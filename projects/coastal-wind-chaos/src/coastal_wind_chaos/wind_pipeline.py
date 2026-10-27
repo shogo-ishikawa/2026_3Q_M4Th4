@@ -103,6 +103,15 @@ def degrees_to_direction_label(degrees):
     return np.array(DIRECTION_LABELS)[index]
 
 
+def normalise_degrees(degrees):
+    """角度を0以上360未満にそろえる（例：-10 → 350、360 → 0）。
+
+    np.mod は、0よりわずかに小さい値に 360.0 を返すことがあるので、それを 0 に直す。
+    """
+    degrees = np.mod(np.asarray(degrees, dtype=float), 360.0)
+    return np.where(degrees >= 360.0, 0.0, degrees)
+
+
 def wind_to_uv(speed, direction_deg):
     """風速と風向（風が吹いてくる方位）を、東向きの u と北向きの v に分ける。
 
@@ -122,7 +131,7 @@ def uv_to_direction(u, v):
     """
     u = np.asarray(u, dtype=float)
     v = np.asarray(v, dtype=float)
-    direction = np.mod(np.rad2deg(np.arctan2(-u, -v)), 360.0)
+    direction = normalise_degrees(np.rad2deg(np.arctan2(-u, -v)))
     return np.where((u == 0) & (v == 0), np.nan, direction)
 
 
@@ -133,7 +142,7 @@ def angular_difference(true_deg, predicted_deg):
     """
     true_deg = np.asarray(true_deg, dtype=float)
     predicted_deg = np.asarray(predicted_deg, dtype=float)
-    return np.mod(predicted_deg - true_deg + 180.0, 360.0) - 180.0
+    return normalise_degrees(predicted_deg - true_deg + 180.0) - 180.0
 
 
 def angular_error(true_deg, predicted_deg):
@@ -147,7 +156,7 @@ def circular_mean_deg(directions_deg):
     mean_sin = np.nanmean(np.sin(radians))
     mean_cos = np.nanmean(np.cos(radians))
     degrees = np.round(np.rad2deg(np.arctan2(mean_sin, mean_cos)), 9)  # 359.9999… を 0 にそろえる
-    return float(np.mod(degrees, 360.0))
+    return float(normalise_degrees(degrees)) + 0.0  # + 0.0 で「-0.0」を「0.0」にする
 
 
 def random_direction_errors(true_deg, seed=0):
@@ -189,7 +198,8 @@ def find_header_row(rows):
             return number, 4
     raise ValueError(
         "「年月日時」の見出し行が見つかりません。気象庁の「過去の気象データ・ダウンロード」で、"
-        "時別値を「すべて数値で格納」「日付リテラルで格納」の設定でダウンロードしたCSVか確認してください。"
+        "時別値を「すべて数値で格納」でダウンロードしたCSV"
+        "（日付は「日付リテラルで格納」または「年月日などに分けて格納」）か確認してください。"
     )
 
 
@@ -298,9 +308,10 @@ def fill_no_phenomenon(raw, min_quality=5):
     """日照時間・降水量で「現象がない」ため空欄の値を 0 にする。
 
     気象庁のCSVでは、現象なし情報が 1 の行（例：夜の日照時間）は値が 0 と書かれる。
-    現象なし情報の列がない地点では、夜の日照時間が空欄で、品質情報は正常（8）になる。
+    現象なし情報の列がない地点（アメダス）では、夜の日照時間が空欄で、品質情報は正常（8）だった
+    （2026年10月にダウンロードしたファイルで確認。気象庁のヘルプには書かれていない）。
     どちらも「その1時間に日照（降水）がなかった」として 0 時間（0 mm）にそろえる。
-    品質情報が低い空欄（欠測など）は 0 にしない。
+    品質情報が低い空欄（欠測など）は 0 にしない。0 にした行は「列名_blank_as_zero」に記録する。
     """
     table = raw.copy()
     for column in ["sunshine_h", "precipitation_mm"]:
@@ -309,7 +320,9 @@ def fill_no_phenomenon(raw, min_quality=5):
         blank = raw[column].isna()
         no_phenomenon = raw.get(column + "_no_phenomenon", pd.Series(np.nan, index=raw.index)) == 1
         good_quality = raw.get(column + "_quality", pd.Series(np.nan, index=raw.index)) >= min_quality
-        table.loc[(blank & (no_phenomenon | good_quality)).to_numpy(), column] = 0.0
+        filled = (blank & (no_phenomenon | good_quality)).to_numpy()
+        table.loc[filled, column] = 0.0
+        table[column + "_blank_as_zero"] = filled
     return table
 
 
@@ -366,8 +379,9 @@ def to_hourly_index(table):
     full_index = pd.date_range(table.index.min(), table.index.max(),
                                freq=pd.Timedelta(hours=1), name="time")
     hourly = table.reindex(full_index)
-    if "wind_is_calm" in hourly.columns:
-        hourly["wind_is_calm"] = hourly["wind_is_calm"].eq(True).to_numpy()
+    for column in hourly.columns:
+        if column == "wind_is_calm" or column.endswith("_blank_as_zero"):
+            hourly[column] = hourly[column].eq(True).to_numpy()  # 追加した時刻は False
     return hourly
 
 
@@ -437,9 +451,19 @@ def summarise_weather(weather):
             missing = int(weather[column].isna().sum())
             note = "（すべて欠損：この地点では観測していない可能性）" if missing == len(weather) else ""
             rows.append((f"{column} が欠損の時刻", f"{missing}{note}"))
+    if "sunshine_h_blank_as_zero" in weather.columns:
+        filled = weather["sunshine_h_blank_as_zero"].to_numpy(dtype=bool)
+        daytime = np.isin(weather.index.hour, [10, 11, 12, 13, 14])
+        note = "（日中の空欄は欠測の可能性。元のCSVを確かめる）" if (filled & daytime).any() else ""
+        rows.append(("空欄を0時間とした日照時間（全体／10〜14時）",
+                     f"{int(filled.sum())}／{int((filled & daytime).sum())}{note}"))
     labels = weather["wind_direction"].dropna().astype(str)
     unknown = labels[~labels.isin(DIRECTION_LABELS + [CALM_LABEL])]
     rows.append(("16方位・静穏以外の風向の記号", sorted(unknown.unique().tolist())))
+    has_quality = any(column.endswith("_quality") for column in weather.columns)
+    rows.append(("品質情報の列", "あり" if has_quality else
+                 "なし（欠測・疑問値を区別できない。「利用上注意が必要なデータの扱い」で"
+                 "情報をつける設定にしてダウンロードし直すとよい）"))
     rows.append(("均質番号が変わった時刻（観測環境の変化。ファイルの境目も含む）", homogeneity_changes(weather)))
     return pd.DataFrame(rows, columns=["項目", "値"])
 
@@ -661,7 +685,7 @@ def fit_predict_degrees_as_numbers(train, test):
     usable = train.dropna(subset=columns + ["target_direction_deg"])
     model = LinearRegression()
     model.fit(usable[columns].to_numpy(), usable["target_direction_deg"].to_numpy())
-    return np.mod(model.predict(test[columns].to_numpy()), 360.0)
+    return normalise_degrees(model.predict(test[columns].to_numpy()))
 
 
 def predict_direction(spec, train, test, climatology, recent, seed=0):

@@ -189,7 +189,12 @@ def main():
 
     if not args.skip_wind:
         data_paths, synthetic = prepare_data_paths(args, config)
-        info["data_files"] = [{"path": str(path), "sha256": file_sha256(path)} for path in data_paths]
+        # 1行目には、気象庁のファイルなら「ダウンロードした時刻」が書かれている（データは後で修正されることがある）
+        info["data_files"] = [
+            {"path": str(path), "sha256": file_sha256(path),
+             "first_line": wind_pipeline.read_text(path).splitlines()[0][:200]}
+            for path in data_paths
+        ]
         info["data_is_synthetic"] = synthetic
         info["wind"] = run_wind(config, data_paths, args.results_dir, args.figures_dir)
     if not args.skip_scenarios and config["scenarios"]["enabled"]:

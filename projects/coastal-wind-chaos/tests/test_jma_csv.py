@@ -29,7 +29,7 @@ ROWS_OFFICE = [
     "2024/2/28 22:00:00,8.0,8,1,0,1,8,1,0,1,8,1,2.5,8,北北東,8,1,1025.0,8,1,1026.0,8,1",
     "2024/2/28 23:00:00,6.8,8,1,0,1,8,1,0,1,8,1,0.1,8,静穏,8,1,1025.2,8,1,1026.2,8,1",
     "2024/2/29 00:00:00,6.2,8,1,0,1,8,1,0,1,8,1,2.2,8,南,8,1,1025.4,8,1,1026.4,8,1",
-    "2024/2/29 1:00:00,,1,1,,0,1,1,,0,1,1,,1,,1,1,,1,1,,1,1",
+    "2024/2/29 1:00:00,,1,1,,,1,1,,,1,1,,1,,1,1,,1,1,,1,1",  # 欠測：値と現象なし情報は空欄
     "2024/2/29 2:00:00,5.4,4,1,0.0,0,8,1,0,1,8,1,2.0,8,西,8,1,1025.3,8,1,1026.3,8,1",
     "2024/2/29 9:00:00,7.0,8,1,0,1,8,1,0.6,0,8,1,3.0,8,東,8,1,1024.0,8,1,1025.0,8,1",
 ]
@@ -211,3 +211,35 @@ def test_synthetic_csv_looks_like_a_jma_download_but_says_it_is_synthetic(tmp_pa
     night = lines[6].split(",")
     assert night[4:6] == ["0", "1"]  # 夜の日照時間は「0」、現象なし情報は 1
     assert settings["seed"] == 3
+    missing = [line.split(",") for line in lines[6:-1] if line.split(",")[2] == "1"]
+    assert missing, "欠測の行があるはず"
+    assert missing[0][4:7] == ["", "", "1"]  # 欠測：日照時間・現象なし情報は空欄、品質情報は 1
+
+
+def test_prefecture_row_above_the_station_row_is_accepted(tmp_path):
+    lines = HEADER_OFFICE[:2] + ["," + ",".join(["テスト県"] * 22)] + HEADER_OFFICE[2:] + ROWS_OFFICE
+    weather = wp.load_weather(write_text(tmp_path / "pref.csv", lines))
+    assert weather.loc[pd.Timestamp("2024-02-29 00:00"), "wind_direction"] == "南"
+
+
+def test_file_without_quality_columns_is_read_with_a_note(tmp_path):
+    path = write_text(tmp_path / "plain.csv", [
+        "ダウンロードした時刻：2026/10/28 00:43:21", "", ",テスト地点,テスト地点,テスト地点,テスト地点",
+        "年月日時,気温(℃),日照時間(時間),風速(m/s),風速(m/s)",
+        ",,,,風向", ",,,,",
+        "2024/2/28 1:00:00,5.9,,2.5,北東",
+        "2024/2/28 2:00:00,5.6,,0.1,静穏",
+    ])
+    weather = wp.load_weather(path)
+    assert weather.loc[pd.Timestamp("2024-02-28 01:00"), "wind_direction_deg"] == 45.0
+    assert weather["sunshine_h"].isna().all()  # 品質情報がないと、夜の空欄と欠測を区別できない
+    summary = dict(wp.summarise_weather(weather).to_numpy())
+    assert summary["品質情報の列"].startswith("なし")
+
+
+def test_daytime_blank_sunshine_is_reported(tmp_path):
+    rows = [ROWS_AMEDAS[0], ROWS_AMEDAS[1].replace("2024/2/28 7:00:00", "2024/2/28 12:00:00").replace(",0.5,8,1,", ",,8,1,")]
+    weather = wp.prepare_weather(wp.read_jma_csv(write_text(tmp_path / "noon.csv", HEADER_AMEDAS + rows)))
+    summary = dict(wp.summarise_weather(weather).to_numpy())
+    value = summary["空欄を0時間とした日照時間（全体／10〜14時）"]
+    assert value.startswith("2／1") and "欠測の可能性" in value

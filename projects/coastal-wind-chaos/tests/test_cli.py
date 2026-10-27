@@ -75,5 +75,6 @@ seed = 0
     info = json.loads((results / "run_info.json").read_text(encoding="utf-8"))
     assert info["data_is_synthetic"] is True
     assert len(info["data_files"][0]["sha256"]) == 64
+    assert info["data_files"][0]["first_line"].startswith("合成データ")
     assert info["environment"]["numpy"]
     assert "平均絶対角度誤差" in stdout

@@ -49,17 +49,31 @@ def test_no_wind_has_no_direction():
     assert np.isnan(wp.uv_to_direction(0.0, 0.0))
 
 
+@pytest.mark.parametrize("direction", [360.0, 720.0, -360.0])
+def test_north_wind_comes_back_near_0_and_never_as_360(direction):
+    u, v = wp.wind_to_uv(5.0, direction)
+    back = wp.uv_to_direction(u, v)
+    assert 0.0 <= back < 360.0
+    assert wp.angular_error(0.0, back) < 1e-9
+
+
+def test_normalise_degrees_keeps_the_range_0_to_360():
+    values = wp.normalise_degrees([-10.0, 0.0, 360.0, 725.0, -1e-15, np.nan])
+    np.testing.assert_allclose(values[:5], [350.0, 0.0, 0.0, 5.0, 0.0])
+    assert np.isnan(values[5])
+
+
 def test_angular_difference_wraps_at_0_and_360():
     assert wp.angular_difference(350.0, 10.0) == pytest.approx(20.0)
     assert wp.angular_difference(10.0, 350.0) == pytest.approx(-20.0)
     assert wp.angular_error(0.0, 180.0) == pytest.approx(180.0)
-    errors = wp.angular_error(np.arange(0, 720, 7.0), np.arange(0, 1440, 14.0))
-    assert np.all((errors >= 0) & (errors <= 180))
+    differences = wp.angular_difference(np.arange(0, 720, 7.0), np.arange(0, 1440, 14.0) - 1e-15)
+    assert np.all((differences >= -180) & (differences < 180))
 
 
 def test_circular_mean_differs_from_naive_mean():
     assert np.mean([350.0, 10.0]) == pytest.approx(180.0)  # 普通の平均では南になってしまう
-    assert wp.angular_error(0.0, wp.circular_mean_deg([350.0, 10.0])) < 1e-9
+    assert wp.circular_mean_deg([350.0, 10.0]) == 0.0
     assert wp.circular_mean_deg([90.0, 180.0]) == pytest.approx(135.0)
 
 

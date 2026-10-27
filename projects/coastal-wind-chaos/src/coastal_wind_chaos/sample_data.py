@@ -160,8 +160,9 @@ def breeze_uv(times, season, strength):
     """海風・陸風（日周期）の成分。
 
     この仮想地点は海が南にあるので、日中は南から吹く海風（v > 0）、
-    夜は北から吹く陸風（v < 0）になる。春から夏に強い。北半球の海風のように、
-    時刻とともに向きが時計回りに少しずつ変わるよう、東西成分 u も加える。
+    夜は北から吹く陸風（v < 0）になる。春から夏に強い。北半球の海風でよく見られる
+    ように（地形などによっては逆回りの例もある）、時刻とともに向きが時計回りに
+    少しずつ変わるよう、東西成分 u も加える。
     """
     hours = np.asarray(pd.DatetimeIndex(times).hour, dtype=float)
     amplitude = strength * (2.4 + 0.8 * np.cos(2 * np.pi * (season - 0.45)))
@@ -386,7 +387,7 @@ def observe(truth, settings):
     - u, v に観測誤差を加え、風速は 0.1 m/s 単位、風向は16方位に丸める
     - 風速 0.2 m/s 以下は「静穏」（風向なし）
     - 気温・気圧は 0.1 単位、日照時間は 0.1 時間単位。太陽が出ていない1時間は「現象なし」
-    - まれに数時間の欠測（品質情報 1、値は空欄）を入れる
+    - まれに数時間の欠測（品質情報 1、値と現象なし情報は空欄）を入れる
     列名は read_jma_csv で読み込んだ表と同じにする。
     """
     rng = np.random.default_rng([settings["seed"], 4])
@@ -402,7 +403,6 @@ def observe(truth, settings):
     observed = pd.DataFrame(index=truth.index)
     observed["temperature_c"] = np.round(truth["temperature_true"].to_numpy() + rng.normal(0.0, 0.1, n_hours), 1)
     observed["sunshine_h"] = np.where(night, 0.0, np.round(truth["sunshine_true_h"].to_numpy(), 1))
-    observed["sunshine_h_no_phenomenon"] = night.astype(int)
     observed["wind_speed_ms"] = speed
     observed["wind_direction"] = labels
     observed["sea_level_pressure_hpa"] = np.round(truth["pressure_true"].to_numpy(), 1)
@@ -411,7 +411,8 @@ def observe(truth, settings):
     for value_column in ["temperature_c", "sunshine_h", "wind_speed_ms", "wind_direction", "sea_level_pressure_hpa"]:
         observed.loc[missing, value_column] = np.nan
         observed[value_column + "_quality"] = np.where(missing, 1, 8)
-    observed.loc[missing, "sunshine_h_no_phenomenon"] = 0
+    # 現象なし情報は、欠測の行では空欄になる（気象庁のヘルプと実際のファイルに合わせる）
+    observed["sunshine_h_no_phenomenon"] = np.where(missing, np.nan, night.astype(float))
     for element_column in ["temperature_c", "sunshine_h", "wind_speed_ms", "sea_level_pressure_hpa"]:
         observed[element_column + "_homogeneity"] = 1
     return observed[[column for _, _, _, column in JMA_LAYOUT]]
