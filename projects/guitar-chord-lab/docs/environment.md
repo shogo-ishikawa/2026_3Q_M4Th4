@@ -10,7 +10,7 @@
 | ギター分離（第2段階以降） | demucs（torch を使用） | `pip install -e ".[separation]"` |
 | テスト・Notebookの自動実行 | pytest、mir_eval、nbformat、nbclient、ipykernel | `pip install -e ".[dev]"` |
 
-- Python 3.12 以上を指定しています（`requires-python = ">=3.12"`）。**実際に確認したのは Python 3.13 だけ**です。
+- Python 3.12 以上を指定しています（`requires-python = ">=3.12"`）。確認したのは Python 3.13（全機能）と Python 3.12（分離を除く）です。
 - Demucs を導入しなくても、単独音源のコード認識、合成デモ、評価、分離を使わない比較実験は動きます。
 - torch は指定していません。Demucs 4.1.0 の依存として `torch>=2.1` が入ります。Colab では導入済みの torch がそのまま使われます。
 
@@ -59,6 +59,10 @@
 | numba | 0.68.0 |
 | soundfile | 0.14.0（libsndfile 1.2.2） |
 | matplotlib | 3.11.2 |
+
+### C：Python 3.12 の環境（分離なし）
+
+Python 3.12.13 に、B と同じ版のライブラリ（numpy 2.5.4、scipy 1.18.1、librosa 1.0.0、soundfile 0.14.0、matplotlib 3.11.2）を入れて、自動テストだけを実行しました。
 
 実施した確認の内容と結果は [verification.md](verification.md) にまとめています。
 
