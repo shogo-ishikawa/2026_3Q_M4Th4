@@ -116,7 +116,7 @@ GuitarSet の奏者00の録音20本（調整用）だけで比べました。結
 | 確認 | 結果 |
 | --- | --- |
 | 環境 A で、Hugging Face のキャッシュ・分離のキャッシュ・取得済みデータを消してから3本を順に実行（`scripts/run_notebooks.py`） | 3本ともエラーなく最後まで実行。Notebook 2 は約25秒、Notebook 3 は約250秒 |
-| Colab の分岐の確認：新しい仮想環境（Colab と同じ版、この作品は未導入）で `google.colab` を読み込んだ状態をまね、セットアップのセルの取得元だけローカルのリポジトリ（作業ブランチ）に替えて実行 | `/content/2026_3Q_M4Th4` への clone、`pip install -e`（Notebook 2・3 は `[separation]` 付き）、作業ディレクトリの設定、使用コミットの表示が動作。Notebook 1 は約46秒、Notebook 2 は約40秒。Demucs を導入しても torch・numpy・librosa の版は変わらなかった |
+| Colab の分岐の確認：新しい仮想環境（Colab と同じ版、この作品は未導入）で `google.colab` を読み込んだ状態をまね、セットアップのセルの取得元だけローカルのリポジトリ（作業ブランチ）に替えて実行 | `/content/2026_3Q_M4Th4` への clone、`pip install -e`（Notebook 2・3 は `[separation]` 付き）、作業ディレクトリの設定、使用コミットの表示が動作。3本ともエラーなく最後まで実行（Notebook 1 は約46秒、Notebook 2 は約40秒、Notebook 3 は約340秒。いずれもデータの取得とインストールを含む）。Demucs を導入しても torch・numpy・librosa の版は変わらず、結果は上の実行と同じ値になった |
 | GitHub から HTTPS で clone | `main` ブランチで確認。作業ブランチは GitHub に push できなかったため未確認 |
 
 Notebook の練習の「期待される観察と解答例」は、既定の入力（GuitarSet `01_Rock3-117-Bb_comp` の先頭20秒）で実際に設定を変えた結果と食い違わないことを確かめてから書きました。
@@ -127,11 +127,12 @@ Notebook の練習の「期待される観察と解答例」は、既定の入�
 
 ## 7. 配布 ZIP
 
-`python scripts/make_release_zip.py` で作成した `guitar-chord-lab-v0.1.0.zip` について、次を確かめます（結果は下に追記します）。
+`python scripts/make_release_zip.py` で作成した `guitar-chord-lab-v0.1.0.zip`（約130 KB）について、次を確かめました。
 
-- 展開後の最上位フォルダが `v0.1.0/` であること
-- Git で管理しているこの作品のファイルと `release_info.json` だけが入っていること（音源、モデルの重み、キャッシュ、仮想環境、出力、内部メモがないこと）
-- 展開したフォルダを新しい仮想環境にインストールし、`guitar-chord-lab demo` とテストが動くこと
+- 展開後の最上位フォルダは `v0.1.0/` だけで、Git で管理しているこの作品のファイル（ソース、Notebook、設定、正解注釈の例、文書、テスト、スクリプト）と `release_info.json`（作成時のコミット）だけが入っている
+- 音源、モデルの重み、キャッシュ、仮想環境、実験の出力（`outputs/` は README だけ）、生成した合成デモ、取得したデータは入っていない。開発のルール（`AGENTS.md`・`CLAUDE.md`）と開発仕様（`DEVELOPMENT.md`）は、リポジトリで公開している文書なので含めている
+- 展開したフォルダを新しい仮想環境（Python 3.13、最新版のライブラリ）に `pip install -e ".[dev]"` でインストールし、`guitar-chord-lab demo` が動作（`demo_a` の正解率 0.972）。Git の管理外なので、解析結果の `analysis.json` には `release_info.json` のコミットが記録された
+- 展開したフォルダでテストを実行し、119 件成功（2 件は条件付きで省略）
 
 ## 8. 未確認の事項
 

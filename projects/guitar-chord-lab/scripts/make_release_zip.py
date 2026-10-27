@@ -21,8 +21,8 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 NAME = "guitar-chord-lab"
 
-# Gitで管理していても、念のため配布しないもの
-EXCLUDED_FOLDERS = {".git", ".venv", "venv", "__pycache__", ".pytest_cache", ".ipynb_checkpoints", "outputs", "dist"}
+# Gitで管理していても、念のため配布しないもの（outputs/ は README.md だけを入れます）
+EXCLUDED_FOLDERS = {".git", ".venv", "venv", "__pycache__", ".pytest_cache", ".ipynb_checkpoints", "dist"}
 EXCLUDED_SUFFIXES = {
     ".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac",
     ".pt", ".pth", ".ckpt", ".onnx", ".safetensors", ".th", ".zip",
@@ -49,6 +49,8 @@ def tracked_files():
 def is_excluded(path):
     """配布しないファイルなら True を返します。"""
     if any(part in EXCLUDED_FOLDERS for part in path.parts):
+        return True
+    if path.parts[0] == "outputs" and path.name != "README.md":
         return True
     return path.suffix.lower() in EXCLUDED_SUFFIXES
 
