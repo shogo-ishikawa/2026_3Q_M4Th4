@@ -114,7 +114,7 @@ def solve_method_b(scenario, conditions, settings=None, reference_time=None):
 # ---------------------------------------------------------------------------
 
 
-VARIANT_KEYS = ("label", "show_id", "starts", "x", "y", "required", "exclude")
+VARIANT_KEYS = ("label", "show_id", "starts", "x", "y", "required", "exclude", "exclude_all_shows")
 
 
 def apply_show_variant(scenario, variant):
@@ -122,21 +122,21 @@ def apply_show_variant(scenario, variant):
 
     variant の例: {"label": "13時・奥", "show_id": "S1", "starts": ["13:00"], "x": 0, "y": 650}
     starts を省略すると公演回はそのまま、x / y を省略すると場所はそのまま。
-    "exclude": True なら、そのショーをシナリオから外す（固定時刻の予定がない基準）。
+    ショーを除く条件（"exclude" と "exclude_all_shows"）では、シナリオは変えません。ショーは地点として残し
+    （ほかの地点の間の移動時間を変えないため）、conditions_for_variant で予定に入らないようにします。
     """
     if not variant:
         return scenario
     _check_variant(variant)
+    if variant.get("exclude_all_shows"):
+        return scenario
     if variant["show_id"] not in scenario.shows:
         raise InputError([f"ショー '{variant['show_id']}' がありません（show_id を確かめてください）"])
     changes = variant.get("starts") or variant.get("x") is not None or variant.get("y") is not None
-    if not (changes or variant.get("exclude")):
+    if not changes:
         return scenario
     raw = copy.deepcopy(scenario.raw)
     show = next(s for s in raw["shows"] if s["id"] == variant["show_id"])
-    if variant.get("exclude"):
-        raw["shows"] = [s for s in raw["shows"] if s["id"] != variant["show_id"]]
-        return scenario_from_dict(raw)
     moved = variant.get("x") is not None or variant.get("y") is not None
     if moved and raw.get("walk_minutes") is not None:
         raise InputError(["移動時間の表（walk_minutes）を使うシナリオでは、座標を変えても移動時間は変わりません"])
@@ -168,6 +168,8 @@ def _variant_problems(variant, where):
     label = variant.get("label")
     if not isinstance(label, str) or not label.strip():
         problems.append(f"{where} に label（表に出す名前）を文字列で書いてください")
+    if "exclude_all_shows" in variant:
+        return problems + _all_shows_problems(variant, where)
     if not isinstance(variant.get("show_id"), str):
         problems.append(f"{where} に show_id（ショーのID）を文字列で書いてください")
     starts = variant.get("starts")
@@ -189,6 +191,16 @@ def _variant_problems(variant, where):
     if variant.get("exclude") and variant.get("required") is True:
         problems.append(f"{where}: exclude（ショーを外す）と required: True（必須にする）は同時に指定できません")
     return problems
+
+
+def _all_shows_problems(variant, where):
+    """すべてのショーを除く条件の誤り。ほかの指定（show_id・開演時刻・場所・必須）とは組み合わせない。"""
+    if variant["exclude_all_shows"] is not True:
+        return [f"{where} の exclude_all_shows は True にしてください（ショーを除かない場合は、このキーを書きません）"]
+    others = sorted(set(variant) - {"label", "exclude_all_shows"})
+    if others:
+        return [f"{where}: exclude_all_shows（すべてのショーを除く）は、{others} と同時に指定できません"]
+    return []
 
 
 def _is_time_text(value):
@@ -260,41 +272,66 @@ def conditions_for_variant(base_conditions, variant, scenario=None):
 
     "required": True なら、そのショーを必須にする。"required": False なら必須から外す
     （希望度があれば、任意の予定として選ばれることがある）。
-    "exclude": True なら必須から外し、希望度の指定からも除く（シナリオからは apply_show_variant で外す）。
+    "exclude": True はそのショーだけを、"exclude_all_shows": True はすべてのショーを予定から除く。
+    除くショーは必須から外し、希望度を0にする（必須でなく希望度が0の活動は、モデルが予定に入れない）。
+    ほかの施設・食事・予算・移動の条件や、ほかの活動の希望度は変えない。
     """
     conditions = copy.deepcopy(base_conditions)
     shows = conditions.get("required_shows") or []
     if not variant or not isinstance(shows, (list, tuple)):
         return conditions  # 形の誤りは prepare_problem が日本語で説明する
     show_id = variant.get("show_id")
+    excluded = excluded_shows(variant, scenario)
     if variant.get("required") is True and show_id not in shows:
         conditions["required_shows"] = [*shows, show_id]
-    if variant.get("required") is False or variant.get("exclude"):
+    if variant.get("required") is False:
         conditions["required_shows"] = [s for s in shows if s != show_id]
-    if variant.get("exclude"):
-        _drop_show_preference(conditions, show_id, scenario)
+    if excluded:
+        conditions["required_shows"] = [s for s in shows if s not in excluded]
+        _set_zero_preference(conditions, excluded, scenario)
     return conditions
 
 
-def _drop_show_preference(conditions, show_id, scenario):
-    """外すショーを、希望度の指定から除く。ほかの活動の希望度は変えない。
+def excluded_shows(variant, scenario):
+    """比較条件で予定から除くショーのIDのリスト（除かない場合は空）。"""
+    if not variant:
+        return []
+    if variant.get("exclude_all_shows") is True:
+        if scenario is None:
+            raise InputError(["exclude_all_shows を使うには、シナリオ（ショーの一覧）が必要です"])
+        return list(scenario.shows)
+    if variant.get("exclude") is True:
+        return [variant.get("show_id")]
+    return []
 
-    希望順位（preference_rank）から一覧を作り直すと、ほかの活動の順位と希望度が変わってしまうので、
-    元の順位で決まる希望度を、すべての活動について明示した preferences に置き換えてから除きます。
+
+def _set_zero_preference(conditions, show_ids, scenario):
+    """除くショーの希望度を0にする。ほかの活動の希望度は変えない。
+
+    希望順位（preference_rank）を使っている場合は、元の順位で決まる希望度をすべての活動について
+    明示した preferences に置き換えてから、ショーだけを0にします（順位を作り直すと、ほかの活動の値が変わるため）。
     """
     rank = conditions.get("preference_rank")
-    if rank and conditions.get("preferences"):
+    overrides = conditions.get("preferences")
+    if rank and overrides:
         return  # 両方の指定は入力の誤り。ほかのケースと同じく prepare_problem が日本語で説明する
-    if scenario is not None and isinstance(rank, (list, tuple)) and rank:
-        activity_ids = [*scenario.attractions, *scenario.shows, *scenario.meals]
-        if all(isinstance(a, str) and a in activity_ids for a in rank) and len(set(rank)) == len(rank):
-            weights = {activity_id: 0 for activity_id in activity_ids}
-            for position, activity_id in enumerate(rank):
-                weights[activity_id] = len(rank) - position
-            conditions["preferences"] = weights
-            conditions["preference_rank"] = None
-    if isinstance(conditions.get("preferences"), dict):
-        conditions["preferences"].pop(show_id, None)
+    if rank:
+        activity_ids = [] if scenario is None else [*scenario.attractions, *scenario.shows, *scenario.meals]
+        valid = isinstance(rank, (list, tuple)) and len(set(map(str, rank))) == len(rank) and all(
+            isinstance(a, str) and a in activity_ids for a in rank)
+        if not valid:
+            return  # 順位の誤りは prepare_problem が日本語で説明する
+        weights = {activity_id: 0 for activity_id in activity_ids}
+        for position, activity_id in enumerate(rank):
+            weights[activity_id] = len(rank) - position
+        conditions["preferences"] = weights
+        conditions["preference_rank"] = None
+    elif overrides is not None and not isinstance(overrides, dict):
+        return  # 形の誤りは prepare_problem が日本語で説明する
+    else:
+        conditions["preferences"] = dict(overrides or {})
+    for show_id in show_ids:
+        conditions["preferences"][show_id] = 0
 
 
 def comparison_cases(budgets, show_variants):
@@ -410,11 +447,20 @@ def _case_settings(case, scenario, conditions, settings, seed):
         "exit_time": conditions.get("exit_time"),
         "budget_yen": case["budget_yen"],
         "show_variant": variant.get("label", "元のまま"),
+        "excluded_shows": _excluded_text(variant, scenario),
         "required_shows": _id_text(conditions.get("required_shows")),
         "time_limit_s_per_stage": settings.time_limit_s,
         "num_workers": settings.num_workers,
         "solver_random_seed": settings.random_seed,
     }
+
+
+def _excluded_text(variant, scenario):
+    """ケースで予定から除いたショー（"S1, S2"。除かなければ「なし」）。"""
+    try:
+        return ", ".join(map(str, excluded_shows(variant, scenario))) or "なし"
+    except InputError:
+        return "なし"
 
 
 def _id_text(value):
@@ -552,6 +598,7 @@ COMPARISON_VIEW_COLUMNS = {
     "travel_min": "移動(分)",
     "skipped_attractions": "予定に入らなかった施設",
     "used_shortcut_attractions": "短縮利用した施設",
+    "excluded_shows": "除いたショー",
     "shows_attended": "見たショーの回",
     "shortcut_candidates": "方法Bの候補",
     "same_options_label": "Bの選択肢がAと同じ",

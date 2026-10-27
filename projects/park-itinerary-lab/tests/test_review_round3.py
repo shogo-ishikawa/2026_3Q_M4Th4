@@ -77,7 +77,7 @@ def test_no_show_baseline_keeps_the_other_ranked_preferences(demo_scenario, rank
     assert conditions["preference_rank"] is None
     preferences = conditions["preferences"]
     assert (preferences["A1"], preferences["A4"], preferences["A6"]) == (4, 2, 1)
-    assert "S1" not in preferences and preferences["A2"] == 0
+    assert preferences["S1"] == 0 and preferences["A2"] == 0  # 除くショーだけを0にし、一覧にない活動は元のとおり0
 
 
 def test_no_show_baseline_with_a_rank_solves_without_errors(demo_scenario, solver_settings):

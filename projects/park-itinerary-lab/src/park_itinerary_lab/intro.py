@@ -68,7 +68,7 @@ def solve_selection(activities, time_limit_min, budget_yen, required_ids=(), sol
     status = stats.status_str
     if status != "Optimal":
         return SelectionResult(status, [], None, None, None, solver.name, str(stats.solver_version))
-    selected = [a["id"] for a in activities if pulp.value(choose[a["id"]]) > 0.5]
+    selected = [a["id"] for a in activities if is_chosen(a, pulp.value(choose[a["id"]]), required_ids)]
     return SelectionResult(
         status=status,
         selected=selected,
@@ -76,6 +76,38 @@ def solve_selection(activities, time_limit_min, budget_yen, required_ids=(), sol
         solver_name=solver.name,
         solver_version=str(stats.solver_version),
     )
+
+
+def contributes_nothing(activity):
+    """所要時間・希望度・費用がすべて0の活動か（選んでも選ばなくても、条件と目的の値が変わらない）。"""
+    return activity["minutes"] == 0 and activity["preference"] == 0 and activity["cost_yen"] == 0
+
+
+def is_chosen(activity, value, required_ids=()):
+    """ソルバーが返した 0/1 変数の値（pulp.value）から、その活動を選んだかを決める。
+
+    所要時間・希望度・費用がすべて0の任意の活動は、目的にも制約にも現れないため、CBC は値を返しません（None）。
+    選んでも選ばなくても実行可能性と希望度の合計は変わらないので、「選ばない」と決めます。
+    必須の活動には「= 1」の制約があるので、値は必ず返ります。それ以外で値がないのは想定外なので、止めて知らせます。
+    """
+    if value is None:
+        if activity["id"] not in required_ids and contributes_nothing(activity):
+            return False
+        raise RuntimeError(f"ソルバーが活動 '{activity['id']}' の値を返しませんでした（終了状態を確かめてください）")
+    return value > 0.5
+
+
+def objective_value(problem):
+    """目的関数の値。係数がすべて0（式に変数が実質ない）とき、PuLP は None を返すので、式の定数（0）を返す。
+
+    係数が0でない変数があるのに値がない場合は、そのまま None を返します（解がない状態を隠さないため）。
+    """
+    import pulp
+
+    expression = problem.objective
+    if all(coefficient == 0 for coefficient in expression.values()):
+        return expression.constant
+    return pulp.value(expression)
 
 
 def _totals(activities, selected):

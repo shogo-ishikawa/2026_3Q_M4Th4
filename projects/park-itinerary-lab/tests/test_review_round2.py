@@ -135,14 +135,16 @@ def test_comparison_rows_keep_the_precheck_reason(demo_scenario, solver_settings
 
 
 def test_no_show_baseline_removes_the_fixed_time_event(demo_scenario, solver_settings):
-    """「ショーなし（基準）」は S1 を一日から外す。必須にしないだけの条件では、S1 が任意の予定として選ばれる。"""
+    """S1 を除く条件では S1 を予定に入れない（S1 は地点として残し、希望度0にする）。必須にしないだけの条件では、S1 が任意の予定として選ばれる。"""
     variants = [{"label": "ショーなし", "show_id": "S1", "exclude": True},
                 {"label": "必須にしない", "show_id": "S1", "required": False}]
     table, details = experiment.run_comparison(
         demo_scenario, DEMO_BUSY, experiment.comparison_cases([1000], variants), solver_settings)
     excluded, optional = table.iloc[0], table.iloc[2]
     assert excluded["status"] == optional["status"] == "optimal"
-    assert excluded["shows_attended"] == "" and "S1" not in details["ショーなし／予算1000円"]["A"]["result"].problem.scenario.shows
+    problem = details["ショーなし／予算1000円"]["A"]["result"].problem
+    assert excluded["shows_attended"] == "" and excluded["excluded_shows"] == "S1"
+    assert "S1" in problem.scenario.shows and problem.preferences["S1"] == 0  # 地点としては残す（移動時間を変えない）
     assert optional["shows_attended"].startswith("S1-")
     assert excluded["required_shows"] == optional["required_shows"] == "なし"
 
