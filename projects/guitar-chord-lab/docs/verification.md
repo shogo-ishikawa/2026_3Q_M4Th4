@@ -125,17 +125,26 @@ GuitarSet の奏者00の録音20本（調整用）だけで比べました。結
 | 確認 | 結果 |
 | --- | --- |
 | 環境 A で、Hugging Face のキャッシュ・分離のキャッシュ・取得済みデータを空にしてから3本を順に実行（`scripts/run_notebooks.py`） | 3本ともエラーなく最後まで実行（Notebook 1 は約26秒、Notebook 2 は約36秒、Notebook 3 は約267秒。いずれもデータとモデルの取得を含む）。Notebook 3 の結果は 4.2 の表と同じ値 |
-| Colab の分岐の確認：新しい仮想環境（Colab と同じ版、この作品は未導入）で `google.colab` を読み込んだ状態をまね、GitHub から HTTPS で作業ブランチを clone して実行 | レビューでの修正の前の版（コミット 0cf875f）で、Notebook 1 を最後まで実行。修正後の版での確認は、このコミットを push した後に行い、次の更新で記録します |
+| Colab の分岐の確認：Colab と同じ版の仮想環境（この作品と Demucs は未導入）で `google.colab` を読み込んだ状態をまね、`BRANCH` を作業ブランチにして、GitHub から HTTPS で新しく clone して実行 | コミット da73e37 で、3本ともエラーなく最後まで実行（Notebook 1 は約64秒、Notebook 2 は約52秒、Notebook 3 は約274秒。clone・インストール・データの取得を含む）。結果は上の実行と同じ値。セットアップのセルが Demucs を導入しても、torch・numpy・librosa の版は変わらなかった |
+| `BRANCH`・`COMMIT` の切り替え（上と同じ環境） | `COMMIT` に前のコミット（0cf875f）を入れて実行するとその版になり、パッケージを読み込んだ後で `COMMIT` を空に戻して実行し直すと、セッションの再起動を求めるエラーで止まった。新しいセッションで実行し直すと、作業ブランチの最新の版（da73e37）になった |
 
 Notebook の練習の「期待される観察と解答例」は、既定の入力（GuitarSet `01_Rock3-117-Bb_comp` の先頭20秒）で実際に設定を変えた結果と食い違わないことを確かめてから書きました。
 
 ## 6. コマンドライン（環境 A）
 
-`--help`、`python -m guitar_chord_lab`、`make-demo`、`demo --pdf`、`analyse`（`--start`・`--duration`・`--set`・`--annotation`・`--separate`）、`separate`、`evaluate`（`--offset`）、`guitarset`、`experiment`（分離あり・`--conditions solo,mixture`）を実行しました。不正な注釈、M4A ファイル、1秒の入力、無音の入力、MP3 の入力、知らない設定名で、それぞれ意図した表示になることを確かめました。レビュー後に加えた確認（`separate` の記録、`evaluate` の切り出し位置、録音IDの誤り、通信エラーなど）は、`main()` を呼ぶ自動テストで確かめています。
+`--help`、`python -m guitar_chord_lab`、`make-demo`、`demo --pdf`、`analyse`（`--start`・`--duration`・`--set`・`--annotation`・`--separate`）、`separate`、`evaluate`（`--offset`）、`guitarset`、`experiment`（分離あり・`--conditions solo,mixture`）を実行しました。不正な注釈、M4A ファイル、1秒の入力、無音の入力、MP3 の入力、知らない設定名で、それぞれ意図した表示になることを確かめました。修正後の版では、`make-demo`、`guitarset`、`experiment`（4.1・4.2）を実行し直しました。レビュー後に加えた確認（`separate` の記録、`evaluate` の切り出し位置、録音IDの誤り、通信エラーなど）は、`main()` を呼ぶ自動テストで確かめています。
 
 ## 7. 配布 ZIP
 
-配布 ZIP は、このコミットから作り直して確認し、次の更新で記録します。前の版（コミット 0cf875f）の ZIP では、展開後の最上位フォルダが `v0.1.0/` だけであること、音源・モデルの重み・キャッシュ・実験の出力が入っていないこと、展開したフォルダでのインストール・`guitar-chord-lab demo`・テストを確かめました。
+`python scripts/make_release_zip.py` でコミット da73e37 から作成した `guitar-chord-lab-v0.1.0.zip`（約153 KB、48ファイルと `release_info.json`）について、次を確かめました。
+
+- 展開後の最上位フォルダは `v0.1.0/` だけで、Git で管理しているこの作品のファイル（ソース、Notebook、設定、正解注釈の例、文書、テスト、スクリプト）と `release_info.json`（作成時のコミットと、未コミットの変更がないこと）だけが入っている
+- 音源、モデルの重み、キャッシュ、仮想環境、実験の出力（`outputs/` は README だけ）、生成した合成デモ、取得したデータは入っていない。開発のルール（`AGENTS.md`・`CLAUDE.md`）と開発仕様（`DEVELOPMENT.md`）は、リポジトリで公開している文書なので含めている
+- 展開したフォルダを新しい仮想環境（Python 3.13、最新版のライブラリ）に `pip install -e ".[dev]"` でインストールし、`guitar-chord-lab demo` が動作（`demo_a` の正解率 0.972）。解析結果の `analysis.json` には `release_info.json` のコミット（da73e37）が記録された
+- 別の Git リポジトリの中に展開しても、そのリポジトリのコミットではなく `release_info.json` のコミットを記録した
+- 展開したフォルダでテストを実行し、169 件成功（2 件は条件付きで省略）
+
+配布する ZIP は、同じ手順で最後のコミットから作り直します。中身は Git で管理しているファイルそのものなので、違いはこの記録と `release_info.json` のコミットだけです。
 
 ## 8. 未確認の事項
 
