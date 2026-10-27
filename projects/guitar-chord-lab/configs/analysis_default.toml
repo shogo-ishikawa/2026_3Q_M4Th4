@@ -1,0 +1,33 @@
+# コード認識の既定の設定（guitar_chord_lab.recognition.ChordSettings と同じ値）
+# 使い方: guitar-chord-lab analyse 音源.wav --config configs/analysis_default.toml
+# 1つだけ変えるときは --set segment_seconds=0.25 のようにも指定できます。
+#
+# 既定値は、GuitarSet の奏者00の伴奏録音20本（調整用）だけを見て選びました。
+# 評価用の録音は値の選択に使っていません。詳しくは docs/research-guide.md を参照してください。
+
+[analysis]
+# 解析に使うサンプリング周波数 [Hz]。入力はこの値に変換してから解析します。
+sample_rate = 22050
+
+# クロマ特徴量を計算する間隔 [サンプル]。512 / 22050 Hz ≒ 0.023秒ごと。
+hop_length = 512
+
+# クロマ特徴量の計算方法: "cqt"（定Q変換）または "stft"（短時間フーリエ変換）
+chroma_method = "cqt"
+
+# 特徴量を平均してコードを1つ選ぶ時間幅 [秒]
+segment_seconds = 0.5
+
+# 区間の音量（RMS）がこの値 [dBFS] 未満なら N（コードなし）にします。
+# 初版では「無音の区間」だけを N とします。
+silence_db = -50.0
+
+# 第1候補の類似度（0〜1のコサイン類似度）がこの値未満なら判定保留（X）にします。
+# 類似度は正解する確率ではありません。
+min_score = 0.5
+
+# 第1候補と第2候補の類似度の差がこの値未満なら判定保留（X）にします。
+min_margin = 0.01
+
+# 前後の区間の類似度を平均する区間の数（1以上の奇数。1なら平滑化しない）
+smoothing_segments = 3

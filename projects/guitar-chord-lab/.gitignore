@@ -1,0 +1,5 @@
+# Guitar Chord Lab で生成するファイル（共通の .gitignore に加えて除外します）
+# 合成デモの音源・注釈は guitar-chord-lab make-demo でいつでも作り直せます。
+data/generated/
+# 配布ZIPに書き込む版情報（scripts/make_release_zip.py が作ります）
+release_info.json

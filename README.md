@@ -6,9 +6,9 @@ Pythonの基礎を学んだ学生が、AIや教員の支援を受けながら制
 
 | 作品 | 内容 | 状態 |
 | --- | --- | --- |
-| [Guitar Chord Lab](projects/guitar-chord-lab/) | ギターの音源分離とコード認識、分離前後の比較実験 | 開発ひな形・仕様あり。アプリ本体は未実装 |
+| [Guitar Chord Lab](projects/guitar-chord-lab/) | ギターの音源分離とコード認識、分離前後の比較実験 | 初版 v0.1.0。Colab用Notebookとコマンドあり（Colab上での動作は未確認） |
 
-実行できるNotebookやコマンドは、実装・動作確認後に各作品のREADMEへ掲載します。
+実行できるNotebookやコマンドは、各作品のREADMEに掲載しています。
 
 ## 使い方
 

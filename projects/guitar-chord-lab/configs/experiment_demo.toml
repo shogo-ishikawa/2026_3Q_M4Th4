@@ -1,0 +1,68 @@
+# 合成デモによる小規模比較実験の設定例
+#
+# 使い方（作品フォルダ projects/guitar-chord-lab で実行）:
+#   guitar-chord-lab make-demo                          # 合成デモの音源と正解注釈を作る
+#   guitar-chord-lab experiment configs/experiment_demo.toml
+#   guitar-chord-lab experiment configs/experiment_demo.toml --conditions solo,mixture   # Demucsなし
+#
+# 相対パスは、この設定ファイルのあるフォルダ（configs/）を基準にします。
+# 合成音による結果はプログラムの確認用です。実際のギター録音での性能の根拠にはしません。
+
+[experiment]
+name = "demo_synthetic"
+output_dir = "../outputs/experiment_demo"
+seed = 0
+# 比べる条件: solo（単独ギター）、mixture（混合音）、separated（混合音から分離したギター）
+conditions = ["solo", "mixture", "separated"]
+# 伴奏の音量 = 20 log10( 伴奏のRMS / ギターのRMS ) [dB]。RMSは無音を含む切り出し全体で計算します。
+accompaniment_db = [0.0, 6.0, 12.0]
+# 混合と分離に使うサンプリング周波数 [Hz]（Demucs のモデルと同じ 44100 Hz）
+mix_sample_rate = 44100
+# 混合音の最大振幅がこの値を超えたら、混合音全体に同じ倍率を掛けて小さくします（音量比は変わりません）
+peak_limit = 0.99
+# 混合音と分離音をWAVで保存するか、条件ごとの図を保存するか
+save_audio = true
+save_figures = false
+
+[separation]
+model = "htdemucs_6s"   # guitar を出力するモデル
+device = "auto"         # auto / cpu / cuda
+shifts = 0              # 0 なら1回だけ推定（再現しやすい）
+overlap = 0.25
+cache_dir = "../outputs/cache/separation"
+
+[analysis]
+# 書かなかった項目は configs/analysis_default.toml と同じ既定値になります。
+segment_seconds = 0.5
+smoothing_segments = 3
+
+# 録音（元素材）ごとの設定
+# source_id: 元素材ID。同じ録音から作った切り出しには同じIDを付けます。
+# split: tuning（調整用）または evaluation（評価用）。元素材単位で分けます。
+# material: synthetic（合成音）または real（実録音）
+[[recordings]]
+id = "demo_a"
+source_id = "demo_a"
+split = "tuning"
+material = "synthetic"
+guitar = "../data/generated/demo/demo_a_guitar.wav"
+annotation = "../data/generated/demo/demo_a_annotation.csv"
+start_s = 0.0
+duration_s = 18.0
+
+[[recordings]]
+id = "demo_b"
+source_id = "demo_b"
+split = "evaluation"
+material = "synthetic"
+guitar = "../data/generated/demo/demo_b_guitar.wav"
+annotation = "../data/generated/demo/demo_b_annotation.csv"
+start_s = 0.0
+duration_s = 18.0
+
+# 伴奏（伴奏IDと、使い始める位置 offset_s [秒]）
+[[accompaniments]]
+id = "drums_120bpm_seed0"
+path = "../data/generated/demo/drums_120bpm_seed0.wav"
+material = "synthetic"
+offset_s = 0.0
