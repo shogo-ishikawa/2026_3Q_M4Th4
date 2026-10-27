@@ -19,6 +19,7 @@
 | 対象 | 確認した内容 | 出典 |
 | --- | --- | --- |
 | Google Colab | Python 3.13.16、torch 2.11.0、librosa 0.11.0、numpy 2.1.3、scipy 1.16.3、soundfile 0.14.0、matplotlib 3.10.0、pandas 2.2.3 | [googlecolab/backend-info](https://github.com/googlecolab/backend-info)（`os-info.txt`、`pip-freeze.txt`、`pip-freeze.gpu.txt`） |
+| PyTorch | Demucs 4.1.0 の要件は torch 2.1 以上。Colab の CPU ランタイムは torch 2.11.0+cpu、GPU ランタイムは torch 2.11.0+cu130。torch 2.11.0 の Python 3.13 用 CPU 版を公式の配布元（download.pytorch.org）から導入して確認 | [googlecolab/backend-info](https://github.com/googlecolab/backend-info)、[PyTorch の配布元](https://download.pytorch.org/whl/cpu/torch/)、Demucs の依存定義 |
 | Demucs 4.1.0（2026年7月11日公開） | Python 3.10以上・torch 2.1以上。推論に torchaudio は不要。重みは Hugging Face Hub から取得し、失敗時は従来の配布元を使う。torch 2.6 以降の `weights_only` に対応 | [Demucs README](https://github.com/adefossez/demucs)、[リリースノート](https://github.com/adefossez/demucs/blob/main/docs/release.md)、PyPI の依存定義 |
 | htdemucs_6s | drums、bass、other、vocals、guitar、piano の6音源を出力する。piano は品質が低いと記載。重みの利用条件は明確でない（非商用の可能性が高い）と記載 | Demucs README |
 | librosa 1.0.0（2026年8月11日公開） | Python 3.12以上。使っている `chroma_cqt`、`chroma_stft`、`resample`、`frames_to_time`、`feature.rms` の使い方は 0.11 と同じ。audioread による読み込みは廃止 | [librosa の変更履歴](https://github.com/librosa/librosa/blob/main/docs/changelog.rst) |

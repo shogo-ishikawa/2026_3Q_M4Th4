@@ -42,7 +42,7 @@ Notebook 1 は CPU だけで動きます。Notebook 2・3 は GPU があると�
 
 ## ローカルでの最短の実行手順
 
-Python 3.12 以上が必要です（確認したのは 3.13）。
+Python 3.12 以上が必要です（確認したのは 3.13。3.12 は分離を除いて確認）。
 
 ```bash
 git clone https://github.com/shogo-ishikawa/2026_3Q_M4Th4.git
