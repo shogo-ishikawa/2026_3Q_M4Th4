@@ -8,6 +8,7 @@
 ```bash
 # 作品フォルダ projects/guitar-chord-lab で実行
 python scripts/make_release_zip.py              # 未コミットの変更があると作りません
+python scripts/make_release_zip.py --allow-dirty   # 確認用。release_info.json に uncommitted_changes: true と記録します
 python scripts/run_notebooks.py notebooks/01_single_guitar_chords.ipynb
 ```
 

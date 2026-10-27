@@ -10,6 +10,7 @@
 """
 
 import argparse
+import json
 import sys
 from dataclasses import fields, replace
 from pathlib import Path
@@ -32,7 +33,11 @@ def parse_overrides(pairs):
         name, text = pair.split("=", 1)
         if name not in types:
             raise ValueError(f"知らない設定名です: {name}。使える名前: {list(types)}")
-        values[name] = types[name](text)
+        try:
+            values[name] = types[name](text)
+        except ValueError:
+            kind = "整数" if types[name] is int else "数"
+            raise ValueError(f"--set {name}={text}: {name} は{kind}で指定してください") from None
     return values
 
 
@@ -72,16 +77,14 @@ def report_analysis(analysis, output_dir, annotation_path=None, pdf=False, title
     """解析結果を表示して保存します。正解注釈があれば、切り出し位置に合わせて評価もします。"""
     import matplotlib.pyplot as plt
 
-    from .evaluation import crop_intervals, evaluate_segments, read_annotation_csv
+    from .evaluation import evaluate_segments, reference_for_clip
     from .plots import plot_analysis
     from .results import print_segments, save_analysis, save_json
 
     reference = None
     extra = dict(extra or {})
     if annotation_path:
-        clip_start = analysis.clip.offset_s
-        clip_end = clip_start + analysis.clip.duration_s
-        reference = crop_intervals(read_annotation_csv(annotation_path), clip_start, clip_end)
+        reference = reference_for_clip(annotation_path, analysis.clip)
         extra["evaluation"] = evaluate_segments(reference, analysis.segments)
         extra["annotation"] = str(annotation_path)
     figure = plot_analysis(analysis, title, reference)
@@ -120,8 +123,11 @@ def run_analyse(args):
     if not args.separate:
         report_analysis(recognise_chords(clip, settings), output_dir, args.annotation, args.pdf, name)
         return
+    from .evaluation import reference_for_clip
     from .separation import describe_separation, separate_guitar
 
+    if args.annotation:
+        reference_for_clip(args.annotation, clip)  # 時間のかかる分離の前に、注釈の誤りを見つけます
     result = separate_guitar(clip, args.model, args.device, cache_dir=args.cache_dir)
     guitar_path = save_audio(output_dir / "separated_guitar.wav", result.guitar)
     print(f"分離したギター: {guitar_path.resolve()}（{result.model_name}, {result.device}, キャッシュ利用: {result.from_cache}）")
@@ -137,27 +143,68 @@ def run_analyse(args):
 
 
 def run_separate(args):
-    """音源からギターを分離して保存します。"""
-    from .audio import load_audio, save_audio
-    from .separation import separate_guitar
+    """音源からギターを分離して保存します。元ファイルでの位置と分離の条件は separation.json に記録します。"""
+    from .audio import describe_clip, file_sha256, load_audio, save_audio
+    from .results import code_version, library_versions, now_utc, save_json
+    from .separation import describe_separation, separate_guitar
 
     clip = load_audio(args.input, args.start, args.duration)
     result = separate_guitar(clip, args.model, args.device, cache_dir=args.cache_dir)
     output_dir = Path(args.output_dir or Path("outputs") / "separate" / Path(args.input).stem)
     guitar_path = save_audio(output_dir / "guitar.wav", result.guitar)
     rest_path = save_audio(output_dir / "without_guitar.wav", result.rest)
+    info_path = save_json(output_dir / "separation.json", {
+        "created_utc": now_utc(),
+        "input": dict(describe_clip(clip), sha256=file_sha256(args.input)),
+        "outputs": {"guitar": guitar_path.name, "without_guitar": rest_path.name},
+        "time_axis": "0 s of the saved WAV files = input.offset_s of the source file",
+        "model": result.model_name,
+        "separation": describe_separation(result),
+        "libraries": library_versions(),
+        "code": code_version(),
+    })
     print(f"モデル: {result.model_name}、デバイス: {result.device}、処理時間: {result.seconds:.1f}秒、キャッシュ利用: {result.from_cache}")
-    print(f"保存しました: {guitar_path.resolve()}\n            {rest_path.resolve()}")
+    print(f"保存しました: {guitar_path.resolve()}\n            {rest_path.resolve()}\n            {info_path.resolve()}")
+    print(
+        f"保存した音の0秒は、元ファイルの {clip.offset_s:.2f} 秒です。元ファイルの時刻でコードを推定するときは、"
+        "analyse に元の音源と --start・--duration・--separate を指定します（分離結果はキャッシュから再利用します）"
+    )
+
+
+def source_duration_for(prediction_path):
+    """chords.csv と同じフォルダの analysis.json から元の音声ファイルを探し、その長さ [秒] を返します。
+
+    analysis.json や音声ファイルが見つからなければ None を返します。
+    """
+    from .audio import file_duration
+
+    info_path = Path(prediction_path).with_name("analysis.json")
+    if not info_path.exists():
+        return None
+    try:
+        with open(info_path, encoding="utf-8") as file:
+            source = json.load(file).get("input", {}).get("source_path", "")
+    except ValueError:  # JSON として読めないファイル
+        return None
+    if not source or not Path(source).exists():
+        return None
+    return file_duration(source)
 
 
 def run_evaluate(args):
-    """保存した推定結果CSVを正解注釈CSVと比べます。"""
+    """保存した推定結果CSVを正解注釈CSVと比べます。注釈は、解析した範囲の分だけを使います。"""
     from .evaluation import crop_intervals, evaluate_segments, read_annotation_csv, read_prediction_csv
 
-    reference = read_annotation_csv(args.annotation)
-    if args.offset:
-        reference = crop_intervals(reference, args.offset, float("inf"))
-    print_evaluation(evaluate_segments(reference, read_prediction_csv(args.prediction)))
+    segments, offset_s = read_prediction_csv(args.prediction)
+    if args.offset is not None:
+        offset_s = args.offset
+    end_s = offset_s + segments[-1].end_s
+    duration_s = source_duration_for(args.prediction)
+    if duration_s is None:
+        print("注意: 元の音声ファイルが見つからないため、注釈が音源より長くないかは確かめていません")
+    reference = crop_intervals(read_annotation_csv(args.annotation, duration_s), offset_s, end_s)
+    print(f"元ファイルの {offset_s:.2f}〜{end_s:.2f} 秒の注釈と比べます")
+    print_evaluation(evaluate_segments(reference, segments))
 
 
 def run_make_demo(args):
@@ -233,8 +280,8 @@ def build_parser():
     evaluate.add_argument("prediction", help="推定結果（chords.csv）")
     evaluate.add_argument("annotation", help="正解注釈CSV")
     evaluate.add_argument(
-        "--offset", type=float, default=0.0,
-        help="推定に使った音源が元ファイルの何秒目から始まるか（注釈の時刻をずらす）",
+        "--offset", type=float, default=None,
+        help="推定に使った音源が元ファイルの何秒目から始まるか（省略時は chords.csv の source_start_s から求める）",
     )
     evaluate.set_defaults(handler=run_evaluate)
 
@@ -267,7 +314,7 @@ def main(argv=None):
     args = build_parser().parse_args(argv)
     try:
         args.handler(args)
-    except (FileNotFoundError, ValueError, SeparationError) as error:
+    except (OSError, ValueError, SeparationError) as error:  # OSError はファイルや通信のエラーです
         print(f"エラー: {error}", file=sys.stderr)
         return 1
     return 0

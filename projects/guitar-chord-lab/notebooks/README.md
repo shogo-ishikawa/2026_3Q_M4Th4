@@ -10,7 +10,7 @@ Google Colab で上のセルから順に実行する教材です。処理の本�
 
 Colab で開くリンクは、作品の [README](../README.md) にあります。
 
-- 最初のセルが、リポジトリの取得（`/content/2026_3Q_M4Th4`）、この作品だけのインストール、作業ディレクトリの設定（`/content/2026_3Q_M4Th4/projects/guitar-chord-lab`）、使用コミットの表示を行います。
+- 最初のセルが、リポジトリの取得（`/content/2026_3Q_M4Th4`）、指定したブランチ（`BRANCH`）またはコミット（`COMMIT`）への切り替え、この作品だけのインストール、作業ディレクトリの設定（`/content/2026_3Q_M4Th4/projects/guitar-chord-lab`）、使用コミットの表示を行います。コードの版が変わったときは、セッションの再起動を求める表示が出ます。
 - 結果は作業ディレクトリの `outputs/` に保存します。
 - 既定の入力は GuitarSet の実ギター録音です（ネット接続が必要）。Notebook 1 は取得に失敗すると合成デモに切り替えます。
 - リポジトリには実行結果を含めない状態で保存しています。ローカルで一括実行して確かめるときは `python scripts/run_notebooks.py notebooks/*.ipynb` を使います（結果は `outputs/notebook_runs/`）。

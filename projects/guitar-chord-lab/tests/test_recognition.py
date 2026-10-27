@@ -140,3 +140,55 @@ def test_plucked_demo_is_mostly_recognised():
         metrics = evaluate_segments(progression_to_intervals(progression), analysis.segments)
         assert metrics["accuracy"] >= 0.9, (name, metrics)
         assert metrics["wrong_s"] == 0, (name, metrics)
+
+
+def test_undecided_segments_are_not_merged_and_keep_their_own_scores():
+    """判定保留の区間はまとめず、それぞれの区間で判定に使った候補と類似度を残します。"""
+    from guitar_chord_lab.recognition import choose_top_two
+
+    samples = np.concatenate([sine_chord("C:maj", 1.5), sine_chord("A:min", 1.5)])
+    settings = ChordSettings(min_score=1.0, smoothing_segments=3)  # どの区間も判定保留になる
+    analysis = recognise_chords(make_clip(samples, SAMPLE_RATE), settings)
+    assert len(analysis.segments) == len(analysis.segment_edges)
+    for index, segment in enumerate(analysis.segments):
+        candidate_1, score_1, candidate_2, score_2 = choose_top_two(analysis.scores[index])
+        assert segment.status == "undecided"
+        assert (segment.candidate_1, segment.candidate_2) == (candidate_1, candidate_2)
+        assert segment.score_1 == pytest.approx(score_1)
+        assert segment.score_1 < settings.min_score or segment.margin < settings.min_margin
+
+
+def test_silent_segments_have_no_similarity_values(tmp_path):
+    from guitar_chord_lab.results import save_scores_csv
+
+    samples = np.concatenate([silence(1.0), sine_chord("G:maj", 2.0), silence(1.0)])
+    analysis = recognise_chords(make_clip(samples, SAMPLE_RATE), ChordSettings())
+    for index, label in enumerate(analysis.segment_labels):
+        assert np.isnan(analysis.scores[index]).all() == (label == "N")
+    path = save_scores_csv(analysis, tmp_path / "scores.csv")
+    first_row = path.read_text(encoding="utf-8").splitlines()[1].split(",")
+    assert first_row[3] == "N" and first_row[4:] == [""] * 24  # N の区間の類似度は空欄
+
+
+@pytest.mark.parametrize(
+    "values, message",
+    [
+        ({"smoothing_segments": 3.0}, "整数"),
+        ({"hop_length": True}, "整数"),
+        ({"min_score": "0.6"}, "数で指定"),
+        ({"silence_db": float("nan")}, "数で指定"),
+        ({"segment_seconds": float("inf")}, "数で指定"),
+        ({"silence_db": 10.0}, "silence_db"),
+        ({"sample_rate": 8000}, "11025"),
+    ],
+)
+def test_setting_types_and_ranges_are_checked(values, message):
+    with pytest.raises(ValueError, match=message):
+        settings_from_dict(values)
+
+
+def test_settings_file_needs_an_analysis_table(tmp_path):
+    config = tmp_path / "typo.toml"
+    config.write_text("[analyse]\nsegment_seconds = 0.25\n", encoding="utf-8")
+    with pytest.raises(ValueError, match=r"\[analysis\]"):
+        load_settings(config)

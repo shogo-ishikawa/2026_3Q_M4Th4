@@ -83,3 +83,12 @@ def test_rms_db():
     assert rms_db(np.ones(100)) == pytest.approx(0.0)
     assert rms_db(np.zeros(100)) == pytest.approx(-120.0)
     assert rms_db(0.1 * np.ones(100)) == pytest.approx(-20.0)
+
+
+@pytest.mark.parametrize("name", ["phone_recording.mp3", "broken.wav"])
+def test_unreadable_audio_gives_a_clear_error(tmp_path, name):
+    path = tmp_path / name
+    path.write_bytes(b"this is not audio data " * 200)
+    with pytest.raises(ValueError, match="読み込めませんでした") as caught:
+        load_audio(path)
+    assert "ffmpeg" in str(caught.value)

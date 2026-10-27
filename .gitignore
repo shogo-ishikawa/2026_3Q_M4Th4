@@ -43,6 +43,7 @@ _private/
 # Data downloads, model caches, generated results and distribution archives
 **/data/raw/
 **/data/processed/
+**/data/generated/
 **/model_cache/
 **/.cache/
 **/outputs/**

@@ -9,8 +9,11 @@ Demucs を導入していなくても、単独音源のコード認識など他�
 導入方法（作品フォルダで実行）: pip install -e ".[separation]"
 """
 
+import gc
 import hashlib
 import json
+import math
+import numbers
 import random
 import time
 from dataclasses import dataclass
@@ -39,7 +42,7 @@ class SeparationResult:
     model_name: str
     device: str
     from_cache: bool  # 保存済みの分離結果を再利用したか
-    seconds: float  # 分離（またはキャッシュの読み込み）にかかった時間 [秒]
+    seconds: float  # 分離にかかった時間 [秒]（キャッシュを使ったときは、最初に分離したときの時間）
     options: dict  # 分離の設定（モデル名、shifts、overlap、segment、seed）
 
 
@@ -86,17 +89,27 @@ def model_error_message(model_name, error):
     )
 
 
-def memory_error_message(device, error):
-    """メモリ不足で分離できなかったときの説明を作ります。"""
-    return (
-        f"メモリが足りず分離できませんでした（装置: {device}）。\n"
-        f"原因: {type(error).__name__}: {error}\n"
-        "対処:\n"
-        "- 切り出す長さ（duration）を短くしてください（まず10〜30秒）\n"
-        "- segment を小さくしてください（htdemucs 系は7.8秒以下。例: segment=5）\n"
-        '- GPUで起きた場合は device="cpu" にしてください\n'
-        "- 他のNotebookを閉じ、「ランタイム」→「セッションを再起動」してから実行し直してください"
-    )
+def describe_error(error):
+    """エラーの種類と内容を1行の文章にします。"""
+    return f"{type(error).__name__}: {error}"
+
+
+def memory_error_message(device, cause):
+    """メモリ不足で分離できなかったときの説明を、使った装置（cpu / cuda）に合わせて作ります。"""
+    lines = [f"メモリが足りず分離できませんでした（装置: {device}）。", f"原因: {cause}", "対処:"]
+    if device == "cuda":
+        lines += [
+            '- device="cpu" にして実行し直してください（CPU でも短い音源なら分離できます）',
+            "- 他のNotebookを閉じ、「ランタイム」→「セッションを再起動」して GPU のメモリを空けてから実行し直してください",
+            "- htdemucs 系のモデルは区切った音を7.8秒の長さに伸ばして処理するため、"
+            "segment を小さくしても GPU のメモリは減りません",
+        ]
+    else:
+        lines += [
+            "- 切り出す長さ（duration）を短くしてください（まず10〜30秒）",
+            "- 他のNotebookやプログラムを閉じ、「ランタイム」→「セッションを再起動」してから実行し直してください",
+        ]
+    return "\n".join(lines)
 
 
 def is_out_of_memory(error):
@@ -114,6 +127,30 @@ def is_out_of_memory(error):
 _SEPARATORS = {}  # 読み込んだモデルを使い回すための入れ物（同じ設定なら再読み込みしない）
 
 
+def check_separation_options(shifts, overlap, segment):
+    """分離の設定値を確かめ、問題があれば理由と使える範囲を示して SeparationError にします。"""
+    problems = []
+    if isinstance(shifts, bool) or not isinstance(shifts, numbers.Integral) or shifts < 0:
+        problems.append(f"shifts は0以上の整数にしてください（指定: {shifts!r}）")
+    if isinstance(overlap, bool) or not isinstance(overlap, numbers.Real) or not 0 <= overlap < 1:
+        problems.append(f"overlap は0以上1未満の数にしてください（指定: {overlap!r}）")
+    if segment is not None:
+        if isinstance(segment, bool) or not isinstance(segment, numbers.Real) or not 0 < segment < math.inf:
+            problems.append(f"segment は正の数 [秒] か None（指定しない）にしてください（指定: {segment!r}）")
+    if problems:
+        raise SeparationError("分離の設定に問題があります: " + "; ".join(problems))
+
+
+def check_segment_limit(separator, model_name, segment):
+    """segment がモデルの扱える長さを超えていないかを確かめます（htdemucs 系は7.8秒まで）。"""
+    limit = float(getattr(separator.model, "max_allowed_segment", math.inf))
+    if segment is not None and segment > limit:
+        raise SeparationError(
+            f"segment（{segment}秒）がモデル {model_name} の上限 {limit:.1f} 秒を超えています。"
+            f"{limit:.1f} 以下にするか、指定しないでください（None）"
+        )
+
+
 def load_separator(model_name, device, shifts, overlap, segment):
     """Demucs の Separator（分離器）を読み込みます。guitar を出力しないモデルはエラーにします。"""
     key = (model_name, device, shifts, overlap, segment)
@@ -126,8 +163,9 @@ def load_separator(model_name, device, shifts, overlap, segment):
         )
     except Exception as error:
         if is_out_of_memory(error):
-            raise SeparationError(memory_error_message(device, error)) from error
+            raise SeparationError(memory_error_message(device, describe_error(error))) from error
         raise SeparationError(model_error_message(model_name, error)) from error
+    check_segment_limit(separator, model_name, segment)
     sources = list(separator.model.sources)
     if GUITAR_SOURCE not in sources:
         raise SeparationError(
@@ -176,12 +214,12 @@ def load_cached(cache_dir, key, clip, options):
         meta = json.load(file)
     if meta.get("options") != options or meta.get("key") != key:
         return None
-    started = time.perf_counter()
     guitar = load_audio(folder / "guitar.wav")
     rest = load_audio(folder / "rest.wav")
     for item in [guitar, rest]:
         item.source_path, item.offset_s = clip.source_path, clip.offset_s
-    seconds = time.perf_counter() - started
+    # seconds には、最初に分離したときにかかった時間を入れます（読み込みの時間ではありません）
+    seconds = meta.get("seconds", float("nan"))
     return SeparationResult(guitar, rest, options["model"], meta["device"], True, seconds, options)
 
 
@@ -195,20 +233,31 @@ def save_cached(cache_dir, key, result, original_seconds):
         json.dump(meta, file, ensure_ascii=False, indent=2)
 
 
+def release_memory(torch, separator, device):
+    """メモリ不足のあとで、モデルを CPU に戻し、使っていない GPU のメモリを手放します。"""
+    gc.collect()
+    if device == "cuda":
+        separator.model.to("cpu")
+        torch.cuda.empty_cache()
+
+
 def run_separator(separator, samples, device, seed):
     """Demucs で分離を実行し、{音源名: 配列} の辞書を返します。"""
     torch, _ = import_demucs()
     random.seed(seed)  # shifts > 0 のときのずらし量を再現できるようにする
     torch.manual_seed(seed)
+    cause = None
     try:
         with torch.no_grad():
             _, stems = separator.separate_tensor(torch.from_numpy(samples), separator.samplerate)
     except Exception as error:
-        if is_out_of_memory(error):
-            if device == "cuda":
-                torch.cuda.empty_cache()
-            raise SeparationError(memory_error_message(device, error)) from error
-        raise SeparationError(f"分離中にエラーが起きました: {type(error).__name__}: {error}") from error
+        if not is_out_of_memory(error):
+            raise SeparationError(f"分離中にエラーが起きました: {describe_error(error)}") from error
+        # エラーには途中の計算結果が残っているので、文章だけを取り出して手放します
+        cause = describe_error(error)
+    if cause is not None:
+        release_memory(torch, separator, device)
+        raise SeparationError(memory_error_message(device, cause))
     return {name: stem.cpu().numpy() for name, stem in stems.items()}
 
 
@@ -220,6 +269,7 @@ def separate_guitar(
     shifts: 0なら1回だけ推定します（再現しやすい）。増やすと時間をずらした推定を平均します。
     cache_dir: 指定すると、同じ入力・設定の結果を保存して再利用します。
     """
+    check_separation_options(shifts, overlap, segment)
     options = {
         "model": model_name, "shifts": shifts, "overlap": overlap, "segment": segment,
         "seed": seed, "demucs": demucs_version(), "cache_format": CACHE_FORMAT,

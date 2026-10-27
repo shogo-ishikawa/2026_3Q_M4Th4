@@ -35,7 +35,7 @@ Notebook では [03_comparison_experiment.ipynb](../notebooks/03_comparison_expe
 | `mixture` | ギターに伴奏を混ぜた音（`artificial`）、または実際に合奏を録音した音（`recorded`） |
 | `separated` | `mixture` から Demucs（htdemucs_6s）で取り出したギター |
 
-3条件とも同じ認識器・同じ設定（`[analysis]`）で解析します。3つの音は同じ録音の同じ位置から切り出し、同じサンプリング周波数（44100 Hz、モノラル）にそろえてから解析します。分離した音は入力と同じ長さで出力されることを確認し、単独ギターとの時間のずれを相互相関で測って `lag_vs_solo_ms` に記録します。
+3条件とも同じ認識器・同じ設定（`[analysis]`）で解析します。3つの音は同じ録音の同じ位置から切り出し、同じサンプリング周波数（44100 Hz、モノラル）にそろえてから解析します。分離した音は 44100 Hz・モノラルに戻した後、リサンプリングの丸めで生じる1〜2サンプルの差を詰めて混合音と同じ長さにそろえ（0.01秒より大きく違うときはエラー）、単独ギターとの時間のずれを相互相関で測って `lag_vs_solo_ms` に記録します。
 
 ## 3. 設定ファイルの書き方
 
@@ -46,8 +46,13 @@ Notebook では [03_comparison_experiment.ipynb](../notebooks/03_comparison_expe
 | `[experiment]` | `name`、`output_dir`、`seed`、`conditions`、`accompaniment_db`（伴奏の音量の一覧）、`mix_sample_rate`、`peak_limit`、`save_audio`、`save_figures` |
 | `[separation]` | `model`（guitar を出力するモデル）、`device`（auto / cpu / cuda）、`shifts`、`overlap`、`segment`、`cache_dir` |
 | `[analysis]` | コード認識の設定（[analysis_default.toml](../configs/analysis_default.toml) と同じ項目） |
-| `[[recordings]]` | `id`、`source_id`（元素材ID）、`split`（tuning / evaluation）、`material`（synthetic / real）、`guitar`、`mixture`、`annotation`、`start_s`、`duration_s` |
-| `[[accompaniments]]` | `id`（伴奏ID）、`path`、`material`、`offset_s`（伴奏のどこから使うか） |
+| `[[recordings]]` | `id`、`source_id`（元素材ID）、`split`（tuning / evaluation）、`material`（synthetic / real）、`guitar`、`mixture`、`annotation`、`start_s`、`duration_s`、`third_played_ratio`（記録用）、`note` |
+| `[[accompaniments]]` | `id`（伴奏ID）、`path`、`material`、`offset_s`（伴奏のどこから使うか）、`note` |
+
+- 表にない項目名（綴りの誤りなど）は、読み込み時にエラーになります。
+- `source_id` を省略すると、使う音声ファイル（`guitar` または `mixture`）を元素材とみなします。同じファイルから切り出した録音は、同じ元素材として扱われます。
+- `segment`（分離で一度に処理する長さ [秒]）は、htdemucs 系のモデルでは7.8秒以下にします。省略（None）すればモデルの既定値を使います。
+- `[analysis]` の `sample_rate` は 11025 Hz 以上にします（CQT クロマで高い音まで調べるため）。
 
 ### 伴奏の音量の定義
 
@@ -79,7 +84,8 @@ start_s,end_s,chord
 - コード名は `C:maj`、`A:min`、`N` の形が基本です。`C`、`Am`、`Bb`、`Ebm` のような書き方も読み込めます。異名同音はシャープ側に統一します（例：`Db` → `C#:maj`、`Bbm` → `A#:min`）。
 - `N` は「コードがない（無音）」区間です。注釈を付けていない時間は評価しません。N と同じ意味にはしません。
 - `C:7`、`C:maj7`、`C/E`（転回形）、`C:sus4` などは**対応外としてエラー**になります。三和音や N に勝手に置き換えません。
-- 区間の重なり、順序の逆転、負の時刻、音源より長い区間、空欄も、行番号付きのエラーとして表示します。
+- 区間の重なり、順序の逆転、負の時刻、音源より長い区間、空欄も、ファイルの行番号付きのエラーとして表示します。
+- ファイルは UTF-8 で保存します（Excel では「CSV UTF-8（コンマ区切り）」）。
 - 単独ギターの推定結果を正解として使ってはいけません。
 
 ### 4.4 GuitarSet を使う
@@ -88,12 +94,12 @@ GuitarSet（Xi ほか、ISMIR 2018、CC BY 4.0）は、6人の奏者が5つの�
 
 - 正解には JAMS の「指示されたコード」（リードシートのコード）を使います。演奏から推定したコード注釈は転回形や7th等を含むため使いません。
 - 伴奏（comp）録音のうち、指示されたコードがメジャー／マイナーだけでできているのは120本（20曲 × 6人）です。
-- 指示されたコードと、ギターが実際に弾いた音は一致しないことがあります。例えば奏者01の `Rock3-148-C` は、ほとんどの区間で根音だけを弾いており、メジャーとマイナーを分ける3度の音が鳴っていません。音符注釈から「3度の音が弾かれている時間の割合」（`third_played_ratio`）を計算して記録し、0.9 未満の録音には注意を表示します。
+- 指示されたコードと、ギターが実際に弾いた音は一致しないことがあります。例えば奏者01の `Rock3-148-C` は、ほとんどの区間で根音だけを弾いており、メジャーとマイナーを分ける3度の音が鳴っていません。音符注釈から「3度の音が少なくとも一度弾かれたコード区間の、時間の割合」（`third_played_ratio`）を計算して記録し、0.9 未満の録音には注意を表示します。3度の音が鳴り続けている時間の割合ではないので、1.0 でも3度がごく短くしか鳴っていない区間を含むことがあります。
 - 配布物や論文で使うときは、出典（`guitar_chord_lab.guitarset.CITATION`）を明記してください。
 
 ## 5. 調整用と評価用の分け方
 
-- 分割は**元素材（`source_id`）単位**です。同じ録音の切り出し、音量違い、分離結果を両側に入れません。設定ファイルを読み込むときに、同じ `source_id` が両側に入っていればエラーにします。
+- 分割は**元素材（`source_id`）単位**です。同じ録音の切り出し、音量違い、分離結果を両側に入れません。設定ファイルを読み込むときに、同じ `source_id`、または同じ音声ファイルが両側に入っていればエラーにします。
 - 素材が多いときは `guitar_chord_lab.experiment.assign_splits_by_source(source_ids, tuning_fraction, seed)` で、元素材IDを乱数シード付きで分けられます。
 - GuitarSet では奏者単位で分けるのが安全です。同じ奏者の録音を両側に入れると、奏者の癖に合わせた設定を選んでしまうおそれがあります。
 - 解析設定は調整用の結果だけを見て決め、評価用は決めた設定で最後に1回だけ評価します。
@@ -107,16 +113,19 @@ GuitarSet（Xi ほか、ISMIR 2018、CC BY 4.0）は、6人の奏者が5つの�
 | `correct_s`、`wrong_s`、`undecided_s`、`missing_s` | 正解・誤り・判定保留・予測なしの時間 [秒] |
 | `difference` | 同じ録音・伴奏・音量での `separated` の正解率 − `mixture` の正解率 |
 
-時間は、正解区間と予測区間が**重なっている時間**から計算します。判定保留と予測のない時間は評価対象に含めたまま不正解として数えます。評価の計算は、判定保留を含まない場合について mir_eval の `majmin` 比較と同じ値になることをテストで確認しています。
+時間は、正解区間と予測区間が**重なっている時間**から計算します。判定保留と予測のない時間は評価対象に含めたまま不正解として数えます。評価の計算は、正解と予測がどちらも評価範囲を隙間なく覆い、判定保留を含まない場合について、mir_eval の `majmin` 比較と同じ値になることをテストで確認しています。注釈のない時間を評価から外すことと、判定保留を不正解として数えることは、この作品で決めた扱いです。
 
 | 出力ファイル | 内容 |
 | --- | --- |
 | `items.csv` | 1行＝1つの録音・条件・伴奏の音量。処理時間、分離の時間とキャッシュ利用の有無、時間ずれを含む |
 | `paired_differences.csv` | 同じ録音の分離前後の対応付け |
-| `summary_by_condition.csv`、`summary_differences.csv` | 平均、標準偏差、最小、最大、録音数、元素材数 |
-| `experiment.json` | 設定、件数（元録音数・切り出し数・人工混合の条件数・合奏録音数）、ライブラリの版、コミット |
-| `summary.png` | 条件別の正解率と分離前後の差（人工混合のみ） |
+| `summary_by_condition.csv`、`summary_differences.csv` | 素材・条件・伴奏・音量ごとの平均、標準偏差、最小、最大と、元素材数（`n_sources`）・切り出し数（`n_clips`） |
+| `experiment.json` | 設定ファイルの内容、実際に使った設定（省略した項目の既定値を含む `effective_settings`）、件数（元録音数・切り出し数・人工混合の条件数・合奏録音数）、ライブラリの版、コミット |
+| `summary.png` | 条件別の正解率と分離前後の差（人工混合は伴奏の音量ごと、合奏録音は録音ごと）、コード認識と分離の処理時間。題名に区分（split）、分離モデル、解析条件 |
 | `items/<録音>/...` | 条件ごとの推定結果（`chords.csv`、`analysis.json`）と音（`mixture.wav`、`separated_guitar.wav`） |
+
+- 集計では、同じ元素材から複数の切り出しがあるとき、まず元素材ごとに平均してから、元素材の間で平均・標準偏差・最小・最大を計算します。同じ録音の切り出しを、独立した曲として数えないためです。
+- `items.csv` と集計のファイルは実行のたびに書き直します（分離を行わない実行でも、`paired_differences.csv` と `summary_differences.csv` は見出しだけのファイルに書き直します）。一方、`items/` には前の実行のファイルが残ることがあります。条件や設定を変えて比べるときは、`--output-dir outputs/別の名前` のように保存先を分けてください。
 
 ## 7. 既定の解析設定の決め方
 

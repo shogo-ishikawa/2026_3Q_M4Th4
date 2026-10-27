@@ -40,8 +40,11 @@ def test_out_of_memory_is_recognised(error, expected):
 def test_error_messages_explain_what_to_do():
     model_text = sep.model_error_message("htdemucs_6s", OSError("Connection refused"))
     assert "Connection refused" in model_text and "インターネット" in model_text and "HF_HOME" in model_text
-    memory_text = sep.memory_error_message("cuda", RuntimeError("CUDA out of memory"))
-    assert "duration" in memory_text and "segment" in memory_text and 'device="cpu"' in memory_text
+    gpu_text = sep.memory_error_message("cuda", "OutOfMemoryError: CUDA out of memory")
+    assert 'device="cpu"' in gpu_text and "セッションを再起動" in gpu_text
+    assert "duration" not in gpu_text  # htdemucs 系では GPU のメモリが減らないので勧めない
+    cpu_text = sep.memory_error_message("cpu", "RuntimeError: DefaultCPUAllocator: can't allocate memory")
+    assert "duration" in cpu_text and 'device="cpu"' not in cpu_text
 
 
 class FakeSeparator:
@@ -130,3 +133,86 @@ def test_real_demucs_separation(tmp_path):
     assert result.guitar.duration_s == pytest.approx(clip.duration_s)
     again = sep.separate_guitar(clip, device="cpu", cache_dir=tmp_path)
     assert again.from_cache
+
+
+@pytest.mark.parametrize(
+    "options, message",
+    [
+        ({"shifts": 1.5}, "shifts"),
+        ({"shifts": -1}, "shifts"),
+        ({"overlap": 1.0}, "overlap"),
+        ({"segment": 0}, "segment"),
+        ({"segment": float("nan")}, "segment"),
+    ],
+)
+def test_invalid_separation_options_are_rejected_before_loading(monkeypatch, options, message):
+    def must_not_load(*args):
+        raise AssertionError("設定が不正なら、モデルを読み込む前に止めるはず")
+
+    monkeypatch.setattr(sep, "load_separator", must_not_load)
+    clip = make_clip(sine_chord("C:maj", 2.5), 22050)
+    with pytest.raises(sep.SeparationError, match=message):
+        sep.separate_guitar(clip, device="cpu", **options)
+
+
+def test_segment_longer_than_the_model_limit_is_rejected(monkeypatch):
+    separator = FakeSeparator(["drums", "guitar"])
+    separator.model.max_allowed_segment = 7.8
+    monkeypatch.setattr(sep, "import_demucs", lambda: (None, SimpleNamespace(Separator=lambda **kwargs: separator)))
+    monkeypatch.setattr(sep, "_SEPARATORS", {})
+    with pytest.raises(sep.SeparationError, match="上限 7.8 秒"):
+        sep.load_separator("htdemucs_6s", "cpu", 0, 0.25, 8)
+    assert sep.load_separator("htdemucs_6s", "cpu", 0, 0.25, 7) is separator
+
+
+class FakeCuda:
+    def __init__(self):
+        self.emptied = False
+
+    def empty_cache(self):
+        self.emptied = True
+
+
+class FakeTorch:
+    """GPU がなくても、メモリ不足のときの後始末を確かめるための偽の torch です。"""
+
+    def __init__(self):
+        self.cuda = FakeCuda()
+
+    def manual_seed(self, seed):
+        pass
+
+    def no_grad(self):
+        import contextlib
+
+        return contextlib.nullcontext()
+
+    def from_numpy(self, samples):
+        return samples
+
+
+def test_gpu_out_of_memory_frees_memory_and_drops_the_traceback(monkeypatch):
+    fake_torch = FakeTorch()
+    monkeypatch.setattr(sep, "import_demucs", lambda: (fake_torch, None))
+    moved = []
+
+    class OutOfMemorySeparator:
+        samplerate = 44100
+        model = SimpleNamespace(to=lambda device: moved.append(device))
+
+        def separate_tensor(self, wav, sr):
+            raise RuntimeError("CUDA out of memory. Tried to allocate 2.00 GiB")
+
+    with pytest.raises(sep.SeparationError) as caught:
+        sep.run_separator(OutOfMemorySeparator(), np.zeros((2, 10), dtype=np.float32), "cuda", 0)
+    assert 'device="cpu"' in str(caught.value)
+    assert caught.value.__cause__ is None and caught.value.__context__ is None  # 途中の計算結果を持ち続けない
+    assert moved == ["cpu"] and fake_torch.cuda.emptied
+
+
+def test_cached_result_reports_the_original_separation_time(monkeypatch, tmp_path):
+    install_fake_separation(monkeypatch, [])
+    clip = make_clip(sine_chord("C:maj", 2.5), 22050)
+    first = sep.separate_guitar(clip, cache_dir=tmp_path)
+    second = sep.separate_guitar(clip, cache_dir=tmp_path)
+    assert second.from_cache and second.seconds == pytest.approx(first.seconds)

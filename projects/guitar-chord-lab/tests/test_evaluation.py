@@ -163,3 +163,68 @@ def test_overlap_is_found_even_after_an_unsupported_chord(tmp_path):
         read_annotation_csv(path)
     text = str(caught.value)
     assert "2行目: 対応外のコード" in text and "3行目: 前の行の区間" in text
+
+
+def test_spaces_in_the_header_are_accepted(tmp_path):
+    path = write_csv(tmp_path / "a.csv", "start_s, end_s, chord\n0, 1, C\n1, 2, Am\n")
+    assert [i.chord for i in read_annotation_csv(path)] == ["C:maj", "A:min"]
+
+
+def test_non_utf8_annotation_gives_a_hint(tmp_path):
+    path = tmp_path / "excel.csv"
+    path.write_bytes("start_s,end_s,chord,note\n0,1,C,イントロ\n".encode("cp932"))
+    with pytest.raises(AnnotationError, match="UTF-8"):
+        read_annotation_csv(path)
+
+
+def test_row_numbers_count_blank_lines(tmp_path):
+    path = write_csv(tmp_path / "a.csv", "start_s,end_s,chord\n0,1,C\n\n1,2,C:7\n")
+    with pytest.raises(AnnotationError, match="4行目: 対応外のコード"):
+        read_annotation_csv(path)
+
+
+def test_overlaps_within_the_tolerance_are_not_counted_twice():
+    reference = [ChordInterval(0.0, 4.0, "C:maj")]
+    metrics = evaluate_segments(reference, [pred(0.0, 2.0009, "C:maj"), pred(2.0, 4.0, "C:maj")])
+    assert metrics["accuracy"] == pytest.approx(1.0)
+    assert metrics["correct_s"] == pytest.approx(4.0)
+    total = metrics["correct_s"] + metrics["wrong_s"] + metrics["undecided_s"] + metrics["missing_s"]
+    assert total == pytest.approx(metrics["evaluated_s"])
+
+
+def test_find_gaps_ignores_intervals_beyond_the_range():
+    reference = [ChordInterval(0.0, 1.0, "C:maj"), ChordInterval(5.0, 6.0, "G:maj"), ChordInterval(8.0, 9.0, "A:min")]
+    assert find_gaps(reference, 0.0, 4.0) == [(1.0, 4.0)]
+    assert find_gaps([ChordInterval(0.0, 6.0, "C:maj")], 0.0, 4.0) == []
+
+
+def test_prediction_csv_with_bom_and_missing_columns(tmp_path):
+    from guitar_chord_lab.evaluation import read_prediction_csv
+
+    good = tmp_path / "chords.csv"
+    good.write_text(
+        "﻿start_s,end_s,source_start_s,source_end_s,status,chord\n0,2,3,5,chord,C:maj\n2,4,5,7,undecided,X\n",
+        encoding="utf-8",
+    )
+    segments, offset_s = read_prediction_csv(good)
+    assert offset_s == 3.0 and [s.chord for s in segments] == ["C:maj", "X"]
+    bad = tmp_path / "bad.csv"
+    bad.write_text("start_s,end_s,chord\n0,2,C:maj\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="status"):
+        read_prediction_csv(bad)
+
+
+def test_reference_for_clip_rejects_annotations_longer_than_the_source(tmp_path):
+    import soundfile as sf
+
+    from guitar_chord_lab.audio import load_audio
+    from guitar_chord_lab.evaluation import reference_for_clip
+
+    audio = tmp_path / "short.wav"
+    sf.write(audio, np.zeros(22050 * 4), 22050)
+    clip = load_audio(audio, start_s=1.0, duration_s=2.0)
+    good = write_csv(tmp_path / "good.csv", "start_s,end_s,chord\n0,2,C\n2,4,G\n")
+    assert reference_for_clip(good, clip) == [ChordInterval(0.0, 1.0, "C:maj"), ChordInterval(1.0, 2.0, "G:maj")]
+    too_long = write_csv(tmp_path / "long.csv", "start_s,end_s,chord\n0,4,C\n4,8,G\n")
+    with pytest.raises(AnnotationError, match="音源の長さ"):
+        reference_for_clip(too_long, clip)

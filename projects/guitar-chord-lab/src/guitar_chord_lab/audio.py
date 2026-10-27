@@ -60,6 +60,30 @@ def check_audio_path(path):
     return path
 
 
+def unreadable_audio_error(path, error):
+    """soundfile が音声を読めなかったときに、原因と対処を説明するエラーを作ります。"""
+    return ValueError(
+        f"音声ファイル {Path(path).name} を読み込めませんでした。ファイルが壊れているか、"
+        "拡張子と中身の形式が違う可能性があります（例: AAC の音を .mp3 という名前で保存した）。"
+        f"ffmpeg -i '{Path(path).name}' output.wav でWAVに変換してから試してください（詳細: {error}）"
+    )
+
+
+def read_info(path):
+    """音声ファイルのサンプリング周波数や長さなどの情報を、中身を読み込まずに調べます。"""
+    path = check_audio_path(path)
+    try:
+        return sf.info(str(path))
+    except RuntimeError as error:  # soundfile の読み込みエラーは RuntimeError の一種です
+        raise unreadable_audio_error(path, error) from error
+
+
+def file_duration(path):
+    """音声ファイル全体の長さ [秒] を返します。"""
+    info = read_info(path)
+    return info.frames / info.samplerate
+
+
 def load_audio(path, start_s=0.0, duration_s=None):
     """音声ファイルの一部を読み込みます。
 
@@ -67,7 +91,7 @@ def load_audio(path, start_s=0.0, duration_s=None):
     duration_s: 読み込む長さ [秒]。None ならファイルの最後まで読みます。
     """
     path = check_audio_path(path)
-    info = sf.info(str(path))
+    info = read_info(path)
     total_s = info.frames / info.samplerate
     if start_s < 0:
         raise ValueError(f"開始時刻は0秒以上にしてください（指定: {start_s}秒）")
@@ -83,9 +107,12 @@ def load_audio(path, start_s=0.0, duration_s=None):
             warnings.warn(
                 f"指定範囲が音源の長さ {total_s:.2f}秒 を超えるため、最後までを読み込みます"
             )
-    data, sample_rate = sf.read(
-        str(path), start=start_frame, frames=frames, dtype="float32", always_2d=True
-    )
+    try:
+        data, sample_rate = sf.read(
+            str(path), start=start_frame, frames=frames, dtype="float32", always_2d=True
+        )
+    except RuntimeError as error:
+        raise unreadable_audio_error(path, error) from error
     if data.shape[0] == 0:
         raise ValueError(f"読み込んだ音声が空です: {path}")
     return AudioClip(data.T.copy(), sample_rate, str(path), start_frame / sample_rate)

@@ -16,6 +16,7 @@ import io
 import json
 import os
 import shutil
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -36,11 +37,12 @@ CITATION = (
     'Transcription", Proc. ISMIR 2018. https://zenodo.org/records/3371780'
 )
 
-# 例として使う伴奏（comp）録音。次の規則で、推定結果を見ずに注釈だけから選びました。
+# 例として使う伴奏（comp）録音。注釈だけを使う次の規則で選びました。ただし規則は、これらを含む120本の
+# 単独ギターの推定結果を一度見た後で決めました（docs/research-guide.md の 8.）。
 # - 奏者00は既定値の調整に使ったため除き、奏者01〜05に1つずつスタイルを割り当てる
 #   （01: Rock、02: SS、03: BN、04: Funk、05: Jazz）
 # - そのスタイルでマイナーコードを含む2曲のうち、録音IDの順で最初に
-#   「3度の音が弾かれている時間の割合（third_played_ratio）が0.9以上」を満たすものを選ぶ
+#   third_played_ratio（3度の音が少なくとも一度弾かれたコード区間の、時間の割合）が0.9以上のものを選ぶ
 EXAMPLE_TRACKS = [
     "01_Rock3-117-Bb_comp",
     "02_SS3-98-C_comp",
@@ -107,15 +109,32 @@ class HttpRangeFile(io.RawIOBase):
 
 
 def fetch_zip_member(zip_name, member, destination):
-    """Zenodo 上のZIPから、member（ZIPの中のファイル名）だけを destination に保存します。"""
+    """Zenodo 上のZIPから、member（ZIPの中のファイル名）だけを destination に保存します。
+
+    取り出し中は「.part」を付けた名前で書き、最後まで取り出せたときだけ本来の名前に変えます。
+    途中で通信が切れても、不完全なファイルを完成品として使わないためです。
+    """
     destination = Path(destination)
     if destination.exists():
         return destination
     destination.parent.mkdir(parents=True, exist_ok=True)
-    remote = io.BufferedReader(HttpRangeFile(zip_url(zip_name)), buffer_size=1024 * 1024)
-    with zipfile.ZipFile(remote) as archive:
-        with archive.open(member) as source, open(destination, "wb") as target:
-            shutil.copyfileobj(source, target)
+    partial = destination.with_name(destination.name + ".part")
+    try:
+        remote = io.BufferedReader(HttpRangeFile(zip_url(zip_name)), buffer_size=1024 * 1024)
+        with zipfile.ZipFile(remote) as archive:
+            with archive.open(member) as source, open(partial, "wb") as target:
+                shutil.copyfileobj(source, target)  # 最後まで読むと、ZIPの検査値（CRC）も確かめられます
+    except KeyError:  # ZIPの中に member という名前のファイルがない
+        raise ValueError(
+            f"GuitarSet の {zip_name} に {member} がありません。録音IDを確かめてください"
+            f"（例: {EXAMPLE_TRACKS[0]}。末尾の _comp または _solo まで書きます）"
+        ) from None
+    except (urllib.error.URLError, TimeoutError, ConnectionError) as error:
+        raise ConnectionError(
+            f"GuitarSet（Zenodo）からファイルを取得できませんでした（{error}）。"
+            "インターネットに接続できるか確かめ、しばらくしてからもう一度実行してください"
+        ) from error
+    partial.replace(destination)
     return destination
 
 
@@ -172,9 +191,11 @@ def read_played_notes(jams_path):
 
 
 def third_played_ratio(jams_path, min_overlap_s=0.05):
-    """指示されたコードの区間のうち、そのコードの3度の音が実際に弾かれている時間の割合を返します。
+    """指示されたコードの区間のうち、そのコードの3度の音が少なくとも一度弾かれた区間の、時間の割合を返します。
 
-    3度（Cメジャーなら E、Aマイナーなら C）が鳴っていないと、ギターの音だけからは
+    区間の中で3度の音符が min_overlap_s 秒より長く重なっていれば、その区間の長さ全体を数えます。
+    3度の音が鳴り続けている時間の割合ではありません。
+    3度（Cメジャーなら E、Aマイナーなら C）が弾かれていないと、ギターの音だけからは
     メジャーとマイナーを区別できません。素材を選ぶ目安に使います（推定結果は使いません）。
     """
     notes = read_played_notes(jams_path)
@@ -187,7 +208,7 @@ def third_played_ratio(jams_path, min_overlap_s=0.05):
             if pitch_class == third and overlap > min_overlap_s:
                 played_s += end_s - start_s
                 break
-    return played_s / total_s
+    return round(played_s / total_s, 6)  # 計算の誤差で 0.5 が 0.4999… にならないように丸めます
 
 
 def prepare_track(track_id, folder):
@@ -244,7 +265,10 @@ def prepare_guitarset_experiment(
         audio_path, annotation_path = prepare_track(track_id, data_dir)
         ratio = third_played_ratio(data_dir / f"{track_id}.jams")
         if ratio < MIN_THIRD_RATIO:
-            print(f"注意: {track_id} は3度の音が弾かれている時間が {ratio:.0%} しかありません（メジャー／マイナーの評価に不向き）")
+            print(
+                f"注意: {track_id} は、3度の音が弾かれたコード区間が時間の {ratio:.0%} しかありません"
+                "（メジャー／マイナーの評価に不向き）"
+            )
         total_s = sf.info(str(audio_path)).duration
         clip_s = total_s if duration_s is None else min(duration_s, total_s)
         longest_s = max(longest_s, clip_s)

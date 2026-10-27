@@ -88,3 +88,69 @@ def test_download_one_track_from_zenodo(tmp_path):
     assert sf.info(str(audio)).samplerate == 44100
     assert read_annotation_csv(annotation)
     assert gs.third_played_ratio(tmp_path / f"{gs.EXAMPLE_TRACKS[0]}.jams") >= gs.MIN_THIRD_RATIO
+
+
+def test_interrupted_download_is_not_used_as_a_finished_file(tmp_path, monkeypatch):
+    import io
+    import zipfile
+
+    archive_path = tmp_path / "remote.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("a_mic.wav", b"x" * 5000)
+    monkeypatch.setattr(gs, "HttpRangeFile", lambda url: io.FileIO(archive_path))
+    destination = tmp_path / "data" / "a_mic.wav"
+
+    def broken_copy(source, target):
+        target.write(source.read(100))
+        raise OSError("connection reset")
+
+    monkeypatch.setattr(gs.shutil, "copyfileobj", broken_copy)
+    with pytest.raises(OSError):
+        gs.fetch_zip_member("remote.zip", "a_mic.wav", destination)
+    assert not destination.exists()  # 途中までのファイルは .part のまま残り、完成品として使われない
+    monkeypatch.undo()
+    monkeypatch.setattr(gs, "HttpRangeFile", lambda url: io.FileIO(archive_path))
+    gs.fetch_zip_member("remote.zip", "a_mic.wav", destination)
+    assert destination.read_bytes() == b"x" * 5000
+
+
+def test_unknown_recording_id_gives_a_clear_error(tmp_path, monkeypatch, capsys):
+    import io
+    import zipfile
+
+    from guitar_chord_lab.cli import main
+
+    archive_path = tmp_path / "remote.zip"
+    with zipfile.ZipFile(archive_path, "w") as archive:
+        archive.writestr("01_Rock3-117-Bb_comp_mic.wav", b"x" * 100)
+    monkeypatch.setattr(gs, "HttpRangeFile", lambda url: io.FileIO(archive_path))
+    with pytest.raises(ValueError, match="録音IDを確かめてください"):
+        gs.fetch_zip_member("remote.zip", "01_Rock3-117-Bb_mic.wav", tmp_path / "x.wav")  # 末尾の _comp がない
+    code = main(["guitarset", "--tracks", "01_Rock3-117-Bb", "--data-dir", str(tmp_path / "gs"),
+                 "--config", str(tmp_path / "gs" / "exp.toml")])
+    assert code == 1 and "_comp" in capsys.readouterr().err
+
+
+def test_network_failure_is_explained_without_a_traceback(tmp_path, monkeypatch, capsys):
+    import urllib.error
+
+    from guitar_chord_lab.cli import main
+
+    def offline(url):
+        raise urllib.error.URLError("Temporary failure in name resolution")
+
+    monkeypatch.setattr(gs, "HttpRangeFile", offline)
+    with pytest.raises(ConnectionError, match="インターネット"):
+        gs.fetch_zip_member("remote.zip", "a_mic.wav", tmp_path / "a_mic.wav")
+    code = main(["guitarset", "--data-dir", str(tmp_path / "gs"), "--config", str(tmp_path / "gs" / "exp.toml")])
+    assert code == 1 and "インターネット" in capsys.readouterr().err
+
+
+def test_third_played_ratio_is_not_pushed_below_a_boundary_by_rounding_errors(monkeypatch):
+    """計算の誤差で、ちょうど半分（0.5）が 0.4999… にならないことを確かめます（しきい値と比べるため）。"""
+    edges = [0.0, 0.1, 0.1 + 0.2, 0.75, 1.1]
+    chords = [(start, end, "C:maj") for start, end in zip(edges, edges[1:])]
+    third_notes = [(edges[0], edges[1], 4), (edges[2], edges[3], 4)]  # 1つ目と3つ目の区間だけ E（3度）を弾く
+    monkeypatch.setattr(gs, "read_instructed_chords", lambda path: chords)
+    monkeypatch.setattr(gs, "read_played_notes", lambda path: third_notes)
+    assert gs.third_played_ratio("unused.jams") == 0.5

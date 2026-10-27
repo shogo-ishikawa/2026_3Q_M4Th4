@@ -85,16 +85,36 @@ def git_commit(folder=PROJECT_DIR):
     return {"commit": commit, "uncommitted_changes": changes != ""}
 
 
+def is_tracked_project(folder=PROJECT_DIR):
+    """folder がGitで管理されたこの作品のフォルダなら True を返します（pip install . で入れたコードは False）。"""
+    if not (folder / "pyproject.toml").exists():
+        return False
+    try:
+        subprocess.run(
+            ["git", "ls-files", "--error-unmatch", "pyproject.toml"], cwd=folder, capture_output=True, check=True
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return False
+    return True
+
+
 def code_version():
     """使ったコードの版（パッケージの版とGitのコミット）を返します。
 
-    配布ZIPから実行した場合は、ZIPに含まれる release_info.json のコミットを使います。
+    配布ZIPから実行した場合は、ZIPに含まれる release_info.json のコミットを使います
+    （ZIPを別のGitリポジトリの中に展開しても、そのリポジトリのコミットとは取り違えません）。
+    どちらでもなければ（pip install . で入れた場合など）、コミットは "unknown" とします。
     """
-    info = {"package_version": __version__, "git": git_commit()}
+    info = {"package_version": __version__}
     release_file = PROJECT_DIR / "release_info.json"
-    if info["git"] is None and release_file.exists():
+    if release_file.exists():
         with open(release_file, encoding="utf-8") as file:
             info["release"] = json.load(file)
+    elif is_tracked_project(PROJECT_DIR):
+        info["git"] = git_commit(PROJECT_DIR)
+    else:
+        info["git"] = "unknown"
+        info["code_location"] = str(Path(__file__).resolve().parent)  # どのコードを使ったかの手がかり
     return info
 
 
@@ -132,11 +152,11 @@ def analysis_info(analysis, extra=None):
 
 
 def save_json(path, data):
-    """辞書をJSONファイルに保存します。"""
+    """辞書をJSONファイルに保存します。JSONで表せない値（設定ファイルに書いた日付など）は文字列にします。"""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w", encoding="utf-8") as file:
-        json.dump(data, file, ensure_ascii=False, indent=2)
+        json.dump(data, file, ensure_ascii=False, indent=2, default=str)
     return path
 
 

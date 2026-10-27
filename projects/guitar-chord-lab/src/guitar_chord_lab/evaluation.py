@@ -17,9 +17,11 @@ import math
 from dataclasses import dataclass
 from pathlib import Path
 
+from .audio import file_duration
 from .chords import UNDECIDED, normalise_chord_label
 
 REQUIRED_COLUMNS = ["start_s", "end_s", "chord"]
+PREDICTION_COLUMNS = ["start_s", "end_s", "status", "chord"]
 TIME_TOLERANCE_S = 1e-3  # 時刻の比較で許す誤差 [秒]
 
 
@@ -49,17 +51,18 @@ def parse_time(text, column, row_number, problems):
     return value
 
 
-def check_annotation_rows(rows, duration_s=None):
+def check_annotation_rows(rows, duration_s=None, row_numbers=None):
     """CSVの各行（辞書）を確かめ、(ChordInterval のリスト, 問題のリスト) を返します。
 
-    行番号はヘッダーを1行目とした、表計算ソフトと同じ番号です。
+    row_numbers には各行がファイルの何行目か（ヘッダーが1行目）を渡します。
+    省略したときは、空行がないものとして番号を付けます。
     時刻の確認（順序・重なり・範囲）は、コード名に問題がある行も含めて行います。
     """
     intervals = []
     problems = []
     previous_end = None
     for index, row in enumerate(rows):
-        row_number = index + 2
+        row_number = row_numbers[index] if row_numbers else index + 2
         start_s = parse_time(row.get("start_s"), "start_s", row_number, problems)
         end_s = parse_time(row.get("end_s"), "end_s", row_number, problems)
         chord = parse_chord(row.get("chord"), row_number, problems)
@@ -98,24 +101,47 @@ def parse_chord(text, row_number, problems):
 
 
 def read_annotation_csv(path, duration_s=None):
-    """正解注釈CSVを読み込み、検証してから ChordInterval のリストを返します。
+    """正解注釈CSV（UTF-8）を読み込み、検証してから ChordInterval のリストを返します。
 
     duration_s を指定すると、音源の長さを超える区間をエラーにします。
     """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(f"正解注釈ファイルが見つかりません: {path}")
-    with open(path, newline="", encoding="utf-8-sig") as file:
-        reader = csv.DictReader(file)
-        columns = reader.fieldnames or []
-        missing = [name for name in REQUIRED_COLUMNS if name not in columns]
-        if missing:
-            raise AnnotationError(f"{path.name}: 必要な列 {missing} がありません（必要な列: {REQUIRED_COLUMNS}）")
-        rows = list(reader)
-    intervals, problems = check_annotation_rows(rows, duration_s)
+    rows, row_numbers = [], []
+    try:
+        with open(path, newline="", encoding="utf-8-sig") as file:
+            reader = csv.DictReader(file)
+            columns = [name.strip() for name in (reader.fieldnames or [])]
+            reader.fieldnames = columns  # 列名の前後の空白は取り除いて読みます
+            missing = [name for name in REQUIRED_COLUMNS if name not in columns]
+            if missing:
+                raise AnnotationError(f"{path.name}: 必要な列 {missing} がありません（必要な列: {REQUIRED_COLUMNS}）")
+            for row in reader:
+                rows.append(row)
+                row_numbers.append(reader.line_num)  # ファイルの何行目か（空行も数えます）
+    except UnicodeDecodeError as error:
+        raise AnnotationError(
+            f"{path.name} を UTF-8 の文字として読めませんでした。表計算ソフトでは「CSV UTF-8」形式で"
+            f"保存してください（詳細: {error}）"
+        ) from error
+    intervals, problems = check_annotation_rows(rows, duration_s, row_numbers)
     if problems:
         raise AnnotationError(f"{path.name} に問題があります:\n- " + "\n- ".join(problems))
     return intervals
+
+
+def reference_for_clip(annotation_path, clip):
+    """正解注釈を読み込み、clip（切り出した音声）の範囲だけを、切り出し位置を0秒とする時刻で返します。
+
+    clip の元ファイルが分かるときは、元ファイルの長さを超える注釈をエラーにします
+    （別の長さのファイル用の注釈を使っていないかを確かめるためです）。
+    """
+    duration_s = None
+    if clip.source_path and Path(clip.source_path).exists():
+        duration_s = file_duration(clip.source_path)
+    full = read_annotation_csv(annotation_path, duration_s)
+    return crop_intervals(full, clip.offset_s, clip.offset_s + clip.duration_s)
 
 
 def write_annotation_csv(path, intervals):
@@ -145,12 +171,17 @@ def crop_intervals(intervals, start_s, end_s):
 
 
 def find_gaps(intervals, start_s, end_s):
-    """[start_s, end_s) のうち、注釈のない時間の (開始, 終了) のリストを返します。"""
+    """[start_s, end_s) のうち、注釈のない時間の (開始, 終了) のリストを返します。
+
+    intervals は時刻順に並んでいるものとします。範囲の外にある注釈は無視します。
+    """
     gaps = []
     time_s = start_s
     for interval in intervals:
+        if interval.start_s >= end_s:
+            break  # ここから先の注釈は範囲の外
         if interval.start_s - time_s > TIME_TOLERANCE_S:
-            gaps.append((time_s, min(interval.start_s, end_s)))
+            gaps.append((time_s, interval.start_s))
         time_s = max(time_s, interval.end_s)
     if end_s - time_s > TIME_TOLERANCE_S:
         gaps.append((time_s, end_s))
@@ -171,6 +202,21 @@ def check_prediction_order(segments):
             )
 
 
+def without_overlaps(items):
+    """許容誤差の範囲で少し重なった区間を、前の区間の終わりから始まるように直します。
+
+    同じ時間を2回数えないためです。戻り値は (開始, 終了, 元の要素) のリストです。
+    """
+    cleaned = []
+    previous_end = -math.inf
+    for item in items:
+        start_s = max(item.start_s, previous_end)
+        if item.end_s > start_s:
+            cleaned.append((start_s, item.end_s, item))
+        previous_end = max(previous_end, item.end_s)
+    return cleaned
+
+
 def evaluate_segments(reference, segments):
     """正解注釈 reference と予測区間 segments を、重なった時間で比べます。
 
@@ -178,11 +224,12 @@ def evaluate_segments(reference, segments):
     戻り値は秒数と割合をまとめた辞書です。
     """
     check_prediction_order(segments)
+    predictions = without_overlaps(segments)
     evaluated_s = correct_s = wrong_s = undecided_s = covered_s = 0.0
-    for interval in reference:
-        evaluated_s += interval.end_s - interval.start_s
-        for segment in segments:
-            overlap = overlap_seconds(interval.start_s, interval.end_s, segment.start_s, segment.end_s)
+    for interval_start, interval_end, interval in without_overlaps(reference):
+        evaluated_s += interval_end - interval_start
+        for segment_start, segment_end, segment in predictions:
+            overlap = overlap_seconds(interval_start, interval_end, segment_start, segment_end)
             if overlap == 0:
                 continue
             covered_s += overlap
@@ -217,9 +264,31 @@ class PredictedSegment:
 
 
 def read_prediction_csv(path):
-    """推定結果CSV（chords.csv）から予測区間を読み込みます。"""
+    """推定結果CSV（chords.csv）を読み込み、(予測区間のリスト, 切り出し位置 [秒]) を返します。
+
+    切り出し位置は、source_start_s 列（元ファイルでの時刻）と start_s 列の差から求めます。
+    source_start_s 列がなければ0秒とします。
+    """
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(f"推定結果ファイルが見つかりません: {path}")
+    with open(path, newline="", encoding="utf-8-sig") as file:
+        reader = csv.DictReader(file)
+        columns = [name.strip() for name in (reader.fieldnames or [])]
+        reader.fieldnames = columns
+        missing = [name for name in PREDICTION_COLUMNS if name not in columns]
+        if missing:
+            raise ValueError(
+                f"{path.name}: 推定結果に必要な列 {missing} がありません"
+                "（guitar-chord-lab が保存した chords.csv を指定してください）"
+            )
+        rows = list(reader)
+    if not rows:
+        raise ValueError(f"{path.name}: 推定結果の行がありません")
     segments = []
-    with open(path, newline="", encoding="utf-8") as file:
-        for row in csv.DictReader(file):
-            segments.append(PredictedSegment(float(row["start_s"]), float(row["end_s"]), row["status"], row["chord"]))
-    return segments
+    for row in rows:
+        segments.append(PredictedSegment(float(row["start_s"]), float(row["end_s"]), row["status"], row["chord"]))
+    offset_s = 0.0
+    if "source_start_s" in columns:
+        offset_s = float(rows[0]["source_start_s"]) - float(rows[0]["start_s"])
+    return segments, round(offset_s, 6)

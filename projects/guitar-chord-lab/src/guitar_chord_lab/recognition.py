@@ -6,14 +6,17 @@
 3. segment_seconds 秒ごとの区間に分け、区間内のクロマを平均する
 4. 区間ごとに24種類のテンプレートとの類似度を計算する（必要なら前後の区間と平均する）
 5. 無音なら N、候補を決めきれなければ判定保留（X）、それ以外は第1候補を選ぶ
-6. 同じ判定が続く区間を1つにまとめる
+6. 同じ判定が続く区間を1つにまとめる（判定保留の区間は、区間ごとの候補を残すためにまとめない）
 
 正解のコードや区間の境界は、この処理には一切渡しません。
 """
 
+import math
+import numbers
 import tomllib
 import warnings
 from dataclasses import asdict, dataclass, field, fields
+from pathlib import Path
 
 import librosa
 import numpy as np
@@ -30,6 +33,12 @@ CQT_OCTAVES = 6
 
 # STFTクロマで使う分析窓の長さ [サンプル]
 STFT_WINDOW = 4096
+
+# 解析に使えるサンプリング周波数の下限 [Hz]。CQTクロマで B7（約3951 Hz）付近まで調べるために必要です。
+MIN_SAMPLE_RATE = 11025
+
+INTEGER_SETTINGS = ["sample_rate", "hop_length", "smoothing_segments"]  # 整数で指定する設定
+NUMBER_SETTINGS = ["segment_seconds", "silence_db", "min_score", "min_margin"]  # 数で指定する設定
 
 STATUS_CHORD = "chord"  # コードを判定した
 STATUS_NO_CHORD = "no_chord"  # 無音なので N（コードなし）
@@ -50,11 +59,37 @@ class ChordSettings:
     smoothing_segments: int = 3  # 類似度を平均する区間の数（奇数。1なら平滑化しない）
 
 
-def check_settings(settings):
-    """設定値の範囲を確認し、問題があれば理由を示して ValueError にします。"""
+def is_integer(value):
+    """True/False ではない整数なら True を返します。"""
+    return isinstance(value, numbers.Integral) and not isinstance(value, bool)
+
+
+def is_number(value):
+    """True/False ではない、有限の数（NaN や無限大ではない数）なら True を返します。"""
+    return isinstance(value, numbers.Real) and not isinstance(value, bool) and math.isfinite(value)
+
+
+def check_setting_types(settings):
+    """設定値が整数・数として正しく書かれているかを確かめ、問題のリストを返します。"""
     problems = []
-    if settings.sample_rate < 8000:
-        problems.append("sample_rate は8000 Hz以上にしてください")
+    for name in INTEGER_SETTINGS:
+        value = getattr(settings, name)
+        if not is_integer(value):
+            problems.append(f"{name} は整数で指定してください（指定: {value!r}）")
+    for name in NUMBER_SETTINGS:
+        value = getattr(settings, name)
+        if not is_number(value):
+            problems.append(f"{name} は数で指定してください（指定: {value!r}）")
+    return problems
+
+
+def check_settings(settings):
+    """設定値の型と範囲を確認し、問題があれば理由を示して ValueError にします。"""
+    problems = check_setting_types(settings)
+    if problems:
+        raise ValueError("設定に問題があります: " + "; ".join(problems))
+    if settings.sample_rate < MIN_SAMPLE_RATE:
+        problems.append(f"sample_rate は{MIN_SAMPLE_RATE} Hz以上にしてください（CQTクロマで高い音まで調べるため）")
     if settings.hop_length <= 0:
         problems.append("hop_length は1以上にしてください")
     if settings.chroma_method not in ["cqt", "stft"]:
@@ -64,6 +99,8 @@ def check_settings(settings):
         problems.append(
             f"segment_seconds は {2 * hop_seconds:.3f} 秒（hop_length の2倍）以上にしてください"
         )
+    if not -120 <= settings.silence_db <= 0:
+        problems.append("silence_db は -120〜0 dBFS の範囲にしてください")
     if not 0 <= settings.min_score <= 1:
         problems.append("min_score は0〜1の範囲にしてください")
     if not 0 <= settings.min_margin <= 1:
@@ -78,7 +115,12 @@ def load_settings(path):
     """TOMLファイルの [analysis] 表から ChordSettings を読み込みます。"""
     with open(path, "rb") as file:
         data = tomllib.load(file)
-    return settings_from_dict(data.get("analysis", {}))
+    if "analysis" not in data:
+        raise ValueError(
+            f"{Path(path).name} に [analysis] 表がありません（見つかった項目: {list(data)}）。"
+            "設定は [analysis] の行の下に書いてください"
+        )
+    return settings_from_dict(data["analysis"])
 
 
 def settings_from_dict(values):
@@ -124,7 +166,7 @@ class ChordAnalysis:
     segment_edges: list  # 区間の (開始, 終了) [秒] のリスト
     segment_chroma: np.ndarray  # 区間ごとに平均したクロマ（区間数×12）
     segment_rms_db: np.ndarray  # 区間ごとの音量 [dBFS]
-    scores: np.ndarray  # 区間ごとの24コードとの類似度（区間数×24、平滑化後）
+    scores: np.ndarray  # 区間ごとの24コードとの類似度（区間数×24、平滑化後。無音の区間は NaN）
     segment_labels: list  # 区間ごとの判定（コード名、"N"、"X"）
     segments: list  # 同じ判定をまとめた ChordSegment のリスト
     messages: list = field(default_factory=list)  # 注意事項
@@ -220,17 +262,19 @@ def similarity_scores(segment_chroma, templates):
 
 
 def smooth_scores(scores, is_silent, window):
-    """前後 window 個の区間の類似度を平均します。無音の区間は平均に使いません。"""
-    if window <= 1:
-        return scores.copy()
+    """前後 window 個の区間の類似度を平均します（window が1なら平均しません）。
+
+    無音の区間は平均に使わず、その区間の値は NaN（値なし）にします。
+    """
     half = window // 2
-    smoothed = np.zeros_like(scores)
+    smoothed = np.full(scores.shape, np.nan)
     for index in range(len(scores)):
+        if is_silent[index]:
+            continue
         first = max(0, index - half)
         last = min(len(scores), index + half + 1)
         neighbours = [j for j in range(first, last) if not is_silent[j]]
-        if neighbours:
-            smoothed[index] = scores[neighbours].mean(axis=0)
+        smoothed[index] = scores[neighbours].mean(axis=0)
     return smoothed
 
 
@@ -279,11 +323,15 @@ def make_merged_segment(first, stop, labels, edges, scores, clip):
 
 
 def merge_segments(labels, edges, scores, clip):
-    """同じ判定が続く区間を1つにまとめ、ChordSegment のリストを返します。"""
+    """同じ判定が続く区間を1つにまとめ、ChordSegment のリストを返します。
+
+    判定保留（X）の区間は、区間ごとの候補と類似度を残すためにまとめません。
+    （まとめて平均すると、しきい値を満たしているように見える値になることがあるためです。）
+    """
     merged = []
     first = 0
     for index in range(1, len(labels) + 1):
-        if index == len(labels) or labels[index] != labels[first]:
+        if index == len(labels) or labels[index] != labels[first] or labels[first] == UNDECIDED:
             merged.append(make_merged_segment(first, index, labels, edges, scores, clip))
             first = index
     return merged

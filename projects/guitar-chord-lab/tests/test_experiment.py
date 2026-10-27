@@ -137,7 +137,8 @@ def test_experiment_with_fake_separation_pairs_before_and_after(tmp_path, monkey
 def test_invalid_experiment_settings_are_reported(tmp_path):
     config = make_small_study(tmp_path)  # g0 は調整用、g1 は評価用
     text = config.read_text(encoding="utf-8")
-    text = text.replace('id = "g1"', 'id = "g1"\nsource_id = "g0"')  # g0 と同じ元素材なのに評価用にする
+    text = text.replace('id = "g0"', 'id = "g0"\nsource_id = "piece"')
+    text = text.replace('id = "g1"', 'id = "g1"\nsource_id = "piece"')  # g0 と同じ元素材なのに評価用にする
     text = text.replace('annotation = "g0.csv"', 'annotation = "missing.csv"')
     config.write_text(text, encoding="utf-8")
     with pytest.raises(ValueError) as caught:
@@ -179,3 +180,127 @@ def test_recorded_mixture_is_compared_without_artificial_mixing(tmp_path, monkey
     assert result["counts"]["recorded_mixtures"] == 1
     assert result["counts"]["artificial_mixture_conditions"] == 0
     assert result["pairs"][0]["difference"] == 0.0
+
+    from guitar_chord_lab.plots import plot_experiment_summary
+
+    figure = plot_experiment_summary(result, "band", exp.load_experiment(config).settings)
+    assert [label.get_text() for label in figure.axes[0].get_xticklabels()] == ["solo", "mixture", "separated"]
+    assert "1 recorded mixtures" in figure._suptitle.get_text() and "CQT chroma" in figure._suptitle.get_text()
+
+
+def test_unknown_keys_in_the_experiment_file_are_reported(tmp_path):
+    config = make_small_study(tmp_path)
+    text = config.read_text(encoding="utf-8")
+    text = text.replace("accompaniment_db = [0.0, 10.0]", "accompaniment_dB = [0.0, 10.0]")
+    text = text.replace('material = "synthetic"\nguitar = "g0.wav"', 'materal = "synthetic"\nguitar = "g0.wav"')
+    config.write_text(text + '\n[separaton]\nmodel = "htdemucs_6s"\n', encoding="utf-8")
+    with pytest.raises(ValueError) as caught:
+        exp.load_experiment(config)
+    message = str(caught.value)
+    assert "accompaniment_dB" in message and "materal" in message and "separaton" in message
+
+
+def test_duplicate_accompaniment_ids_and_levels_are_rejected(tmp_path):
+    config = make_small_study(tmp_path)
+    text = config.read_text(encoding="utf-8")
+    text = text.replace("accompaniment_db = [0.0, 10.0]", "accompaniment_db = [6.0, 6.04]")
+    text += '\n[[accompaniments]]\nid = "noise"\npath = "noise.wav"\n'
+    config.write_text(text, encoding="utf-8")
+    with pytest.raises(ValueError) as caught:
+        exp.load_experiment(config)
+    assert "伴奏ID noise が重複" in str(caught.value) and "0.1 dB" in str(caught.value)
+
+
+def test_cuts_of_one_file_count_as_one_source_and_cannot_be_split(tmp_path):
+    config = make_small_study(tmp_path)
+    text = config.read_text(encoding="utf-8").replace('guitar = "g1.wav"', 'guitar = "g0.wav"')
+    text = text.replace('annotation = "g1.csv"', 'annotation = "g0.csv"')
+    config.write_text(text, encoding="utf-8")
+    with pytest.raises(ValueError, match="同じ音声ファイル g0.wav"):
+        exp.load_experiment(config)  # g0.wav の切り出しが調整用と評価用の両方にある
+    config.write_text(text.replace('split = "evaluation"', 'split = "tuning"'), encoding="utf-8")
+    experiment = exp.load_experiment(config)
+    assert exp.count_materials(experiment, experiment.recordings)["source_recordings"] == 1
+
+
+def test_summary_averages_each_source_first():
+    rows = [
+        {"recording_id": "a1", "source_id": "A", "material": "real", "mixture_type": "none", "condition": "solo",
+         "accompaniment_id": "", "accompaniment_db": "", "accuracy": 1.0, "decided_ratio": 1.0},
+        {"recording_id": "a2", "source_id": "A", "material": "real", "mixture_type": "none", "condition": "solo",
+         "accompaniment_id": "", "accompaniment_db": "", "accuracy": 0.8, "decided_ratio": 1.0},
+        {"recording_id": "b1", "source_id": "B", "material": "real", "mixture_type": "none", "condition": "solo",
+         "accompaniment_id": "", "accompaniment_db": "", "accuracy": 0.2, "decided_ratio": 1.0},
+    ]
+    line = exp.summarise(rows, ["material", "mixture_type", "condition", "accompaniment_id", "accompaniment_db"], "accuracy")[0]
+    assert (line["n_sources"], line["n_clips"], line["accuracy_n"]) == (2, 3, 2)
+    assert line["accuracy_mean"] == pytest.approx((0.9 + 0.2) / 2)
+
+
+def install_identity_separation(monkeypatch):
+    """Demucs の代わりに、入力をそのまま guitar として返す（44.1 kHz・ステレオで処理する）仕組みです。"""
+    from types import SimpleNamespace
+
+    separator = SimpleNamespace(model=SimpleNamespace(sources=["guitar"]), samplerate=44100, audio_channels=2)
+    monkeypatch.setattr(sep, "choose_device", lambda device: "cpu")
+    monkeypatch.setattr(sep, "load_separator", lambda *args: separator)
+    monkeypatch.setattr(sep, "run_separator", lambda separator, samples, device, seed: {"guitar": samples.copy()})
+
+
+def test_other_mix_sample_rates_keep_the_separated_length(tmp_path, monkeypatch):
+    """48 kHz で混ぜると、44.1 kHz との往復で長さが1サンプルずれることがありますが、そろえて比べます。"""
+    install_identity_separation(monkeypatch)
+    rate = 48000
+    samples = np.concatenate([sine_chord("C:maj", 2.0005, rate), sine_chord("G:maj", 2.0, rate)])
+    sf.write(tmp_path / "g.wav", samples, rate)
+    write_annotation_csv(tmp_path / "g.csv", [ChordInterval(0.0, 2.0, "C:maj"), ChordInterval(2.0, 4.0, "G:maj")])
+    sf.write(tmp_path / "noise.wav", np.random.default_rng(0).uniform(-0.5, 0.5, 5 * rate), rate)
+    config = tmp_path / "rate.toml"
+    config.write_text(
+        "\n".join([
+            "[experiment]", 'output_dir = "out"', "mix_sample_rate = 48000", "accompaniment_db = [0.0]", "",
+            "[[recordings]]", 'id = "g"', 'split = "evaluation"', 'guitar = "g.wav"', 'annotation = "g.csv"', "",
+            "[[accompaniments]]", 'id = "noise"', 'path = "noise.wav"', "",
+        ]),
+        encoding="utf-8",
+    )
+    result = exp.run_experiment(exp.load_experiment(config))
+    separated = [row for row in result["rows"] if row["condition"] == "separated"]
+    assert len(separated) == 1 and separated[0]["lag_vs_solo_ms"] == 0.0
+    info = json.loads((tmp_path / "out" / "experiment.json").read_text(encoding="utf-8"))
+    assert info["effective_settings"]["separation"]["model"] == "htdemucs_6s"  # 省略した設定も記録する
+    item_info = json.loads((tmp_path / "out" / "items" / "g" / "noise_+0.0dB" / "separated" / "analysis.json").read_text(encoding="utf-8"))
+    assert "separation" in item_info and separated[0]["separation_model"] == "htdemucs_6s"
+
+
+def test_summary_files_are_rewritten_by_every_run(tmp_path, monkeypatch):
+    install_identity_separation(monkeypatch)
+    config = make_small_study(tmp_path)
+    exp.run_experiment(exp.load_experiment(config), conditions=["solo", "mixture", "separated"])
+    assert len(read_rows(tmp_path / "out" / "paired_differences.csv")) == 4
+    exp.run_experiment(exp.load_experiment(config), conditions=["solo", "mixture"])
+    assert read_rows(tmp_path / "out" / "paired_differences.csv") == []  # 前の実行の結果を残さない
+
+
+def test_summary_figure_keeps_each_accompaniment(tmp_path):
+    from guitar_chord_lab.plots import plot_experiment_summary
+
+    config = make_small_study(tmp_path)
+    sf.write(tmp_path / "noise2.wav", np.random.default_rng(1).uniform(-0.5, 0.5, 5 * 22050), 22050)
+    text = config.read_text(encoding="utf-8") + '\n[[accompaniments]]\nid = "noise2"\npath = "noise2.wav"\n'
+    config.write_text(text, encoding="utf-8")
+    result = exp.run_experiment(exp.load_experiment(config))
+    labels = plot_experiment_summary(result, "two accompaniments").axes[0].get_legend_handles_labels()[1]
+    assert "mixture (noise, synthetic)" in labels and "mixture (noise2, synthetic)" in labels
+
+
+def test_summary_figure_shows_processing_times(tmp_path, monkeypatch):
+    """図にも処理時間（コード認識は条件ごと、分離は使ったデバイスと一緒に）を示します。"""
+    from guitar_chord_lab.plots import plot_experiment_summary
+
+    install_identity_separation(monkeypatch)
+    config = make_small_study(tmp_path)
+    result = exp.run_experiment(exp.load_experiment(config), conditions=["solo", "mixture", "separated"])
+    figure = plot_experiment_summary(result, "times")
+    labels = [label.get_text() for label in figure.axes[2].get_xticklabels()]
+    assert labels == ["recognition\n(solo)", "recognition\n(mixture)", "recognition\n(separated)", "separation\n(cpu)"]

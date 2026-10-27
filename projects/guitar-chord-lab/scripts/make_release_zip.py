@@ -55,13 +55,14 @@ def is_excluded(path):
     return path.suffix.lower() in EXCLUDED_SUFFIXES
 
 
-def make_zip(output_path, version, files, commit):
+def make_zip(output_path, version, files, commit, uncommitted_changes=False):
     """ファイルを vX.Y.Z/ の下にまとめたZIPを作ります。"""
     top = f"v{version}"
     info = {
         "name": NAME,
         "version": version,
         "git_commit": commit,
+        "uncommitted_changes": uncommitted_changes,  # True なら、ZIPの中身は git_commit と一致しません
         "created_utc": datetime.now(timezone.utc).isoformat(timespec="seconds"),
     }
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -86,8 +87,10 @@ def main():
     commit = git("rev-parse", "HEAD").strip()
     files = [path for path in tracked_files() if not is_excluded(path)]
     output_path = Path(args.output_dir) / f"{NAME}-v{version}.zip"
-    make_zip(output_path, version, files, commit)
+    make_zip(output_path, version, files, commit, bool(changes))
     print(f"作成しました: {output_path.resolve()}（{len(files)}ファイル、最上位フォルダ v{version}/、コミット {commit[:12]}）")
+    if changes:
+        print("注意: 未コミットの変更を含むZIPです（release_info.json に uncommitted_changes: true と記録しました）")
     return 0
 
 

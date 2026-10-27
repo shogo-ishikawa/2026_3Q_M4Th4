@@ -11,20 +11,46 @@
 import random
 import time
 import tomllib
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+import librosa
 import numpy as np
-import soundfile as sf
 from scipy.signal import correlate, correlation_lags
 
 from .audio import AudioClip, load_audio, make_clip, prepare_for_analysis, save_audio
-from .evaluation import crop_intervals, evaluate_segments, find_gaps, read_annotation_csv
-from .recognition import ChordSettings, recognise_chords, segment_rows, settings_from_dict
+from .evaluation import evaluate_segments, find_gaps, reference_for_clip
+from .recognition import MIN_DURATION_S, ChordSettings, recognise_chords, segment_rows, settings_from_dict
 from .results import analysis_info, code_version, library_versions, now_utc, save_json, write_rows_csv
 
 CONDITIONS = ["solo", "mixture", "separated"]
 SPLITS = ["tuning", "evaluation"]
+
+# 設定ファイルの表ごとに使える項目名（綴りの誤りを見つけるため、ほかの名前はエラーにします）
+ALLOWED_KEYS = {
+    "設定ファイル": ["experiment", "separation", "analysis", "recordings", "accompaniments"],
+    "experiment": [
+        "name", "output_dir", "seed", "conditions", "accompaniment_db", "mix_sample_rate",
+        "peak_limit", "save_audio", "save_figures",
+    ],
+    "separation": ["model", "device", "shifts", "overlap", "segment", "cache_dir"],
+    "recordings": [
+        "id", "source_id", "split", "material", "guitar", "mixture", "annotation",
+        "start_s", "duration_s", "third_played_ratio", "note",
+    ],
+    "accompaniments": ["id", "path", "material", "offset_s", "note"],
+}
+
+# 集計表が空のときにも書き出す列（前の実行の結果が残らないように、毎回ファイルを作り直します）
+PAIR_COLUMNS = [
+    "recording_id", "source_id", "split", "material", "mixture_type", "accompaniment_id", "accompaniment_db",
+    "solo_accuracy", "mixture_accuracy", "separated_accuracy", "difference",
+    "mixture_decided_ratio", "separated_decided_ratio",
+]
+DIFFERENCE_COLUMNS = [
+    "material", "mixture_type", "accompaniment_id", "accompaniment_db", "n_sources", "n_clips",
+    "difference_n", "difference_mean", "difference_std", "difference_min", "difference_max",
+]
 
 
 @dataclass
@@ -56,6 +82,18 @@ def resolve(base_dir, value):
     return path if path.is_absolute() else (base_dir / path).resolve()
 
 
+def unknown_keys(table_name, values):
+    """設定の表 table_name に知らない項目名があれば、その説明のリストを返します。"""
+    allowed = ALLOWED_KEYS[table_name]
+    return [f"[{table_name}] の知らない項目 {name}（使える項目: {allowed}）" for name in values if name not in allowed]
+
+
+def audio_file_of(item):
+    """録音の設定から、使う音声ファイル（単独ギターまたは合奏録音）のパスを返します。なければ None です。"""
+    path = item.get("guitar") or item.get("mixture")
+    return str(path) if path else None
+
+
 def check_recordings(recordings):
     """録音の設定（ID、元素材ID、区分、ファイル）を確かめ、問題を文字列のリストで返します。"""
     problems = []
@@ -80,14 +118,36 @@ def check_recordings(recordings):
 
 
 def check_source_split(recordings):
-    """同じ元素材（source_id）が調整用と評価用の両方に入っていないかを確かめます。"""
+    """同じ元素材（source_id）や同じ音声ファイルが、調整用と評価用の両方に入っていないかを確かめます。"""
     splits_of_source = {}
+    splits_of_file = {}
     for item in recordings:
         splits_of_source.setdefault(item.get("source_id"), set()).add(item.get("split"))
+        if audio_file_of(item):
+            splits_of_file.setdefault(audio_file_of(item), set()).add(item.get("split"))
     problems = []
     for source_id, splits in splits_of_source.items():
         if len(splits) > 1:
             problems.append(f"元素材 {source_id} が調整用と評価用の両方に入っています。元素材単位で分けてください")
+    for audio_file, splits in splits_of_file.items():
+        if len(splits) > 1:
+            problems.append(f"同じ音声ファイル {Path(audio_file).name} が調整用と評価用の両方に入っています")
+    return problems
+
+
+def check_accompaniments(accompaniments, levels):
+    """伴奏の設定（ID の重複、ファイル）と伴奏の音量の重複を確かめ、問題のリストを返します。"""
+    problems = []
+    seen = set()
+    for item in accompaniments:
+        if not item.get("id") or item.get("path") is None or not Path(item["path"]).exists():
+            problems.append(f"伴奏 {item.get('id', '?')}: id と存在する path が必要です")
+        if item.get("id") in seen:
+            problems.append(f"伴奏ID {item['id']} が重複しています（分離前後の対応付けができなくなります）")
+        seen.add(item.get("id"))
+    names = [f"{float(level):+.1f}" for level in levels]
+    if len(set(names)) != len(names):
+        problems.append(f"accompaniment_db {levels} に、0.1 dB 単位で同じになる値があります")
     return problems
 
 
@@ -109,31 +169,34 @@ def load_experiment(path):
         raw = tomllib.load(file)
     base = path.parent
     main = raw.get("experiment", {})
+    problems = unknown_keys("設定ファイル", raw) + unknown_keys("experiment", main)
+    problems += unknown_keys("separation", raw.get("separation", {}))
     recordings = []
     for item in raw.get("recordings", []):
+        problems += unknown_keys("recordings", item)
         item = dict(item)
         for key in ["guitar", "mixture", "annotation"]:
             item[key] = resolve(base, item.get(key))
-        item.setdefault("source_id", item.get("id"))
+        # 元素材IDを省略したときは、音声ファイルを元素材とみなします（同じファイルの切り出しは同じ元素材）
+        item.setdefault("source_id", audio_file_of(item) or item.get("id"))
         item.setdefault("material", "real")
         item.setdefault("start_s", 0.0)
         item.setdefault("duration_s", None)
         recordings.append(item)
     accompaniments = []
     for item in raw.get("accompaniments", []):
+        problems += unknown_keys("accompaniments", item)
         item = dict(item)
         item["path"] = resolve(base, item.get("path"))
         item.setdefault("offset_s", 0.0)
         item.setdefault("material", "real")
         accompaniments.append(item)
-    problems = check_recordings(recordings)
+    problems += check_recordings(recordings)
     conditions = main.get("conditions", CONDITIONS)
     problems += [f"知らない条件です: {name}（使える条件: {CONDITIONS}）" for name in conditions if name not in CONDITIONS]
     if any(item.get("guitar") and not item.get("mixture") for item in recordings) and not accompaniments:
         problems.append("単独ギターから混合音を作るには [[accompaniments]] が必要です")
-    for item in accompaniments:
-        if not item.get("id") or item.get("path") is None or not Path(item["path"]).exists():
-            problems.append(f"伴奏 {item.get('id', '?')}: id と存在する path が必要です")
+    problems += check_accompaniments(accompaniments, main.get("accompaniment_db", [0.0]))
     if problems:
         raise ValueError(f"実験設定 {path.name} に問題があります:\n- " + "\n- ".join(problems))
     separation = {"model": "htdemucs_6s", "device": "auto", "shifts": 0, "overlap": 0.25, "segment": None}
@@ -221,17 +284,27 @@ def estimate_lag_seconds(reference, other, sample_rate, max_lag_s=0.1):
     return float(best / sample_rate)
 
 
-def reference_for(recording, clip):
-    """正解注釈を読み込み、解析する切り出し範囲の時刻に直します。"""
-    audio_path = recording.get("guitar") or recording.get("mixture")
-    total_s = sf.info(str(audio_path)).duration
-    full = read_annotation_csv(recording["annotation"], duration_s=total_s)
-    start = clip.offset_s
-    return crop_intervals(full, start, start + clip.duration_s)
+def fit_length(clip, length):
+    """分離して元のサンプリング周波数に戻した音の長さを、混合音と同じサンプル数にそろえます。
+
+    リサンプリングの丸めで1〜2サンプルずれることがあるためです。大きくずれていればエラーにします。
+    """
+    difference = clip.samples.shape[1] - length
+    if abs(difference) > 0.01 * clip.sample_rate:
+        raise ValueError(f"分離音の長さ（{clip.samples.shape[1]}サンプル）が混合音（{length}サンプル）と大きく違います")
+    samples = librosa.util.fix_length(clip.samples, size=length, axis=-1)
+    return AudioClip(samples, clip.sample_rate, clip.source_path, clip.offset_s)
 
 
-def analyse_condition(clip, reference, settings, labels, output_dir, save_figure):
-    """1つの条件の音を解析・評価し、結果の行（辞書）を返します。"""
+def warm_up(settings):
+    """最初の1回の解析は準備に時間がかかるので、時間を測る前に短い音で一度だけ解析しておきます。"""
+    duration_s = max(MIN_DURATION_S, settings.segment_seconds) + 0.5
+    t = np.arange(int(duration_s * settings.sample_rate)) / settings.sample_rate
+    recognise_chords(make_clip(0.1 * np.sin(2 * np.pi * 440 * t), settings.sample_rate), settings)
+
+
+def analyse_condition(clip, reference, settings, labels, output_dir, save_figure, extra=None):
+    """1つの条件の音を解析・評価し、結果の行（辞書）を返します。extra は analysis.json に加える情報です。"""
     started = time.perf_counter()
     analysis = recognise_chords(clip, settings)
     seconds = time.perf_counter() - started
@@ -244,7 +317,10 @@ def analyse_condition(clip, reference, settings, labels, output_dir, save_figure
     unannotated = find_gaps(reference, 0.0, clip.duration_s)
     row["unannotated_s"] = round(sum(end - start for start, end in unannotated), 4)
     write_rows_csv(output_dir / "chords.csv", segment_rows(analysis))
-    save_json(output_dir / "analysis.json", analysis_info(analysis, {"condition": labels, "evaluation": metrics}))
+    info_extra = {"condition": labels, "evaluation": metrics}
+    if extra:
+        info_extra.update(extra)
+    save_json(output_dir / "analysis.json", analysis_info(analysis, info_extra))
     if save_figure:
         from .plots import plot_analysis
         import matplotlib.pyplot as plt
@@ -298,14 +374,17 @@ def run_mixture_conditions(experiment, recording, mixture_clip, guitar_clip, ref
             row["lag_vs_solo_ms"] = lag_ms(guitar_clip, mixture_clip)
         rows.append(row)
     if "separated" in experiment.conditions:
+        from .separation import describe_separation
+
         result = separate_for_experiment(experiment, mixture_clip)
         separated = prepare_for_analysis(result.guitar, experiment.mix_sample_rate)
-        if separated.samples.shape != mixture_clip.samples.shape:
-            raise ValueError(f"分離音の長さ {separated.samples.shape} が混合音 {mixture_clip.samples.shape} と違います")
+        separated = fit_length(separated, mixture_clip.samples.shape[1])
         if experiment.save_audio:
             save_audio(folder / "separated" / "separated_guitar.wav", result.guitar)
         row = analyse_condition(separated, reference, settings, dict(labels, condition="separated"),
-                                folder / "separated", experiment.save_figures)
+                                folder / "separated", experiment.save_figures,
+                                {"separation": describe_separation(result)})
+        row["separation_model"] = result.model_name
         row["separation_s"] = round(result.seconds, 3)
         row["separation_from_cache"] = result.from_cache
         row["separation_device"] = result.device
@@ -325,14 +404,14 @@ def run_recording(experiment, recording):
     guitar_clip = None
     if recording.get("guitar"):
         guitar_clip = load_mono(recording["guitar"], recording["start_s"], recording["duration_s"], rate)
-        reference = reference_for(recording, guitar_clip)
+        reference = reference_for_clip(recording["annotation"], guitar_clip)
         if "solo" in experiment.conditions:
             labels = item_labels(recording, "solo", "none")
             rows.append(analyse_condition(guitar_clip, reference, experiment.settings, labels,
                                           folder / "solo", experiment.save_figures))
     if recording.get("mixture"):
         mixture_clip = load_mono(recording["mixture"], recording["start_s"], recording["duration_s"], rate)
-        reference = reference_for(recording, mixture_clip)
+        reference = reference_for_clip(recording["annotation"], mixture_clip)
         if guitar_clip is not None and guitar_clip.samples.shape != mixture_clip.samples.shape:
             raise ValueError(f"{recording['id']}: 単独ギターと合奏録音の長さが違います")
         labels = item_labels(recording, "", "recorded", "recorded")
@@ -402,21 +481,36 @@ def describe_values(values):
     }
 
 
+def source_means(members, value_key):
+    """元素材ごとに value_key の平均をとったリストを返します。"""
+    per_source = {}
+    for member in members:
+        per_source.setdefault(member["source_id"], []).append(member[value_key])
+    return [float(np.mean(values)) for values in per_source.values()]
+
+
 def summarise(rows, group_keys, value_key):
-    """group_keys が同じ行をまとめ、value_key の平均やばらつきを計算します。"""
+    """group_keys が同じ行をまとめ、value_key の平均やばらつきを計算します。
+
+    同じ元素材から複数の切り出しがあるときは、まず元素材ごとに平均してから集計します
+    （同じ録音の加工物を独立した曲として数えないためです）。value_key_n は元素材の数です。
+    """
     groups = {}
     for row in rows:
         groups.setdefault(tuple(row[key] for key in group_keys), []).append(row)
     summary = []
     for key, members in groups.items():
         line = dict(zip(group_keys, key))
-        line["n_recordings"] = len({member["recording_id"] for member in members})
         line["n_sources"] = len({member["source_id"] for member in members})
-        line.update({f"{value_key}_{name}": value for name, value in describe_values([m[value_key] for m in members]).items()})
+        line["n_clips"] = len({member["recording_id"] for member in members})
+        statistics = describe_values(source_means(members, value_key))
+        line.update({f"{value_key}_{name}": value for name, value in statistics.items()})
         if "decided_ratio" in members[0]:
-            line["decided_ratio_mean"] = round(float(np.mean([m["decided_ratio"] for m in members])), 4)
-        if "analysis_s" in members[0]:
-            line["analysis_s_mean"] = round(float(np.mean([m["analysis_s"] for m in members])), 3)
+            line["decided_ratio_mean"] = round(float(np.mean(source_means(members, "decided_ratio"))), 4)
+        for time_key in ["analysis_s", "separation_s"]:  # 処理時間は1回ごとの平均
+            times = [member[time_key] for member in members if member.get(time_key, "") != ""]
+            if times:
+                line[f"{time_key}_mean"] = round(float(np.mean(times)), 3)
         summary.append(line)
     return summary
 
@@ -450,6 +544,7 @@ def run_experiment(experiment, split="all", conditions=None, output_dir=None):
     if not recordings:
         raise ValueError(f"split={split} の録音がありません")
     started = now_utc()
+    warm_up(experiment.settings)
     rows = []
     for recording in recordings:
         print(f"録音 {recording['id']} を処理しています（条件: {', '.join(experiment.conditions)}）")
@@ -476,14 +571,18 @@ def save_experiment(experiment, result, split, started):
             if key not in columns:
                 columns.append(key)
     write_rows_csv(folder / "items.csv", result["rows"], columns)
-    if result["pairs"]:
-        write_rows_csv(folder / "paired_differences.csv", result["pairs"])
-        write_rows_csv(folder / "summary_differences.csv", result["difference_summary"])
+    # 分離の結果がなくても（ヘッダーだけの）ファイルを書き直し、前の実行の集計が残らないようにします
+    write_rows_csv(folder / "paired_differences.csv", result["pairs"], None if result["pairs"] else PAIR_COLUMNS)
+    write_rows_csv(
+        folder / "summary_differences.csv", result["difference_summary"],
+        None if result["difference_summary"] else DIFFERENCE_COLUMNS,
+    )
     write_rows_csv(folder / "summary_by_condition.csv", result["summary"])
     info = {
         "name": experiment.name,
         "config_file": str(experiment.config_path),
         "config": experiment.raw,
+        "effective_settings": effective_settings(experiment),
         "split": split,
         "conditions": experiment.conditions,
         "seed": experiment.seed,
@@ -503,33 +602,66 @@ def save_experiment(experiment, result, split, started):
     from .plots import plot_experiment_summary
     import matplotlib.pyplot as plt
 
-    figure = plot_experiment_summary(result, experiment.name)
+    if "separated" in experiment.conditions:
+        model = f"separation model: {experiment.separation['model']}"
+    else:
+        model = "no separation"
+    figure = plot_experiment_summary(result, f"{experiment.name} (split: {split}, {model})", experiment.settings)
     figure.savefig(folder / "summary.png", dpi=150)
     plt.close(figure)
+
+
+def plain(item):
+    """保存できるように、Path を文字列に直した辞書を返します。"""
+    return {key: (str(value) if isinstance(value, Path) else value) for key, value in item.items()}
+
+
+def effective_settings(experiment):
+    """実際に使った設定（省略した項目には既定値を入れたもの）を返します。"""
+    return {
+        "output_dir": str(experiment.output_dir),
+        "conditions": experiment.conditions,
+        "accompaniment_db": experiment.accompaniment_db,
+        "mix_sample_rate": experiment.mix_sample_rate,
+        "peak_limit": experiment.peak_limit,
+        "separation": plain(experiment.separation),
+        "analysis": asdict(experiment.settings),
+        "recordings": [plain(item) for item in experiment.recordings],
+        "accompaniments": [plain(item) for item in experiment.accompaniments],
+    }
 
 
 def print_experiment_summary(result):
     """件数と条件別の平均正解率を表示します。"""
     counts = result["counts"]
+    detail = ""
+    if counts["artificial_mixture_conditions"]:
+        detail = f"（伴奏 {counts['accompaniments']} 種 × 音量 {len(counts['accompaniment_levels_db'])} 段階）"
     print(
         f"元録音数 {counts['source_recordings']}、切り出し数 {counts['clips']}、"
-        f"人工混合の条件数 {counts['artificial_mixture_conditions']}"
-        f"（伴奏 {counts['accompaniments']} 種 × 音量 {len(counts['accompaniment_levels_db'])} 段階）、"
+        f"人工混合の条件数 {counts['artificial_mixture_conditions']}{detail}、"
         f"合奏録音 {counts['recorded_mixtures']}、素材の種類 {counts['materials']}"
     )
     for line in result["summary"]:
-        level = line["accompaniment_db"]
-        level_text = "" if level == "" else f" 伴奏 {level:+.1f} dB"
         std = line["accuracy_std"]
         std_text = "" if std == "" else f" ± {std:.3f}"
         print(
-            f"  {line['condition']:<9}{level_text:<14} 正解率 平均 {line['accuracy_mean']:.3f}{std_text}"
-            f"（{line['n_recordings']}録音、判定率 {line['decided_ratio_mean']:.3f}）"
+            f"  [{line['material']}] {line['condition']:<9} {condition_text(line):<26} "
+            f"正解率 平均 {line['accuracy_mean']:.3f}{std_text}"
+            f"（{line['n_sources']}素材・{line['n_clips']}切り出し、判定率 {line['decided_ratio_mean']:.3f}）"
         )
     for line in result["difference_summary"]:
-        level = line["accompaniment_db"]
-        level_text = "合奏録音" if level == "" else f"伴奏 {level:+.1f} dB"
         print(
-            f"  分離後 − 分離前（{level_text}）: 平均 {line['difference_mean']:+.3f}"
-            f"（最小 {line['difference_min']:+.3f}、最大 {line['difference_max']:+.3f}、{line['n_recordings']}録音）"
+            f"  [{line['material']}] 分離後 − 分離前 {condition_text(line):<26} 平均 {line['difference_mean']:+.3f}"
+            f"（最小 {line['difference_min']:+.3f}、最大 {line['difference_max']:+.3f}、"
+            f"{line['n_sources']}素材・{line['n_clips']}切り出し）"
         )
+
+
+def condition_text(line):
+    """集計の1行が、どの伴奏・音量の結果かを表す短い文字列を返します。"""
+    if line["mixture_type"] == "recorded":
+        return "合奏録音"
+    if line["accompaniment_db"] == "":
+        return ""
+    return f"伴奏 {line['accompaniment_id']} {line['accompaniment_db']:+.1f} dB"
