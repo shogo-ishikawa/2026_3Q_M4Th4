@@ -12,6 +12,7 @@ A が B 以上になること自体は、B が A の選択肢を減らした問�
 import copy
 import json
 import math
+import numbers
 import random
 
 import pandas as pd
@@ -126,13 +127,13 @@ def apply_show_variant(scenario, variant):
     if not variant:
         return scenario
     _check_variant(variant)
+    if variant["show_id"] not in scenario.shows:
+        raise InputError([f"ショー '{variant['show_id']}' がありません（show_id を確かめてください）"])
     changes = variant.get("starts") or variant.get("x") is not None or variant.get("y") is not None
     if not (changes or variant.get("exclude")):
         return scenario
     raw = copy.deepcopy(scenario.raw)
-    show = next((s for s in raw["shows"] if s["id"] == variant["show_id"]), None)
-    if show is None:
-        raise InputError([f"ショー '{variant['show_id']}' がありません"])
+    show = next(s for s in raw["shows"] if s["id"] == variant["show_id"])
     if variant.get("exclude"):
         raw["shows"] = [s for s in raw["shows"] if s["id"] != variant["show_id"]]
         return scenario_from_dict(raw)
@@ -244,29 +245,52 @@ def _reference_problems(reference_time):
 
 
 def _seed_problems(seeds):
-    if isinstance(seeds, (list, tuple)) and seeds and all(
+    if not isinstance(seeds, (list, tuple)) or not seeds or not all(
             isinstance(seed, int) and not isinstance(seed, bool) for seed in seeds):
-        return []
-    return ["BATCH_SEEDS は、乱数の seed（整数）のリストにしてください 例: [1, 2, 3]"]
+        return ["BATCH_SEEDS は、乱数の seed（整数）のリストにしてください 例: [1, 2, 3]"]
+    if len(set(seeds)) < len(seeds):
+        return ["BATCH_SEEDS に同じ seed が2回以上あります"]
+    return []
 
 
-def conditions_for_variant(base_conditions, variant):
-    """ショーを必須から外す条件を作る。
+def conditions_for_variant(base_conditions, variant, scenario=None):
+    """ショーの条件に合わせて、必須ショーと希望度の指定を変えた条件を作る（元の条件は変えない）。
 
-    "required": False なら、ショーを必須から外す（希望度があれば、任意の予定として選ばれることがある）。
-    "exclude": True なら、ショーを必須から外し、希望度などの指定からも除く（シナリオからは apply_show_variant で外す）。
+    "required": True なら、そのショーを必須にする。"required": False なら必須から外す
+    （希望度があれば、任意の予定として選ばれることがある）。
+    "exclude": True なら必須から外し、希望度の指定からも除く（シナリオからは apply_show_variant で外す）。
     """
     conditions = copy.deepcopy(base_conditions)
-    if not variant or not (variant.get("required") is False or variant.get("exclude")):
-        return conditions
+    shows = conditions.get("required_shows") or []
+    if not variant or not isinstance(shows, (list, tuple)):
+        return conditions  # 形の誤りは prepare_problem が日本語で説明する
     show_id = variant.get("show_id")
-    conditions["required_shows"] = [s for s in conditions.get("required_shows") or [] if s != show_id]
+    if variant.get("required") is True and show_id not in shows:
+        conditions["required_shows"] = [*shows, show_id]
+    if variant.get("required") is False or variant.get("exclude"):
+        conditions["required_shows"] = [s for s in shows if s != show_id]
     if variant.get("exclude"):
-        if isinstance(conditions.get("preferences"), dict):
-            conditions["preferences"].pop(show_id, None)
-        if isinstance(conditions.get("preference_rank"), list):
-            conditions["preference_rank"] = [a for a in conditions["preference_rank"] if a != show_id]
+        _drop_show_preference(conditions, show_id, scenario)
     return conditions
+
+
+def _drop_show_preference(conditions, show_id, scenario):
+    """外すショーを、希望度の指定から除く。ほかの活動の希望度は変えない。
+
+    希望順位（preference_rank）から一覧を作り直すと、ほかの活動の順位と希望度が変わってしまうので、
+    元の順位で決まる希望度を、すべての活動について明示した preferences に置き換えてから除きます。
+    """
+    rank = conditions.get("preference_rank")
+    if scenario is not None and isinstance(rank, (list, tuple)) and rank and not conditions.get("preferences"):
+        activity_ids = [*scenario.attractions, *scenario.shows, *scenario.meals]
+        if all(isinstance(a, str) and a in activity_ids for a in rank) and len(set(rank)) == len(rank):
+            weights = {activity_id: 0 for activity_id in activity_ids}
+            for position, activity_id in enumerate(rank):
+                weights[activity_id] = len(rank) - position
+            conditions["preferences"] = weights
+            conditions["preference_rank"] = None
+    if isinstance(conditions.get("preferences"), dict):
+        conditions["preferences"].pop(show_id, None)
 
 
 def comparison_cases(budgets, show_variants):
@@ -299,10 +323,11 @@ def run_comparison(scenario, base_conditions, cases, settings=None, reference_ti
     details = {}
     for case in cases:
         variant = case.get("show_variant")
-        conditions = conditions_for_variant(dict(base_conditions, budget_yen=case["budget_yen"]), variant)
+        conditions = dict(base_conditions, budget_yen=case["budget_yen"])
         reference = reference_time or conditions.get("entry_time")
         try:
             case_scenario = apply_show_variant(scenario, variant)
+            conditions = conditions_for_variant(conditions, variant, scenario)
         except InputError as error:
             result_a = result_b = PlanResult("error", "none", messages=list(error.problems))
             case_scenario, candidate_rows, selected = scenario, [], []
@@ -314,7 +339,7 @@ def run_comparison(scenario, base_conditions, cases, settings=None, reference_ti
         common = _case_settings(case, case_scenario, conditions, settings, seed)
         row_a = _result_row(common, "A", result_a, report_a, "", "全施設（制限なし）")
         row_b = _result_row(common, "B", result_b, report_b, reference, ", ".join(selected) or "なし")
-        row_b["b_same_options_as_a"] = _same_options(result_a, selected)
+        row_b["b_same_options_as_a"] = _same_options(result_a, selected) if result_a.has_plan else None
         _add_difference(row_b, result_a, result_b, row_a)
         rows += [row_a, row_b]
         details[case["case_id"]] = {
@@ -381,11 +406,18 @@ def _case_settings(case, scenario, conditions, settings, seed):
         "exit_time": conditions.get("exit_time"),
         "budget_yen": case["budget_yen"],
         "show_variant": variant.get("label", "元のまま"),
-        "required_shows": ", ".join(conditions.get("required_shows") or []) or "なし",
+        "required_shows": _id_text(conditions.get("required_shows")),
         "time_limit_s_per_stage": settings.time_limit_s,
         "num_workers": settings.num_workers,
         "solver_random_seed": settings.random_seed,
     }
+
+
+def _id_text(value):
+    """IDのリストを "S1, S2" の文字列にする（空なら「なし」。形の誤りもそのまま文字にする）。"""
+    if isinstance(value, (list, tuple)):
+        return ", ".join(map(str, value)) or "なし"
+    return "なし" if value is None else str(value)
 
 
 def _used_shortcuts(report):
@@ -442,9 +474,19 @@ def _result_row(common, method, result, report, reference, candidates):
         "reference_time": reference,
         "validation_ok": None if report is None else report.ok,
         "score_diff_A_minus_B": None,
+        "cost_diff_B_minus_A": None,
         "diff_note": "",
+        "reason": _reason(result),
         "message": " ／ ".join(result.messages),
     }
+
+
+def _reason(result):
+    """予定がない場合の理由。事前チェックで分かった場合は、その具体的な内容を返す（予定があれば空）。"""
+    if result.has_plan:
+        return ""
+    proofs = [issue.message for issue in result.precheck_issues if issue.proves_infeasible]
+    return " ／ ".join(proofs or result.messages)
 
 
 def _score_proven(result):
@@ -457,8 +499,8 @@ def _add_difference(row_b, result_a, result_b, row_a):
     どちらかが暫定案の場合、差にはソルバーの打ち切りの影響が混ざるので計算しません。
     """
     if result_a.status in ("infeasible", "error"):
-        row_b["diff_note"] = (f"Aに予定がないため、差を計算しない"
-                              f"（A: {result_a.status_label}／B: {result_b.status_label}。理由は message の列）")
+        row_b["diff_note"] = (f"Aに予定がないため、差を計算しない（A: {result_a.status_label}／B: {result_b.status_label}。"
+                              "理由は「予定がない理由」の列、CSV では reason の列）")
     elif not _score_proven(result_a):
         row_b["diff_note"] = f"Aの希望度合計が最適と確認できていないため、差を計算しない（A: {result_a.status_label}）"
     elif not result_b.has_plan:
@@ -467,6 +509,12 @@ def _add_difference(row_b, result_a, result_b, row_a):
         row_b["diff_note"] = "Bは暫定案のため、手法の影響として差を計算しない"
     else:
         row_b["score_diff_A_minus_B"] = row_a["score"] - row_b["score"]
+        if row_a["score"] == row_b["score"] and _cost_proven(result_a) and _cost_proven(result_b):
+            row_b["cost_diff_B_minus_A"] = row_b["extra_cost_yen"] - row_a["extra_cost_yen"]
+
+
+def _cost_proven(result):
+    return result.has_plan and result.optimality_scope in ("lexicographic", "score_cost")
 
 
 def save_comparison(table, output_root, label, settings_info):
@@ -492,7 +540,8 @@ COMPARISON_VIEW_COLUMNS = {
     "shows_attended": "見たショーの回",
     "shortcut_candidates": "方法Bの候補",
     "same_options_label": "Bの選択肢がAと同じ",
-    "score_diff_A_minus_B": "差（A − B）",
+    "score_diff_A_minus_B": "希望度合計の差（A − B）",
+    "cost_diff_B_minus_A": "同点のときの追加費用の差（B − A）",
     "diff_note": "差の注記",
     "reason": "予定がない理由",
 }
@@ -518,9 +567,22 @@ def comparison_view(table):
                            for status, scope in zip(view["status"], view["optimality_scope"])]
     view["same_options_label"] = [{True: "はい（差は構造上0）", False: "いいえ"}.get(value, "")
                                   for value in view["b_same_options_as_a"]]
-    view["reason"] = [message if status in ("infeasible", "unknown", "error") else ""
-                      for status, message in zip(view["status"], view["message"])]
+    view["reason"] = [_display(reason) if status in ("infeasible", "unknown", "error") else ""
+                      for status, reason in zip(view["status"], view["reason"])]
+    for column in ("score", "extra_cost_yen", "travel_min", "score_diff_A_minus_B", "cost_diff_B_minus_A"):
+        view[column] = [_display(value) for value in view[column]]
     return view[list(COMPARISON_VIEW_COLUMNS)].rename(columns=COMPARISON_VIEW_COLUMNS)
+
+
+def _display(value):
+    """表示用: 欠損値は空欄、整数の値（3.0 など）は整数（3）にする。"""
+    if value is None or (isinstance(value, float) and math.isnan(value)):
+        return ""
+    if isinstance(value, numbers.Integral) and not isinstance(value, bool):
+        return int(value)
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
 
 
 def candidate_view(rows):

@@ -825,7 +825,18 @@ def _id_list(conditions, key, check):
     if not isinstance(values, (list, tuple)):
         check.add(f"{key} はIDのリストにしてください")
         return []
-    return list(values)
+    return _string_ids(values, key, check)
+
+
+def _string_ids(values, where, check):
+    """IDのリストのうち、文字列のものだけを返す（文字列でないものは日本語で報告する）。"""
+    ids = []
+    for value in values:
+        if isinstance(value, str):
+            ids.append(value)
+        else:
+            check.add(f"{where}: {value!r} はIDの文字列ではありません（\"A1\" のように書いてください）")
+    return ids
 
 
 def _read_required(scenario, conditions, check):
@@ -871,7 +882,11 @@ def _read_preferences(scenario, conditions, check):
 
 def _preferences_from_rank(rank, base, check):
     """順位から希望度を作る: n件のうち1位は n、2位は n-1 …、一覧にないものは 0。"""
-    if not isinstance(rank, (list, tuple)) or len(set(rank)) != len(rank):
+    if not isinstance(rank, (list, tuple)):
+        check.add("preference_rank は重複のないIDのリストにしてください")
+        return base
+    rank = _string_ids(rank, "preference_rank", check)
+    if len(set(rank)) != len(rank):
         check.add("preference_rank は重複のないIDのリストにしてください")
         return base
     preferences = {activity_id: 0 for activity_id in base}
@@ -893,7 +908,7 @@ def _read_acquired(scenario, conditions, check):
         if slot_id in scenario.offers or slot_id in [slot.id for slot in slots]:
             check.add(f"{where}: 枠ID '{slot_id}' が他の枠と重複しています")
         attraction_id = item.get("attraction")
-        if attraction_id not in scenario.attractions:
+        if not isinstance(attraction_id, str) or attraction_id not in scenario.attractions:
             check.add(f"{where}: 施設ID '{attraction_id}' がありません")
         must_use = item.get("must_use")
         if not isinstance(must_use, bool):
@@ -924,7 +939,7 @@ def _read_candidates(scenario, conditions, check):
     if not isinstance(candidates, (list, tuple)):
         check.add("shortcut_candidates は None か施設IDのリストにしてください")
         return None
-    for attraction_id in candidates:
+    for attraction_id in _string_ids(candidates, "shortcut_candidates", check):
         if attraction_id not in scenario.attractions:
             check.add(f"shortcut_candidates: '{attraction_id}' は施設のIDではありません")
     return tuple(candidates)

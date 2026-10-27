@@ -119,8 +119,8 @@ def _check_required_pairs(problem, shortest, options, timely):
 def _check_total_time(problem, options, timely):
     """必須項目の「待ち時間＋所要時間」の最小値の合計が、滞在時間を超えないかを調べる。
 
-    予算内の利用案（options）で判定します。料金を考えない利用案（timely）なら収まる場合は、
-    予算内の方法だけでは足りないことを、説明に書き添えます。
+    予算内の利用案（options）で判定します。料金を考えない利用案（timely）での合計なら収まる場合は、
+    そのことを説明に書き添えます（合計の条件についての事実だけで、成立するとは言いません）。
     """
     required = [a for a in problem.required if options[a]]
     needed = sum(min(o.wait + o.duration for o in options[a]) for a in required)
@@ -131,8 +131,9 @@ def _check_total_time(problem, options, timely):
         f"必須項目の待ち時間と所要時間の合計が、予算内で使える方法では最小でも {needed} 分あり、"
         f"滞在時間 {available} 分を超えます。"
     )
-    needed_any_price = sum(min(o.wait + o.duration for o in timely[a]) for a in required)
+    in_time = [a for a in problem.required if timely[a]]  # 料金だけで外れた活動も含める
+    needed_any_price = sum(min(o.wait + o.duration for o in timely[a]) for a in in_time)
     if needed_any_price <= available:
-        message += (f"料金を考えなければ合計は最小 {needed_any_price} 分で滞在時間に収まりますが、"
-                    "そのための短縮利用の料金が予算を超えます。")
+        message += (f"料金を考えなければ、この合計だけは最小 {needed_any_price} 分で滞在時間に収まります"
+                    "（移動など、ほかの条件は考えていません）。")
     return [PrecheckIssue("P4-total", message, tuple(sorted(required)), True)]
