@@ -63,6 +63,10 @@ def validate_plan(problem, steps):
         if activity_id not in problem.activity_ids():
             report.errors.append(f"{order}番目: '{activity_id}' という活動はありません")
             continue
+        queue_time = _get(step, "queue_time")
+        if isinstance(queue_time, bool) or not isinstance(queue_time, int):
+            report.errors.append(f"{order}番目: 並び始めの時刻（queue_time）が整数の分で書かれていません（{queue_time!r}）")
+            continue
         if activity_id in visited:
             report.errors.append(f"{order}番目: 「{problem.name_of(activity_id)}」を2回以上予定に入れています")
         visited.append(activity_id)

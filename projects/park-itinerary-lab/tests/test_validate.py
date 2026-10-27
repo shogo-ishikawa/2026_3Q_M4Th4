@@ -333,7 +333,10 @@ def test_detects_an_unused_must_use_slot(scenario, full_day):
 
 def test_detects_a_finish_by_deadline(make_scenario, make_conditions):
     """完了期限（finish_by）: 終了がちょうど期限なら可、1分でも過ぎれば誤り。"""
-    raw = make_scenario(attractions=[{"id": "X", "duration_min": 10, "preference": 1, "finish_by": "09:30"}], default_walk=5)
+    raw = make_scenario(
+        attractions=[{"id": "X", "duration_min": 10, "preference": 1, "finish_by": "09:30"}],
+        default_walk=5,
+    )
     problem = prepare_problem(scenario_from_dict(raw), make_conditions())
     on_time = validate_plan(problem, [{"activity_id": "X", "mode": "normal", "queue_time": hhmm("09:20")}])
     assert on_time.ok, on_time.errors

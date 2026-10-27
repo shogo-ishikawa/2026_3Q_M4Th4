@@ -215,13 +215,18 @@ CONDITION_ERRORS = [
     pytest.param({"acquired_shortcuts": [OWN_SLOT]}, "must_use", id="missing-must-use"),
     pytest.param({"cost_basis": "group_total"}, "とデータの cost_basis", id="cost-basis-mismatch"),
     pytest.param(
-        {"acquired_shortcuts": [dict(OWN_SLOT, must_use=True), dict(OWN_SLOT, id="OWN2", window="15:00-16:00", must_use=True)]},
+        {"acquired_shortcuts": [
+            dict(OWN_SLOT, must_use=True),
+            dict(OWN_SLOT, id="OWN2", window="15:00-16:00", must_use=True),
+        ]},
         "同じ施設に「必ず使う」取得済み枠が複数",
         id="two-must-use-slots-on-one-attraction",
     ),
     pytest.param({"acquired_shortcuts": [dict(OWN_SLOT, id="P-A1-10", must_use=False)]}, "重複", id="slot-id-clash"),
     pytest.param(
-        {"acquired_shortcuts": [dict(OWN_SLOT, attraction="Z9", must_use=False)]}, "'Z9' がありません", id="slot-unknown-attraction"
+        {"acquired_shortcuts": [dict(OWN_SLOT, attraction="Z9", must_use=False)]},
+        "'Z9' がありません",
+        id="slot-unknown-attraction",
     ),
     pytest.param({"budget_yen": -100}, "budget_yen", id="negative-budget"),
     pytest.param({"budget_yen": 1000.5}, "整数", id="non-integer-budget"),
@@ -288,7 +293,11 @@ def _scenario_error_cases():
         ("queue-window-reversed", lambda raw: raw["attractions"][0].update(queue_open="21:00"), "queue_open"),
         ("negative-duration", lambda raw: raw["attractions"][0].update(duration_min=-3), "duration_min"),
         ("wait-count", lambda raw: raw["wait_tables"]["normal"]["wait_min"]["A1"].pop(), "時間帯と同じ数"),
-        ("overlapping-bands", lambda raw: raw["wait_tables"]["normal"]["bands"].__setitem__(1, "09:30-11:00"), "重なっています"),
+        (
+            "overlapping-bands",
+            lambda raw: raw["wait_tables"]["normal"]["bands"].__setitem__(1, "09:30-11:00"),
+            "重なっています",
+        ),
         ("offer-unknown-attraction", lambda raw: raw["shortcut_offers"][0].update(attraction="Z9"), "'Z9' がありません"),
         ("offer-window-reversed", lambda raw: raw["shortcut_offers"][0].update(window="11:00-10:00"), "開始は終了より前"),
         ("show-without-performances", lambda raw: raw["shows"][0].update(performances=[]), "performances"),

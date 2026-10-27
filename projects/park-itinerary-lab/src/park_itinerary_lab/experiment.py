@@ -86,7 +86,7 @@ def shortlist_candidates(problem, reference_time):
 def solve_method_b(scenario, conditions, settings=None, reference_time=None):
     """方法 B で解く。戻り値は (PlanResult, 候補の計算過程, 候補の施設IDのリスト)。"""
     problem = prepare_problem(scenario, conditions)
-    reference_time = reference_time or conditions["entry_time"]
+    reference_time = reference_time or conditions.get("entry_time")
     rows = shortlist_candidates(problem, reference_time)
     selected = [row["attraction_id"] for row in rows if row["selected"]]
     conditions_b = dict(conditions, shortcut_candidates=selected)
@@ -106,6 +106,7 @@ def apply_show_variant(scenario, variant):
     """
     if not variant or not (variant.get("starts") or variant.get("x") is not None or variant.get("y") is not None):
         return scenario
+    _check_variant(variant)
     raw = copy.deepcopy(scenario.raw)
     show = next((s for s in raw["shows"] if s["id"] == variant["show_id"]), None)
     if show is None:
@@ -123,11 +124,27 @@ def apply_show_variant(scenario, variant):
     return scenario_from_dict(raw)
 
 
+def _check_variant(variant):
+    """ショーの条件の書き方を確かめ、誤りは InputError（日本語）にする。"""
+    problems = []
+    if not isinstance(variant.get("show_id"), str):
+        problems.append("show_variant には show_id（ショーのID）を文字列で書いてください")
+    starts = variant.get("starts")
+    if starts is not None and (not isinstance(starts, (list, tuple)) or not all(isinstance(s, str) for s in starts)):
+        problems.append('show_variant の starts は "HH:MM" の文字列のリストにしてください')
+    for key in ("x", "y"):
+        value = variant.get(key)
+        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))):
+            problems.append(f"show_variant の {key} は数値にしてください")
+    if problems:
+        raise InputError(problems)
+
+
 def conditions_for_variant(base_conditions, variant):
     """variant に "required": False があれば、そのショーを必須から外す（固定時刻の予定がない基準）。"""
     conditions = copy.deepcopy(base_conditions)
     if variant and variant.get("required") is False:
-        shows = [s for s in conditions.get("required_shows", []) if s != variant["show_id"]]
+        shows = [s for s in conditions.get("required_shows") or [] if s != variant["show_id"]]
         conditions["required_shows"] = shows
     return conditions
 
@@ -161,7 +178,7 @@ def run_comparison(scenario, base_conditions, cases, settings=None, reference_ti
     for case in cases:
         variant = case.get("show_variant")
         conditions = conditions_for_variant(dict(base_conditions, budget_yen=case["budget_yen"]), variant)
-        reference = reference_time or conditions["entry_time"]
+        reference = reference_time or conditions.get("entry_time")
         try:
             case_scenario = apply_show_variant(scenario, variant)
         except InputError as error:
@@ -228,7 +245,7 @@ def _case_settings(case, scenario, conditions, settings, seed):
         "exit_time": conditions.get("exit_time"),
         "budget_yen": case["budget_yen"],
         "show_variant": variant.get("label", "元のまま"),
-        "required_shows": ", ".join(conditions.get("required_shows", [])) or "なし",
+        "required_shows": ", ".join(conditions.get("required_shows") or []) or "なし",
         "time_limit_s_per_stage": settings.time_limit_s,
         "num_workers": settings.num_workers,
         "solver_random_seed": settings.random_seed,

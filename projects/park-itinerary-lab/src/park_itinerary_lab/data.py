@@ -18,7 +18,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from .timeutil import format_time, parse_time, parse_window
+from .timeutil import format_time, format_window, parse_time, parse_window
 
 SOURCE_TYPES = ("fictional", "own_observation", "published_information", "other")
 DISTANCE_METHODS = ("manhattan", "euclidean")
@@ -246,6 +246,21 @@ class _Checker:
             return None
         return value
 
+    def dict_items(self, items, where):
+        """リストの中の辞書を (番号, 辞書) で返す。リストでない・辞書でない項目は誤りとして記録する。"""
+        if items is None:
+            return []
+        if not isinstance(items, (list, tuple)):
+            self.add(f"{where} はリスト（[...]）にしてください")
+            return []
+        pairs = []
+        for index, item in enumerate(items):
+            if isinstance(item, dict):
+                pairs.append((index, item))
+            else:
+                self.add(f"{where}[{index}] は辞書（{{...}}）にしてください（{item!r}）")
+        return pairs
+
     def identifier(self, value, where):
         if not isinstance(value, str) or not _ID_PATTERN.match(value):
             self.add(f"{where}: IDは英数字・ハイフン・下線で書いてください（{value!r}）")
@@ -271,6 +286,8 @@ def load_scenario(path):
 
 def scenario_from_dict(raw):
     """シナリオの辞書を確認して Scenario にする。元の辞書は変更しない。"""
+    if not isinstance(raw, dict):
+        raise InputError(["シナリオは辞書（JSON のオブジェクト）にしてください"])
     raw = copy.deepcopy(raw)
     check = _Checker()
     if raw.get("format_version") != 1:
@@ -288,6 +305,10 @@ def scenario_from_dict(raw):
     wait_tables = _read_wait_tables(raw.get("wait_tables", {}), attractions, check)
     offers = _read_offers(raw.get("shortcut_offers", []), attractions, check)
     walk_minutes = raw.get("walk_minutes")
+    if walk_minutes is not None and not (
+        isinstance(walk_minutes, dict) and all(isinstance(row, dict) for row in walk_minutes.values())
+    ):
+        check.add("walk_minutes は null か {出発ID: {到着ID: 分}} の辞書にしてください")
     check.raise_if_any()
     scenario = Scenario(
         meta=meta,
@@ -342,6 +363,9 @@ def _read_gates(gates, check):
 
 
 def _read_walking(walking, check):
+    if not isinstance(walking, dict):
+        check.add("walking は {metres_per_minute, distance} の辞書にしてください")
+        walking = {}
     speed = walking.get("metres_per_minute", 60)
     method = walking.get("distance", "manhattan")
     if check.number(speed, "walking.metres_per_minute") is not None and speed <= 0:
@@ -353,7 +377,7 @@ def _read_walking(walking, check):
 
 def _read_attractions(items, check):
     attractions = {}
-    for index, item in enumerate(items):
+    for index, item in check.dict_items(items, "attractions"):
         where = f"attractions[{index}]"
         activity_id = check.identifier(item.get("id"), f"{where}.id")
         queue_open = check.time(item.get("queue_open"), f"{where}.queue_open")
@@ -383,12 +407,12 @@ def _read_attractions(items, check):
 
 def _read_shows(items, check):
     shows = {}
-    for index, item in enumerate(items):
+    for index, item in check.dict_items(items, "shows"):
         where = f"shows[{index}]"
         show_id = check.identifier(item.get("id"), f"{where}.id")
         performances = []
         seen = set()
-        for number, performance in enumerate(item.get("performances", [])):
+        for number, performance in check.dict_items(item.get("performances", []), f"{where}.performances"):
             place = f"{where}.performances[{number}]"
             performance_id = check.identifier(performance.get("id"), f"{place}.id")
             start = check.time(performance.get("start"), f"{place}.start")
@@ -417,7 +441,7 @@ def _read_shows(items, check):
 
 def _read_meals(items, check):
     meals = {}
-    for index, item in enumerate(items):
+    for index, item in check.dict_items(items, "meals"):
         where = f"meals[{index}]"
         meal_id = check.identifier(item.get("id"), f"{where}.id")
         meal = Meal(
@@ -456,6 +480,9 @@ def _read_wait_tables(tables, attractions, check):
     result = {}
     for key, table in tables.items():
         where = f"wait_tables.{key}"
+        if not isinstance(table, dict) or not isinstance(table.get("wait_min", {}), dict):
+            check.add(f"{where} は {{label, bands, wait_min}} の辞書にしてください")
+            continue
         bands = [check.window(band, f"{where}.bands") for band in table.get("bands", [])]
         if not bands:
             check.add(f"{where}: bands（時間帯）を入力してください")
@@ -485,7 +512,7 @@ def _read_wait_tables(tables, attractions, check):
 
 def _read_offers(items, attractions, check):
     offers = {}
-    for index, item in enumerate(items):
+    for index, item in check.dict_items(items, "shortcut_offers"):
         where = f"shortcut_offers[{index}]"
         offer_id = check.identifier(item.get("id"), f"{where}.id")
         attraction_id = item.get("attraction")
@@ -707,6 +734,8 @@ def shortest_paths(travel):
 
 def prepare_problem(scenario, conditions):
     """シナリオと条件を確認し、計算に使う Problem を作る。"""
+    if not isinstance(conditions, dict):
+        raise InputError(["条件（conditions）は辞書にしてください"])
     check = _Checker()
     conditions = copy.deepcopy(conditions)
     unknown = sorted(set(conditions) - set(CONDITION_KEYS))
@@ -717,7 +746,7 @@ def prepare_problem(scenario, conditions):
     if entry is not None and exit_time is not None and entry >= exit_time:
         check.add("入園時刻は退園時刻より前にしてください")
     season = conditions.get("season")
-    if season not in scenario.wait_tables:
+    if not isinstance(season, str) or season not in scenario.wait_tables:
         check.add(f"season（季節・混雑）は {list(scenario.wait_tables)} のどれかにしてください（{season!r}）")
     budget = check.integer(conditions.get("budget_yen", 0), "budget_yen（追加費用の予算）")
     cost_basis = conditions.get("cost_basis", "per_person")
@@ -733,8 +762,10 @@ def prepare_problem(scenario, conditions):
     preferences = _read_preferences(scenario, conditions, check)
     acquired = _read_acquired(scenario, conditions, check)
     candidates = _read_candidates(scenario, conditions, check)
-    rules = conditions.get("purchase_rules", [])
-    if rules:
+    rules = conditions.get("purchase_rules") or []
+    if not isinstance(rules, (list, tuple)):
+        check.add("purchase_rules はリストにしてください（初版では空のまま）")
+    elif rules:
         unsupported = [rule for rule in rules if rule not in IMPLEMENTED_PURCHASE_RULES]
         check.add(f"未実装の購入ルールです: {unsupported}（初版では購入ルールを適用しません）")
     check.raise_if_any()
@@ -765,9 +796,26 @@ def prepare_problem(scenario, conditions):
         party_size=party_size,
         allow_new_shortcuts=allow_new,
         shortcut_candidates=candidates,
-        warnings=data_warnings(scenario, season),
+        warnings=data_warnings(scenario, season) + _acquired_warnings(scenario, acquired, entry, exit_time),
     )
     return problem
+
+
+def _acquired_warnings(scenario, acquired, entry, exit_time):
+    """取得済み枠の時間帯が、滞在時間や施設の案内時間から外れていないかを確かめる（注意として表示）。"""
+    warnings = []
+    for slot in acquired:
+        attraction = scenario.attractions[slot.attraction_id]
+        if slot.window[1] <= entry or slot.window[0] >= exit_time:
+            warnings.append(
+                f"取得済み枠 '{slot.id}' の時間帯 {format_window(slot.window)} は、入園から退園までの間にありません"
+            )
+        elif slot.window[0] < attraction.queue_open or slot.window[1] > attraction.queue_close:
+            warnings.append(
+                f"取得済み枠 '{slot.id}' の時間帯 {format_window(slot.window)} が、施設 '{attraction.id}' の案内時間"
+                f" {format_time(attraction.queue_open)}-{format_time(attraction.queue_close)} の外を含みます"
+            )
+    return warnings
 
 
 def _id_list(conditions, key, check):
@@ -839,7 +887,7 @@ def _read_acquired(scenario, conditions, check):
     slots = []
     items = conditions.get("acquired_shortcuts") or []
     must_use_attractions = set()
-    for index, item in enumerate(items):
+    for index, item in check.dict_items(items, "acquired_shortcuts"):
         where = f"acquired_shortcuts[{index}]"
         slot_id = check.identifier(item.get("id"), f"{where}.id")
         if slot_id in scenario.offers or slot_id in [slot.id for slot in slots]:

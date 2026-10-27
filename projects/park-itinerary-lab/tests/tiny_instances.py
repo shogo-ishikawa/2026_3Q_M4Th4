@@ -8,6 +8,7 @@
 - 後の時間帯まで待つと得になる待ち時間表、時間帯・短縮枠・食事の時間帯の終わりぎりぎりでの入列
 - 完了期限（finish_by）、事前到着つきのショー（公演 1〜2 回）、食事の時間帯
 - 予算より高い／安い新規の短縮枠、必ず使う／任意の取得済み枠、新規の短縮利用の不許可
+- 混雑日（通常の待ち時間が長く、同じ料金の新規枠を予算の範囲で 1〜2 個買うかどうかが効く）
 - shortcut_candidates が null・空のリスト・施設のリスト
 - 所要時間 0 分の活動、希望度 0、希望順位（preference_rank）、必須の活動、実行不可能な条件
 
@@ -20,6 +21,7 @@ import bisect
 import random
 
 from park_itinerary_lab.bruteforce import (
+    band_wait,
     direct_walk_minutes,
     find_option,
     parse_window,
@@ -228,9 +230,9 @@ def set_random_walking(rng, scenario):
 
 
 def random_cut_points(rng, entry, exit_time, travel, scenario):
-    """時間帯の区切りの時刻。ときどき、入口から直行した到着時刻の 1 分後で区切る。
+    """時間帯の区切りの時刻。ときどき、入口から直行した到着時刻 t（または t + 1 分）で区切る。
 
-    返り値は (区切りのリスト, tight)。tight は (施設 ID, 到着 + 1 分) か None。
+    返り値は (区切りのリスト, tight)。tight は (施設 ID, 区切り) か None。
     半分ほどは早めの区切り（入園 5〜30 分後）も入れ、次の時間帯まで待つ価値が出るようにする。
     """
     cuts = set(rng.sample(range(entry + 5, exit_time - 5), rng.randint(1, 3)))
@@ -239,7 +241,7 @@ def random_cut_points(rng, entry, exit_time, travel, scenario):
     tight = None
     if rng.random() < 0.3:
         attraction_id = rng.choice(scenario["attractions"])["id"]
-        tight = (attraction_id, entry + travel["entrance"][attraction_id] + 1)
+        tight = (attraction_id, entry + travel["entrance"][attraction_id] + rng.choice([0, 1]))
         cuts.add(tight[1])
     return sorted(cuts), tight
 
@@ -265,7 +267,7 @@ def add_random_waits(rng, scenario, bands, tight):
     """施設ごとの時間帯別の待ち時間を決める。
 
     ときどき「最初の時間帯は長く、次の時間帯は短い」施設を作り、待ってから並ぶと得になるようにする。
-    tight があれば、その施設で到着直後に終わる時間帯を 0 分にする（終わりぎりぎりの入列）。
+    tight があれば、その施設で到着の前後で終わる時間帯を 0 分にする（終わりぎりぎりの入列）。
     """
     table = scenario["wait_tables"][SEASON]
     table["bands"] = [span(s, e) for s, e in bands]
@@ -377,7 +379,8 @@ def make_busy(rng, scenario, conditions, entry):
     """ときどき「混雑日」にする: 通常の待ち時間を長くし、各施設に同じ料金の新規枠を 1 つずつ用意する。
 
     予算は「枠 1 つ分」「枠 2 つ分」「2 つ分に 1 円足りない」のどれかにして、
-    追加費用の合計に対する予算の上限が効く問題を作る。
+    追加費用の合計に対する予算の上限が効く問題を作る。ときどき新規の短縮利用そのものを許さない
+    （枠が役に立つ日に、許可の設定が守られるかを確かめるため）。
     """
     if rng.random() >= 0.2:
         return
@@ -390,7 +393,7 @@ def make_busy(rng, scenario, conditions, entry):
         add_offer(scenario, f"P-{attraction['id']}-busy", attraction["id"],
                   (start, start + rng.choice([15, 30, 60])), price=price,
                   residual=rng.choice([0, 2, 5]))
-    conditions.update(allow_new_shortcuts=True, shortcut_candidates=None,
+    conditions.update(allow_new_shortcuts=rng.random() < 0.8, shortcut_candidates=None,
                       budget_yen=rng.choice([price, 2 * price, 2 * price, 2 * price - 1]))
 
 
@@ -398,25 +401,48 @@ def make_busy(rng, scenario, conditions, entry):
 
 
 def tighten_one_window(rng, scenario, conditions, entry, travel):
-    """ときどき、入口から直行した到着時刻 t に合わせて、枠・時間帯・公演の境界を置く。
+    """ときどき、入口から直行した到着時刻 t に合わせて、枠・列・公演の境界を置く。
 
-    短縮枠と食事は [t − k, t + 1) にして、到着した分（= 終了 − 1 分）にしか入れないようにする。
-    ショーは集合時刻（開演 − 事前到着分）を t ちょうどにする。
+    margin = 1 なら「ぎりぎり間に合う側」、margin = 0 なら「1 分遅れる側」になる。
+    - 短縮枠と食事は [t − k, t + margin): margin = 1 なら到着した分（= 終了 − 1 分）にだけ入れる。
+    - 施設の列の締め切り（queue_close）を t + margin にする。
+    - 施設の完了期限（finish_by）を「t にすぐ並んだときの終了時刻 − 1 + margin」にする。
+    - ショーは集合時刻（開演 − 事前到着分）を t − 1 + margin にする。
     """
-    targets = scenario["shortcut_offers"] + conditions["acquired_shortcuts"]
-    targets = [("slot", slot) for slot in targets] + [("meal", meal) for meal in scenario["meals"]]
+    slots = scenario["shortcut_offers"] + conditions["acquired_shortcuts"]
+    targets = [("slot", slot) for slot in slots] + [("meal", meal) for meal in scenario["meals"]]
+    targets += [(kind, item) for kind in ("queue", "finish") for item in scenario["attractions"]]
     targets += [("show", show) for show in scenario["shows"]]
-    if not targets or rng.random() >= 0.45:
+    if rng.random() >= 0.5:
         return
     kind, item = rng.choice(targets)
-    place = item["attraction"] if kind == "slot" else item["id"]
-    arrival = entry + travel["entrance"][place]
-    if kind != "show":
-        item["window"] = span(arrival - rng.randint(0, 5), arrival + 1)
-        return
-    start = hhmm(arrival + item["arrive_before_min"])
-    if all(performance["start"] != start for performance in item["performances"]):
-        item["performances"][rng.randrange(len(item["performances"]))]["start"] = start
+    arrival = entry + travel["entrance"][item["attraction"] if kind == "slot" else item["id"]]
+    margin = rng.choice([0, 1])
+    if kind in ("slot", "meal"):
+        item["window"] = span(arrival - rng.randint(1, 5), arrival + margin)
+    elif kind == "queue":
+        item["queue_open"], item["queue_close"] = hhmm(8 * 60), hhmm(arrival + margin)
+    elif kind == "finish":
+        end = end_when_joining_at(scenario, item, arrival)
+        item["finish_by"] = None if end is None else hhmm(end - 1 + margin)
+    else:
+        set_meeting_time(rng, item, arrival - 1 + margin)
+
+
+def end_when_joining_at(scenario, attraction, minute):
+    """施設に minute ちょうどに通常利用で並んだときの終了時刻。その時刻に並べなければ None。"""
+    opens, closes = to_minutes(attraction["queue_open"]), to_minutes(attraction["queue_close"])
+    wait = band_wait(scenario["wait_tables"][SEASON], attraction["id"], minute)
+    if wait is None or not opens <= minute < closes:
+        return None
+    return minute + wait + attraction["duration_min"]
+
+
+def set_meeting_time(rng, show, meeting):
+    """ショーの公演を 1 つ選び、集合時刻（開演 − 事前到着分）が meeting になるように開演を動かす。"""
+    start = hhmm(meeting + show["arrive_before_min"])
+    if all(performance["start"] != start for performance in show["performances"]):
+        show["performances"][rng.randrange(len(show["performances"]))]["start"] = start
 
 
 # ------------------------------------------------------------------ 生成器の本体
@@ -437,11 +463,12 @@ def make_tiny_instance(seed):
     add_random_offers(rng, scenario, entry, exit_time)
     conditions = random_conditions(rng, scenario, entry, exit_time)
     make_busy(rng, scenario, conditions, entry)
-    tighten_one_window(rng, scenario, conditions, entry, travel)
+    for _round in range(2):
+        tighten_one_window(rng, scenario, conditions, entry, travel)
     return scenario, conditions
 
 
-# ------------------------------------------------------------------ 生成した問題の特徴（網羅の確認用）
+# ------------------------------------------------------------------ 素朴な探索（正解器の照合・網羅の確認用）
 
 
 def search_without_memo(instance, earliest_only):
@@ -457,7 +484,8 @@ def search_without_memo(instance, earliest_only):
     while stack:
         visited, node, time, spent, value = stack.pop()
         walk = instance["travel"][node]["exit"]
-        if visited & instance["required"] == instance["required"] and time + walk <= instance["exit"]:
+        all_required = visited & instance["required"] == instance["required"]
+        if all_required and time + walk <= instance["exit"]:
             total = (value[0], value[1], value[2] - walk)
             best = total if best is None or total > best else best
         stack += next_states(instance, (visited, node, time, spent, value), earliest_only)
@@ -492,12 +520,16 @@ def earliest_join_best(instance):
     return search_without_memo(instance, earliest_only=True)
 
 
+# ------------------------------------------------------------------ 生成した問題の特徴（網羅の確認用）
+
+
 def plan_timeline(instance, plan):
     """予定の各項目について (項目, 到着時刻, 終了時刻) を並べ、出口への到着時刻も返す。"""
     rows = []
     node, time = "entrance", instance["entry"]
+    by_id = {activity["id"]: activity for activity in instance["activities"]}
     for step in plan:
-        activity = next(item for item in instance["activities"] if item["id"] == step["activity_id"])
+        activity = by_id[step["activity_id"]]
         end = dict(find_option(activity, step)["joins"])[step["queue_time"]]
         rows.append((step, time + instance["travel"][node][activity["id"]], end))
         node, time = activity["id"], end
@@ -560,13 +592,15 @@ def activity_features(scenario, conditions):
             features.add("show_arrive_before")
     if scenario["meals"]:
         features.add("meal_window")
-    if any(activity["preference"] == 0 for activity in prepare_instance(scenario, conditions)["activities"]):
+    activities = prepare_instance(scenario, conditions)["activities"]
+    if any(activity["preference"] == 0 for activity in activities):
         features.add("zero_preference")
     if conditions["preference_rank"]:
         features.add("preference_rank")
     if conditions["preferences"]:
         features.add("preference_override")
-    if conditions["required_attractions"] + conditions["required_shows"] + conditions["required_meals"]:
+    required_keys = ("required_attractions", "required_shows", "required_meals")
+    if any(conditions[key] for key in required_keys):
         features.add("required")
     return features
 
@@ -592,6 +626,36 @@ def shortcut_features(scenario, conditions):
             features.add("offer_within_budget")
     for slot in conditions["acquired_shortcuts"]:
         features.add("must_use_true" if slot["must_use"] else "must_use_false")
+    return features
+
+
+def boundary_features(scenario, conditions):
+    """入口から直行した到着時刻 t が、境界の「1 分遅れる側」などにある特徴の名前の集合。
+
+    枠・食事の時間帯・列の締め切りが t ちょうどに終わる、集合時刻が t − 1 分、
+    完了期限が「t にすぐ並んだときの終了時刻」かその 1 分前、の場合。
+    """
+    features = set()
+    entry = to_minutes(conditions["entry_time"])
+    travel = travel_minutes(scenario)
+    arrival = {place: entry + minutes for place, minutes in travel["entrance"].items()}
+    for slot in scenario["shortcut_offers"] + conditions["acquired_shortcuts"]:
+        if parse_window(slot["window"])[1] == arrival[slot["attraction"]]:
+            features.add("slot_ends_on_arrival")
+    for meal in scenario["meals"]:
+        if parse_window(meal["window"])[1] == arrival[meal["id"]]:
+            features.add("meal_window_ends_on_arrival")
+    for attraction in scenario["attractions"]:
+        if to_minutes(attraction["queue_close"]) == arrival[attraction["id"]]:
+            features.add("queue_closes_on_arrival")
+        end = end_when_joining_at(scenario, attraction, arrival[attraction["id"]])
+        if end is not None and attraction["finish_by"] is not None:
+            if to_minutes(attraction["finish_by"]) - end in (-1, 0):
+                features.add("finish_by_at_direct_join_end")
+    for show in scenario["shows"]:
+        starts = [to_minutes(performance["start"]) for performance in show["performances"]]
+        if arrival[show["id"]] - 1 in [start - show["arrive_before_min"] for start in starts]:
+            features.add("meeting_one_minute_before_arrival")
     return features
 
 
@@ -646,5 +710,5 @@ def budget_features(scenario, conditions, oracle):
 def instance_features(scenario, conditions, oracle):
     """生成した問題と正解器の結果から、含まれる特徴の名前の集合を作る（網羅の確認用）。"""
     return (walking_features(scenario) | activity_features(scenario, conditions)
-            | shortcut_features(scenario, conditions)
+            | shortcut_features(scenario, conditions) | boundary_features(scenario, conditions)
             | solution_features(scenario, conditions, oracle))

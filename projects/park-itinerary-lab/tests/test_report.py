@@ -20,6 +20,7 @@ from matplotlib.figure import Figure  # noqa: E402
 
 from park_itinerary_lab import report  # noqa: E402
 from park_itinerary_lab.data import load_scenario  # noqa: E402
+from park_itinerary_lab.timeutil import format_time  # noqa: E402
 
 # デモの標準条件に、任意の取得済み枠（既払い 1000 円）を1つ加えた条件
 CONDITIONS = {
@@ -106,6 +107,18 @@ def test_tables_for_an_infeasible_result_explain_the_reason(infeasible_result):
     checks = report.precheck_table(infeasible_result)
     assert (checks["実行不可能の証明"] == "はい").any()
     assert checks["内容"].str.contains("S2").any()
+
+
+def test_metrics_row_summarises_one_result_per_row(demo_result, infeasible_result):
+    """条件を変えた結果を比べる1行: 予定があれば値を入れ、予定がなければ状態だけを入れる。"""
+    metrics = demo_result.validation.metrics
+    row = report.metrics_row("標準", demo_result)
+    assert (row["条件"], row["計算結果"]) == ("標準", "最適性確認済み")
+    assert (row["希望度の合計"], row["追加費用(円)"]) == (metrics["score"], metrics["extra_cost_yen"])
+    assert row["出口への到着"] == format_time(metrics["exit_arrival"])
+    empty = report.metrics_row("夜のショーを必須", infeasible_result)
+    assert empty["計算結果"] == "実行不可能と証明"
+    assert empty["希望度の合計"] is None and empty["出口への到着"] == ""
 
 
 def test_plot_timeline_returns_a_matplotlib_figure(demo_result):

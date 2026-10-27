@@ -95,8 +95,9 @@ def check_model_against_oracle(scenario, conditions):
     else:
         assert result.status == "infeasible", describe(oracle, result)
     without_prechecks = run_model(scenario, conditions, run_prechecks=False)
-    assert without_prechecks.status == result.status, describe(oracle, without_prechecks)
-    assert model_triple(without_prechecks) == model_triple(result), describe(oracle, without_prechecks)
+    message = describe(oracle, without_prechecks)
+    assert without_prechecks.status == result.status, message
+    assert model_triple(without_prechecks) == model_triple(result), message
     return oracle, result
 
 
@@ -149,10 +150,13 @@ MINIMUM_SEEDS_WITH_FEATURE = {
     # 移動
     "walk_table_non_metric": 10, "exit_to_entrance_walk": 10, "gates_apart": 10,
     "manhattan": 10, "euclidean": 10,
-    # 時刻（わざと待つ・境界ぎりぎり）
+    # 時刻（わざと待つ・境界ぎりぎりで間に合う側）
     "waiting_pays_off": 3, "idle_before_join": 10, "forced_join_at_normal_end": 3,
-    "forced_join_at_shortcut_end": 3, "forced_join_at_meal_end": 3,
-    "arrives_exactly_at_meeting_time": 2, "exit_exactly_on_time": 3,
+    "forced_join_at_shortcut_end": 2, "forced_join_at_meal_end": 3,
+    "arrives_exactly_at_meeting_time": 3, "exit_exactly_on_time": 3,
+    # 時刻（境界で 1 分遅れる側）
+    "slot_ends_on_arrival": 3, "meal_window_ends_on_arrival": 3, "queue_closes_on_arrival": 3,
+    "meeting_one_minute_before_arrival": 3, "finish_by_at_direct_join_end": 3,
     # 活動
     "finish_by": 10, "show_arrive_before": 10, "show_one_performance": 10,
     "show_two_performances": 10, "meal_window": 10, "zero_duration": 10,

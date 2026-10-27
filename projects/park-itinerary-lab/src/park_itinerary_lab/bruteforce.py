@@ -111,7 +111,8 @@ def direct_walk_minutes(scenario):
                 table[from_id][to_id] = int(given[from_id][to_id])
             else:
                 metres = metres_between(positions[from_id], positions[to_id], walking["distance"])
-                table[from_id][to_id] = walk_minutes_from_metres(metres, walking["metres_per_minute"])
+                speed = walking["metres_per_minute"]
+                table[from_id][to_id] = walk_minutes_from_metres(metres, speed)
     return table
 
 
@@ -300,6 +301,23 @@ def check_size(scenario, entry, exit_time, max_activities, max_horizon_min):
             f"horizon too long for enumeration: {exit_time - entry} > {max_horizon_min} minutes")
 
 
+def check_unique_ids(scenario, conditions):
+    """活動 ID と短縮枠 ID が重複していないかを確かめる。
+
+    予定の項目は activity_id と slot_id で活動や枠を指すので、重複があると
+    どれを指すか決められない。重複していれば ValueError。
+    """
+    groups = {
+        "activity": [item["id"] for _kind, item in list_activities(scenario)],
+        "slot": [slot["id"] for slot in scenario.get("shortcut_offers", [])]
+        + [slot["id"] for slot in conditions.get("acquired_shortcuts") or []],
+    }
+    for name, ids in groups.items():
+        repeated = sorted({item_id for item_id in ids if ids.count(item_id) > 1})
+        if repeated:
+            raise ValueError(f"duplicate {name} ids: {repeated}")
+
+
 def activity_record(kind, item, context):
     """活動 1 つを、全列挙で使う形（希望度と利用方法の候補）にまとめる。"""
     first, last = context["entry"], context["exit"]
@@ -334,6 +352,7 @@ def prepare_instance(scenario, conditions, max_activities=6, max_horizon_min=240
     entry = to_minutes(conditions["entry_time"])
     exit_time = to_minutes(conditions["exit_time"])
     check_size(scenario, entry, exit_time, max_activities, max_horizon_min)
+    check_unique_ids(scenario, conditions)
     slots = allowed_slots(scenario, conditions)
     context = {
         "entry": entry,
@@ -437,7 +456,7 @@ def solve_by_enumeration(scenario, conditions, max_activities=6, max_horizon_min
     plan は訪問順で、queue_time は並び始める（入る・集合する）時刻（0:00 からの分）。
     同点の最適な予定が複数あるときは、そのうちの 1 つを返す（一致を調べるのは目的値の組）。
     活動数が max_activities より多い、または入園から退園までが max_horizon_min 分より
-    長い場合は ValueError を出す（必須の ID がシナリオにない場合なども ValueError）。
+    長い場合は ValueError を出す（必須の ID がシナリオにない・ID が重複している場合も ValueError）。
     """
     instance = prepare_instance(scenario, conditions, max_activities, max_horizon_min)
     memo = {}

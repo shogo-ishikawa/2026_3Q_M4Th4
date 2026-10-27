@@ -7,7 +7,9 @@ overall_status は各段階のソルバーの終了状態だけから決まる�
 
 from dataclasses import replace
 
+import ortools
 import pytest
+from ortools.sat.python import cp_model
 
 from park_itinerary_lab import model
 from park_itinerary_lab.model import STAGES, STATUS_LABELS, TIE_BREAK_STAGE, PlanResult, StageResult, overall_status
@@ -221,3 +223,28 @@ def test_solver_infeasible_has_solver_proof_and_does_not_guess_a_cause(demo_scen
     assert (result.status, result.proof) == ("infeasible", "solver")
     assert result.stages[0].cp_status == "INFEASIBLE"
     assert any("原因は特定できていません" in message for message in result.messages)
+
+
+def test_solver_runs_with_zero_gap_limits_and_the_given_time_limit(monkeypatch, make_scenario, make_conditions, solve):
+    """近似ギャップによる早期終了を無効にし（相対・絶対とも0）、各段階に指定の制限時間を使い、版を記録する。"""
+    used = []
+
+    class RecordingSolver(cp_model.CpSolver):
+        """実際に solve を呼んだときのパラメータを記録する CpSolver。"""
+
+        def solve(self, model_to_solve, *args, **kwargs):
+            parameters = self.parameters
+            used.append((parameters.relative_gap_limit, parameters.absolute_gap_limit,
+                         parameters.max_time_in_seconds, parameters.num_workers))
+            return super().solve(model_to_solve, *args, **kwargs)
+
+    monkeypatch.setattr(cp_model, "CpSolver", RecordingSolver)
+    raw = make_scenario(attractions=[{"id": "X", "duration_min": 10, "preference": 5}])
+    result = solve(raw, make_conditions(), time_limit_s=7)
+    assert result.status == "optimal"
+    assert len(used) == len(result.stages) == len(STAGES)
+    assert all(entry == (0.0, 0.0, 7.0, 4) for entry in used)  # CP-SAT の既定の絶対ギャップ 1e-4 は使わない
+    assert all(stage.time_limit_s == 7.0 and stage.wall_time_s >= 0 for stage in result.stages)
+    info = result.solver_info
+    assert (info["relative_gap_limit"], info["absolute_gap_limit"], info["time_limit_s_per_stage"]) == (0.0, 0.0, 7.0)
+    assert info["ortools_version"] == ortools.__version__

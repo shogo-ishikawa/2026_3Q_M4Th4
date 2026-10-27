@@ -66,7 +66,8 @@ def test_waiting_for_a_cheaper_band_before_a_show_is_optimal():
     conditions = new_conditions(540, 600)
     result = solve_by_enumeration(scenario, conditions)
     assert triple(result) == (8, 0, 0)
-    assert result["plan"] == [step("A", "normal", 570), step("S", "show", 580, performance_id="S-1")]
+    assert result["plan"] == [step("A", "normal", 570),
+                              step("S", "show", 580, performance_id="S-1")]
     # 到着後すぐ（間に合う最初の分）に並ぶだけでは、A か S の片方しか回れない。
     assert earliest_join_best(prepare_instance(scenario, conditions)) == (5, 0, 0)
 
@@ -423,6 +424,16 @@ def test_unknown_required_id_raises_value_error():
         solve_by_enumeration(scenario, new_conditions(540, 600, required_attractions=["Z"]))
 
 
+def test_duplicate_slot_ids_raise_value_error():
+    """取得済み枠と新規枠の ID が同じだと、予定の slot_id がどちらか決まらないので ValueError。"""
+    scenario = new_scenario([(540, 660)])
+    add_attraction(scenario, "A", [0])
+    add_offer(scenario, "X", "A", (540, 550), price=100)
+    slot = acquired_slot("X", "A", (560, 570))
+    with pytest.raises(ValueError):
+        solve_by_enumeration(scenario, new_conditions(540, 600, acquired_shortcuts=[slot]))
+
+
 # ------------------------------------------------------------------ 予定の計算し直し（evaluate_plan）
 
 
@@ -482,7 +493,9 @@ def test_memoised_search_matches_plain_search():
         scenario, conditions = make_tiny_instance(seed)
         result = solve_by_enumeration(scenario, conditions)
         plain = search_without_memo(prepare_instance(scenario, conditions), earliest_only=False)
-        expected = (result["score"], -result["extra_cost"], -result["travel"]) if result["feasible"] else None
+        expected = None
+        if result["feasible"]:
+            expected = (result["score"], -result["extra_cost"], -result["travel"])
         assert plain == expected, seed
 
 

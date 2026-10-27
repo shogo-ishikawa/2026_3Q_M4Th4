@@ -291,7 +291,12 @@ def test_comparison_cases_combine_budgets_and_show_variants():
     """ケースは「ショーの条件 × 予算」のすべての組合せ。"""
     variants = [{"label": "元のまま", "show_id": "S1"}, {"label": "13時", "show_id": "S1", "starts": ["13:00"]}]
     cases = experiment.comparison_cases([0, 1000], variants)
-    assert [case["case_id"] for case in cases] == ["元のまま／予算0円", "元のまま／予算1000円", "13時／予算0円", "13時／予算1000円"]
+    assert [case["case_id"] for case in cases] == [
+        "元のまま／予算0円",
+        "元のまま／予算1000円",
+        "13時／予算0円",
+        "13時／予算1000円",
+    ]
 
 
 def test_show_variant_changes_time_and_place_without_changing_the_original(demo_scenario):
@@ -310,6 +315,18 @@ def test_variant_with_required_false_removes_only_that_show(demo_conditions):
     conditions = experiment.conditions_for_variant(base, {"label": "なし", "show_id": "S1", "required": False})
     assert conditions["required_shows"] == ["S2"]
     assert base["required_shows"] == ["S1", "S2"]
+
+
+def test_none_as_required_shows_is_treated_as_an_empty_list(free_late_slot, solver_settings):
+    """必須ショーの一覧が None でも、入力の確認（data.py）と同じく空のリストとして扱い、比較表を作れる。"""
+    scenario, conditions = free_late_slot
+    conditions = dict(conditions, required_shows=None)
+    variant = {"label": "必須から外す", "show_id": "SH", "required": False}
+    assert experiment.conditions_for_variant(conditions, variant)["required_shows"] == []
+    cases = [{"case_id": "必須なし", "budget_yen": 0, "show_variant": variant}]
+    table, _details = experiment.run_comparison(scenario, conditions, cases, solver_settings)
+    assert list(table["required_shows"]) == ["なし", "なし"]
+    assert set(table["status"]) == {"optimal"}
 
 
 def test_representative_cases_pick_the_largest_and_a_zero_difference():
@@ -355,7 +372,8 @@ def test_save_comparison_never_overwrites_within_the_same_second(tmp_path, monke
     monkeypatch.setattr(report, "datetime", FixedDatetime)
     table = pd.DataFrame([{"case_id": "c", "score": 1}])
     folders = [experiment.save_comparison(table, tmp_path, "same", {}) for _ in range(3)]
-    assert [folder.name for folder in folders] == ["20260102-030405_same", "20260102-030405_same-2", "20260102-030405_same-3"]
+    stamp = "20260102-030405_same"
+    assert [folder.name for folder in folders] == [stamp, f"{stamp}-2", f"{stamp}-3"]
 
 
 @pytest.mark.parametrize("seed", [0, 1, 7])

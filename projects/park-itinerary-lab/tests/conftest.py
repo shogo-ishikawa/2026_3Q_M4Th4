@@ -1,10 +1,12 @@
 """テスト全体で使う共通の準備（pytest の fixture）。
 
-- PROJECT_DIR: この作品のフォルダ（tests/ の1つ上）。どこから pytest を実行しても同じ場所を指す。
-- demo_scenario: configs/demo_park.json から読み込んだデモのシナリオ。
+- project_dir: この作品のフォルダ（tests/ の1つ上、PROJECT_DIR）。どこから pytest を実行しても同じ場所を指す。
+- demo_scenario_path / demo_raw / demo_scenario: configs/demo_park.json（デモ）のパス・辞書・読み込んだシナリオ。
+- demo_conditions: デモの基本の条件。
+- solver_settings / solve: 制限時間などを明示したソルバーの設定と、それで解く関数。
 - make_scenario / make_conditions: 手で作る極小問題の辞書を作る関数。
-- solve: 極小問題やデモを、制限時間を明示した設定で解く関数。
 
+ソルバー（CBC・CP-SAT）がない環境では、テストを飛ばさずに失敗させます。
 テストの出力ファイルは、pytest が用意する tmp_path の中だけに書きます。
 """
 
@@ -60,7 +62,7 @@ def demo_scenario():
 
 @pytest.fixture
 def demo_conditions():
-    """デモで使う基本の条件（Notebook の標準に近い、小さな設定）。"""
+    """デモの基本の条件: 09:00-18:00、休日の混雑、予算 2000 円、昼のパレード（S1）と昼食（M1）が必須。"""
     return {
         "entry_time": "09:00",
         "exit_time": "18:00",

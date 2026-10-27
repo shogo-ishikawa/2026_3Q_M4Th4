@@ -358,7 +358,7 @@ def result_summary(result, report=None):
 
 def metrics_row(label, result):
     """条件を変えた計算結果を1行にまとめる（比較の表に使う）。予定がない場合は状態だけを入れる。"""
-    report = result.validation
+    report = result.validation if result.has_plan else None
     metrics = report.metrics if report is not None else {}
     return {
         "条件": label,
