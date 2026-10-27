@@ -1,0 +1,3 @@
+id,attraction_id,window_start,window_end,price_yen,residual_wait_min
+P-T1-11,T1,11:00,12:00,1000,10
+P-T1-15,T1,15:00,16:00,1000,10

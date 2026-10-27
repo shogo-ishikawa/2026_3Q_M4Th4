@@ -1,0 +1,25 @@
+{
+  "meta": {
+    "title": "01 入門用の架空の活動",
+    "source_type": "fictional",
+    "checked_on": null,
+    "assumptions": [
+      "活動名・所要時間・希望度・費用は、すべて計算例のための架空の値です。",
+      "所要時間は、平均的な待ち時間も含めた固定の値とします（時間帯による変化は考えません）。",
+      "費用は一般的な架空の追加料金の例で、実在のテーマパークの施設ごとの料金を再現したものではありません。",
+      "移動時間、時間帯ごとの混雑、ショーの開演時刻は、この入門では考えません。"
+    ]
+  },
+  "time_limit_min": 360,
+  "budget_yen": 2000,
+  "required_ids": ["F"],
+  "activities": [
+    {"id": "A", "name": "ジェットコースター", "minutes": 90, "preference": 9, "cost_yen": 0},
+    {"id": "B", "name": "ボートツアー", "minutes": 60, "preference": 6, "cost_yen": 0},
+    {"id": "C", "name": "お化け屋敷", "minutes": 45, "preference": 5, "cost_yen": 0},
+    {"id": "D", "name": "キャラクター撮影（有料）", "minutes": 30, "preference": 7, "cost_yen": 1500},
+    {"id": "E", "name": "体験工房（有料）", "minutes": 60, "preference": 8, "cost_yen": 1200},
+    {"id": "F", "name": "パレード鑑賞", "minutes": 60, "preference": 6, "cost_yen": 0},
+    {"id": "G", "name": "レストランで昼食", "minutes": 50, "preference": 4, "cost_yen": 1000}
+  ]
+}

@@ -1,0 +1,4 @@
+id,name,x,y,duration_min,preference,queue_open,queue_close,finish_by
+T1,記入例のコースター,-200,300,3,9,09:00,20:00,
+T2,記入例のボート,150,350,10,6,09:00,20:00,
+T3,記入例のシアター,0,450,15,5,09:00,19:00,
