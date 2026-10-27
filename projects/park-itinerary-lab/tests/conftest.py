@@ -5,21 +5,30 @@
 - demo_conditions: デモの基本の条件。
 - solver_settings / solve: 制限時間などを明示したソルバーの設定と、それで解く関数。
 - make_scenario / make_conditions: 手で作る極小問題の辞書を作る関数。
+- run_notebook: Notebook の一部を書き換えて実行する関数（保存先は tmp_path の中）。
 
 ソルバー（CBC・CP-SAT）がない環境では、テストを飛ばさずに失敗させます。
 テストの出力ファイルは、pytest が用意する tmp_path の中だけに書きます。
 """
 
 import json
+import os
 from pathlib import Path
 
+import nbformat
 import pytest
+from nbclient import NotebookClient
 
 from park_itinerary_lab.data import load_scenario, scenario_from_dict
 from park_itinerary_lab.model import SolverSettings, solve_day_plan
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 DEMO_SCENARIO_PATH = PROJECT_DIR / "configs" / "demo_park.json"
+NOTEBOOK_DIR = PROJECT_DIR / "notebooks"
+PROJECT_OUTPUTS = PROJECT_DIR / "outputs"
+
+# セットアップセル（cells[2]）で保存先を決める行。テストでは tmp_path の中に変える。
+OUTPUT_DIR_LINE = 'OUTPUT_DIR = PROJECT_DIR / "outputs"'
 
 # 極小問題の待ち時間表のキー（季節・混雑の名前）
 TINY_SEASON = "test"
@@ -205,3 +214,69 @@ def make_scenario():
 def make_conditions():
     """極小問題の条件の辞書を作る関数（build_tiny_conditions）。"""
     return build_tiny_conditions
+
+
+# ---------------------------------------------------------------------------
+# Notebook の実行
+# ---------------------------------------------------------------------------
+
+
+def _redirect_outputs(notebook, output_dir):
+    """セットアップセル（cells[2]）の保存先 OUTPUT_DIR を output_dir に変える。変えられなければ失敗にする。"""
+    setup = notebook.cells[2]
+    assert setup.cell_type == "code" and setup.source.count(OUTPUT_DIR_LINE) == 1, (
+        f"セットアップセル（cells[2]）に {OUTPUT_DIR_LINE!r} の行が1つだけあるはずです"
+    )
+    new_line = f"OUTPUT_DIR = Path({str(output_dir)!r})"
+    setup.source = setup.source.replace(OUTPUT_DIR_LINE, new_line)
+    assert OUTPUT_DIR_LINE not in setup.source and new_line in setup.source
+
+
+def _replace_in_code(notebook, old, new):
+    """old を含む最初のコードセルで、old を new に置き換える。どのコードセルにもなければ失敗にする。"""
+    cell = next((c for c in notebook.cells if c.cell_type == "code" and old in c.source), None)
+    if cell is None:
+        pytest.fail(f"置き換える文字列 {old!r} が、Notebook のどのコードセルにもありません")
+    cell.source = cell.source.replace(old, new)
+
+
+def _output_text(notebook):
+    """全セルの出力（stream の文字と text/plain）を改行でつないだ文字列。"""
+    texts = []
+    for cell in notebook.cells:
+        for output in cell.get("outputs", []):
+            texts.append(output.get("text") or output.get("data", {}).get("text/plain", ""))
+    return "\n".join(texts)
+
+
+def _kernel_env():
+    """カーネルの環境変数。テストしている src/ を PYTHONPATH の先頭に置き、インストール済みの別の版を読まない。"""
+    paths = [str(PROJECT_DIR / "src"), os.environ.get("PYTHONPATH", "")]
+    return dict(os.environ, PYTHONPATH=os.pathsep.join(path for path in paths if path))
+
+
+@pytest.fixture
+def run_notebook(tmp_path):
+    """run(名前, [(元の文字列, 新しい文字列), ...]) で、Notebook を書き換えてから実行する関数を返す。
+
+    - 名前は "02_day_plan_optimisation" のように、notebooks/ の中のファイル名（拡張子なし）。
+    - 元の文字列は、どこかのコードセルに必ずある（なければ失敗）。最初に見つかったセルで置き換える。
+    - 保存先 OUTPUT_DIR は tmp_path / "outputs" に変え、作品の outputs/ には書かない（実行の前後で確かめる）。
+    - nbclient で実行する（制限時間 600 秒、カーネル python3、作業フォルダは notebooks/）。
+    戻り値は (実行した Notebook, すべての出力の文字を改行でつないだ文字列)。
+    """
+    output_dir = tmp_path / "outputs"
+
+    def run(name, replacements):
+        notebook = nbformat.read(NOTEBOOK_DIR / f"{name}.ipynb", as_version=4)
+        _redirect_outputs(notebook, output_dir)
+        for old, new in replacements:
+            _replace_in_code(notebook, old, new)
+        before = sorted(path.name for path in PROJECT_OUTPUTS.iterdir())
+        client = NotebookClient(notebook, timeout=600, kernel_name="python3",
+                                resources={"metadata": {"path": str(NOTEBOOK_DIR)}})
+        client.execute(env=_kernel_env())
+        assert sorted(path.name for path in PROJECT_OUTPUTS.iterdir()) == before, "作品の outputs/ に書き込みました"
+        return notebook, _output_text(notebook)
+
+    return run

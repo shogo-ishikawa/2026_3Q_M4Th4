@@ -137,27 +137,46 @@ def test_only_optimal_and_feasible_results_have_a_plan(status, has_plan):
 # ---------------------------------------------------------------------------
 
 
+def assert_proven_only_when_optimal_with_matching_bound(result):
+    """各段階を「確認済み」とするのは、CP-SAT が OPTIMAL で、目的値と限界値が一致したときだけ。"""
+    for stage in result.stages:
+        assert stage.proven == (stage.cp_status == "OPTIMAL" and stage.objective == stage.bound), stage
+
+
 def test_time_limit_zero_is_never_reported_as_infeasible(demo_scenario, demo_conditions, solve):
-    """制限時間0秒: 同じ条件は十分な時間なら最適解があるので、「実行不可能」とは決して表示しない。"""
+    """制限時間0秒: 解も証明もない「未判定」になる。十分な時間なら最適解がある条件なので、「実行不可能」とは表示しない。"""
     enough_time = solve(demo_scenario, demo_conditions)
     assert enough_time.status == "optimal"
+    assert_proven_only_when_optimal_with_matching_bound(enough_time)
     result = solve(demo_scenario, demo_conditions, time_limit_s=0)
-    assert result.status != "infeasible"
-    assert result.proof is None
-    assert result.stages, "ソルバーを実行していない"
-    assert result.stages[0].time_limit_s == 0
-    priority = result.stages[:PRIORITY_COUNT]
-    if result.status == "optimal":
-        assert len(priority) == PRIORITY_COUNT
-        assert all(stage.cp_status == "OPTIMAL" and stage.proven for stage in priority)
-    elif result.status == "unknown":
-        assert result.stages[0].cp_status == "UNKNOWN"
-        assert result.steps == [] and not result.has_plan
-        assert any("実行不可能とは限りません" in message for message in result.messages)
-    else:
-        assert result.status == "feasible"
-        assert not (len(priority) == PRIORITY_COUNT and all(stage.proven for stage in priority))
-        assert result.validation.ok
+    assert (result.status, result.optimality_scope, result.proof) == ("unknown", "none", None)
+    assert [(stage.cp_status, stage.time_limit_s, stage.proven) for stage in result.stages] == [("UNKNOWN", 0.0, False)]
+    assert result.steps == [] and not result.has_plan
+    assert any("実行不可能とは限りません" in message for message in result.messages)
+
+
+def test_stage_stopped_at_its_first_solution_is_not_proven(monkeypatch, demo_scenario, demo_conditions, solve):
+    """本物の FEASIBLE: 第1段階が最初の解で止まったら確認済みにせず、その値を固定して次の段階へ進まない。"""
+
+    class FirstSolutionSolver(cp_model.CpSolver):
+        """最初の解が見つかったら、最適性を証明する前に止める CpSolver。
+
+        1スレッドにして、毎回同じ最初の解（最適値より小さい希望度合計）で止まるようにする。
+        """
+
+        def solve(self, model_to_solve, *args, **kwargs):
+            self.parameters.stop_after_first_solution = True
+            self.parameters.num_workers = 1
+            return super().solve(model_to_solve, *args, **kwargs)
+
+    monkeypatch.setattr(model.cp_model, "CpSolver", FirstSolutionSolver)
+    result = solve(demo_scenario, demo_conditions)
+    first = result.stages[0]
+    assert (first.name, first.cp_status, first.proven) == ("score", "FEASIBLE", False)
+    assert (result.status, result.optimality_scope) == ("feasible", "none")
+    assert [stage.name for stage in result.stages] == ["score"]  # 確認していない値で先へ進まない
+    assert_proven_only_when_optimal_with_matching_bound(result)
+    assert result.has_plan and result.validation.ok
 
 
 def _stop_at_stage(monkeypatch, stage_name, cp_status):

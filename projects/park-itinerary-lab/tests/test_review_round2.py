@@ -9,7 +9,6 @@ import sys
 import nbformat
 import pandas as pd
 import pytest
-from nbclient import NotebookClient
 from nbclient.exceptions import CellExecutionError
 
 from park_itinerary_lab import experiment
@@ -191,35 +190,16 @@ def test_candidate_view_uses_japanese_column_names(demo_scenario):
 # ---------------------------------------------------------------------------
 
 
-def _run_notebook_copy(project_dir, tmp_path, name, replacements):
-    """Notebook の写しを、設定の文字列を置き換えて実行する。結果の保存先は tmp_path の中にする。"""
-    notebook = nbformat.read(project_dir / "notebooks" / f"{name}.ipynb", as_version=4)
-    output_line = 'OUTPUT_DIR = PROJECT_DIR / "outputs"'
-    assert output_line in notebook.cells[2].source
-    notebook.cells[2].source = notebook.cells[2].source.replace(output_line, f'OUTPUT_DIR = Path(r"{tmp_path}")')
-    for old, new in replacements:
-        cells = [cell for cell in notebook.cells if cell.cell_type == "code" and old in cell.source]
-        assert cells, old
-        for cell in cells:
-            cell.source = cell.source.replace(old, new)
-    NotebookClient(notebook, timeout=600, kernel_name="python3",
-                   resources={"metadata": {"path": str(project_dir / "notebooks")}}).execute()
-    texts = [out.get("text") or out.get("data", {}).get("text/plain", "")
-             for cell in notebook.cells for out in cell.get("outputs", [])]
-    return notebook, "\n".join(texts)
-
-
-def test_notebook_02_explains_a_wrong_experiment_setting(project_dir, tmp_path):
-    _notebook, text = _run_notebook_copy(project_dir, tmp_path, "02_day_plan_optimisation",
-                                         [('REFERENCE_TIME = None', 'REFERENCE_TIME = "9時"')])
+def test_notebook_02_explains_a_wrong_experiment_setting(run_notebook):
+    _notebook, text = run_notebook("02_day_plan_optimisation", [('REFERENCE_TIME = None', 'REFERENCE_TIME = "9時"')])
     assert "比較実験の設定に誤りがあります" in text and "REFERENCE_TIME" in text
     assert "比較実験の表がないため" in text
     assert "設定セルの条件の計算結果: 最適性確認済み" in text
 
 
-def test_notebook_01_stops_with_a_japanese_message_for_an_unknown_required_id(project_dir, tmp_path):
+def test_notebook_01_stops_with_a_japanese_message_for_an_unknown_required_id(run_notebook):
     with pytest.raises(CellExecutionError, match="必須の活動 'Z' がありません"):
-        _run_notebook_copy(project_dir, tmp_path, "01_pulp_intro", [('required_ids = ["F"]', 'required_ids = ["Z"]')])
+        run_notebook("01_pulp_intro", [('required_ids = ["F"]', 'required_ids = ["Z"]')])
 
 
 # ---------------------------------------------------------------------------
@@ -237,12 +217,17 @@ def _setup_source(project_dir, replacements):
     return source
 
 
-def _run_setup(project_dir, folder, replacements):
-    """セットアップセルを別のプロセスで実行する。インストールが必要になったら、インストールせずに止める。"""
+def _run_setup(project_dir, folder, replacements, src_dir=None):
+    """セットアップセルを別のプロセスで実行する。インストールが必要になったら、インストールせずに止める。
+
+    src_dir（標準はこの作品の src/）を PYTHONPATH の先頭に置き、試すコードを読み込ませる
+    （インストール済みのパッケージが別のチェックアウトを指していても、入れ直さないようにする）。
+    """
     no_install = ("    install_project(PROJECT_DIR)", '    raise RuntimeError("テスト: インストールが必要になりました")')
     script = folder / "setup_cell.py"
     script.write_text(_setup_source(project_dir, [*replacements, no_install]), encoding="utf-8")
-    env = dict(os.environ, HOME=str(folder), GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1")
+    env = dict(os.environ, HOME=str(folder), GIT_CONFIG_GLOBAL=os.devnull, GIT_CONFIG_NOSYSTEM="1",
+               PYTHONPATH=str(src_dir or project_dir / "src"))
     return subprocess.run([sys.executable, str(script)], cwd=folder, capture_output=True, text=True, env=env,
                           timeout=300)
 
@@ -274,7 +259,8 @@ def test_setup_cell_does_not_report_another_repositorys_commit_for_an_unpacked_c
     subprocess.run(["git", "init", "-q"], cwd=outer, check=True)
     subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@example.invalid", "commit", "-q",
                     "--allow-empty", "-m", "unrelated"], cwd=outer, check=True)
-    done = _run_setup(project_dir, tmp_path, [('PROJECT_DIR_OVERRIDE = ""', f'PROJECT_DIR_OVERRIDE = "{copy}"')])
+    done = _run_setup(project_dir, tmp_path, [('PROJECT_DIR_OVERRIDE = ""', f'PROJECT_DIR_OVERRIDE = "{copy}"')],
+                      src_dir=copy / "src")
     assert done.returncode == 0, done.stderr[-2000:]
     assert "Gitのチェックアウトではありません" in done.stdout
     assert "abc1234" in done.stdout  # 配布zipの情報（BUILD_INFO.json）を表示する

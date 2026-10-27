@@ -17,6 +17,7 @@ import pytest
 
 from park_itinerary_lab.data import prepare_problem, scenario_from_dict
 from park_itinerary_lab.precheck import run_prechecks
+from park_itinerary_lab.timeutil import parse_time as hhmm
 
 _JAPANESE = re.compile(r"[぀-ヿ㐀-鿿]")
 
@@ -209,6 +210,73 @@ def test_waiting_for_a_lower_wait_is_not_flagged(make_scenario, make_conditions,
     assert [step.activity_id for step in result.steps] == ["A", "S"]
     assert result.validation.ok
     assert result.validation.rows[0]["idle_min"] > 0
+
+
+def assert_fits_exactly(solve, raw, exact, one_minute_shorter):
+    """境界: ちょうど収まる条件は事前チェックで止めず、最適な予定がある。
+
+    滞在を1分短くした同じ問題は「実行不可能」（事前チェックが判定し、ソルバーだけでも証明できる）。
+    戻り値は、ちょうど収まる条件で解いた結果。
+    """
+    assert proving_issues(raw, exact) == []
+    result = solve(raw, exact)
+    assert result.status == "optimal" and result.validation.ok
+    shorter = solve(raw, one_minute_shorter)
+    assert (shorter.status, shorter.proof) == ("infeasible", "precheck")
+    assert_solver_also_proves_infeasible(solve, raw, one_minute_shorter)
+    return result
+
+
+def test_p1_walk_exactly_as_long_as_the_stay_is_not_flagged(make_scenario, make_conditions, solve):
+    """P1 の境界: 入口から出口まで 30 分、滞在もちょうど 30 分なら成立する（何も訪れずに 09:30 に出口）。29 分なら不成立。"""
+    raw = make_scenario(
+        attractions=[{"id": "X", "duration_min": 5, "preference": 3}],
+        positions={"entrance": 0, "X": 15, "exit": 30},
+    )
+    result = assert_fits_exactly(solve, raw, make_conditions(exit="09:30"), make_conditions(exit="09:29"))
+    assert result.steps == []
+    assert result.validation.metrics["exit_arrival"] == hhmm("09:30")
+
+
+def test_p4_total_exactly_as_long_as_the_stay_is_not_flagged(make_scenario, make_conditions, solve):
+    """P4 の境界: 必須項目の 待ち時間 + 所要時間 の合計が、滞在時間ちょうどなら入る。1分短いと不成立。
+
+    必須3施設（R1 は待ち 10 分 + 体験 30 分、R2・R3 は体験 40 分、移動 0 分）の合計 120 分と、滞在 120 分 / 119 分。
+    """
+    raw = make_scenario(
+        attractions=[
+            {"id": "R1", "duration_min": 30, "preference": 1},
+            {"id": "R2", "duration_min": 40, "preference": 1},
+            {"id": "R3", "duration_min": 40, "preference": 1},
+        ],
+        waits={"R1": [10]},
+        default_walk=0,
+    )
+    required = ["R1", "R2", "R3"]
+    result = assert_fits_exactly(solve, raw, make_conditions(exit="11:00", required_attractions=required),
+                                 make_conditions(exit="10:59", required_attractions=required))
+    assert sorted(step.activity_id for step in result.steps) == required
+    assert result.validation.metrics["exit_arrival"] == hhmm("11:00")
+
+
+def test_p3_pair_joining_at_the_last_allowed_minute_is_not_flagged(make_scenario, make_conditions, solve):
+    """P3 の境界: 2つ目の必須施設に、並べる最後の1分ちょうどに着く組は入る。滞在が1分短いと不成立。
+
+    A（09:00-09:10 に並べる、体験 20 分）の後に 9 分歩くと、B（09:00-09:30 に並べる）の最後の 09:29 に着く。
+    B を先にすると A に間に合わない。入園 09:00 なら両方入り、09:01 なら入らない。
+    """
+    raw = make_scenario(
+        attractions=[
+            {"id": "A", "duration_min": 20, "preference": 1, "queue_open": "09:00", "queue_close": "09:10"},
+            {"id": "B", "duration_min": 10, "preference": 1, "queue_open": "09:00", "queue_close": "09:30"},
+        ],
+        positions={"entrance": 0, "A": 0, "B": 9, "exit": 9},
+    )
+    both = {"exit": "10:00", "required_attractions": ["A", "B"]}
+    result = assert_fits_exactly(solve, raw, make_conditions(entry="09:00", **both),
+                                 make_conditions(entry="09:01", **both))
+    joins = [(step.activity_id, step.queue_time) for step in result.steps]
+    assert joins == [("A", hhmm("09:00")), ("B", hhmm("09:29"))]
 
 
 def test_demo_conditions_raise_no_proof(demo_scenario, demo_conditions):

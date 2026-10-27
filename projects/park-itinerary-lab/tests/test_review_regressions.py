@@ -3,9 +3,7 @@
 import json
 from pathlib import Path
 
-import nbformat
 import pandas as pd
-from nbclient import NotebookClient
 
 from park_itinerary_lab.data import load_scenario, prepare_problem
 from park_itinerary_lab.experiment import METHOD_LABELS, representative_cases, shortlist_candidates
@@ -118,42 +116,25 @@ def test_representative_zero_difference_case_shows_different_choices():
     assert representative_cases(table) == ["gap", "other-choice"]
 
 
-def _run_notebook(name, replacements):
-    notebook = nbformat.read(PROJECT_DIR / "notebooks" / f"{name}.ipynb", as_version=4)
-    settings = next(cell for cell in notebook.cells if cell.cell_type == "code" and all(
-        old in cell.source for old, _new in replacements))
-    for old, new in replacements:
-        settings.source = settings.source.replace(old, new)
-    NotebookClient(notebook, timeout=600, kernel_name="python3",
-                   resources={"metadata": {"path": str(PROJECT_DIR / "notebooks")}}).execute()
-    return notebook
-
-
-def _outputs(notebook):
-    texts = []
-    for cell in notebook.cells:
-        for out in cell.get("outputs", []):
-            texts.append(out.get("text") or out.get("data", {}).get("text/plain", ""))
-    return "\n".join(texts)
-
-
-def test_notebook_01_shows_no_answer_for_infeasible_settings():
+def test_notebook_01_shows_no_answer_for_infeasible_settings(run_notebook):
     """01 の手書きのモデル: 条件を満たせない設定では、目的関数の値や選んだ活動を表示しない。"""
-    notebook = _run_notebook("01_pulp_intro", [("time_limit_min = 360", "time_limit_min = 120"),
-                                               ('required_ids = ["F"]', 'required_ids = ["A", "F"]')])
-    text = _outputs(notebook)
+    _notebook, text = run_notebook("01_pulp_intro", [("time_limit_min = 360", "time_limit_min = 120"),
+                                                     ('required_ids = ["F"]', 'required_ids = ["A", "F"]')])
     assert "終了状態: Infeasible" in text
     assert "目的関数の値" not in text
     assert "条件を満たす選び方はありません" in text
 
 
-def test_notebook_02_runs_through_with_an_input_error():
-    """02: 設定セルの誤り（季節の綴り）があっても「すべて実行」が途中で止まらず、日本語で理由を表示する。"""
-    notebook = _run_notebook("02_day_plan_optimisation", [('"season": "busy"', '"season": "Busy"')])
-    text = _outputs(notebook)
+def test_notebook_02_runs_through_with_an_input_error(run_notebook, tmp_path):
+    """02: 設定セルの誤り（季節の綴り）があっても「すべて実行」が途中で止まらず、日本語で理由を表示する。
+
+    結果のフォルダは、作品の outputs/ ではなく tmp_path の中に保存される。
+    """
+    _notebook, text = run_notebook("02_day_plan_optimisation", [('"season": "busy"', '"season": "Busy"')])
     assert "設定セルの入力に誤りがあります" in text
     assert "モデルまたは入力のエラー" in text
     assert "season（季節・混雑）" in text
+    assert any((tmp_path / "outputs").iterdir())
 
 
 def load_scenario_from(raw):

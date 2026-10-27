@@ -106,6 +106,33 @@ def test_no_old_pulp_api_in_code():
                 assert _old_pulp_uses(ast.parse(source(cell))) == [], path.name
 
 
+def _count_calls(nodes, name):
+    """AST の節のリスト nodes の中にある、name(...) という呼び出しの数。"""
+    return sum(
+        isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == name
+        for top in nodes
+        for node in ast.walk(top)
+    )
+
+
+def test_random_batch_runs_only_when_switched_on():
+    """02: 時間のかかる乱数の一括実験は、「すべて実行」では動かない。
+
+    設定セルで RUN_RANDOM_BATCH = False にしてあり、run_random_batch は「if RUN_RANDOM_BATCH:」の中でだけ呼ぶ。
+    """
+    texts = [source(cell) for cell in load(NOTEBOOKS["main"])["cells"] if cell["cell_type"] == "code"]
+    trees = [ast.parse(text) for text in texts]
+    settings = next(tree for tree, text in zip(trees, texts) if "CONDITIONS = {" in text)
+    switches = [node for tree in trees for node in ast.walk(tree) if isinstance(node, ast.Assign)
+                and any(ast.unparse(target) == "RUN_RANDOM_BATCH" for target in node.targets)]
+    assert [ast.unparse(node) for node in switches] == ["RUN_RANDOM_BATCH = False"]
+    assert switches[0] in settings.body
+    guarded = [statement for tree in trees for node in ast.walk(tree)
+               if isinstance(node, ast.If) and ast.unparse(node.test) == "RUN_RANDOM_BATCH"
+               for statement in node.body]
+    assert _count_calls(trees, "run_random_batch") == _count_calls(guarded, "run_random_batch") == 1
+
+
 def test_init_does_not_import_solvers():
     """01 が OR-Tools なしで動くよう、パッケージの __init__.py はソルバーを読み込まない。"""
     tree = ast.parse((PROJECT_DIR / "src" / "park_itinerary_lab" / "__init__.py").read_text(encoding="utf-8"))

@@ -5,6 +5,7 @@
 徒歩時間は positions（直線上の位置、分）または walk（組ごとの分）で指定します。
 """
 
+from park_itinerary_lab import model
 from park_itinerary_lab.data import prepare_problem, scenario_from_dict
 from park_itinerary_lab.timeutil import parse_time as hhmm
 from park_itinerary_lab.validate import validate_plan
@@ -34,6 +35,8 @@ def assert_validated_optimum(result):
     assert result.validation.ok, result.validation.errors
     recomputed = recomputed_values(result.validation)
     for stage in result.stages:
+        # 「確認済み」は、CP-SAT が OPTIMAL で、目的値と限界値が一致したときだけ
+        assert stage.proven == (stage.cp_status == "OPTIMAL" and stage.objective == stage.bound), stage
         if stage.proven:
             assert stage.objective == recomputed[stage.name], (stage.name, stage.objective, recomputed[stage.name])
 
@@ -617,3 +620,46 @@ def test_re_solving_with_changed_conditions_gives_independent_results(make_scena
     assert second.objective_values["score"] == 4
     assert [(s.activity_id, s.mode) for s in first.steps] == [(s.activity_id, s.mode) for s in third.steps]
     assert first.problem is not third.problem
+
+
+# ---------------------------------------------------------------------------
+# 安全網: 検証関数と食い違う結果は、最適と表示しない（わざと故障を入れて確かめる）
+# ---------------------------------------------------------------------------
+
+
+def test_solver_value_that_disagrees_with_the_validator_gives_an_error(
+    monkeypatch, make_scenario, make_conditions, solve
+):
+    """ソルバー側の希望度合計を1だけ多く報告させると、ソルバーは最適と答えていても「エラー」になり、不一致を示す。"""
+    real_extract = model._extract
+
+    def extract_with_a_wrong_score(built, solver):
+        steps, values, hints = real_extract(built, solver)
+        return steps, dict(values, score=values["score"] + 1), hints
+
+    monkeypatch.setattr(model, "_extract", extract_with_a_wrong_score)
+    result = solve(make_scenario(attractions=[{"id": "X", "duration_min": 10, "preference": 5}]), make_conditions())
+    assert all(stage.proven for stage in result.stages)
+    assert (result.status, result.optimality_scope, result.has_plan) == ("error", "none", False)
+    assert result.validation.ok  # 予定そのものは制約を満たす。値の食い違いだけで止める
+    assert result.steps == [] and result.objective_values == {}  # 使ってはいけない予定は返さない
+    assert "score: ソルバー 6 / 検証 5" in result.messages
+
+
+def test_plan_with_a_violation_found_by_the_validator_gives_an_error(
+    monkeypatch, make_scenario, make_conditions, solve
+):
+    """検証関数が制約違反を報告したら、ソルバーの値と一致していても「エラー」にし、違反の説明を示す。"""
+    real_validate = model.validate_plan
+    violation = "テスト用に入れた制約違反"
+
+    def validate_with_a_violation(problem, steps):
+        report = real_validate(problem, steps)
+        report.errors.append(violation)
+        report.ok = False
+        return report
+
+    monkeypatch.setattr(model, "validate_plan", validate_with_a_violation)
+    result = solve(make_scenario(attractions=[{"id": "X", "duration_min": 10, "preference": 5}]), make_conditions())
+    assert (result.status, result.optimality_scope, result.has_plan) == ("error", "none", False)
+    assert violation in result.messages

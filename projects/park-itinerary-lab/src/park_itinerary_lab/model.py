@@ -371,6 +371,8 @@ def _check_with_validator(result):
     ]
     result.status = "error"
     result.optimality_scope = "none"
+    result.steps = []  # 使ってはいけない予定は返さない（理由は messages、計算し直した値は validation に残る）
+    result.objective_values = {}
 
 
 def _solve_stages(built, settings):

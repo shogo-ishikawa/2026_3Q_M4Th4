@@ -260,12 +260,11 @@ def test_time_limit_zero_rows_are_kept_with_a_note(free_late_slot):
     cases = [{"case_id": "時間切れ", "budget_yen": 0, "show_variant": None}]
     table, _details = experiment.run_comparison(scenario, conditions, cases, SolverSettings(time_limit_s=0, num_workers=4))
     assert len(table) == 2
-    assert set(table["status"]) <= {"unknown", "feasible", "optimal"}
-    assert "infeasible" not in set(table["status"])
-    row_a, row_b = table.iloc[0], table.iloc[1]
-    if row_a["optimality_scope"] not in ("lexicographic", "score_cost", "score"):
-        assert pd.isna(row_b["score_diff_A_minus_B"])
-        assert "Aの希望度合計が最適と確認できていない" in row_b["diff_note"]
+    assert list(table["status"]) == ["unknown", "unknown"]  # 制限時間0秒では探索しないので、いつも未判定
+    row_b = table.iloc[1]
+    assert pd.isna(row_b["score_diff_A_minus_B"])
+    assert "Aの希望度合計が最適と確認できていない" in row_b["diff_note"]
+    assert all(message for message in table["message"])  # 理由（未判定であること）を残す
 
 
 def test_invalid_show_variant_keeps_error_rows(demo_scenario, demo_conditions, solver_settings):
@@ -399,10 +398,11 @@ def test_different_seeds_give_different_scenarios():
 
 
 def test_random_batch_runs_only_when_called_and_records_the_seed(solver_settings):
-    """乱数の一括実験は、明示的に呼んだときだけ動く。各行に seed を記録する。"""
+    """乱数の一括実験は、明示的に呼んだときだけ動く。各行に seed を記録し、A・B とも検証を通る予定が得られる。"""
     base = {"entry_time": "09:00", "exit_time": "15:00", "season": "random", "allow_new_shortcuts": True}
     table = experiment.run_random_batch([1], [1000], base, solver_settings)
     assert len(table) == 2
     assert set(table["seed"]) == {1}
     assert list(table["method"]) == [METHOD_A, METHOD_B]
-    assert set(table["status"]) <= {"optimal", "feasible", "unknown", "infeasible", "error"}
+    assert set(table["status"]) <= {"optimal", "feasible"}, list(table["message"])
+    assert table["validation_ok"].tolist() == [True, True]

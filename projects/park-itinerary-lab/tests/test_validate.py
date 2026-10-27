@@ -344,6 +344,52 @@ def test_detects_a_finish_by_deadline(make_scenario, make_conditions):
     assert any("完了期限 09:30" in error for error in late.errors)
 
 
+def test_detects_a_shortcut_finishing_after_finish_by(make_scenario, make_conditions):
+    """完了期限（finish_by）は短縮利用でも確かめる: ちょうど期限に終われば可、1分でも過ぎれば誤り。
+
+    枠 P-X に 09:15 に入場すると、残る待ち 5 分 + 体験 10 分で 09:30 ちょうどに終わる。09:16 の入場は 09:31 に終わる。
+    """
+    raw = make_scenario(
+        attractions=[{"id": "X", "duration_min": 10, "preference": 1, "finish_by": "09:30"}],
+        waits={"X": [None]},
+        offers=[{"id": "P-X", "attraction": "X", "window": "09:10-09:40", "price_yen": 300, "residual_wait_min": 5}],
+        default_walk=5,
+    )
+    problem = prepare_problem(scenario_from_dict(raw), make_conditions(allow_new_shortcuts=True, budget_yen=300))
+
+    def shortcut_at(minute):
+        return [{"activity_id": "X", "mode": "shortcut", "slot_id": "P-X", "queue_time": hhmm(minute)}]
+
+    on_time = validate_plan(problem, shortcut_at("09:15"))
+    assert on_time.ok, on_time.errors
+    assert on_time.rows[0]["end"] == hhmm("09:30")
+    errors = errors_after(problem, shortcut_at("09:16"))
+    assert len(errors) == 1 and "完了期限 09:30" in errors[0]
+
+
+@pytest.mark.parametrize("join", ["10:15", "11:10"], ids=["null-band", "outside-every-band"])
+def test_detects_a_normal_join_without_a_wait_value(make_scenario, make_conditions, join):
+    """通常利用で、並び始めの時刻の待ち時間が表にない予定は誤り（値が null の時間帯、どの時間帯にも入らない時刻）。
+
+    X の案内時間は 09:00-12:00、待ち時間表は 09:00-10:00 が0分、10:00-11:00 が null、11:30-12:00 が0分。
+    同じ予定でも、値のある 09:30 に並ぶなら問題はない。
+    """
+    raw = make_scenario(
+        attractions=[{"id": "X", "duration_min": 5, "preference": 1}],
+        bands=("09:00-10:00", "10:00-11:00", "11:30-12:00"),
+        waits={"X": [0, None, 0]},
+        default_walk=5,
+    )
+    problem = prepare_problem(scenario_from_dict(raw), make_conditions(exit="13:00"))
+
+    def normal_at(minute):
+        return [{"activity_id": "X", "mode": "normal", "queue_time": hhmm(minute)}]
+
+    assert validate_plan(problem, normal_at("09:30")).ok
+    errors = errors_after(problem, normal_at(join))
+    assert len(errors) == 1 and f"{join} の待ち時間が表にない" in errors[0]
+
+
 def test_compare_with_solver_detects_inconsistent_solver_values(full_day):
     """ソルバーの値と検証関数の値が食い違えば、その点を一覧にする。"""
     report = validate_plan(full_day.problem, full_day.steps)
