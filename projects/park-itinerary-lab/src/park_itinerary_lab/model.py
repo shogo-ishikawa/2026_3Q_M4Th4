@@ -45,6 +45,9 @@ SCOPE_LABELS = {
     "none": "最適性は未確認",
 }
 
+# CP-SAT の前処理の probing を使わない（_solve_stage の説明を参照）
+PRESOLVE_PROBING_LEVEL = 0
+
 # (段階の名前, 向き, 表示名)。最初の3つが優先順位、最後は同点の予定を選ぶための補助の段階。
 PRIORITY_STAGES = (
     ("score", "max", "希望度合計"),
@@ -411,6 +414,9 @@ def _solve_stage(built, name, sense, label, settings):
     solver.parameters.random_seed = int(settings.random_seed)
     solver.parameters.relative_gap_limit = 0.0
     solver.parameters.absolute_gap_limit = 0.0
+    # OR-Tools 9.15 の CP-SAT は、まれに前処理（presolve）の probing の内部チェックで Python ごと停止するため
+    # （冗長な NoOverlap 制約を含む極小の例で確認）、probing を使わない。解と証明の正しさは変わらない。
+    solver.parameters.cp_model_probing_level = PRESOLVE_PROBING_LEVEL
     solver.parameters.log_search_progress = bool(settings.log_search_progress)
     started = time.perf_counter()
     code = solver.solve(model)
@@ -574,6 +580,7 @@ def _solver_info(settings):
         "random_seed": int(settings.random_seed),
         "relative_gap_limit": 0.0,
         "absolute_gap_limit": 0.0,
+        "cp_model_probing_level": PRESOLVE_PROBING_LEVEL,
         "prechecks": bool(settings.run_prechecks),
     }
 

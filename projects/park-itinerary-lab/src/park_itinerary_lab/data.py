@@ -913,7 +913,7 @@ def _read_acquired(scenario, conditions, check):
         must_use = item.get("must_use")
         if not isinstance(must_use, bool):
             check.add(f"{where}.must_use（必ず使うなら True、使うかどうかを任せるなら False）を指定してください")
-        elif must_use:
+        elif must_use and isinstance(attraction_id, str):
             if attraction_id in must_use_attractions:
                 check.add(f"{where}: 同じ施設に「必ず使う」取得済み枠が複数あります（施設は1回までの利用です）")
             must_use_attractions.add(attraction_id)

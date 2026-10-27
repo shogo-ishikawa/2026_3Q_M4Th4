@@ -186,6 +186,8 @@ def _variant_problems(variant, where):
             problems.append(f"{where} の {key} は True か False にしてください")
     if variant.get("exclude") and (starts or variant.get("x") is not None or variant.get("y") is not None):
         problems.append(f"{where}: exclude（ショーを外す）と、開演時刻・場所の変更は同時に指定できません")
+    if variant.get("exclude") and variant.get("required") is True:
+        problems.append(f"{where}: exclude（ショーを外す）と required: True（必須にする）は同時に指定できません")
     return problems
 
 
@@ -281,7 +283,9 @@ def _drop_show_preference(conditions, show_id, scenario):
     元の順位で決まる希望度を、すべての活動について明示した preferences に置き換えてから除きます。
     """
     rank = conditions.get("preference_rank")
-    if scenario is not None and isinstance(rank, (list, tuple)) and rank and not conditions.get("preferences"):
+    if rank and conditions.get("preferences"):
+        return  # 両方の指定は入力の誤り。ほかのケースと同じく prepare_problem が日本語で説明する
+    if scenario is not None and isinstance(rank, (list, tuple)) and rank:
         activity_ids = [*scenario.attractions, *scenario.shows, *scenario.meals]
         if all(isinstance(a, str) and a in activity_ids for a in rank) and len(set(rank)) == len(rank):
             weights = {activity_id: 0 for activity_id in activity_ids}
@@ -430,6 +434,14 @@ def _used_shortcuts(report):
     return attractions, slots
 
 
+def _skipped_attractions(result, report):
+    """予定に入らなかった施設（施設ID順）。予定がない場合は空。"""
+    if report is None or result.problem is None:
+        return ""
+    visited = {row["activity_id"] for row in report.rows}
+    return ", ".join(a for a in result.problem.scenario.attractions if a not in visited)
+
+
 def _shows_attended(report):
     """鑑賞したショーの公演回（例: "S1-1500"）。"""
     if report is None:
@@ -455,6 +467,8 @@ def _result_row(common, method, result, report, reference, candidates):
         "used_shortcut_attractions": used_attractions,
         "used_slots": used_slots,
         "shows_attended": _shows_attended(report),
+        "visited_activities": "" if report is None else ", ".join(row["activity_id"] for row in report.rows),
+        "skipped_attractions": _skipped_attractions(result, report),
         "solve_time_s": round(sum(stage.wall_time_s for stage in result.stages), 3),
         "score_status": _stage_value(result, 0, "cp_status"),
         "score_objective": _stage_value(result, 0, "objective"),
@@ -536,6 +550,7 @@ COMPARISON_VIEW_COLUMNS = {
     "score": "希望度合計",
     "extra_cost_yen": "追加費用(円)",
     "travel_min": "移動(分)",
+    "skipped_attractions": "予定に入らなかった施設",
     "used_shortcut_attractions": "短縮利用した施設",
     "shows_attended": "見たショーの回",
     "shortcut_candidates": "方法Bの候補",
