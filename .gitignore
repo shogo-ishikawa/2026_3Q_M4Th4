@@ -1,0 +1,52 @@
+# Python environments and generated files
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+.coverage.*
+htmlcov/
+build/
+dist/
+
+# Notebook and editor caches
+.ipynb_checkpoints/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Credentials and local notes
+.env
+.env.*
+!.env.example
+.private/
+_private/
+
+# Audio and model weights: keep sources and generation instructions instead
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.aac
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.safetensors
+
+# Data downloads, model caches, generated results and distribution archives
+**/data/raw/
+**/data/processed/
+**/model_cache/
+**/.cache/
+**/outputs/**
+!**/outputs/README.md
+!**/outputs/.gitkeep
+*.zip
+*.tar.gz
