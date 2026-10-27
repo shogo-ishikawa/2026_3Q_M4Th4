@@ -146,11 +146,17 @@ def build_options(problem, shortest=None, check_budget=True):
 
 
 def drop_reasons(problem, shortest, activity_id):
-    """利用案が残らなかった理由を数える（事前チェックの説明用）。"""
-    counts = {"raw": 0, "time": 0, "finish_by": 0, "budget": 0}
+    """利用案が残らなかった理由を数える（事前チェックの説明用）。
+
+    "finish_by_affordable" は、完了期限で外れた利用案のうち、料金が予算以内のものの数です
+    （完了期限だけが原因かどうかを説明し分けるために使います）。
+    """
+    counts = {"raw": 0, "time": 0, "finish_by": 0, "budget": 0, "finish_by_affordable": 0}
     for option in raw_options(problem, activity_id):
         counts["raw"] += 1
         _tightened, reason = tighten_option(problem, shortest, option)
         if reason is not None:
             counts[reason] += 1
+        if reason == "finish_by" and option.cost <= problem.budget:
+            counts["finish_by_affordable"] += 1
     return counts

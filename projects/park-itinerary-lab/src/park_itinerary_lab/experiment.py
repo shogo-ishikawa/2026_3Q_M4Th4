@@ -17,7 +17,7 @@ import random
 import pandas as pd
 
 from .data import InputError, prepare_problem, scenario_from_dict
-from .model import PlanResult, SolverSettings, solve_day_plan
+from .model import SCOPE_LABELS, PlanResult, SolverSettings, solve_day_plan
 from .report import environment_info, new_run_folder
 from .timeutil import format_time, parse_time
 from .validate import normal_wait_at, validate_plan
@@ -53,8 +53,8 @@ def shortlist_candidates(problem, reference_time):
         normal = None
         if attraction.queue_open <= reference < attraction.queue_close:
             normal = normal_wait_at(problem.wait_table, attraction.id, reference)
-        saved = 0 if normal is None else normal - cheapest.residual_wait
-        ratio = math.inf if cheapest.price == 0 else saved / cheapest.price
+        saved = None if normal is None else normal - cheapest.residual_wait  # 通常利用できないなら計算しない
+        ratio = _saving_ratio(saved, cheapest.price)
         rows.append({
             "attraction_id": attraction.id,
             "name": attraction.name,
@@ -69,11 +69,13 @@ def shortlist_candidates(problem, reference_time):
             "selected": False,
             "reason": "",
         })
-    rows.sort(key=lambda row: (-row["_ratio"], -row["saved_min"], row["attraction_id"]))
+    rows.sort(key=lambda row: (-row["_ratio"], -(row["saved_min"] or 0), row["attraction_id"]))
     spent = 0
     for row in rows:
         if row["attraction_id"] in held:
             row["reason"] = "取得済み枠あり"
+        elif row["saved_min"] is None:
+            row["reason"] = "基準時刻に通常利用できない"
         elif row["saved_min"] <= 0:
             row["reason"] = "短縮できる時間が0分以下"
         elif spent + row["price_yen"] > problem.budget:
@@ -85,6 +87,15 @@ def shortlist_candidates(problem, reference_time):
     for row in rows:
         del row["_ratio"]
     return rows
+
+
+def _saving_ratio(saved, price):
+    """「短縮できる時間 ÷ 料金」。通常利用できない施設は最後、料金0円は先頭（無限大）に並ぶ値にする。"""
+    if saved is None:
+        return -math.inf
+    if price == 0:
+        return math.inf
+    return saved / price
 
 
 def solve_method_b(scenario, conditions, settings=None, reference_time=None):
@@ -102,19 +113,29 @@ def solve_method_b(scenario, conditions, settings=None, reference_time=None):
 # ---------------------------------------------------------------------------
 
 
+VARIANT_KEYS = ("label", "show_id", "starts", "x", "y", "required", "exclude")
+
+
 def apply_show_variant(scenario, variant):
     """ショーの開演時刻や場所を変えたシナリオを作る（元のシナリオは変更しない）。
 
     variant の例: {"label": "13時・奥", "show_id": "S1", "starts": ["13:00"], "x": 0, "y": 650}
     starts を省略すると公演回はそのまま、x / y を省略すると場所はそのまま。
+    "exclude": True なら、そのショーをシナリオから外す（固定時刻の予定がない基準）。
     """
-    if not variant or not (variant.get("starts") or variant.get("x") is not None or variant.get("y") is not None):
+    if not variant:
         return scenario
     _check_variant(variant)
+    changes = variant.get("starts") or variant.get("x") is not None or variant.get("y") is not None
+    if not (changes or variant.get("exclude")):
+        return scenario
     raw = copy.deepcopy(scenario.raw)
     show = next((s for s in raw["shows"] if s["id"] == variant["show_id"]), None)
     if show is None:
         raise InputError([f"ショー '{variant['show_id']}' がありません"])
+    if variant.get("exclude"):
+        raw["shows"] = [s for s in raw["shows"] if s["id"] != variant["show_id"]]
+        return scenario_from_dict(raw)
     moved = variant.get("x") is not None or variant.get("y") is not None
     if moved and raw.get("walk_minutes") is not None:
         raise InputError(["移動時間の表（walk_minutes）を使うシナリオでは、座標を変えても移動時間は変わりません"])
@@ -128,33 +149,129 @@ def apply_show_variant(scenario, variant):
     return scenario_from_dict(raw)
 
 
-def _check_variant(variant):
+def _check_variant(variant, where="show_variant"):
     """ショーの条件の書き方を確かめ、誤りは InputError（日本語）にする。"""
-    problems = []
-    if not isinstance(variant.get("show_id"), str):
-        problems.append("show_variant には show_id（ショーのID）を文字列で書いてください")
-    starts = variant.get("starts")
-    if starts is not None and (not isinstance(starts, (list, tuple)) or not all(isinstance(s, str) for s in starts)):
-        problems.append('show_variant の starts は "HH:MM" の文字列のリストにしてください')
-    for key in ("x", "y"):
-        value = variant.get(key)
-        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))):
-            problems.append(f"show_variant の {key} は数値にしてください")
+    problems = _variant_problems(variant, where)
     if problems:
         raise InputError(problems)
 
 
+def _variant_problems(variant, where):
+    """ショーの条件1つの誤りを、日本語の文のリストで返す。"""
+    if not isinstance(variant, dict):
+        return [f'{where} は辞書で書いてください 例: {{"label": "13時の回だけ", "show_id": "S1", "starts": ["13:00"]}}']
+    problems = []
+    unknown = sorted(set(variant) - set(VARIANT_KEYS))
+    if unknown:
+        problems.append(f"{where} に使えないキーがあります: {unknown}（使えるキー: {', '.join(VARIANT_KEYS)}）")
+    label = variant.get("label")
+    if not isinstance(label, str) or not label.strip():
+        problems.append(f"{where} に label（表に出す名前）を文字列で書いてください")
+    if not isinstance(variant.get("show_id"), str):
+        problems.append(f"{where} に show_id（ショーのID）を文字列で書いてください")
+    starts = variant.get("starts")
+    if starts is not None:
+        if not isinstance(starts, (list, tuple)) or not starts:
+            problems.append(f'{where} の starts は "HH:MM" の文字列のリストにしてください')
+        else:
+            problems += [f'{where} の starts の {start!r} は "HH:MM" の形式で書いてください'
+                         for start in starts if not _is_time_text(start)]
+    for key in ("x", "y"):
+        value = variant.get(key)
+        if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float))):
+            problems.append(f"{where} の {key} は数値にしてください")
+    for key in ("required", "exclude"):
+        if key in variant and not isinstance(variant[key], bool):
+            problems.append(f"{where} の {key} は True か False にしてください")
+    if variant.get("exclude") and (starts or variant.get("x") is not None or variant.get("y") is not None):
+        problems.append(f"{where}: exclude（ショーを外す）と、開演時刻・場所の変更は同時に指定できません")
+    return problems
+
+
+def _is_time_text(value):
+    if not isinstance(value, str):
+        return False
+    try:
+        parse_time(value)
+    except ValueError:
+        return False
+    return True
+
+
+def check_experiment_settings(budgets, show_variants, reference_time=None):
+    """比較実験の設定の形（予算・ショーの条件の一覧・基準時刻）を確かめ、誤りは InputError（日本語）にする。
+
+    ケースの一覧を作れない誤り（ラベルがない・重複している、予算がリストでない など）は、計算を始める前に止めます。
+    1つのショーの条件の中身の誤り（存在しないショー・時刻の書き方など）は、そのケースをエラーの行として表に残します。
+    """
+    problems = _budget_problems(budgets) + _variant_list_problems(show_variants) + _reference_problems(reference_time)
+    if problems:
+        raise InputError(problems)
+
+
+def _budget_problems(budgets):
+    if not isinstance(budgets, (list, tuple)) or not budgets:
+        return ["EXPERIMENT_BUDGETS は、予算（0以上の整数, 円）のリストにしてください 例: [0, 1000, 2000]"]
+    problems = [f"EXPERIMENT_BUDGETS の {budget!r} は0以上の整数（円）にしてください"
+                for budget in budgets if isinstance(budget, bool) or not isinstance(budget, int) or budget < 0]
+    if len(set(map(repr, budgets))) < len(budgets):
+        problems.append("EXPERIMENT_BUDGETS に同じ予算が2回以上あります")
+    return problems
+
+
+def _variant_list_problems(show_variants):
+    if not isinstance(show_variants, (list, tuple)) or not show_variants:
+        return ["EXPERIMENT_SHOW_VARIANTS は、ショーの条件（辞書）のリストにしてください"]
+    problems = []
+    labels = []
+    for number, variant in enumerate(show_variants, start=1):
+        label = variant.get("label") if isinstance(variant, dict) else None
+        if isinstance(label, str) and label.strip():
+            labels.append(label)
+        else:
+            problems.append(f'EXPERIMENT_SHOW_VARIANTS の{number}番目は、label（表に出す名前）を持つ辞書にしてください'
+                            f' 例: {{"label": "13時の回だけ", "show_id": "S1", "starts": ["13:00"]}}')
+    repeated = sorted({label for label in labels if labels.count(label) > 1})
+    if repeated:
+        problems.append(f"EXPERIMENT_SHOW_VARIANTS の label が重複しています: {repeated}")
+    return problems
+
+
+def _reference_problems(reference_time):
+    if reference_time is None or _is_time_text(reference_time):
+        return []
+    return [f'REFERENCE_TIME は "HH:MM" の文字列か None にしてください（{reference_time!r}）']
+
+
+def _seed_problems(seeds):
+    if isinstance(seeds, (list, tuple)) and seeds and all(
+            isinstance(seed, int) and not isinstance(seed, bool) for seed in seeds):
+        return []
+    return ["BATCH_SEEDS は、乱数の seed（整数）のリストにしてください 例: [1, 2, 3]"]
+
+
 def conditions_for_variant(base_conditions, variant):
-    """variant に "required": False があれば、そのショーを必須から外す（固定時刻の予定がない基準）。"""
+    """ショーを必須から外す条件を作る。
+
+    "required": False なら、ショーを必須から外す（希望度があれば、任意の予定として選ばれることがある）。
+    "exclude": True なら、ショーを必須から外し、希望度などの指定からも除く（シナリオからは apply_show_variant で外す）。
+    """
     conditions = copy.deepcopy(base_conditions)
-    if variant and variant.get("required") is False:
-        shows = [s for s in conditions.get("required_shows") or [] if s != variant["show_id"]]
-        conditions["required_shows"] = shows
+    if not variant or not (variant.get("required") is False or variant.get("exclude")):
+        return conditions
+    show_id = variant.get("show_id")
+    conditions["required_shows"] = [s for s in conditions.get("required_shows") or [] if s != show_id]
+    if variant.get("exclude"):
+        if isinstance(conditions.get("preferences"), dict):
+            conditions["preferences"].pop(show_id, None)
+        if isinstance(conditions.get("preference_rank"), list):
+            conditions["preference_rank"] = [a for a in conditions["preference_rank"] if a != show_id]
     return conditions
 
 
 def comparison_cases(budgets, show_variants):
-    """予算とショーの条件の組合せを、ケースの一覧にする。"""
+    """予算とショーの条件の組合せを、ケースの一覧にする（設定の誤りは InputError）。"""
+    check_experiment_settings(budgets, show_variants)
     cases = []
     for variant in show_variants:
         for budget in budgets:
@@ -177,6 +294,7 @@ def run_comparison(scenario, base_conditions, cases, settings=None, reference_ti
     タイムアウト・実行不可能・入力エラーのケースも除外せず、状態とともに表に残します。
     """
     settings = settings or SolverSettings()
+    _check_cases(cases, reference_time)
     rows = []
     details = {}
     for case in cases:
@@ -207,6 +325,17 @@ def run_comparison(scenario, base_conditions, cases, settings=None, reference_ti
     return pd.DataFrame(rows), details
 
 
+def _check_cases(cases, reference_time):
+    """計算を始める前に、ケースIDの重複と基準時刻の書き方を確かめる。"""
+    problems = _reference_problems(reference_time)
+    ids = [case["case_id"] for case in cases]
+    repeated = sorted({case_id for case_id in ids if ids.count(case_id) > 1})
+    if repeated:
+        problems.append(f"ケースIDが重複しています（ショーの条件の label・予算・seed を確かめてください）: {repeated}")
+    if problems:
+        raise InputError(problems)
+
+
 def _solve_b_safely(scenario, conditions, settings, reference):
     try:
         return solve_method_b(scenario, conditions, settings, reference)
@@ -228,7 +357,10 @@ def _same_options(result_a, selected):
     problem = result_a.problem
     if problem is None:
         return None
-    affordable = {s.attraction_id for s in problem.slots.values() if not s.acquired and s.price <= problem.budget}
+    # 必ず使う取得済み枠がある施設は、方法Aでもその枠しか使えないので、比べる対象から除く
+    fixed = {problem.slots[slot_id].attraction_id for slot_id in problem.must_use_slots}
+    affordable = {s.attraction_id for s in problem.slots.values()
+                  if not s.acquired and s.price <= problem.budget and s.attraction_id not in fixed}
     return affordable <= set(selected)
 
 
@@ -266,6 +398,13 @@ def _used_shortcuts(report):
     return attractions, slots
 
 
+def _shows_attended(report):
+    """鑑賞したショーの公演回（例: "S1-1500"）。"""
+    if report is None:
+        return ""
+    return ", ".join(row["performance_id"] for row in report.rows if row["kind"] == "show")
+
+
 def _result_row(common, method, result, report, reference, candidates):
     metrics = report.metrics if report is not None else {}
     used_attractions, used_slots = _used_shortcuts(report)
@@ -283,6 +422,7 @@ def _result_row(common, method, result, report, reference, candidates):
         "n_activities": metrics.get("n_activities"),
         "used_shortcut_attractions": used_attractions,
         "used_slots": used_slots,
+        "shows_attended": _shows_attended(report),
         "solve_time_s": round(sum(stage.wall_time_s for stage in result.stages), 3),
         "score_status": _stage_value(result, 0, "cp_status"),
         "score_objective": _stage_value(result, 0, "objective"),
@@ -303,7 +443,7 @@ def _result_row(common, method, result, report, reference, candidates):
         "validation_ok": None if report is None else report.ok,
         "score_diff_A_minus_B": None,
         "diff_note": "",
-        "message": result.messages[0] if result.messages else "",
+        "message": " ／ ".join(result.messages),
     }
 
 
@@ -316,7 +456,10 @@ def _add_difference(row_b, result_a, result_b, row_a):
 
     どちらかが暫定案の場合、差にはソルバーの打ち切りの影響が混ざるので計算しません。
     """
-    if not _score_proven(result_a):
+    if result_a.status in ("infeasible", "error"):
+        row_b["diff_note"] = (f"Aに予定がないため、差を計算しない"
+                              f"（A: {result_a.status_label}／B: {result_b.status_label}。理由は message の列）")
+    elif not _score_proven(result_a):
         row_b["diff_note"] = f"Aの希望度合計が最適と確認できていないため、差を計算しない（A: {result_a.status_label}）"
     elif not result_b.has_plan:
         row_b["diff_note"] = f"Bでは予定が得られていない（B: {result_b.status_label}）"
@@ -336,6 +479,57 @@ def save_comparison(table, output_root, label, settings_info):
     return folder
 
 
+# Notebook で表示するときの日本語の列名（CSV には英語の列名のまま保存します）
+COMPARISON_VIEW_COLUMNS = {
+    "case_id": "ケース",
+    "method": "方法",
+    "status_label": "状態",
+    "scope_label": "最適性の確認範囲",
+    "score": "希望度合計",
+    "extra_cost_yen": "追加費用(円)",
+    "travel_min": "移動(分)",
+    "used_shortcut_attractions": "短縮利用した施設",
+    "shows_attended": "見たショーの回",
+    "shortcut_candidates": "方法Bの候補",
+    "same_options_label": "Bの選択肢がAと同じ",
+    "score_diff_A_minus_B": "差（A − B）",
+    "diff_note": "差の注記",
+    "reason": "予定がない理由",
+}
+CANDIDATE_VIEW_COLUMNS = {
+    "attraction_id": "施設ID",
+    "name": "名前",
+    "reference_time": "基準時刻",
+    "normal_wait_min": "通常の待ち(分)",
+    "cheapest_slot": "最も安い枠",
+    "residual_wait_min": "枠の残る待ち(分)",
+    "saved_min": "短縮できる時間(分)",
+    "price_yen": "料金(円)",
+    "saved_per_1000yen": "1000円あたりの短縮(分)",
+    "selected": "候補",
+    "reason": "理由",
+}
+
+
+def comparison_view(table):
+    """比較の表を、Notebook で読むための日本語の列名の表にする（元の表は変えない）。"""
+    view = table.copy()
+    view["scope_label"] = [SCOPE_LABELS.get(scope, scope) if status in ("optimal", "feasible") else ""
+                           for status, scope in zip(view["status"], view["optimality_scope"])]
+    view["same_options_label"] = [{True: "はい（差は構造上0）", False: "いいえ"}.get(value, "")
+                                  for value in view["b_same_options_as_a"]]
+    view["reason"] = [message if status in ("infeasible", "unknown", "error") else ""
+                      for status, message in zip(view["status"], view["message"])]
+    return view[list(COMPARISON_VIEW_COLUMNS)].rename(columns=COMPARISON_VIEW_COLUMNS)
+
+
+def candidate_view(rows):
+    """方法Bの候補の計算過程（shortlist_candidates の結果）を、日本語の列名の表にする。"""
+    table = pd.DataFrame(rows, columns=list(CANDIDATE_VIEW_COLUMNS))
+    table["selected"] = table["selected"].map({True: "候補", False: ""})
+    return table.rename(columns=CANDIDATE_VIEW_COLUMNS)
+
+
 def representative_cases(table):
     """差が最大のケースと、差が0のケースを1つずつ選ぶ（差を計算できたケースの中から）。
 
@@ -349,11 +543,13 @@ def representative_cases(table):
         return chosen
     chosen.append(measured.sort_values("score_diff_A_minus_B", ascending=False).iloc[0]["case_id"])
     zero = measured[(measured["score_diff_A_minus_B"] == 0) & (~measured["case_id"].isin(chosen))]
-    a_rows = table[table["method"] == METHOD_LABELS["A"]].set_index("case_id")
+    a_rows = {row["case_id"]: row for _index, row in table[table["method"] == METHOD_LABELS["A"]].iterrows()}
 
     def choices_differ(row):
-        a_row = a_rows.loc[row["case_id"]]
-        return (a_row["used_shortcut_attractions"] != row["used_shortcut_attractions"]
+        a_row = a_rows.get(row["case_id"])
+        if a_row is None:
+            return False
+        return (_id_set(a_row["used_shortcut_attractions"]) != _id_set(row["used_shortcut_attractions"])
                 or a_row["extra_cost_yen"] != row["extra_cost_yen"])
 
     candidates = [zero]
@@ -371,6 +567,13 @@ def representative_cases(table):
 # ---------------------------------------------------------------------------
 # 乱数で作る架空のシナリオ（一括実験・テスト用）
 # ---------------------------------------------------------------------------
+
+
+def _id_set(text):
+    """"A4, A6" のような文字列を、順番を無視した集合にする（空欄や欠損値は空集合）。"""
+    if not isinstance(text, str):
+        return frozenset()
+    return frozenset(part.strip() for part in text.split(",") if part.strip())
 
 
 def generate_random_scenario(
@@ -507,6 +710,9 @@ def _random_meal(area_m, opening, closing):
 
 def run_random_batch(seeds, budgets, base_conditions, settings=None, reference_time=None, **generator_options):
     """乱数のシナリオを seed ごとに作り、予算を変えて A と B を比較する（明示的に呼んだときだけ実行）。"""
+    problems = _seed_problems(seeds) + _budget_problems(budgets) + _reference_problems(reference_time)
+    if problems:
+        raise InputError(problems)
     tables = []
     for seed in seeds:
         scenario = scenario_from_dict(generate_random_scenario(seed, **generator_options))

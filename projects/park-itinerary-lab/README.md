@@ -35,17 +35,17 @@ Colab で開くURLは `https://colab.research.google.com/github/shogo-ishikawa/2
 
 ### コードの版（`REPO_REF`）について
 
-- セットアップセルの `REPO_REF` が、取得するコードの版です（ブランチ名・タグ名・コミットSHA・`refs/pull/<番号>/head` のどれでも指定できます）。Colab ではセルが折りたたまれ、`REPO_REF` の入力欄だけが表示されます。
+- セットアップセルの `REPO_REF` が、取得するコードの版です（ブランチ名・タグ名・コミットSHA・`refs/pull/<番号>/head` のどれでも指定できます）。Colab ではセルのコードが折りたたまれ、`REPO_REF`・`UPDATE_CHECKOUT`・`PROJECT_DIR_OVERRIDE` の入力欄だけが表示されます（コードを見るには、セルをダブルクリックします）。
 - **開発中**は、作業ブランチ `claude/new-session-cc8kr0` を指定しています。main へ反映した後は、別の変更（プルリクエスト）で `REPO_REF = "main"`（または `park-itinerary-lab-v0.1.0` のような作品名付きのタグ）と、この README のリンクを一緒に更新します。
 - Colab で PR や別のブランチの Notebook を開いても、セットアップが自動的にその PR のコードを取得するわけではありません。取得するのは `REPO_REF` の版です。PR の内容を試す場合は、`REPO_REF` に `refs/pull/<番号>/head` を指定します。
 - 指定した版を取得できない場合や、その版にこの作品がない場合（例: main へ反映する前に `"main"` を指定した）は、main に切り替えずに理由を表示して止まります。
-- 2回目以降の実行では、前回取得したコミットをそのまま使います。最新にしたいときは `UPDATE_CHECKOUT = True` にします。セットアップセルが作ったチェックアウト以外のフォルダや、保存されていない変更があるチェックアウトは、書き換えません。
+- 2回目以降の実行では、前回取得したコミットをそのまま使います。最新にしたいときは `UPDATE_CHECKOUT` にチェックを入れます。セットアップセルが作ったチェックアウト以外のフォルダや、保存されていない変更があるチェックアウトは、書き換えません（保存されていない変更があるまま使う場合は、注意を表示し、保存する結果にも記録します）。
 - `REPO_REF` を変えて再実行し「ランタイムを再起動」と表示されたら、「ランタイム → セッションを再起動する」の後、セットアップセルから実行し直します。
-- 配布 zip を Colab で展開して使う場合は、セットアップセルの `PROJECT_DIR_OVERRIDE` に展開したフォルダ（例: `/content/v0.1.0`）を指定します。
+- 配布 zip を Colab で展開して使う場合は、セットアップセルの `PROJECT_DIR_OVERRIDE` に展開したフォルダ（例: `/content/v0.1.0`）を指定します。自分で `git clone` したチェックアウトを使う場合も、その中の作品フォルダ（例: `/content/2026_3Q_M4Th4/projects/park-itinerary-lab`）を指定します。指定すると `REPO_REF` は使いません。
 
 ## ローカルでの実行
 
-Python 3.12 以上が必要です（PuLP 4 の要件）。リポジトリのルートで:
+Python 3.12 以上が必要です（PuLP 4 の要件）。CBC を含む cbcbox 2.929 の配布物（wheel）は Linux・Windows・macOS 15 以降向けで、macOS 14 以前には用意されていません（確認したのは Linux だけです）。リポジトリのルートで:
 
 ```bash
 python -m venv .venv && source .venv/bin/activate

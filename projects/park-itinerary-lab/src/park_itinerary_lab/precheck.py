@@ -26,11 +26,12 @@ def run_prechecks(problem, options=None, shortest=None):
     """事前チェックの結果を返す。proves_infeasible=True の項目があれば実行不可能。"""
     shortest = shortest or shortest_paths(problem.travel)
     options = options or build_options(problem, shortest)
+    timely = build_options(problem, shortest, check_budget=False)  # 料金を考えない利用案（説明の区別に使う）
     issues = []
     issues += _check_gates(problem, shortest)
     issues += _check_each_required(problem, shortest, options)
-    issues += _check_required_pairs(problem, shortest, options)
-    issues += _check_total_time(problem, options)
+    issues += _check_required_pairs(problem, shortest, options, timely)
+    issues += _check_total_time(problem, options, timely)
     issues += [PrecheckIssue("W-data", message, (), False) for message in problem.warnings]
     return issues
 
@@ -69,8 +70,11 @@ def _why_no_option(problem, shortest, activity_id):
         return "利用できる時間帯がありません。"
     if counts["budget"] > 0:
         return "時間内に利用できる方法（短縮利用の枠）はありますが、その料金が追加費用の予算を超えます。"
+    if counts["finish_by"] > 0 and counts["finish_by_affordable"] > 0:
+        return "入退園時刻と移動の面では利用できる時間帯がありますが、施設の完了期限（finish_by）までに利用を終えられません。"
     if counts["finish_by"] > 0:
-        return "入退園時刻の間には並べても、施設の完了期限（finish_by）までに利用を終えられません。"
+        return ("入退園時刻と移動の面では利用できる短縮利用の枠がありますが、施設の完了期限（finish_by）までに"
+                "利用を終えられず、その料金も追加費用の予算を超えます。")
     if must_use:
         return f"必ず使う取得済み枠 {must_use[0]} の時間帯では、移動を含めて入退園時刻の間に利用を終えられません。"
     if kind == "show":
@@ -87,9 +91,8 @@ def _pair_time_fits(shortest, first, second, option_a, option_b):
     return queue_b <= option_b.hi
 
 
-def _check_required_pairs(problem, shortest, options):
+def _check_required_pairs(problem, shortest, options, timely):
     """必須の活動の2つ組を調べる。時間の面で入る組合せがあっても、費用の合計が予算を超えるなら、そう説明する。"""
-    timely = build_options(problem, shortest, check_budget=False)
     issues = []
     required = sorted(a for a in problem.required if options[a])
     for index, a in enumerate(required):
@@ -113,14 +116,23 @@ def _check_required_pairs(problem, shortest, options):
     return issues
 
 
-def _check_total_time(problem, options):
+def _check_total_time(problem, options, timely):
+    """必須項目の「待ち時間＋所要時間」の最小値の合計が、滞在時間を超えないかを調べる。
+
+    予算内の利用案（options）で判定します。料金を考えない利用案（timely）なら収まる場合は、
+    予算内の方法だけでは足りないことを、説明に書き添えます。
+    """
     required = [a for a in problem.required if options[a]]
     needed = sum(min(o.wait + o.duration for o in options[a]) for a in required)
     available = problem.exit - problem.entry
     if needed <= available:
         return []
     message = (
-        f"必須項目の待ち時間と所要時間の合計が、最小でも {needed} 分あり、"
+        f"必須項目の待ち時間と所要時間の合計が、予算内で使える方法では最小でも {needed} 分あり、"
         f"滞在時間 {available} 分を超えます。"
     )
+    needed_any_price = sum(min(o.wait + o.duration for o in timely[a]) for a in required)
+    if needed_any_price <= available:
+        message += (f"料金を考えなければ合計は最小 {needed_any_price} 分で滞在時間に収まりますが、"
+                    "そのための短縮利用の料金が予算を超えます。")
     return [PrecheckIssue("P4-total", message, tuple(sorted(required)), True)]

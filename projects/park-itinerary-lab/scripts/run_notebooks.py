@@ -7,6 +7,7 @@
 
 実行済みの Notebook は outputs/executed_notebooks/<日時>/ に保存します（Git には入れません）。
 Notebook のセットアップセルは、このチェックアウトのコードを使います（REPO_REF は取得しません）。
+--cwd repo-root は、リポジトリの中の作品フォルダ（projects/park-itinerary-lab）でだけ使えます（配布zipでは使えません）。
 """
 
 import argparse
@@ -17,7 +18,7 @@ from pathlib import Path
 
 import nbformat
 from nbclient import NotebookClient
-from nbclient.exceptions import CellExecutionError
+from nbclient.exceptions import CellExecutionError, CellTimeoutError, DeadKernelError
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 NOTEBOOKS = ("01_pulp_intro", "02_day_plan_optimisation")
@@ -43,8 +44,17 @@ def run_notebook(name, working_dir, save_dir, timeout):
         client.execute()
     except CellExecutionError as exc:
         error = str(exc)
-    nbformat.write(notebook, save_dir / f"{name}.ipynb")
+    except CellTimeoutError as exc:
+        error = f"セルの制限時間（{timeout} 秒）を超えました: {exc}"
+    except DeadKernelError as exc:
+        error = f"カーネルが停止しました: {exc}"
+    nbformat.write(notebook, save_dir / f"{name}.ipynb")  # 途中で止まった場合も、そこまでの出力を保存する
     return not error, time.perf_counter() - started, error
+
+
+def is_repository_root(folder):
+    """folder が、この作品を projects/park-itinerary-lab に含むリポジトリのルートかを調べる。"""
+    return (folder / "projects" / "park-itinerary-lab").resolve() == PROJECT_DIR.resolve()
 
 
 def main():
@@ -53,6 +63,10 @@ def main():
     parser.add_argument("--cwd", choices=sorted(WORKING_DIRS), default="notebooks", help="カーネルの作業フォルダ")
     parser.add_argument("--timeout", type=int, default=900, help="1つのセルの制限時間（秒）")
     args = parser.parse_args()
+    if args.cwd == "repo-root" and not is_repository_root(WORKING_DIRS["repo-root"]):
+        print(f"--cwd repo-root は使えません: {WORKING_DIRS['repo-root']} は、この作品を含むリポジトリのルートではありません"
+              "（配布zipを展開したフォルダなど）。--cwd notebooks か --cwd project を使ってください。")
+        return 2
 
     stamp = datetime.now(timezone(timedelta(hours=9))).strftime("%Y%m%d-%H%M%S")  # 日本時間
     save_dir = PROJECT_DIR / "outputs" / "executed_notebooks" / f"{stamp}_cwd-{args.cwd}"

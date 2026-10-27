@@ -8,7 +8,7 @@ Notebook やスクリプトの結果は、このフォルダの中に保存し�
 
 | 作られるもの | 作る関数・スクリプト | 中身 |
 | --- | --- | --- |
-| `YYYYmmdd-HHMMSS_day_plan/` | `report.save_run()`（02 の「結果を保存する」） | `plan.csv`（予定表）、`segments.csv`（移動・待機・待ち時間・体験などの時間の流れ）、`summary.json`（状態、各段階の目的値と限界値、条件、データの出典、ソフトウェアの版、検証結果）、`timeline.png`（タイムライン図） |
+| `YYYYmmdd-HHMMSS_day_plan/` | `report.save_run()`（02 の「結果を保存する」） | `plan.csv`（予定表）、`segments.csv`（移動・待機・待ち時間・体験などの時間の流れ）、`summary.json`（状態、各段階の目的値と限界値、条件、データの出典、ソフトウェアの版、使ったコードの版（`REPO_REF`・コミット・コミットしていない変更の有無）、検証結果）、`timeline.png`（タイムライン図） |
 | `YYYYmmdd-HHMMSS_day_plan.zip` | 02 の Notebook | 上のフォルダを zip にしたもの（Colab でのダウンロード用） |
 | `YYYYmmdd-HHMMSS_comparison/` | `experiment.save_comparison()`（02 の比較実験） | `comparison.csv`（ケース・方法ごとの結果）、`settings.json`（実験の設定、方法Bの規則、ソフトウェアの版） |
 | `YYYYmmdd-HHMMSS_random_batch/` | 一括実験（`RUN_RANDOM_BATCH = True` のとき） | 上と同じ形式 |

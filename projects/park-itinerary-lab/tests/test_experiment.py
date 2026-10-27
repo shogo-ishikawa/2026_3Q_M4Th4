@@ -39,7 +39,7 @@ SHORTLIST_OFFERS = [
     offer("P-C", "C", 0, 0),        # 料金0円 → 比は無限大で先頭
     offer("P-D", "D", 100, 10),     # 短縮 0 分 → 候補にしない
     offer("P-E", "E", 2000, 0),     # 短縮 50 分、25 分/1000円
-    offer("P-F", "F", 300, 0),      # 基準時刻に通常利用できない → 短縮 0 分
+    offer("P-F", "F", 300, 0),      # 基準時刻に通常利用できない → 短縮できる時間は計算しない
     offer("P-G", "G", 100, 0),      # 短縮 2 分、20 分/1000円（安いので、予算の残りに入る）
     offer("P-H", "H", 500, 5),      # B と同じ比・同じ短縮時間 → 施設IDの順で B の後
     offer("P-I", "I", 1000, 0),     # B と同じ比、短縮時間が長い（50 分）→ B の前
@@ -90,11 +90,13 @@ def test_shortlist_skips_what_does_not_fit_the_budget_and_continues(shortlist_ro
 
 
 def test_shortlist_excludes_attractions_without_a_saving(shortlist_rows):
-    """短縮できる時間が0分以下（D）や、基準時刻に通常利用できない施設（F）は候補にしない。"""
+    """短縮できる時間が0分以下（D）や、基準時刻に通常利用できない施設（F）は候補にしない。理由は分けて書く。"""
     rows = {row["attraction_id"]: row for row in shortlist_rows}
     assert rows["D"]["saved_min"] == 0 and not rows["D"]["selected"]
-    assert rows["F"]["normal_wait_min"] is None and rows["F"]["saved_min"] == 0 and not rows["F"]["selected"]
-    assert rows["D"]["reason"] == rows["F"]["reason"] == "短縮できる時間が0分以下"
+    assert rows["D"]["reason"] == "短縮できる時間が0分以下"
+    assert rows["F"]["normal_wait_min"] is None and rows["F"]["saved_min"] is None and not rows["F"]["selected"]
+    assert rows["F"]["reason"] == "基準時刻に通常利用できない"
+    assert shortlist_rows[-1]["attraction_id"] == "F"  # 比を計算できない施設は最後に並べる
 
 
 def test_shortlist_puts_free_slots_first(shortlist_rows):
