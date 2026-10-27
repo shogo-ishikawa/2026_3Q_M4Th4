@@ -6,8 +6,9 @@
 
 import json
 import platform
+import re
 import sys
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from importlib import metadata
 from pathlib import Path
 
@@ -17,6 +18,8 @@ from .timeutil import format_time, format_window
 from .validate import SEGMENT_LABELS
 
 COST_BASIS_LABELS = {"per_person": "1人分", "group_total": "グループ総額"}
+# 保存するフォルダ名と記録の時刻は日本時間（Colab のサーバーは協定世界時のため、明示する）
+JAPAN_TIME = timezone(timedelta(hours=9), "JST")
 
 SEGMENT_COLOURS = {
     "travel": "#9e9e9e",
@@ -296,8 +299,10 @@ def environment_info(packages=("park-itinerary-lab", "pandas", "matplotlib", "or
 
 def new_run_folder(output_root, label):
     """outputs/ の中に、実行ごとの新しいフォルダ（日時_ラベル）を作る。既存のフォルダは上書きしない。"""
+    if not re.fullmatch(r"[A-Za-z0-9_-]+", label):
+        raise ValueError(f"ラベルは英数字・ハイフン・下線で書いてください: {label!r}")
     output_root = Path(output_root)
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now(JAPAN_TIME).strftime("%Y%m%d-%H%M%S")
     folder = output_root / f"{stamp}_{label}"
     number = 2
     while folder.exists():
@@ -327,7 +332,7 @@ def result_summary(result, report=None):
     """JSON に保存できる形の、計算結果のまとめ。"""
     problem = result.problem
     summary = {
-        "saved_at": datetime.now().isoformat(timespec="seconds"),
+        "saved_at": datetime.now(JAPAN_TIME).isoformat(timespec="seconds"),
         "status": result.status,
         "status_label": result.status_label,
         "optimality_scope": result.optimality_scope,

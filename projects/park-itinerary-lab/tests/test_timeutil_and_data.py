@@ -250,7 +250,9 @@ def test_all_condition_errors_are_reported_together(demo_scenario):
     conditions = {"entry_time": "9時", "exit_time": "18:00", "season": "normal", "colour": "red", "required_shows": ["A1"]}
     with pytest.raises(InputError) as info:
         prepare_problem(demo_scenario, conditions)
-    assert len(info.value.problems) == 3
+    message = str(info.value)
+    for expected in ("'colour'", "entry_time", "'A1' はショーのIDではありません"):
+        assert expected in message
 
 
 def test_prepare_problem_does_not_change_the_inputs(demo_scenario, demo_conditions):

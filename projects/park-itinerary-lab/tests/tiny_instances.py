@@ -11,13 +11,23 @@
 - shortcut_candidates が null・空のリスト・施設のリスト
 - 所要時間 0 分の活動、希望度 0、希望順位（preference_rank）、必須の活動、実行不可能な条件
 
-後半の new_scenario などの小さな関数は、手計算のテスト（test_bruteforce.py）でも使います。
+new_scenario などの小さな関数は、手計算のテスト（test_bruteforce.py）でも使います。
+最後の instance_features は、seed の集まりが上の特徴を本当に含むかを数えるための関数です。
 値はすべてテスト用の架空のものです。
 """
 
+import bisect
 import random
 
-from park_itinerary_lab.bruteforce import travel_minutes
+from park_itinerary_lab.bruteforce import (
+    direct_walk_minutes,
+    find_option,
+    parse_window,
+    prepare_instance,
+    solve_by_enumeration,
+    to_minutes,
+    travel_minutes,
+)
 
 SEASON = "test"
 
@@ -221,8 +231,11 @@ def random_cut_points(rng, entry, exit_time, travel, scenario):
     """時間帯の区切りの時刻。ときどき、入口から直行した到着時刻の 1 分後で区切る。
 
     返り値は (区切りのリスト, tight)。tight は (施設 ID, 到着 + 1 分) か None。
+    半分ほどは早めの区切り（入園 5〜30 分後）も入れ、次の時間帯まで待つ価値が出るようにする。
     """
     cuts = set(rng.sample(range(entry + 5, exit_time - 5), rng.randint(1, 3)))
+    if rng.random() < 0.5:
+        cuts.add(entry + rng.randint(5, 30))
     tight = None
     if rng.random() < 0.3:
         attraction_id = rng.choice(scenario["attractions"])["id"]
@@ -286,11 +299,19 @@ def random_slot_window(rng, entry, exit_time):
 def add_random_offers(rng, scenario, entry, exit_time):
     """施設ごとに、新規の短縮枠を 0〜2 個追加する（料金 300〜1200 円）。"""
     for attraction in scenario["attractions"]:
-        count = rng.choice([0, 0, 1, 1, 2])
+        count = rng.choice([0, 1, 1, 2])
         for number in range(1, count + 1):
             add_offer(scenario, f"P-{attraction['id']}-{number}", attraction["id"],
                       random_slot_window(rng, entry, exit_time),
                       price=rng.choice([300, 500, 800, 1200]), residual=rng.choice([0, 2, 5]))
+
+
+def random_budget(rng, scenario):
+    """追加費用の予算。ときどき、ある短縮枠の料金とちょうど同じ額にする（「以下」の境界）。"""
+    prices = [offer["price_yen"] for offer in scenario["shortcut_offers"]]
+    if prices and rng.random() < 0.3:
+        return rng.choice(prices)
+    return rng.choice([0, 0, 500, 1000, 2000])
 
 
 def random_candidates(rng, scenario):
@@ -316,11 +337,12 @@ def random_acquired(rng, scenario, entry, exit_time):
 
 
 def random_required(rng, scenario):
-    """必須の活動を種類ごとに選ぶ（各活動 25 %）。"""
+    """必須の活動を種類ごとに選ぶ（各活動 25 %、ときどき全部。全部だと成立しないことが多い）。"""
+    share = 1.0 if rng.random() < 0.1 else 0.25
     chosen = {}
     for key, name in (("attractions", "required_attractions"), ("shows", "required_shows"),
                       ("meals", "required_meals")):
-        chosen[name] = [item["id"] for item in scenario[key] if rng.random() < 0.25]
+        chosen[name] = [item["id"] for item in scenario[key] if rng.random() < share]
     return chosen
 
 
@@ -342,13 +364,34 @@ def random_conditions(rng, scenario, entry, exit_time):
     """予算・短縮利用・取得済み枠・必須・希望度の条件を乱数で決める。"""
     return new_conditions(
         entry, exit_time,
-        budget_yen=rng.choice([0, 0, 500, 1000, 2000]),
+        budget_yen=random_budget(rng, scenario),
         allow_new_shortcuts=rng.random() < 0.65,
         shortcut_candidates=random_candidates(rng, scenario),
         acquired_shortcuts=random_acquired(rng, scenario, entry, exit_time),
         **random_required(rng, scenario),
         **random_preference_changes(rng, scenario),
     )
+
+
+def make_busy(rng, scenario, conditions, entry):
+    """ときどき「混雑日」にする: 通常の待ち時間を長くし、各施設に同じ料金の新規枠を 1 つずつ用意する。
+
+    予算は「枠 1 つ分」「枠 2 つ分」「2 つ分に 1 円足りない」のどれかにして、
+    追加費用の合計に対する予算の上限が効く問題を作る。
+    """
+    if rng.random() >= 0.2:
+        return
+    table = scenario["wait_tables"][SEASON]
+    scenario["shortcut_offers"] = []
+    price = rng.choice([300, 500])
+    for attraction in scenario["attractions"]:
+        table["wait_min"][attraction["id"]] = [rng.choice([30, 45, 60]) for _band in table["bands"]]
+        start = entry + rng.randint(0, 10)
+        add_offer(scenario, f"P-{attraction['id']}-busy", attraction["id"],
+                  (start, start + rng.choice([15, 30, 60])), price=price,
+                  residual=rng.choice([0, 2, 5]))
+    conditions.update(allow_new_shortcuts=True, shortcut_candidates=None,
+                      budget_yen=rng.choice([price, 2 * price, 2 * price, 2 * price - 1]))
 
 
 # ------------------------------------------------------------------ 境界ぎりぎりの調整
@@ -393,5 +436,215 @@ def make_tiny_instance(seed):
     add_random_waits(rng, scenario, bands, tight)
     add_random_offers(rng, scenario, entry, exit_time)
     conditions = random_conditions(rng, scenario, entry, exit_time)
+    make_busy(rng, scenario, conditions, entry)
     tighten_one_window(rng, scenario, conditions, entry, travel)
     return scenario, conditions
+
+
+# ------------------------------------------------------------------ 生成した問題の特徴（網羅の確認用）
+
+
+def search_without_memo(instance, earliest_only):
+    """メモ化をせずに予定を 1 つずつたどり、最善値を返す（極小の問題の照合用の素朴な方法）。
+
+    instance は bruteforce.prepare_instance の結果。値は (希望度, -追加費用, -移動時間) で、
+    条件に合う予定がなければ None。
+    earliest_only が True なら、各活動に「到着後、最初に並べて間に合う分」だけを試す
+    （わざと待ってから並ぶ予定は調べない）。False なら、到着後のすべての分を試す。
+    """
+    best = None
+    stack = [(0, "entrance", instance["entry"], 0, (0, 0, 0))]
+    while stack:
+        visited, node, time, spent, value = stack.pop()
+        walk = instance["travel"][node]["exit"]
+        if visited & instance["required"] == instance["required"] and time + walk <= instance["exit"]:
+            total = (value[0], value[1], value[2] - walk)
+            best = total if best is None or total > best else best
+        stack += next_states(instance, (visited, node, time, spent, value), earliest_only)
+    return best
+
+
+def next_states(instance, state, earliest_only):
+    """search_without_memo 用: 次の活動に並んだ後の状態のリスト。"""
+    visited, node, time, spent, value = state
+    states = []
+    for index, activity in enumerate(instance["activities"]):
+        if visited & (1 << index):
+            continue
+        walk = instance["travel"][node][activity["id"]]
+        for option in activity["options"]:
+            if spent + option["cost"] > instance["budget"]:
+                continue
+            first = bisect.bisect_left(option["join_minutes"], time + walk)
+            joins = option["joins"][first:first + 1] if earliest_only else option["joins"][first:]
+            gained = (activity["preference"], -option["cost"], -walk)
+            total = tuple(a + b for a, b in zip(value, gained))
+            states += [(visited | (1 << index), activity["id"], end, spent + option["cost"], total)
+                       for _q, end in joins]
+    return states
+
+
+def earliest_join_best(instance):
+    """各活動に「到着後、最初に並べて間に合う分」にだけ並ぶ予定の中での最善値。
+
+    これが正解器の最善値より悪ければ、その問題では「わざと待ってから並ぶ」ことが得になっている。
+    """
+    return search_without_memo(instance, earliest_only=True)
+
+
+def plan_timeline(instance, plan):
+    """予定の各項目について (項目, 到着時刻, 終了時刻) を並べ、出口への到着時刻も返す。"""
+    rows = []
+    node, time = "entrance", instance["entry"]
+    for step in plan:
+        activity = next(item for item in instance["activities"] if item["id"] == step["activity_id"])
+        end = dict(find_option(activity, step)["joins"])[step["queue_time"]]
+        rows.append((step, time + instance["travel"][node][activity["id"]], end))
+        node, time = activity["id"], end
+    return rows, time + instance["travel"][node]["exit"]
+
+
+def join_window_end(scenario, conditions, step):
+    """項目が並び始めた短縮枠・食事の時間帯・待ち時間の時間帯の終了時刻（ショーは None）。"""
+    if step["mode"] == "shortcut":
+        slots = scenario["shortcut_offers"] + conditions["acquired_shortcuts"]
+        return parse_window(next(s["window"] for s in slots if s["id"] == step["slot_id"]))[1]
+    if step["mode"] == "meal":
+        meal = next(item for item in scenario["meals"] if item["id"] == step["activity_id"])
+        return parse_window(meal["window"])[1]
+    if step["mode"] == "normal":
+        for band in scenario["wait_tables"][conditions["season"]]["bands"]:
+            start, end = parse_window(band)
+            if start <= step["queue_time"] < end:
+                return end
+    return None
+
+
+def outside_queue_hours(scenario, step):
+    """短縮枠の入場時刻が、その施設の通常の入列可能時間の外なら True。"""
+    attraction = next(a for a in scenario["attractions"] if a["id"] == step["activity_id"])
+    opens, closes = to_minutes(attraction["queue_open"]), to_minutes(attraction["queue_close"])
+    return not opens <= step["queue_time"] < closes
+
+
+def walking_features(scenario):
+    """移動時間に関する特徴の名前の集合。"""
+    features = set()
+    travel = travel_minutes(scenario)
+    if scenario["walk_minutes"] is not None:
+        features.add("walk_table")
+        if direct_walk_minutes(scenario) != travel:
+            features.add("walk_table_non_metric")
+    else:
+        features.add(scenario["walking"]["distance"])
+    if travel["exit"]["entrance"] > 0:
+        features.add("exit_to_entrance_walk")
+    gates = scenario["gates"]
+    if (gates["entrance"]["x"], gates["entrance"]["y"]) != (gates["exit"]["x"], gates["exit"]["y"]):
+        features.add("gates_apart")
+    return features
+
+
+def activity_features(scenario, conditions):
+    """施設・ショー・食事と希望度に関する特徴の名前の集合。"""
+    features = set()
+    items = scenario["attractions"] + scenario["shows"] + scenario["meals"]
+    if any(item["duration_min"] == 0 for item in items):
+        features.add("zero_duration")
+    if any(item["finish_by"] is not None for item in scenario["attractions"]):
+        features.add("finish_by")
+    for show in scenario["shows"]:
+        features.add("show_two_performances" if len(show["performances"]) == 2
+                     else "show_one_performance")
+        if show["arrive_before_min"] > 0:
+            features.add("show_arrive_before")
+    if scenario["meals"]:
+        features.add("meal_window")
+    if any(activity["preference"] == 0 for activity in prepare_instance(scenario, conditions)["activities"]):
+        features.add("zero_preference")
+    if conditions["preference_rank"]:
+        features.add("preference_rank")
+    if conditions["preferences"]:
+        features.add("preference_override")
+    if conditions["required_attractions"] + conditions["required_shows"] + conditions["required_meals"]:
+        features.add("required")
+    return features
+
+
+def shortcut_features(scenario, conditions):
+    """短縮枠に関する特徴の名前の集合。"""
+    features = set()
+    candidates = conditions["shortcut_candidates"]
+    if candidates is None:
+        features.add("candidates_null")
+    elif candidates == []:
+        features.add("candidates_empty")
+    else:
+        features.add("candidates_list")
+    if scenario["shortcut_offers"] and not conditions["allow_new_shortcuts"]:
+        features.add("new_shortcuts_not_allowed")
+    if conditions["allow_new_shortcuts"]:
+        prices = [offer["price_yen"] for offer in scenario["shortcut_offers"]
+                  if candidates is None or offer["attraction"] in candidates]
+        if any(price > conditions["budget_yen"] for price in prices):
+            features.add("offer_above_budget")
+        if any(price <= conditions["budget_yen"] for price in prices):
+            features.add("offer_within_budget")
+    for slot in conditions["acquired_shortcuts"]:
+        features.add("must_use_true" if slot["must_use"] else "must_use_false")
+    return features
+
+
+def step_features(scenario, conditions, step, arrival):
+    """最適な予定の項目 1 つ（到着時刻つき）から分かる特徴の名前の集合。"""
+    features = {"uses_" + step["mode"]}
+    q = step["queue_time"]
+    if q > arrival:
+        features.add("idle_before_join")
+    if step["mode"] == "show" and q == arrival:
+        features.add("arrives_exactly_at_meeting_time")
+    if step["mode"] == "shortcut" and outside_queue_hours(scenario, step):
+        features.add("shortcut_outside_queue_hours")
+    end = join_window_end(scenario, conditions, step)
+    if end is not None and q == end - 1 == arrival:
+        features.add(f"forced_join_at_{step['mode']}_end")
+    return features
+
+
+def solution_features(scenario, conditions, oracle):
+    """正解器の結果（最適値と予定の例）から分かる特徴の名前の集合。"""
+    if not oracle["feasible"]:
+        return {"infeasible"}
+    features = {"feasible"}
+    instance = prepare_instance(scenario, conditions)
+    greedy = earliest_join_best(instance)
+    if greedy is None or greedy < (oracle["score"], -oracle["extra_cost"], -oracle["travel"]):
+        features.add("waiting_pays_off")
+    if 0 < oracle["extra_cost"] == conditions["budget_yen"]:
+        features.add("budget_exactly_used")
+    rows, exit_arrival = plan_timeline(instance, oracle["plan"])
+    if exit_arrival == instance["exit"]:
+        features.add("exit_exactly_on_time")
+    for step, arrival, _end in rows:
+        features |= step_features(scenario, conditions, step, arrival)
+    return features | budget_features(scenario, conditions, oracle)
+
+
+def budget_features(scenario, conditions, oracle):
+    """予算の特徴: 有料の新規枠を 2 つ使う・予算がもっとあれば希望度合計が上がる（予算が効いている）。"""
+    features = set()
+    offer_ids = {offer["id"] for offer in scenario["shortcut_offers"]}
+    if sum(step["slot_id"] in offer_ids for step in oracle["plan"]) >= 2:
+        features.add("two_paid_slots_used")
+    if conditions["allow_new_shortcuts"] and conditions["budget_yen"] > 0:
+        richer = solve_by_enumeration(scenario, dict(conditions, budget_yen=10 ** 6))
+        if richer["score"] > oracle["score"]:
+            features.add("budget_limits_purchases")
+    return features
+
+
+def instance_features(scenario, conditions, oracle):
+    """生成した問題と正解器の結果から、含まれる特徴の名前の集合を作る（網羅の確認用）。"""
+    return (walking_features(scenario) | activity_features(scenario, conditions)
+            | shortcut_features(scenario, conditions)
+            | solution_features(scenario, conditions, oracle))

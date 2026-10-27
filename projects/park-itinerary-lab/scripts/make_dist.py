@@ -12,6 +12,7 @@ outputs/ の計算結果、キャッシュ、仮想環境、他の作品、.git 
 """
 
 import argparse
+import json
 import subprocess
 import sys
 import tomllib
@@ -40,13 +41,18 @@ def tracked_files():
     return sorted(name for name in run_git(["ls-files", "-z", "--", "."]).split("\0") if name)
 
 
-def build_zip(files, version, target):
+def build_zip(files, version, commit, target):
+    """作品のファイルと、版とコミットを記録した BUILD_INFO.json を zip にする。"""
+    build_info = json.dumps({"project": "park-itinerary-lab", "version": version, "commit": commit},
+                            ensure_ascii=False, indent=2) + "\n"
+    entries = [(name, (PROJECT_DIR / name).read_bytes()) for name in files]
+    entries.append(("BUILD_INFO.json", build_info.encode("utf-8")))
     with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as archive:
-        for name in files:
+        for name, data in sorted(entries):
             info = zipfile.ZipInfo(f"v{version}/{name}", date_time=FIXED_TIME)
             info.compress_type = zipfile.ZIP_DEFLATED
             info.external_attr = 0o644 << 16
-            archive.writestr(info, (PROJECT_DIR / name).read_bytes())
+            archive.writestr(info, data)
 
 
 def check_zip(target, version):
@@ -64,7 +70,7 @@ def check_zip(target, version):
             problems.append(f"計算結果が入っています: {name}")
         if name.endswith((".zip", ".pyc")):
             problems.append(f"生成物が入っています: {name}")
-    for required in ("README.md", "pyproject.toml", "notebooks/01_pulp_intro.ipynb", "notebooks/02_day_plan_optimisation.ipynb"):
+    for required in ("README.md", "pyproject.toml", "BUILD_INFO.json", "notebooks/01_pulp_intro.ipynb", "notebooks/02_day_plan_optimisation.ipynb"):
         if f"v{version}/{required}" not in names:
             problems.append(f"必要なファイルがありません: {required}")
     return names, problems
@@ -83,9 +89,9 @@ def main():
     if target.exists() and not args.force:
         raise SystemExit(f"{target} はすでにあります。作り直す場合は --force を付けてください。")
     target.parent.mkdir(exist_ok=True)
-    build_zip(tracked_files(), version, target)
-    names, problems = check_zip(target, version)
     commit = run_git(["rev-parse", "HEAD"]).strip()
+    build_zip(tracked_files(), version, commit, target)
+    names, problems = check_zip(target, version)
     print(f"作成しました: {target}（{len(names)} ファイル、コミット {commit}）")
     if problems:
         print("問題が見つかりました:")

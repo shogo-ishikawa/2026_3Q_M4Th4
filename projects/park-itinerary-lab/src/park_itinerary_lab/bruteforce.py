@@ -14,6 +14,9 @@
 （データ読込・本体モデル・検証関数）には依存しません。入力はシナリオと条件の
 「JSON と同じ形の辞書」をそのまま受け取ります。
 
+- solve_by_enumeration: 最適な目的値の組と、それを実現する予定の例を返す。
+- evaluate_plan: 別の方法（本体のモデルなど）が返した予定を、同じ決まりで計算し直す。
+
 主な決まり（時刻はすべて 0:00 からの整数の分）:
 - 時間帯や枠 "A-B" は [A, B) で、A ちょうどは入り、B ちょうどは入らない。
 - 移動時間は、他の地点を通り抜ける近道も含めた最短の徒歩時間（Floyd–Warshall 法）。
@@ -432,8 +435,9 @@ def solve_by_enumeration(scenario, conditions, max_activities=6, max_horizon_min
              "states_explored": int}
     mode は "normal"（通常）・"shortcut"（短縮枠）・"show"・"meal" のいずれか。
     plan は訪問順で、queue_time は並び始める（入る・集合する）時刻（0:00 からの分）。
+    同点の最適な予定が複数あるときは、そのうちの 1 つを返す（一致を調べるのは目的値の組）。
     活動数が max_activities より多い、または入園から退園までが max_horizon_min 分より
-    長い場合は ValueError を出す。
+    長い場合は ValueError を出す（必須の ID がシナリオにない場合なども ValueError）。
     """
     instance = prepare_instance(scenario, conditions, max_activities, max_horizon_min)
     memo = {}

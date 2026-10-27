@@ -1,12 +1,13 @@
 # Park Itinerary Labの編集ルール
 
-リポジトリルートの [AGENTS.md](../../AGENTS.md) と、このファイルの両方に従ってください。モデルの詳細は [docs/model.md](docs/model.md)、検証の記録は [docs/validation.md](docs/validation.md) にあります。
+リポジトリルートの [AGENTS.md](../../AGENTS.md)（配布zipには含まれないため、https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/AGENTS.md も参照）と、このファイルの両方に従ってください。モデルの詳細は [docs/model.md](docs/model.md)、検証の記録は [docs/validation.md](docs/validation.md) にあります。
 
 ## 編集範囲と構成
 
 - 主な編集範囲は `projects/park-itinerary-lab/` です。他の作品（例: `projects/guitar-chord-lab/`）のコード・依存・データは変更・流用しません。
 - 最適化・検証・データ読込の正本は `src/park_itinerary_lab/` に置きます。Notebook と比較実験は、その関数を呼び出し、処理をコピーしません。
 - 依存は `pyproject.toml` の追加分（`intro`: PuLP と CBC、`main`: OR-Tools など、`dev`: テスト）で分けます。`__init__.py` ではソルバーを読み込みません（01 は OR-Tools なしで動く必要があります）。
+- PuLP は 4.2 の書き方だけを使います（`problem.add_variable(...)`、`stats.status_str`、`pulp.COIN_CMD`）。古い `LpVariable(..., cat=...)`・`LpStatus`・`PULP_CBC_CMD` は使えません。ソルバーの版は `pyproject.toml` で固定し、変えるときは検証をやり直します。
 - 初学者が追える短い関数と明確な名前を使い、深い継承や巨大なクラスで中身を隠しません。説明は日本語、英語は英国式の綴りにします。
 
 ## モデルの約束

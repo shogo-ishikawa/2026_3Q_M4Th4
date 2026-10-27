@@ -33,10 +33,16 @@ TEST_RANDOM_SEED = 0
 # ---------------------------------------------------------------------------
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def project_dir():
     """作品のフォルダ（projects/park-itinerary-lab/）。"""
     return PROJECT_DIR
+
+
+@pytest.fixture(scope="session")
+def demo_scenario_path():
+    """デモのシナリオのファイル（configs/demo_park.json）。"""
+    return DEMO_SCENARIO_PATH
 
 
 @pytest.fixture
@@ -95,7 +101,7 @@ def solve_with_settings(scenario, conditions, **setting_changes):
     return solve_day_plan(scenario, conditions, make_settings(**setting_changes))
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def solve():
     """solve(シナリオ, 条件, run_prechecks=False のような設定の変更) で解く関数。"""
     return solve_with_settings
@@ -187,13 +193,13 @@ def build_tiny_conditions(entry="09:00", exit="10:00", **extra):
     return conditions
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def make_scenario():
     """極小のシナリオの辞書を作る関数（build_tiny_scenario）。"""
     return build_tiny_scenario
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def make_conditions():
     """極小問題の条件の辞書を作る関数（build_tiny_conditions）。"""
     return build_tiny_conditions
