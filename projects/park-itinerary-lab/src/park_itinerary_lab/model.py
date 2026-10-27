@@ -547,10 +547,11 @@ def _status_messages(result):
     elif result.status == "feasible":
         messages.append(f"制限時間内に予定は見つかりましたが、{SCOPE_LABELS[result.optimality_scope]}の段階です（暫定案）。")
     elif result.status == "infeasible":
+        checked = result.solver_info.get("prechecks", True)
         messages.append(
             "条件をすべて満たす予定は存在しないことを、ソルバーが証明しました。"
-            "事前チェックでは単純な衝突が見つからなかったため、原因は特定できていません。"
-            "必須項目・入退園時刻・予算・短縮利用の枠などを一つずつ緩めて確認してください。"
+            + ("事前チェックでは単純な衝突が見つからなかったため、" if checked else "事前チェックは実行していないため、")
+            + "原因は特定できていません。必須項目・入退園時刻・予算・短縮利用の枠などを一つずつ緩めて確認してください。"
         )
     elif result.status == "unknown":
         messages.append(

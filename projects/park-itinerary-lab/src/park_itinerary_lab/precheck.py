@@ -59,6 +59,7 @@ def _check_each_required(problem, shortest, options):
 
 
 def _why_no_option(problem, shortest, activity_id):
+    """必須の活動に使える利用案がない理由を、確かめられた範囲で説明する。"""
     counts = drop_reasons(problem, shortest, activity_id)
     kind = problem.kind_of(activity_id)
     must_use = [s for s in problem.must_use_slots if problem.slots[s].attraction_id == activity_id]
@@ -66,10 +67,12 @@ def _why_no_option(problem, shortest, activity_id):
         if kind == "attraction":
             return "この季節・混雑の待ち時間表と案内時間、使える短縮利用の枠のどれにも、利用できる時間帯がありません。"
         return "利用できる時間帯がありません。"
+    if counts["budget"] > 0:
+        return "時間内に利用できる方法（短縮利用の枠）はありますが、その料金が追加費用の予算を超えます。"
+    if counts["finish_by"] > 0:
+        return "入退園時刻の間には並べても、施設の完了期限（finish_by）までに利用を終えられません。"
     if must_use:
         return f"必ず使う取得済み枠 {must_use[0]} の時間帯では、移動を含めて入退園時刻の間に利用を終えられません。"
-    if counts["budget"] == counts["raw"]:
-        return "予算内で使える利用方法がありません。"
     if kind == "show":
         return "どの公演回も、入園後の移動で開演前の集合時刻に間に合わないか、終演後に退園時刻までに出口へ着けません。"
     if kind == "meal":
@@ -77,32 +80,36 @@ def _why_no_option(problem, shortest, activity_id):
     return "どの時間帯・利用方法でも、移動を含めて入退園時刻の間に利用を終えられません。"
 
 
-def _pair_fits(problem, shortest, first, second, option_a, option_b):
-    """2つの必須活動を first → second の順に、最も早い時刻で入れられるか。"""
-    if option_a.cost + option_b.cost > problem.budget:
-        return False
+def _pair_time_fits(shortest, first, second, option_a, option_b):
+    """2つの必須活動を first → second の順に、最も早い時刻で入れられるか（費用は見ない）。"""
     end_a = option_a.lo + option_a.wait + option_a.duration
     queue_b = max(option_b.lo, end_a + shortest[first][second])
     return queue_b <= option_b.hi
 
 
 def _check_required_pairs(problem, shortest, options):
+    """必須の活動の2つ組を調べる。時間の面で入る組合せがあっても、費用の合計が予算を超えるなら、そう説明する。"""
+    timely = build_options(problem, shortest, check_budget=False)
     issues = []
     required = sorted(a for a in problem.required if options[a])
     for index, a in enumerate(required):
         for b in required[index + 1 :]:
-            fits = any(
-                _pair_fits(problem, shortest, first, second, option_a, option_b)
-                for first, second in permutations((a, b))
-                for option_a in options[first]
-                for option_b in options[second]
-            )
-            if not fits:
-                message = (
-                    f"必須の「{problem.name_of(a)}」（{a}）と「{problem.name_of(b)}」（{b}）は、"
-                    "どちらの順番・どの時間帯（公演回・枠）を選んでも、移動を含めると両方を予定に入れられません。"
-                )
-                issues.append(PrecheckIssue("P3-pair", message, (a, b), True))
+            fits_in_time = False
+            fits = False
+            for first, second in permutations((a, b)):
+                for option_a in timely[first]:
+                    for option_b in timely[second]:
+                        if _pair_time_fits(shortest, first, second, option_a, option_b):
+                            fits_in_time = True
+                            fits = fits or option_a.cost + option_b.cost <= problem.budget
+            if fits:
+                continue
+            names = f"必須の「{problem.name_of(a)}」（{a}）と「{problem.name_of(b)}」（{b}）"
+            if fits_in_time:
+                message = f"{names}は、時間の面では両方を入れる順番・時間帯がありますが、その追加費用の合計が予算を超えます。"
+            else:
+                message = f"{names}は、どちらの順番・どの時間帯（公演回・枠）を選んでも、移動を含めると両方を予定に入れられません。"
+            issues.append(PrecheckIssue("P3-pair", message, (a, b), True))
     return issues
 
 

@@ -93,7 +93,7 @@ def p2_cases():
                          "residual_wait_min": 0}]},
             {"exit": "11:00", "required_attractions": ["X"], "allow_new_shortcuts": True, "budget_yen": 500},
             "X",
-            "予算内で使える利用方法がありません",
+            "料金が追加費用の予算を超えます",
         ),
         (
             "no-wait-values-and-no-slots",

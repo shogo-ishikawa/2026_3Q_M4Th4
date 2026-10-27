@@ -29,6 +29,7 @@ CANDIDATE_RULE = (
     "料金の合計が予算以内に収まるものを順に候補とする（入らないものは飛ばして次を調べる）。"
     "基準時刻に通常利用できない施設や、短縮できる時間が0分以下の施設は候補にしない。"
     "料金0円の枠は比が無限大として先頭に並べる。"
+    "取得済み枠をすでに持っている施設は、新しく買う候補にしない（取得済み枠は方法A・Bのどちらでも使える）。"
 )
 
 METHOD_LABELS = {"A": "A: 同時最適化", "B": "B: 候補を先に絞る"}
@@ -43,6 +44,7 @@ def shortlist_candidates(problem, reference_time):
     """方法 B の候補の施設を、CANDIDATE_RULE に従って決める。各施設の計算過程を返す。"""
     reference = parse_time(reference_time)
     rows = []
+    held = {s.attraction_id for s in problem.slots.values() if s.acquired}
     for attraction in problem.scenario.attractions.values():
         offers = [s for s in problem.slots.values() if s.attraction_id == attraction.id and not s.acquired]
         if not offers:
@@ -70,7 +72,9 @@ def shortlist_candidates(problem, reference_time):
     rows.sort(key=lambda row: (-row["_ratio"], -row["saved_min"], row["attraction_id"]))
     spent = 0
     for row in rows:
-        if row["saved_min"] <= 0:
+        if row["attraction_id"] in held:
+            row["reason"] = "取得済み枠あり"
+        elif row["saved_min"] <= 0:
             row["reason"] = "短縮できる時間が0分以下"
         elif spent + row["price_yen"] > problem.budget:
             row["reason"] = "予算を超える"
@@ -283,10 +287,16 @@ def _result_row(common, method, result, report, reference, candidates):
         "score_status": _stage_value(result, 0, "cp_status"),
         "score_objective": _stage_value(result, 0, "objective"),
         "score_bound": _stage_value(result, 0, "bound"),
+        "score_time_s": _stage_value(result, 0, "wall_time_s"),
         "cost_status": _stage_value(result, 1, "cp_status"),
+        "cost_objective": _stage_value(result, 1, "objective"),
         "cost_bound": _stage_value(result, 1, "bound"),
+        "cost_time_s": _stage_value(result, 1, "wall_time_s"),
         "travel_status": _stage_value(result, 2, "cp_status"),
+        "travel_objective": _stage_value(result, 2, "objective"),
         "travel_bound": _stage_value(result, 2, "bound"),
+        "travel_time_s": _stage_value(result, 2, "wall_time_s"),
+        "exit_arrival_stage_status": _stage_value(result, 3, "cp_status"),
         "shortcut_candidates": candidates,
         "b_same_options_as_a": None,
         "reference_time": reference,
@@ -327,15 +337,34 @@ def save_comparison(table, output_root, label, settings_info):
 
 
 def representative_cases(table):
-    """差が最大のケースと、差が0のケースを1つずつ選ぶ（差を計算できたケースの中から）。"""
+    """差が最大のケースと、差が0のケースを1つずつ選ぶ（差を計算できたケースの中から）。
+
+    差が0のケースは、B の選択肢が A と同じになったもの（構造上、差が0）を避け、
+    A と B で使った短縮利用や追加費用が違うものを優先します。
+    """
     b_rows = table[table["method"] == METHOD_LABELS["B"]]
     measured = b_rows.dropna(subset=["score_diff_A_minus_B"])
     chosen = []
-    if not measured.empty:
-        chosen.append(measured.sort_values("score_diff_A_minus_B", ascending=False).iloc[0]["case_id"])
-        zero = measured[measured["score_diff_A_minus_B"] == 0]
-        if not zero.empty and zero.iloc[0]["case_id"] not in chosen:
-            chosen.append(zero.iloc[0]["case_id"])
+    if measured.empty:
+        return chosen
+    chosen.append(measured.sort_values("score_diff_A_minus_B", ascending=False).iloc[0]["case_id"])
+    zero = measured[(measured["score_diff_A_minus_B"] == 0) & (~measured["case_id"].isin(chosen))]
+    a_rows = table[table["method"] == METHOD_LABELS["A"]].set_index("case_id")
+
+    def choices_differ(row):
+        a_row = a_rows.loc[row["case_id"]]
+        return (a_row["used_shortcut_attractions"] != row["used_shortcut_attractions"]
+                or a_row["extra_cost_yen"] != row["extra_cost_yen"])
+
+    candidates = [zero]
+    if {"b_same_options_as_a", "used_shortcut_attractions", "extra_cost_yen"} <= set(table.columns) and not zero.empty:
+        different = zero[zero["b_same_options_as_a"] == False]  # noqa: E712
+        candidates = [different[different.apply(choices_differ, axis=1)] if not different.empty else different,
+                      different, zero]
+    for preferred in candidates:
+        if not preferred.empty:
+            chosen.append(preferred.iloc[0]["case_id"])
+            break
     return chosen
 
 
