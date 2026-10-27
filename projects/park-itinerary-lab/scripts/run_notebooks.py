@@ -12,7 +12,7 @@ Notebook のセットアップセルは、このチェックアウトのコー�
 import argparse
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import nbformat
@@ -54,7 +54,7 @@ def main():
     parser.add_argument("--timeout", type=int, default=900, help="1つのセルの制限時間（秒）")
     args = parser.parse_args()
 
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    stamp = datetime.now(timezone(timedelta(hours=9))).strftime("%Y%m%d-%H%M%S")  # 日本時間
     save_dir = PROJECT_DIR / "outputs" / "executed_notebooks" / f"{stamp}_cwd-{args.cwd}"
     save_dir.mkdir(parents=True)
     failures = 0
