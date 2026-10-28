@@ -1,0 +1,10 @@
+# 生成した合成データ・実データ・図・結果（コードから作り直せるため、Gitで管理しない）
+data/*.csv
+data/raw/
+figures/
+results/
+
+# 学習済みモデルを保存した場合のファイル
+*.joblib
+*.pkl
+*.pickle

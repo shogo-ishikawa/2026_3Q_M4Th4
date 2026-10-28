@@ -1,0 +1,53 @@
+# 1〜72時間先のすべての整数時間を走査し、シナリオとローレンツ系の確認を増やした設定。
+# パスは作品フォルダ projects/coastal-wind-chaos/ を基準にします。
+# 使い方：python scripts/run_experiments.py --config configs/full.toml
+
+[sample_data]
+preset = "default"
+seed = 2026
+years = 3
+output = "data/sample_coastal_amedas.csv"
+truth_output = "data/sample_coastal_truth.csv"
+
+[data]
+min_quality = 8
+
+[split]
+mode = "years"
+test_days = 365
+validation_days = 365
+max_horizon = 72
+
+[models]
+candidates = ["linear", "boosting_shallow", "boosting", "boosting_deep"]
+selection_horizon = 3
+lags = [0, 1, 2, 3, 6, 12, 24]
+seed = 0
+
+[experiment1]
+horizon = 3
+methods = ["linear", "boosting"]
+
+[experiment2]
+horizon = 3
+window_hours = 48
+
+[experiment3]
+horizon_range = [1, 72]       # 1, 2, 3, …, 72 のすべて
+extra_models = []
+
+[scenarios]
+enabled = true
+names = ["periodic_only", "periodic_ar", "default", "no_precursor"]
+horizon_range = [1, 72]
+models = ["persistence", "climatology", "persistence_24h", "linear:calendar+recent"]
+
+[lorenz]
+n_start_points = 40
+perturbation_sizes = [1e-12, 1e-10, 1e-8, 1e-6, 1e-4, 1e-2]
+n_steps = 4000
+dt = 0.01
+tolerance = 1.0
+benettin_steps = 100000
+check_dts = [0.01, 0.005, 0.0025]
+seed = 0
