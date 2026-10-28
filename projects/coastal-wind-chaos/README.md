@@ -105,7 +105,7 @@ python scripts/build_notebook.py                              # Notebook を作�
 | 補足：合成データの成分を変えた比較 | `scenario_scores.csv` | `scenario_comparison.png` |
 | 実験4：ローレンツ系 | `exp4_predictability.csv`, `exp4_time_steps.csv`, `exp4_summary.json` | `exp4_twin_runs.png`, `exp4_separation_growth.png`, `exp4_predictability_times.png`, `exp4_time_step_check.png`, `exp4_ar1_vs_lorenz.png` |
 
-実行時間の目安は、確認に使った4コアのLinux環境（「最新の版」）で、コマンドの開始から終了まで fast が約22秒（合成データの生成を含む）、full が約71秒でした（環境によって変わります）。
+実行時間の目安は、確認に使った4コアのLinux環境（「最新の版」）で、コマンドの開始から終了まで fast が約22〜23秒（合成データの生成を含む。2回）、full が約71〜84秒（3回）でした（環境や混み具合によって変わります）。
 
 ### 図の文字（日本語フォント）
 
