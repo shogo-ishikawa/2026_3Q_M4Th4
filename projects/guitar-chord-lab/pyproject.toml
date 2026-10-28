@@ -1,0 +1,47 @@
+# Guitar Chord Lab の依存定義
+# この作品だけをインストールできるように、作品フォルダで `pip install -e .` を実行します。
+# 検証した版は docs/environment.md に記録しています。
+
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "guitar-chord-lab"
+version = "0.1.0"
+description = "ギター音源から時刻付きのコード候補を推定し、音源分離の効果を比較する学習用ツール"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.1",
+    "scipy>=1.15",
+    "librosa>=0.11",
+    "soundfile>=0.12.1",
+    "matplotlib>=3.9",
+]
+
+[project.optional-dependencies]
+# ギター分離（第2段階以降）。torch は Colab に導入済みのものを使います。
+separation = [
+    "demucs>=4.1.0",
+]
+# テストとNotebookの自動実行に使います。
+dev = [
+    "pytest>=8",
+    "mir_eval>=0.8",
+    "nbformat>=5.10",
+    "nbclient>=0.10",
+    "ipykernel>=6",
+]
+
+[project.scripts]
+guitar-chord-lab = "guitar_chord_lab.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "demucs: Demucsのモデル取得と実分離を行う重い確認（RUN_DEMUCS_TESTS=1 のときだけ実行）",
+]

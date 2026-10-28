@@ -1,0 +1,41 @@
+{
+  "format_version": 1,
+  "meta": {
+    "title": "JSONテンプレート（架空の記入例）",
+    "source_type": "fictional",
+    "checked_on": null,
+    "assumptions": ["記入例の値はすべて架空です。"],
+    "notes": "configs/demo_park.json も同じ形式です。"
+  },
+  "cost_basis": "per_person",
+  "gates": {
+    "entrance": {"name": "入口", "x": 0, "y": 0},
+    "exit": {"name": "出口", "x": 0, "y": 0}
+  },
+  "walking": {"metres_per_minute": 60, "distance": "manhattan"},
+  "walk_minutes": null,
+  "attractions": [
+    {"id": "T1", "name": "記入例のコースター", "x": -200, "y": 300, "duration_min": 3, "preference": 9,
+     "queue_open": "09:00", "queue_close": "20:00", "finish_by": null},
+    {"id": "T2", "name": "記入例のボート", "x": 150, "y": 350, "duration_min": 10, "preference": 6,
+     "queue_open": "09:00", "queue_close": "20:00", "finish_by": null}
+  ],
+  "wait_tables": {
+    "weekday": {
+      "label": "平日（記入例）",
+      "bands": ["09:00-12:00", "12:00-16:00", "16:00-20:00"],
+      "wait_min": {"T1": [30, 60, 30], "T2": [15, 30, 15]}
+    }
+  },
+  "shortcut_offers": [
+    {"id": "P-T1-13", "attraction": "T1", "window": "13:00-14:00", "price_yen": 1000, "residual_wait_min": 10}
+  ],
+  "shows": [
+    {"id": "SH1", "name": "記入例のショー", "x": 50, "y": 200, "duration_min": 30, "arrive_before_min": 15,
+     "preference": 7, "performances": [{"id": "SH1-1200", "start": "12:00"}]}
+  ],
+  "meals": [
+    {"id": "L1", "name": "昼食（記入例）", "x": -50, "y": 250, "duration_min": 40, "window": "11:00-14:00",
+     "preference": 0}
+  ]
+}

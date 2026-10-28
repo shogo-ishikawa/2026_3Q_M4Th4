@@ -1,0 +1,3 @@
+show_id,show_name,x,y,duration_min,arrive_before_min,preference,performance_id,start
+SH1,記入例のショー,50,200,30,15,7,SH1-1200,12:00
+SH1,記入例のショー,50,200,30,15,7,SH1-1600,16:00

@@ -1,0 +1,48 @@
+{
+  "format_version": 1,
+  "meta": {
+    "title": "独立な正解器と照合するための極小パーク（架空）",
+    "source_type": "fictional",
+    "checked_on": null,
+    "assumptions": [
+      "全時刻を調べる正解器でも短時間で解けるよう、施設を3つ、ショーを1つ、時間を90分に絞った架空の例です。",
+      "待ち時間は15分ごとの時間帯別の表で、待ってから並ぶほうが早く終わる時間帯を含めています。"
+    ],
+    "notes": "02 の Notebook の「独立な正解器との照合」で使います。"
+  },
+  "cost_basis": "per_person",
+  "gates": {
+    "entrance": {"name": "入口", "x": 0, "y": 0},
+    "exit": {"name": "出口", "x": 0, "y": 0}
+  },
+  "walking": {"metres_per_minute": 60, "distance": "manhattan"},
+  "walk_minutes": null,
+  "attractions": [
+    {"id": "K1", "name": "小さなコースター", "x": 120, "y": 0, "duration_min": 5, "preference": 5,
+     "queue_open": "09:00", "queue_close": "10:30", "finish_by": null},
+    {"id": "K2", "name": "小さなボート", "x": 0, "y": 180, "duration_min": 10, "preference": 4,
+     "queue_open": "09:00", "queue_close": "10:30", "finish_by": null},
+    {"id": "K3", "name": "小さなタワー", "x": 240, "y": 180, "duration_min": 3, "preference": 6,
+     "queue_open": "09:00", "queue_close": "10:30", "finish_by": null}
+  ],
+  "wait_tables": {
+    "tiny": {
+      "label": "15分ごとの待ち時間（架空）",
+      "bands": ["09:00-09:15", "09:15-09:30", "09:30-09:45", "09:45-10:00", "10:00-10:15", "10:15-10:30"],
+      "wait_min": {
+        "K1": [40, 5, 10, 10, 20, 20],
+        "K2": [10, 10, 15, 15, 5, 5],
+        "K3": [20, 20, 30, 30, 10, 10]
+      }
+    }
+  },
+  "shortcut_offers": [
+    {"id": "P-K3-0930", "attraction": "K3", "window": "09:30-09:45", "price_yen": 500, "residual_wait_min": 0}
+  ],
+  "shows": [
+    {"id": "T1", "name": "小さなショー", "x": 60, "y": 60, "duration_min": 10, "arrive_before_min": 5,
+     "preference": 3,
+     "performances": [{"id": "T1-0940", "start": "09:40"}, {"id": "T1-1010", "start": "10:10"}]}
+  ],
+  "meals": []
+}

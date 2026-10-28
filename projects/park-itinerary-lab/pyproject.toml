@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "park-itinerary-lab"
+version = "0.1.0"
+description = "Teaching project: park day-itinerary optimisation with PuLP and OR-Tools CP-SAT"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "pandas>=2.2",
+]
+
+[project.optional-dependencies]
+# 01_pulp_intro.ipynb 用。PuLP 4 は CBC を同梱しないため、cbc 追加分（cbcbox）を入れる。
+intro = [
+    "pulp[cbc]==4.2.0",
+    "cbcbox==2.929",
+]
+# 02_day_plan_optimisation.ipynb 用。CP-SAT は OR-Tools に含まれる。
+# ソルバーは検証した版に固定し、Colab に入っている pandas・matplotlib は下限だけを指定する。
+main = [
+    "ortools==9.15.6755",
+    "matplotlib>=3.8",
+    "matplotlib-fontja==1.1.0",
+]
+# 開発・検証用（テストと Notebook の自動実行）。
+dev = [
+    "park-itinerary-lab[intro,main]",
+    "pytest>=8",
+    "nbclient>=0.10",
+    "nbformat>=5.10",
+    "ipykernel>=6.17",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"

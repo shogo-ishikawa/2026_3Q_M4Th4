@@ -1,0 +1,19 @@
+{
+  "format_version": 1,
+  "meta": {
+    "title": "CSVテンプレートの記入例（架空）",
+    "source_type": "fictional",
+    "checked_on": null,
+    "assumptions": [
+      "記入例の値はすべて架空です。自分で調べた値に置き換える場合は source_type と checked_on も書き換えてください。",
+      "徒歩は分速60m、縦横の道に沿った距離で計算します。"
+    ],
+    "notes": "attractions.csv など同じフォルダのCSVと組み合わせて読み込みます。"
+  },
+  "cost_basis": "per_person",
+  "gates": {
+    "entrance": {"name": "入口", "x": 0, "y": 0},
+    "exit": {"name": "出口", "x": 0, "y": 0}
+  },
+  "walking": {"metres_per_minute": 60, "distance": "manhattan"}
+}
