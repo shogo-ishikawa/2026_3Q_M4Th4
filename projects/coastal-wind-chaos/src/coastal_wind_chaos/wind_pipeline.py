@@ -63,6 +63,7 @@ INFO_SUFFIXES = {
 DEFAULT_MIN_QUALITY = 8
 
 LAG_HOURS = (0, 1, 2, 3, 6, 12, 24)     # u, v の「何時間前」（0 は予測起点の値）
+CHANGE_HOURS = (1, 3)                   # u, v の「何時間前からの変化」（lags に含まれる時間だけ作る）
 TEMPERATURE_LAG_HOURS = (1, 2, 3, 6)   # 気温の「何時間前」
 COMMON_MAX_HORIZON = 72                 # 予測時間を比べるとき、この時間先まで評価期間に収まる予測起点だけを使う
 
@@ -71,12 +72,12 @@ CALENDAR_COLUMNS = [
     "hour_sin", "hour_cos", "hour2_sin", "hour2_cos", "season_sin", "season_cos",
 ]
 CLIMATOLOGY_COLUMNS = ["clim_u", "clim_v"]
-# 過去・直近の観測（recent）：u_lag*, v_lag* に加えて必ず使う、過去24時間の平均の風
+# 過去・直近の観測（recent）：u_lag*, v_lag*, u_change*, v_change* に加えて必ず使う、過去24時間の平均の風
 WIND_STATE_COLUMNS = ["u_mean24", "v_mean24"]
 # 気温・気圧・日照から作る列。観測していない地点もあるので、学習期間に半分以上ある列だけ使う
 OPTIONAL_RECENT_COLUMNS = [
     "temperature_now", "temperature_lag1", "temperature_lag2", "temperature_lag3", "temperature_lag6",
-    "temperature_change_3h", "temperature_change_24h",
+    "temperature_change_1h", "temperature_change_3h", "temperature_change_24h",
     "pressure_now", "pressure_change_1h", "pressure_change_3h",
     "sunshine_now", "sunshine_today",
 ]
@@ -678,7 +679,8 @@ def make_forecast_table(weather, horizon, lags=LAG_HOURS):
     - 目的変数：t + horizon の u, v と風向（静穏なら風向は NaN、u = v = 0）
     - 季節・日周期：t + horizon の暦（暦は前もって分かる）。月×時刻の平均の風（clim_u, clim_v）は、
       学習期間が決まってから add_climatology_columns で加える。
-    - 過去・直近の観測：t とそれより前の観測。shift(k) は k 時間前の値。
+    - 過去・直近の観測：t とそれより前の観測。shift(k) は k 時間前の値。u, v の1時間・3時間の変化は、
+      lags にその時間が含まれるときだけ作る（使わない「何時間前」の値が、変化を通して入らないように）。
     - 24時間周期の持続予報に使う、t 以前で対象時刻と同じ時刻の風（u_cycle24, v_cycle24）
     lags には必ず 0（予測起点の値）を含める（持続予報に使うため）。
     """
@@ -702,6 +704,10 @@ def make_forecast_table(weather, horizon, lags=LAG_HOURS):
     for lag in lags:
         table[f"u_lag{lag}"] = u.shift(lag).to_numpy()
         table[f"v_lag{lag}"] = v.shift(lag).to_numpy()
+    for hours in CHANGE_HOURS:
+        if hours in lags:
+            table[f"u_change_{hours}h"] = (u - u.shift(hours)).to_numpy()  # t の値 − hours 時間前の値
+            table[f"v_change_{hours}h"] = (v - v.shift(hours)).to_numpy()
     table["u_mean24"] = u.rolling(24, min_periods=24).mean().to_numpy()  # t を含む過去24時間の平均
     table["v_mean24"] = v.rolling(24, min_periods=24).mean().to_numpy()
     cycle = cycle_lag(horizon)
@@ -718,6 +724,7 @@ def add_optional_columns(table, weather):
         table["temperature_now"] = temperature.to_numpy()
         for lag in TEMPERATURE_LAG_HOURS:
             table[f"temperature_lag{lag}"] = temperature.shift(lag).to_numpy()
+        table["temperature_change_1h"] = (temperature - temperature.shift(1)).to_numpy()
         table["temperature_change_3h"] = (temperature - temperature.shift(3)).to_numpy()
         table["temperature_change_24h"] = (temperature - temperature.shift(24)).to_numpy()
     pressure_name = pressure_column(weather)
@@ -747,10 +754,11 @@ def add_climatology_columns(table, climatology):
 def recent_columns(table, min_available=0.5):
     """過去・直近の観測の列のうち、使う列を返す（学習用の行を渡す）。
 
-    風の列（u_lag*, v_lag*, u_mean24, v_mean24）は必ず使う。気温・気圧・日照の列は、
+    風の列（u_lag*, v_lag*, u_change*, v_change*, u_mean24, v_mean24）は必ず使う。気温・気圧・日照の列は、
     渡した行の半分以上に値がある場合だけ使う（その観測をしていない地点もあるため）。
     """
-    columns = [name for name in table.columns if name.startswith(("u_lag", "v_lag"))] + WIND_STATE_COLUMNS
+    wind = ("u_lag", "v_lag", "u_change", "v_change")
+    columns = [name for name in table.columns if name.startswith(wind)] + WIND_STATE_COLUMNS
     for name in OPTIONAL_RECENT_COLUMNS:
         if name in table.columns and table[name].notna().mean() >= min_available:
             columns.append(name)

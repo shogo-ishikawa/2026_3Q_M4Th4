@@ -64,7 +64,8 @@ def test_new_features_do_not_change_when_the_future_changes(two_year_weather):
     cut = pd.Timestamp("2024-03-01 12:00")
     before = wp.make_forecast_table(two_year_weather, 30)
     after = wp.make_forecast_table(change_after(two_year_weather, cut), 30)
-    new_columns = ["u_mean24", "v_mean24", "u_cycle24", "v_cycle24", "temperature_lag1", "temperature_lag6",
+    new_columns = ["u_mean24", "v_mean24", "u_cycle24", "v_cycle24", "u_change_1h", "v_change_1h", "u_change_3h",
+                   "v_change_3h", "temperature_lag1", "temperature_lag6", "temperature_change_1h",
                    "temperature_change_24h", "pressure_change_1h", "sunshine_now", "sunshine_today"]
     assert set(new_columns) <= set(before.columns)
     features = [name for name in before.columns if not name.startswith("target_")]
@@ -82,8 +83,24 @@ def test_past_24h_mean_and_changes_are_computed_up_to_the_issue_time(two_year_we
     temperature = two_year_weather["temperature_c"]
     assert table.loc[issue, "temperature_change_24h"] == pytest.approx(temperature[issue] - temperature[issue - 24 * HOUR])
     assert table.loc[issue, "temperature_lag3"] == temperature[issue - 3 * HOUR]
+    assert table.loc[issue, "temperature_change_1h"] == pytest.approx(temperature[issue] - temperature[issue - HOUR])
     pressure = two_year_weather["sea_level_pressure_hpa"]
     assert table.loc[issue, "pressure_change_1h"] == pytest.approx(pressure[issue] - pressure[issue - HOUR])
+    u, v = two_year_weather["u_ms"], two_year_weather["v_ms"]
+    assert table.loc[issue, "u_change_1h"] == pytest.approx(u[issue] - u[issue - HOUR])
+    assert table.loc[issue, "v_change_1h"] == pytest.approx(v[issue] - v[issue - HOUR])
+    assert table.loc[issue, "u_change_3h"] == pytest.approx(u[issue] - u[issue - 3 * HOUR])
+    assert table.loc[issue, "v_change_3h"] == pytest.approx(v[issue] - v[issue - 3 * HOUR])
+
+
+def test_wind_changes_follow_the_lags(two_year_weather):
+    """u, v の変化は、lags にその「何時間前」があるときだけ作る（使わない過去の値が、変化を通して入らない）。"""
+    changes = {"u_change_1h", "v_change_1h", "u_change_3h", "v_change_3h"}
+    assert changes <= set(wp.make_forecast_table(two_year_weather, 3).columns)
+    assert not changes & set(wp.make_forecast_table(two_year_weather, 3, lags=(0,)).columns)
+    split = wp.last_days_split(two_year_weather, test_days=120)
+    recent = wp.prepare_stage(two_year_weather, 3, split, lags=(0, 1))["recent"]
+    assert {"u_change_1h", "v_change_1h"} <= set(recent) and not {"u_change_3h", "v_change_3h"} & set(recent)
 
 
 def test_past_24h_mean_is_missing_when_an_hour_is_missing(two_year_weather):

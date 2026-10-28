@@ -17,13 +17,13 @@ min_quality = 8               # 使う品質情報の下限：8 = 正常値だ�
 mode = "years"                # "years"：1年目学習・2年目検証・3年目最終テスト、"last_days"：最後の日数で分ける
 test_days = 365               # mode = "last_days" のときの最終テスト期間（日）
 validation_days = 365         # mode = "last_days" のときの検証期間（日、0 なら検証なし）
-max_horizon = 72              # この時間先まで評価期間に収まる予測起点だけを使う（どの予測時間でも同じ起点）
+max_horizon = 72              # この時間先まで評価期間に収まる予測起点だけを使う（どの予測時間でも同じ起点。選択と実験1〜3に共通）
 
 [models]
 # 統合モデル（季節・日周期＋過去・直近の観測）の設定の候補。検証期間の成績で選び、最終テスト期間では選ばない。
 candidates = ["linear", "boosting_shallow", "boosting", "boosting_deep"]
 selection_horizon = 3
-lags = [0, 1, 2, 3, 6, 12, 24]   # u, v の「何時間前」
+lags = [0, 1, 2, 3, 6, 12, 24]   # u, v の「何時間前」（選択と実験1〜3に共通。1・3を含むと、その時間の変化も入力にする）
 seed = 0
 
 [experiment1]

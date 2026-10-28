@@ -48,6 +48,30 @@ def test_direct_angle_regression_falls_into_the_south_when_the_truth_is_north():
     assert (wp.angular_error(by_vector, 0.0) < 45).mean() > 0.9
 
 
+def test_experiment1_trains_uv_and_angle_on_the_same_rows(three_year_weather, split, monkeypatch):
+    """表し方だけを変えた比較にするため、u, v の回帰も角度の回帰と同じ（対象時刻が静穏でない）行で学習する。
+    ふつうの u, v の予測（実験2・3）では、静穏の行も u = v = 0 として学習に使う。"""
+    used = {}
+    original_uv, original_angle = wp.fit_predict_uv, wp.fit_predict_angle
+
+    def recording_uv(method, train, rows, columns, seed=0):
+        used["uv"] = train.index
+        return original_uv(method, train, rows, columns, seed)
+
+    def recording_angle(method, train, rows, columns, seed=0):
+        used["angle"] = train.dropna(subset=["target_direction_deg"]).index  # 角度の回帰が実際に使う行
+        return original_angle(method, train, rows, columns, seed)
+
+    monkeypatch.setattr(wp, "fit_predict_uv", recording_uv)
+    monkeypatch.setattr(wp, "fit_predict_angle", recording_angle)
+    result = ex.experiment_angle(three_year_weather, split, methods=("linear",), horizon=3)
+    assert used["uv"].equals(used["angle"]) and len(used["uv"]) == result["n_train"]
+    assert result["n_calm_train"] > 0
+    used.clear()
+    wp.forecast_stage(three_year_weather, 3, ["linear:calendar+recent"], split, "validation")
+    assert len(used["uv"]) == result["n_train"] + result["n_calm_train"]
+
+
 def test_experiment1_compares_the_same_inputs_period_and_settings(three_year_weather, split):
     result = ex.experiment_angle(three_year_weather, split, methods=("linear",), horizon=3)
     assert result["pairs"] == [("linear:calendar+recent", "linear_angle:calendar+recent")]
@@ -104,6 +128,32 @@ def test_example_windows_follow_the_declared_rule(three_year_weather, experiment
     assert change_3h.loc[middle] > change_3h.loc[calm_start:calm_end].max()
 
 
+def with_wind_gaps(weather, every_hours=36):
+    """every_hours 時間ごとに風が欠測したデータ。欠測のない48時間がなくなる。"""
+    gappy = weather.copy()
+    columns = [name for name in ["u_ms", "v_ms", "wind_speed_ms", "wind_direction_deg"] if name in gappy]
+    gappy.loc[gappy.index[::every_hours], columns] = np.nan
+    return gappy
+
+
+def test_experiment2_continues_when_an_example_window_cannot_be_chosen(two_year_weather):
+    """穏やかな期間を規則どおりに選べなくても、成績は計算し、その期間の例だけを理由を付けて省く。"""
+    weather = with_wind_gaps(two_year_weather)
+    split = wp.last_days_split(weather, test_days=120)
+    result = ex.experiment_features(weather, split, "linear", horizon=3)
+    assert result["windows"]["calm"] is None and "calm" not in result["examples"]
+    assert "欠測" in result["window_notes"]["calm"]
+    assert result["windows"]["abrupt"] is not None and "abrupt" in result["examples"]
+    assert "abrupt" not in result["window_notes"]
+    assert result["scores"]["mae_deg"].notna().all() and (result["scores"]["n_test"] > 0).all()
+
+
+def test_no_example_window_when_the_period_is_shorter_than_the_window(three_year_weather, experiment2):
+    short = experiment2["forecasts"].iloc[:30]
+    assert (short["excluded"] == "").any()
+    assert ex.choose_example_windows(three_year_weather, short) == {"calm": None, "abrupt": None}
+
+
 def test_example_window_plots_forecasts_at_their_target_time(experiment2):
     for name, (start, end) in experiment2["windows"].items():
         window = experiment2["examples"][name]
@@ -136,6 +186,25 @@ def test_without_a_validation_period_the_simplest_setting_is_used(two_year_weath
     assert ex.select_integrated(two_year_weather, split) == (None, "linear")
     with pytest.raises(ValueError, match="検証期間"):
         wp.select_on_validation(two_year_weather, split)
+
+
+def test_lags_and_max_horizon_reach_the_selection_and_every_experiment(three_year_weather, split, monkeypatch):
+    calls = []
+    original = wp.prepare_stage
+
+    def recording(weather, horizon, split, stage="test", lags=wp.LAG_HOURS, max_horizon=wp.COMMON_MAX_HORIZON):
+        calls.append((tuple(lags), max_horizon))
+        return original(weather, horizon, split, stage, lags, max_horizon)
+
+    monkeypatch.setattr(wp, "prepare_stage", recording)
+    options = {"lags": (0, 1, 3), "max_horizon": 48}
+    ex.select_integrated(three_year_weather, split, candidates=["linear"], **options)
+    ex.experiment_angle(three_year_weather, split, methods=("linear",), **options)
+    ex.experiment_features(three_year_weather, split, "linear", **options)
+    result = ex.experiment_horizons(three_year_weather, split, "linear", [1, 48], **options)
+    assert len(calls) == 5 and set(calls) == {((0, 1, 3), 48)}
+    test_hours = (split["end"] - split["test_start"]) // pd.Timedelta(hours=1) + 1
+    assert (result["scores"]["n_issue"] == test_hours - 48).all()   # 48時間先まで収まる予測起点
 
 
 def test_experiment3_uses_common_issue_times_and_reports_counts(three_year_weather, split):

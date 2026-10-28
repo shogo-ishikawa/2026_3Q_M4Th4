@@ -137,9 +137,16 @@ def run_data_overview(weather, split, max_horizon, results_dir, figures_dir, sav
     save(plotting.plot_time_split(weather, split, max_horizon), figures_dir, "time_split.png", saved)
 
 
-def run_input_check(weather, split, horizon, max_horizon, results_dir):
+def model_options(config):
+    """どの実験にも同じ値を渡す設定：u, v の「何時間前」（[models] lags）と、共通の予測起点を決める
+    最長の予測時間（[split] max_horizon）。"""
+    return {"lags": tuple(config["models"]["lags"]), "max_horizon": config["split"]["max_horizon"]}
+
+
+def run_input_check(weather, split, horizon, config, results_dir):
     """最終テストの段階で使う入力の列と、欠けている入力で評価から外す予測起点の数。"""
-    stage = wind_pipeline.prepare_stage(weather, horizon, split, "test", max_horizon=max_horizon)
+    options = model_options(config)
+    stage = wind_pipeline.prepare_stage(weather, horizon, split, "test", options["lags"], options["max_horizon"])
     columns = wind_pipeline.input_column_table(stage)
     columns.to_csv(results_dir / "input_columns.csv", index=False)
     unused = columns.loc[~columns["used"], "column"].tolist()
@@ -159,7 +166,7 @@ def run_experiment1(weather, split, config, results_dir, figures_dir, saved):
     settings = config["experiment1"]
     stage = "validation" if split.get("validation_start") is not None else "test"
     result = experiments.experiment_angle(weather, split, settings["methods"], settings["horizon"], stage,
-                                          config["models"]["seed"])
+                                          config["models"]["seed"], **model_options(config))
     for name in ["means", "scores", "north"]:
         result[name].to_csv(results_dir / f"exp1_{name}.csv", index=False)
     result["by_direction"].to_csv(results_dir / "exp1_by_direction.csv")
@@ -168,19 +175,27 @@ def run_experiment1(weather, split, config, results_dir, figures_dir, saved):
     print_table("実験1：337.5度と22.5度の平均", result["means"])
     print_table(f"実験1：同じ入力・同じ設定での u, v 回帰と角度の直接回帰（{settings['horizon']}時間先、{stage}期間）",
                 result["scores"], SCORE_COLUMNS)
+    print(f"学習に使った行：{result['n_train']} 行（u, v の回帰と角度の回帰で同じ。"
+          f"対象時刻が静穏の {result['n_calm_train']} 行は、角度が決まらないので両方とも除く）")
     print_table("実験1：観測した風向が北から22.5度以内の時刻", result["north"])
-    return {"stage": stage}
+    return {"stage": stage, "n_train": result["n_train"], "n_calm_train": result["n_calm_train"]}
 
 
 def run_experiment2(weather, split, integrated, config, results_dir, figures_dir, saved):
     settings = config["experiment2"]
     result = experiments.experiment_features(weather, split, integrated, settings["horizon"],
-                                             config["models"]["seed"], settings["window_hours"])
+                                             config["models"]["seed"], settings["window_hours"],
+                                             **model_options(config))
     result["scores"].to_csv(results_dir / "exp2_scores.csv", index=False)
     windows = []
-    for name, (start, end) in result["windows"].items():
+    for name, window in result["windows"].items():
+        if window is None:  # 規則どおりに選べなかった期間は、図を省略して理由を残す（成績の表は保存する）
+            note = result["window_notes"][name]
+            print(f"例の期間（{name}）を選べなかったので、図を省略します：{note}")
+            windows.append({"window": name, "first_target_time": None, "last_target_time": None, "note": note})
+            continue
         result["examples"][name].to_csv(results_dir / f"exp2_{name}_48h.csv", index=False)
-        windows.append({"window": name, "first_target_time": start, "last_target_time": end})
+        windows.append({"window": name, "first_target_time": window[0], "last_target_time": window[1], "note": ""})
         save(plotting.plot_example_window(result["examples"][name], result["models"], f"{name}_window"),
              figures_dir, f"exp2_{name}_48h.png", saved)
     hourly = wind_pipeline.error_by_hour(result["forecasts"], result["models"])
@@ -188,14 +203,15 @@ def run_experiment2(weather, split, integrated, config, results_dir, figures_dir
     pd.DataFrame(windows).to_csv(results_dir / "exp2_windows.csv", index=False)
     print_table(f"実験2：{settings['horizon']}時間先、最終テスト期間（統合モデルの設定：{integrated}）",
                 result["scores"], SCORE_COLUMNS + ["n_calm_target", "n_missing_target", "n_missing_input"])
-    print("例の48時間（観測値だけから選んだ期間、対象時刻）:", {k: f"{a}〜{b}" for k, (a, b) in result["windows"].items()})
-    return {"windows": {k: [str(a), str(b)] for k, (a, b) in result["windows"].items()}}
+    chosen = {name: [str(window[0]), str(window[1])] if window else None for name, window in result["windows"].items()}
+    print(f"例の{settings['window_hours']}時間（観測値だけから選んだ期間、対象時刻）:", chosen)
+    return {"windows": chosen, "window_notes": result["window_notes"]}
 
 
 def run_experiment3(weather, split, integrated, horizons, config, results_dir, figures_dir, saved):
     settings = config["experiment3"]
     result = experiments.experiment_horizons(weather, split, integrated, horizons, config["models"]["seed"],
-                                             settings.get("extra_models", []))
+                                             settings.get("extra_models", []), **model_options(config))
     result["scores"].to_csv(results_dir / "exp3_scores.csv", index=False)
     result["counts"].to_csv(results_dir / "exp3_counts.csv", index=False)
     save(plotting.plot_error_vs_horizon(result["scores"], result["models"]), figures_dir,
@@ -224,8 +240,10 @@ def run_scenarios(config, results_dir, figures_dir, saved):
         name: sample_data.generate_weather(name, seed=settings["seed"], years=settings["years"])
         for name in scenarios["names"]
     }
+    options = model_options(config)
     scores = wind_pipeline.run_scenario_experiment(weather_by_scenario, horizons_from(scenarios), scenarios["models"],
-                                                   lags=config["models"]["lags"], seed=config["models"]["seed"])
+                                                   lags=options["lags"], seed=config["models"]["seed"],
+                                                   max_horizon=options["max_horizon"])
     scores.to_csv(results_dir / "scenario_scores.csv", index=False)
     save(plotting.plot_scenario_comparison(scores, scenarios["models"]), figures_dir, "scenario_comparison.png", saved)
     print("\n補足：シナリオ別の平均絶対角度誤差（度）、最終テスト期間（一部の予測時間を表示）")
@@ -293,14 +311,17 @@ def main():
         weather = wind_pipeline.load_weather(data_paths, min_quality=min_quality)
         split = make_split(weather, args, config)
         info["split"] = {name: str(value) for name, value in split.items()}
-        max_horizon = config["split"]["max_horizon"]
-        run_data_overview(weather, split, max_horizon, args.results_dir, args.figures_dir, saved)
+        info["model_options"] = model_options(config)  # 選択と実験1〜3に渡した lags と max_horizon
+        run_data_overview(weather, split, config["split"]["max_horizon"], args.results_dir, args.figures_dir, saved)
         print(f"時間の分け方：{info['split']}")
-        run_input_check(weather, split, config["experiment2"]["horizon"], max_horizon, args.results_dir)
+        print(f"u, v の「何時間前」（lags）：{info['model_options']['lags']}　"
+              f"共通の予測起点を決める最長の予測時間（max_horizon）：{info['model_options']['max_horizon']}")
+        run_input_check(weather, split, config["experiment2"]["horizon"], config, args.results_dir)
 
         models = config["models"]
         selection, integrated = experiments.select_integrated(weather, split, models["selection_horizon"],
-                                                             models["candidates"], models["seed"])
+                                                             models["candidates"], models["seed"],
+                                                             **model_options(config))
         info["integrated_model"] = integrated
         if selection is None:
             print(f"\n検証期間がないので、統合モデルの設定は既定の {integrated} を使います。")

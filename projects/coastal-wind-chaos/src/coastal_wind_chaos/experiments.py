@@ -1,7 +1,8 @@
 """4つの実験を実行する関数（CLI と Notebook で共通に使う）。
 
-- 実験1 experiment_angle：角度の罠。2つの風向の算術平均とベクトル平均、同じ入力・同じ期間・同じモデル設定での
-  「角度を直接回帰」と「u, v を回帰」の比較、北付近の誤差。予測の表し方を決めるための比較なので、検証期間で比べる。
+- 実験1 experiment_angle：角度の罠。2つの風向の算術平均とベクトル平均、同じ入力・同じ期間・同じモデル設定・
+  同じ学習行での「角度を直接回帰」と「u, v を回帰」の比較、北付近の誤差。予測の表し方を決めるための比較なので、
+  検証期間で比べる。
 - 実験2 experiment_features：3時間先について、季節・日周期だけ／過去・直近の観測だけ／両方（統合モデル）と、
   3つの基準予報を最終テスト期間で比べる。穏やかな期間と急変を含む期間の48時間を、観測値だけから選んで取り出す。
 - 実験3 experiment_horizons：予測時間を変えて、統合モデルと3つの基準予報を最終テスト期間で比べる。
@@ -18,16 +19,27 @@ from . import wind_pipeline as wp
 
 MEAN_EXAMPLE_DEG = (337.5, 22.5)
 FEATURE_SETS = ["calendar", "recent", "calendar+recent"]
+# 例の期間を規則どおりに選べなかったときに表示する理由（{hours} は期間の長さ）
+WINDOW_NOT_FOUND = {
+    "calm": "風の欠測も静穏もなく、平均風速が中央値以上の{hours}時間（毎日1時に始まる）が、評価する期間にありません"
+            "（欠測が多いか、期間が短い）",
+    "abrupt": "3時間の風ベクトルの変化を計算できる時刻が、評価する期間の中ほどにありません（欠測が多いか、期間が短い）",
+}
+
+# lags（u, v の「何時間前」）と max_horizon（共通の予測起点を決める最長の予測時間）は、どの実験にも
+# 同じ値を渡す。CLI では設定ファイルの [models] lags と [split] max_horizon を使う。
 
 
-def select_integrated(weather, split, horizon=3, candidates=wp.INTEGRATED_CANDIDATES, seed=0):
+def select_integrated(weather, split, horizon=3, candidates=wp.INTEGRATED_CANDIDATES, seed=0,
+                      lags=wp.LAG_HOURS, max_horizon=wp.COMMON_MAX_HORIZON):
     """検証期間の成績で統合モデルの設定を選ぶ。戻り値は（検証期間の成績の表, 選んだ名前）。
 
     検証期間のない分割では選べないので、表は None、名前は "linear"（いちばん単純な候補）にする。
     """
     if split.get("validation_start") is None:
         return None, "linear"
-    return wp.select_on_validation(weather, split, candidates, horizon, seed=seed)
+    return wp.select_on_validation(weather, split, candidates, horizon, lags=lags, max_horizon=max_horizon,
+                                   seed=seed)
 
 
 # ---------------------------------------------------------------------------
@@ -68,15 +80,22 @@ def north_summary(forecasts, models, half_width=22.5):
     return pd.DataFrame(table)
 
 
-def experiment_angle(weather, split, methods=("linear", "boosting"), horizon=3, stage="validation", seed=0):
+def experiment_angle(weather, split, methods=("linear", "boosting"), horizon=3, stage="validation", seed=0,
+                     lags=wp.LAG_HOURS, max_horizon=wp.COMMON_MAX_HORIZON):
     """実験1。methods の各設定で、u, v の回帰（"名前:calendar+recent"）と角度の直接回帰
-    （"名前_angle:calendar+recent"）を、同じ入力・同じ期間・同じ設定で比べる。
+    （"名前_angle:calendar+recent"）を、同じ入力・同じ期間・同じ設定・同じ学習行で比べる。
 
+    対象時刻が静穏の行は風向が決まらないので、角度の回帰の学習には使えない。表し方だけを変えた比較に
+    するため、ここでは u, v の回帰もその行を除いた同じ学習行で学習する（ふつうの u, v の予測では、
+    静穏の行も u = v = 0 として学習に使う）。
     悪い例（degrees_as_numbers：入力もモデルも違う）は参考として加えるが、表し方の比較には使わない。
     """
     pairs = [(f"{method}:calendar+recent", f"{method}_angle:calendar+recent") for method in methods]
     models = [spec for pair in pairs for spec in pair] + ["degrees_as_numbers"]
-    forecasts = wp.forecast_stage(weather, horizon, models, split, stage, seed=seed)
+    stage_data = wp.prepare_stage(weather, horizon, split, stage, lags, max_horizon)
+    train = stage_data["train"]
+    matched = {**stage_data, "train": train[train["target_direction_deg"].notna()]}
+    forecasts = wp.forecast_rows(matched, models, seed)
     return {
         "means": mean_direction_example(),
         "scores": wp.score_forecasts(forecasts, models),
@@ -85,6 +104,8 @@ def experiment_angle(weather, split, methods=("linear", "boosting"), horizon=3, 
         "forecasts": forecasts,
         "pairs": pairs,
         "models": models,
+        "n_train": len(matched["train"]),
+        "n_calm_train": len(train) - len(matched["train"]),
     }
 
 
@@ -102,7 +123,8 @@ def choose_example_windows(weather, forecasts, hours=48):
     - 急変を含む期間（abrupt）：3時間の風ベクトルの変化が範囲の中で最も大きい時刻が、
       ちょうど真ん中（hours/2 時間目）に来る hours 時間
     同じ値なら早い方を選ぶ。予測の列は使わないので、どの手法が当たるかで期間は変わらない。
-    戻り値は {"calm": (最初の対象時刻, 最後の対象時刻), "abrupt": (...)}。
+    戻り値は {"calm": (最初の対象時刻, 最後の対象時刻), "abrupt": (...)}。欠測が多いなどで規則どおりに
+    選べない期間は None にする（理由は WINDOW_NOT_FOUND）。
     """
     targets = forecasts.loc[forecasts["excluded"] == "", "target_time"]
     first, last = targets.min(), targets.max()
@@ -122,8 +144,10 @@ def choose_example_windows(weather, forecasts, hours=48):
             best_start, best_value = start, window.max()
 
     half = pd.Timedelta(hours=hours // 2)
-    peak = change_3h.loc[first + half:last - span + half].idxmax()
-    return {"calm": (best_start, best_start + span), "abrupt": (peak - half, peak - half + span)}
+    middle = change_3h.loc[first + half:last - span + half].dropna()
+    calm = None if best_start is None else (best_start, best_start + span)
+    abrupt = None if middle.empty else (middle.idxmax() - half, middle.idxmax() - half + span)
+    return {"calm": calm, "abrupt": abrupt}
 
 
 def window_forecasts(forecasts, models, start, end):
@@ -141,25 +165,36 @@ def window_forecasts(forecasts, models, start, end):
     return part.sort_values("target_time").reset_index(drop=True)
 
 
-def experiment_features(weather, split, integrated, horizon=3, seed=0, window_hours=48):
+def experiment_features(weather, split, integrated, horizon=3, seed=0, window_hours=48,
+                        lags=wp.LAG_HOURS, max_horizon=wp.COMMON_MAX_HORIZON):
     """実験2。integrated（検証期間で選んだ統合モデルの設定）で、特徴量の組だけを変えた3つと、
-    3つの基準予報を、最終テスト期間の同じ行で比べる。"""
+    3つの基準予報を、最終テスト期間の同じ行で比べる。
+
+    例の期間を選べなかったときも成績は返す。examples にはその期間を入れず、window_notes に理由を書く。
+    """
     models = [f"{integrated}:{feature_set}" for feature_set in FEATURE_SETS] + list(wp.BASELINE_MODELS)
-    forecasts = wp.forecast_stage(weather, horizon, models, split, "test", seed=seed)
+    forecasts = wp.forecast_stage(weather, horizon, models, split, "test", lags, max_horizon, seed)
     windows = choose_example_windows(weather, forecasts, window_hours)
-    examples = {name: window_forecasts(forecasts, models, start, end) for name, (start, end) in windows.items()}
+    examples = {name: window_forecasts(forecasts, models, *window)
+                for name, window in windows.items() if window is not None}
+    notes = {name: WINDOW_NOT_FOUND[name].format(hours=window_hours)
+             for name, window in windows.items() if window is None}
     return {"scores": wp.score_forecasts(forecasts, models), "forecasts": forecasts, "models": models,
-            "windows": windows, "examples": examples}
+            "windows": windows, "examples": examples, "window_notes": notes}
 
 
 # ---------------------------------------------------------------------------
 # 実験3：予測時間の比較
 # ---------------------------------------------------------------------------
 
-def experiment_horizons(weather, split, integrated, horizons, seed=0, extra_models=()):
-    """実験3。統合モデルと3つの基準予報を、horizons の各予測時間で、最終テスト期間の同じ予測起点で比べる。"""
+def experiment_horizons(weather, split, integrated, horizons, seed=0, extra_models=(),
+                        lags=wp.LAG_HOURS, max_horizon=None):
+    """実験3。統合モデルと3つの基準予報を、horizons の各予測時間で、最終テスト期間の同じ予測起点で比べる。
+
+    max_horizon を省略すると、72時間と horizons の最大値の大きい方（run_horizon_experiment と同じ）。
+    """
     models = [f"{integrated}:calendar+recent"] + list(wp.BASELINE_MODELS) + list(extra_models)
-    scores = wp.run_horizon_experiment(weather, horizons, models, split, "test", seed=seed)
+    scores = wp.run_horizon_experiment(weather, horizons, models, split, "test", lags, max_horizon, seed)
     return {"scores": scores, "models": models, "counts": count_table(scores)}
 
 

@@ -26,7 +26,10 @@ def run(arguments, expect_success=True):
 
 
 def write_small_config(tmp_path, years=3):
-    """短時間で終わる設定ファイルを作る。"""
+    """短時間で終わる設定ファイルを作る。
+
+    lags と max_horizon は、既定（[0, 1, 2, 3, 6, 12, 24] と 72）と違う値にして、設定が実験に届くことを確かめる。
+    """
     config = tmp_path / "small.toml"
     config.write_text(f"""
 [sample_data]
@@ -43,12 +46,12 @@ min_quality = 8
 mode = "years"
 test_days = 365
 validation_days = 365
-max_horizon = 72
+max_horizon = 48
 
 [models]
 candidates = ["linear", "boosting_shallow"]
 selection_horizon = 3
-lags = [0, 1, 2, 3, 6, 12, 24]
+lags = [0, 1, 3]
 seed = 0
 
 [experiment1]
@@ -60,7 +63,7 @@ horizon = 3
 window_hours = 48
 
 [experiment3]
-horizons = [1, 25, 72]
+horizons = [1, 25, 48]
 extra_models = []
 
 [scenarios]
@@ -137,12 +140,24 @@ def test_run_experiments_cli_with_a_small_config(tmp_path):
     assert info["figure_language"] == "en" and info["min_quality"] == 8
     assert "git_has_uncommitted_changes" in info["environment"]
     scores = pd.read_csv(results / "exp3_scores.csv")
-    assert sorted(scores["horizon_h"].unique()) == [1, 25, 72]
+    assert sorted(scores["horizon_h"].unique()) == [1, 25, 48]
     assert scores.groupby("horizon_h")["n_issue"].nunique().eq(1).all()
     assert scores["n_issue"].nunique() == 1  # どの予測時間でも同じ予測起点
     assert {"vector_rmse_ms", "n_undefined", "n_calm_target", "n_missing_input"} <= set(scores.columns)
     assert "検証期間で統合モデルの設定を選ぶ" in stdout
     assert "入力が欠けていて評価から外す予測起点" in stdout
+    # 設定の lags と max_horizon が、選択と実験1〜3に届いている
+    assert info["model_options"] == {"lags": [0, 1, 3], "max_horizon": 48}
+    columns = set(pd.read_csv(results / "input_columns.csv")["column"])
+    assert {"u_lag3", "u_change_1h", "u_change_3h"} <= columns and not {"u_lag2", "u_lag24"} & columns
+    split = {name: pd.Timestamp(value) for name, value in info["split"].items() if name != "mode"}
+    hour = pd.Timedelta(hours=1)
+    n_validation = (split["test_start"] - split["validation_start"]) // hour - 48   # 48時間先まで収まる予測起点
+    n_test = (split["end"] - split["test_start"]) // hour + 1 - 48
+    for name, expected in [("selection_validation", n_validation), ("exp1_scores", n_validation),
+                           ("exp2_scores", n_test), ("exp3_scores", n_test)]:
+        assert (pd.read_csv(results / f"{name}.csv")["n_issue"] == expected).all(), name
+    assert info["experiment1"]["n_train"] > 0 and "学習に使った行" in stdout
     exp2 = pd.read_csv(results / "exp2_scores.csv")
     excluded = stdout.split("入力が欠けていて評価から外す予測起点：")[1].split(" /")[0]
     assert (exp2["n_missing_input"] == int(excluded)).all()  # 表示した数と実験2の表の数が同じ
@@ -151,6 +166,36 @@ def test_run_experiments_cli_with_a_small_config(tmp_path):
     stdout = run([SCRIPTS / "run_experiments.py", "--config", config, "--results-dir", results,
                   "--figures-dir", figures, "--experiments", "2", "--skip-scenarios", "--language", "en"]).stdout
     assert "既存の合成データを使います" in stdout
+
+
+def blank_wind_every(path, every_hours):
+    """気象庁形式のCSVで、every_hours 時間ごとに風速・風向を欠測（空欄、品質情報1）にする。"""
+    lines = path.read_bytes().decode("cp932").split("\r\n")
+    for number in range(6, len(lines), every_hours):  # 7行目からがデータ
+        cells = lines[number].split(",")
+        if len(cells) == 16:
+            cells[8:12] = ["", "1", "", "1"]   # 風速, 品質情報, 風向, 品質情報
+            lines[number] = ",".join(cells)
+    path.write_bytes("\r\n".join(lines).encode("cp932"))
+
+
+def test_experiment2_keeps_the_scores_when_an_example_window_cannot_be_chosen(tmp_path):
+    """36時間ごとに風が欠測すると、欠測のない48時間がないので穏やかな期間を選べない。
+    成績の表は保存し、その期間の図だけを理由を付けて省く。"""
+    config = write_small_config(tmp_path, years=1)
+    data = tmp_path / "gappy.csv"
+    run([SCRIPTS / "generate_sample_jma_csv.py", "--output", data, "--years", "1", "--seed", "8"])
+    blank_wind_every(data, 36)
+    results, figures = tmp_path / "results", tmp_path / "figures"
+    stdout = run([SCRIPTS / "run_experiments.py", "--config", config, "--data", data, "--split", "last_days",
+                  "--test-days", "90", "--validation-days", "60", "--experiments", "2",
+                  "--results-dir", results, "--figures-dir", figures, "--language", "en"]).stdout
+    assert "図を省略します" in stdout
+    windows = pd.read_csv(results / "exp2_windows.csv").set_index("window")
+    assert pd.isna(windows.loc["calm", "first_target_time"]) and "欠測" in windows.loc["calm", "note"]
+    assert not (figures / "exp2_calm_48h.png").exists() and (figures / "exp2_abrupt_48h.png").exists()
+    scores = pd.read_csv(results / "exp2_scores.csv")
+    assert scores["mae_deg"].notna().all() and (scores["n_test"] > 0).all()
 
 
 def split_into_two_files(source, first, second):
