@@ -7,6 +7,7 @@ Pythonの基礎を学んだ学生が、AIや教員の支援を受けながら制
 | 作品 | 内容 | 状態 |
 | --- | --- | --- |
 | [Guitar Chord Lab](projects/guitar-chord-lab/) | ギターの音源分離とコード認識、分離前後の比較実験 | 開発ひな形・仕様あり。アプリ本体は未実装 |
+| [Park Itinerary Lab](projects/park-itinerary-lab/) | 架空のテーマパークでの一日の予定を数理最適化で計算（PuLP入門、CP-SATによる日程最適化、短縮利用の配分の比較実験） | v0.1.0 初版。ローカルでテストとNotebookの実行を確認。Colab上での実行は未確認 |
 
 実行できるNotebookやコマンドは、実装・動作確認後に各作品のREADMEへ掲載します。
 
