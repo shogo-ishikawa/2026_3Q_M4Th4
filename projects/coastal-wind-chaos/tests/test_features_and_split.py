@@ -93,6 +93,37 @@ def test_past_24h_mean_and_changes_are_computed_up_to_the_issue_time(two_year_we
     assert table.loc[issue, "v_change_3h"] == pytest.approx(v[issue] - v[issue - 3 * HOUR])
 
 
+def test_changes_match_known_values():
+    """手で決めた値で、変化（t の値 − 1時間前・3時間前の値）を確かめる。最初の行は前の値がないので欠損。"""
+    times = pd.date_range("2024-03-01 01:00", periods=6, freq=HOUR, name="time")
+    weather = pd.DataFrame({
+        "u_ms": [0.0, 1.0, 3.0, 6.0, 10.0, 15.0],
+        "v_ms": [5.0, 4.0, 2.0, -1.0, -5.0, -10.0],
+        "wind_direction_deg": np.nan,
+        "temperature_c": [10.0, 12.0, 11.0, 15.0, 14.0, 20.0],
+    }, index=times)
+    table = wp.make_forecast_table(weather, 1, lags=(0, 1, 3))
+    assert table["u_change_1h"].isna().iloc[0] and table["u_change_3h"].isna().iloc[:3].all()
+    assert table["u_change_1h"].iloc[1:].tolist() == [1.0, 2.0, 3.0, 4.0, 5.0]
+    assert table["u_change_3h"].iloc[3:].tolist() == [6.0, 9.0, 12.0]
+    assert table["v_change_1h"].iloc[1:].tolist() == [-1.0, -2.0, -3.0, -4.0, -5.0]
+    assert table["v_change_3h"].iloc[3:].tolist() == [-6.0, -9.0, -12.0]
+    assert table["temperature_change_1h"].iloc[1:].tolist() == [2.0, -1.0, 4.0, -1.0, 6.0]
+
+
+def test_changes_are_inputs_of_recent_and_the_integrated_model(two_year_weather):
+    split = wp.last_days_split(two_year_weather, test_days=120)
+    recent = wp.prepare_stage(two_year_weather, 3, split)["recent"]
+    changes = {"u_change_1h", "v_change_1h", "u_change_3h", "v_change_3h", "temperature_change_1h"}
+    assert changes <= set(wp.feature_columns("recent", recent))
+    assert changes <= set(wp.feature_columns("calendar+recent", recent))
+    assert not changes & set(wp.feature_columns("calendar", recent))
+    # 気温を観測しない地点：気温の変化は作らず（任意の列の扱い）、u, v の変化は使う
+    no_temperature = two_year_weather.drop(columns=["temperature_c"])
+    recent = wp.prepare_stage(no_temperature, 3, split)["recent"]
+    assert "temperature_change_1h" not in recent and {"u_change_1h", "v_change_3h"} <= set(recent)
+
+
 def test_wind_changes_follow_the_lags(two_year_weather):
     """u, v の変化は、lags にその「何時間前」があるときだけ作る（使わない過去の値が、変化を通して入らない）。"""
     changes = {"u_change_1h", "v_change_1h", "u_change_3h", "v_change_3h"}

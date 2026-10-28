@@ -92,6 +92,40 @@ def horizons_from(settings):
     return list(settings["horizons"])
 
 
+def check_settings(config, args):
+    """計算を始める前に、設定の矛盾を調べる。矛盾があれば、何も計算せずに理由を示して止める。
+
+    例えば、予測時間が [split] max_horizon（共通の予測起点を決める最長の予測時間）より長い設定。
+    """
+    max_horizon = config["split"]["max_horizon"]
+    lags = config["models"]["lags"]
+    problems = []
+    if not isinstance(max_horizon, int) or max_horizon < 1:
+        problems.append(f"[split] max_horizon は1以上の整数にしてください（今は {max_horizon!r}）")
+        max_horizon = None
+    if not lags or not all(isinstance(lag, int) and lag >= 0 for lag in lags):
+        problems.append(f"[models] lags は0以上の整数の一覧にしてください（今は {lags!r}）")
+    horizons = {}
+    if any(number in (1, 2, 3) for number in args.experiments) and not args.skip_wind:
+        horizons["[models] selection_horizon"] = [config["models"]["selection_horizon"]]
+        if 1 in args.experiments:
+            horizons["[experiment1] horizon"] = [config["experiment1"]["horizon"]]
+        if 2 in args.experiments:
+            horizons["[experiment2] horizon"] = [config["experiment2"]["horizon"]]
+        if 3 in args.experiments:
+            horizons["[experiment3]"] = horizons_from(config["experiment3"])
+        if config["scenarios"]["enabled"] and not args.skip_scenarios and not args.data:
+            horizons["[scenarios]"] = horizons_from(config["scenarios"])
+    for name, values in horizons.items():
+        if not all(isinstance(value, int) and value >= 1 for value in values):
+            problems.append(f"{name} の予測時間は1以上の整数にしてください（今は {values}）")
+        elif max_horizon is not None and max(values) > max_horizon:
+            problems.append(f"{name} の予測時間 {max(values)} が [split] max_horizon（{max_horizon}）より長いです")
+    if problems:
+        raise SystemExit("設定に矛盾があるので、計算を始めずに止めます（" + str(args.config) + "）：\n- "
+                         + "\n- ".join(problems))
+
+
 def prepare_data_paths(args, config):
     """使うデータファイルの一覧。指定がなければ合成データを（なければ作って）使う。"""
     if args.data:
@@ -189,15 +223,14 @@ def run_experiment2(weather, split, integrated, config, results_dir, figures_dir
     result["scores"].to_csv(results_dir / "exp2_scores.csv", index=False)
     windows = []
     for name, window in result["windows"].items():
-        if window is None:  # 規則どおりに選べなかった期間は、図を省略して理由を残す（成績の表は保存する）
-            note = result["window_notes"][name]
-            print(f"例の期間（{name}）を選べなかったので、図を省略します：{note}")
-            windows.append({"window": name, "first_target_time": None, "last_target_time": None, "note": note})
+        fig = plotting.plot_example(result, name)  # 規則どおりに選べなかった期間は、図を作らずに理由を表示する
+        if fig is None:  # 成績の表は保存し、省略した図と理由を記録する（条件を緩めて別の期間を選ばない）
+            windows.append({"window": name, "first_target_time": None, "last_target_time": None,
+                            "note": result["window_notes"][name]})
             continue
         result["examples"][name].to_csv(results_dir / f"exp2_{name}_48h.csv", index=False)
         windows.append({"window": name, "first_target_time": window[0], "last_target_time": window[1], "note": ""})
-        save(plotting.plot_example_window(result["examples"][name], result["models"], f"{name}_window"),
-             figures_dir, f"exp2_{name}_48h.png", saved)
+        save(fig, figures_dir, f"exp2_{name}_48h.png", saved)
     hourly = wind_pipeline.error_by_hour(result["forecasts"], result["models"])
     save(plotting.plot_error_by_hour(hourly), figures_dir, "exp2_error_by_hour.png", saved)
     pd.DataFrame(windows).to_csv(results_dir / "exp2_windows.csv", index=False)
@@ -286,6 +319,7 @@ def main():
     sys.stdout.reconfigure(encoding="utf-8")  # 出力をファイルに書き出しても、日本語で失敗しないようにする
     args = parse_args()
     config = load_config(args.config)
+    check_settings(config, args)
     args.results_dir.mkdir(parents=True, exist_ok=True)
     args.figures_dir.mkdir(parents=True, exist_ok=True)
     language = plotting.apply_style(args.language)

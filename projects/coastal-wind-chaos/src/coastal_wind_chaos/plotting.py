@@ -126,6 +126,8 @@ TEXTS = {
     "observed": ("観測", "Observed"),
     "window_mae": ("{label}\n平均誤差 {mae:.0f}°", "{label}\nmean error {mae:.0f}°"),
     "split_title": ("時間順の分割（学習・検証・最終テスト）", "Time-ordered split (training, validation, final test)"),
+    "split_note": ("濃い部分：各期間の最後の{hours}時間（max_horizon）。評価ではこの時間の予測起点を使わない",
+                   "Darker band: last {hours} h of each period (max_horizon); issue times there are not evaluated"),
     "weekly_u": ("u の1週間平均", "Weekly mean of u"),
     "train_period": ("学習", "Training"),
     "validation_period": ("検証", "Validation"),
@@ -340,7 +342,7 @@ def plot_time_split(weather, split, max_horizon):
                 ha="center", va="bottom", color=INK)
     ax.set_yticks([])
     ax.set_ylabel(text("weekly_u"))
-    ax.set_xlabel(text("time_axis"))
+    ax.set_xlabel(text("time_axis") + "\n" + text("split_note", hours=max_horizon))
     ax.set_title(text("split_title"), pad=18)
     return fig
 
@@ -443,6 +445,18 @@ def plot_angle_trap(by_direction, forecasts, pair, title=None):
         ax.set_title(text("angle_right_title", label=name), fontsize=9)
     fig.suptitle(title or text("angle_title"))
     return fig
+
+
+def plot_example(result, name):
+    """実験2の結果 result から、例の期間 name（"calm" か "abrupt"）の図を描く。
+
+    規則どおりに選べなかった期間は、条件を緩めて別の期間を選ぶことはせず、図を作らずに理由を表示して
+    None を返す（CLI と Notebook で同じ扱いにする）。
+    """
+    if name not in result["examples"]:
+        print(f"例の期間（{TEXTS[name + '_window'][0]}）の図を省略します：{result['window_notes'][name]}")
+        return None
+    return plot_example_window(result["examples"][name], result["models"], f"{name}_window")
 
 
 def plot_example_window(window, models, name_key, title=None):

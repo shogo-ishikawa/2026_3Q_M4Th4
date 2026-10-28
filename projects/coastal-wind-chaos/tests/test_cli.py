@@ -168,6 +168,20 @@ def test_run_experiments_cli_with_a_small_config(tmp_path):
     assert "既存の合成データを使います" in stdout
 
 
+def test_inconsistent_settings_stop_before_any_computation(tmp_path):
+    """予測時間が max_horizon より長い設定は、データを作ったり計算したりする前に、理由を示して止める。"""
+    config = write_small_config(tmp_path)
+    config.write_text(config.read_text(encoding="utf-8").replace("horizons = [1, 25, 48]", "horizons = [1, 25, 72]"),
+                      encoding="utf-8")
+    results = tmp_path / "results"
+    result = run([SCRIPTS / "run_experiments.py", "--config", config, "--results-dir", results,
+                  "--figures-dir", tmp_path / "figures"], expect_success=False)
+    assert result.returncode != 0
+    assert "計算を始めずに止めます" in result.stderr
+    assert "[experiment3] の予測時間 72 が [split] max_horizon（48）より長い" in result.stderr
+    assert not results.exists() and not (tmp_path / "data").exists()   # 何も作っていない
+
+
 def blank_wind_every(path, every_hours):
     """気象庁形式のCSVで、every_hours 時間ごとに風速・風向を欠測（空欄、品質情報1）にする。"""
     lines = path.read_bytes().decode("cp932").split("\r\n")

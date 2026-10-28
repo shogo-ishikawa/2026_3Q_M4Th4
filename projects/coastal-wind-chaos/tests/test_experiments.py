@@ -1,11 +1,17 @@
 """4つの実験の関数を確かめる（手法の勝ち負けではなく、条件のそろえ方と仕組みを確かめる）。"""
 
-import numpy as np
-import pandas as pd
-import pytest
+import matplotlib
 
-from coastal_wind_chaos import experiments as ex
-from coastal_wind_chaos import wind_pipeline as wp
+matplotlib.use("Agg")  # 画面のない環境でも図を作れるようにする
+
+import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
+import pandas as pd  # noqa: E402
+import pytest  # noqa: E402
+
+from coastal_wind_chaos import experiments as ex  # noqa: E402
+from coastal_wind_chaos import plotting  # noqa: E402
+from coastal_wind_chaos import wind_pipeline as wp  # noqa: E402
 
 
 @pytest.fixture(scope="module")
@@ -48,28 +54,55 @@ def test_direct_angle_regression_falls_into_the_south_when_the_truth_is_north():
     assert (wp.angular_error(by_vector, 0.0) < 45).mean() > 0.9
 
 
-def test_experiment1_trains_uv_and_angle_on_the_same_rows(three_year_weather, split, monkeypatch):
-    """表し方だけを変えた比較にするため、u, v の回帰も角度の回帰と同じ（対象時刻が静穏でない）行で学習する。
-    ふつうの u, v の予測（実験2・3）では、静穏の行も u = v = 0 として学習に使う。"""
-    used = {}
-    original_uv, original_angle = wp.fit_predict_uv, wp.fit_predict_angle
+class RecordingModel:
+    """回帰モデルを包み、学習（fit）と予測（predict）に渡された入力の値を記録する。"""
+
+    def __init__(self, model, record):
+        self.model, self.record = model, record
+
+    def fit(self, inputs, targets):
+        self.record["fit"] = np.array(inputs, copy=True)
+        self.model.fit(inputs, targets)
+        return self
+
+    def predict(self, inputs):
+        self.record["predict"] = np.array(inputs, copy=True)
+        return self.model.predict(inputs)
+
+
+def test_experiment1_trains_uv_and_angle_on_the_same_rows_and_inputs(three_year_weather, split, monkeypatch):
+    """表し方だけを変えた比較にするため、u, v の回帰と角度の回帰に、同じ学習行（対象時刻が静穏でない行）、
+    同じ入力の列と値、同じ評価行を渡す。ふつうの u, v の予測（実験2・3）では、静穏の行も学習に使う。"""
+    passed, inputs = {}, {}
+    original_uv, original_angle, original_make = wp.fit_predict_uv, wp.fit_predict_angle, wp.make_regressor
 
     def recording_uv(method, train, rows, columns, seed=0):
-        used["uv"] = train.index
+        passed["uv"] = (train.index, list(columns), rows.index)
         return original_uv(method, train, rows, columns, seed)
 
     def recording_angle(method, train, rows, columns, seed=0):
-        used["angle"] = train.dropna(subset=["target_direction_deg"]).index  # 角度の回帰が実際に使う行
+        used = train.dropna(subset=["target_direction_deg"])  # 角度の回帰が実際に学習に使う行
+        passed["angle"] = (used.index, list(columns), rows.index)
         return original_angle(method, train, rows, columns, seed)
+
+    def recording_make(method, seed=0, n_outputs=2):
+        target = "uv" if n_outputs == 2 else "angle"
+        return RecordingModel(original_make(method, seed, n_outputs), inputs.setdefault(target, {}))
 
     monkeypatch.setattr(wp, "fit_predict_uv", recording_uv)
     monkeypatch.setattr(wp, "fit_predict_angle", recording_angle)
+    monkeypatch.setattr(wp, "make_regressor", recording_make)
     result = ex.experiment_angle(three_year_weather, split, methods=("linear",), horizon=3)
-    assert used["uv"].equals(used["angle"]) and len(used["uv"]) == result["n_train"]
+    uv_train, uv_columns, uv_rows = passed["uv"]
+    angle_train, angle_columns, angle_rows = passed["angle"]
+    assert uv_train.equals(angle_train) and len(uv_train) == result["n_train"]   # 学習行
+    assert uv_columns == angle_columns and uv_rows.equals(angle_rows)             # 入力の列と評価行
+    assert np.array_equal(inputs["uv"]["fit"], inputs["angle"]["fit"])             # 学習に渡した入力の値
+    assert np.array_equal(inputs["uv"]["predict"], inputs["angle"]["predict"])     # 予測に渡した入力の値
     assert result["n_calm_train"] > 0
-    used.clear()
+    passed.clear()
     wp.forecast_stage(three_year_weather, 3, ["linear:calendar+recent"], split, "validation")
-    assert len(used["uv"]) == result["n_train"] + result["n_calm_train"]
+    assert len(passed["uv"][0]) == result["n_train"] + result["n_calm_train"]   # ふつうの予測は静穏も学習
 
 
 def test_experiment1_compares_the_same_inputs_period_and_settings(three_year_weather, split):
@@ -136,7 +169,7 @@ def with_wind_gaps(weather, every_hours=36):
     return gappy
 
 
-def test_experiment2_continues_when_an_example_window_cannot_be_chosen(two_year_weather):
+def test_experiment2_continues_when_an_example_window_cannot_be_chosen(two_year_weather, capsys):
     """穏やかな期間を規則どおりに選べなくても、成績は計算し、その期間の例だけを理由を付けて省く。"""
     weather = with_wind_gaps(two_year_weather)
     split = wp.last_days_split(weather, test_days=120)
@@ -146,12 +179,27 @@ def test_experiment2_continues_when_an_example_window_cannot_be_chosen(two_year_
     assert result["windows"]["abrupt"] is not None and "abrupt" in result["examples"]
     assert "abrupt" not in result["window_notes"]
     assert result["scores"]["mae_deg"].notna().all() and (result["scores"]["n_test"] > 0).all()
+    # 図：選べなかった期間は図を作らずに理由を表示し、選べた期間の図は描く（CLI と Notebook で共通）
+    assert plotting.plot_example(result, "calm") is None
+    assert result["window_notes"]["calm"] in capsys.readouterr().out
+    fig = plotting.plot_example(result, "abrupt")
+    assert fig is not None
+    plt.close(fig)
 
 
 def test_no_example_window_when_the_period_is_shorter_than_the_window(three_year_weather, experiment2):
     short = experiment2["forecasts"].iloc[:30]
     assert (short["excluded"] == "").any()
     assert ex.choose_example_windows(three_year_weather, short) == {"calm": None, "abrupt": None}
+
+
+def test_experiment2_with_an_evaluation_period_shorter_than_the_window(two_year_weather):
+    """評価期間が48時間に満たないときは、条件を緩めずにどちらの例も選ばず、成績だけを返す。"""
+    split = wp.last_days_split(two_year_weather, test_days=1)
+    result = ex.experiment_features(two_year_weather, split, "linear", horizon=3, max_horizon=3)
+    assert result["windows"] == {"calm": None, "abrupt": None} and result["examples"] == {}
+    assert set(result["window_notes"]) == {"calm", "abrupt"}
+    assert (result["scores"]["n_test"] > 0).all()
 
 
 def test_example_window_plots_forecasts_at_their_target_time(experiment2):
@@ -196,15 +244,45 @@ def test_lags_and_max_horizon_reach_the_selection_and_every_experiment(three_yea
         calls.append((tuple(lags), max_horizon))
         return original(weather, horizon, split, stage, lags, max_horizon)
 
+    trained = []
+    original_uv, original_angle = wp.fit_predict_uv, wp.fit_predict_angle
+
+    def recording_uv(method, train, rows, columns, seed=0):
+        trained.append(list(columns))
+        return original_uv(method, train, rows, columns, seed)
+
+    def recording_angle(method, train, rows, columns, seed=0):
+        trained.append(list(columns))
+        return original_angle(method, train, rows, columns, seed)
+
     monkeypatch.setattr(wp, "prepare_stage", recording)
+    monkeypatch.setattr(wp, "fit_predict_uv", recording_uv)
+    monkeypatch.setattr(wp, "fit_predict_angle", recording_angle)
     options = {"lags": (0, 1, 3), "max_horizon": 48}
     ex.select_integrated(three_year_weather, split, candidates=["linear"], **options)
     ex.experiment_angle(three_year_weather, split, methods=("linear",), **options)
     ex.experiment_features(three_year_weather, split, "linear", **options)
     result = ex.experiment_horizons(three_year_weather, split, "linear", [1, 48], **options)
     assert len(calls) == 5 and set(calls) == {((0, 1, 3), 48)}
+    # 学習に渡した入力の列：過去の観測を使うモデルは、u, v の lags と、その時間の変化だけを使う
+    wind_inputs = [{name for name in columns if name.startswith(("u_lag", "u_change"))}
+                   for columns in trained if "u_lag0" in columns]
+    assert len(wind_inputs) == 7   # 選択1、実験1（u, v と角度）2、実験2（recent と統合）2、実験3（2つの予測時間）2
+    assert all(names == {"u_lag0", "u_lag1", "u_lag3", "u_change_1h", "u_change_3h"} for names in wind_inputs)
     test_hours = (split["end"] - split["test_start"]) // pd.Timedelta(hours=1) + 1
     assert (result["scores"]["n_issue"] == test_hours - 48).all()   # 48時間先まで収まる予測起点
+
+
+def test_lead_time_longer_than_max_horizon_is_reported_before_computing(three_year_weather, split, monkeypatch):
+    with pytest.raises(ValueError, match="max_horizon"):
+        ex.experiment_features(three_year_weather, split, "linear", horizon=6, max_horizon=3)
+
+    def must_not_run(*args, **kwargs):
+        raise AssertionError("予測時間を確かめる前に計算を始めた")
+
+    monkeypatch.setattr(wp, "prepare_stage", must_not_run)
+    with pytest.raises(ValueError, match="max_horizon"):   # 1時間先などを計算してから止まるのではない
+        ex.experiment_horizons(three_year_weather, split, "linear", [1, 24, 72], max_horizon=48)
 
 
 def test_experiment3_uses_common_issue_times_and_reports_counts(three_year_weather, split):

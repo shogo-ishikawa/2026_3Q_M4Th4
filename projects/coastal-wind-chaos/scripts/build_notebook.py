@@ -524,17 +524,17 @@ md("""
 - **急な変化のない穏やかな期間**：風の欠測も静穏もなく、平均風速が中央値以上の48時間のうち、3時間の風ベクトルの変化の最大値が最も小さい期間
 - **急変を含む期間**：3時間の風ベクトルの変化が最も大きい時刻を真ん中に含む48時間
 
-図の横軸は**対象時刻**です。3時間先の予報は、予報を出した時刻の3時間後の位置に描いています。灰色が観測、色が予報です。
+図の横軸は**対象時刻**です。3時間先の予報は、予報を出した時刻の3時間後の位置に描いています。灰色が観測、色が予報です。欠測が多いデータなどで規則どおりに選べない期間があるときは、条件を緩めて別の期間を選ぶことはせず、その図だけを省いて理由を表示します（成績の表はそのまま使えます）。
 """)
 
 code("""
-print(exp2["windows"])
-plotting.plot_example_window(exp2["examples"]["calm"], exp2["models"], "calm_window")
+print(exp2["windows"])                  # 選べなかった期間は None（理由は exp2["window_notes"]）
+plotting.plot_example(exp2, "calm")     # 選べなかったときは、図を作らずに理由を表示する
 plt.show()
 """)
 
 code("""
-plotting.plot_example_window(exp2["examples"]["abrupt"], exp2["models"], "abrupt_window")
+plotting.plot_example(exp2, "abrupt")
 plt.show()
 """)
 

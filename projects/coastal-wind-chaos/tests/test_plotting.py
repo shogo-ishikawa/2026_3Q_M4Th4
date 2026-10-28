@@ -16,6 +16,7 @@ from matplotlib import font_manager  # noqa: E402
 from matplotlib.text import Text  # noqa: E402
 
 from coastal_wind_chaos import lorenz_demo, plotting  # noqa: E402
+from coastal_wind_chaos import wind_pipeline as wp  # noqa: E402
 
 FORBIDDEN_WORDS = ["limit", "wall", "barrier", "uniform random guess", "限界", "壁"]
 
@@ -66,6 +67,26 @@ def test_error_figures_label_the_90_degree_line_as_a_reference(scores):
         assert texts.count(plotting.RANDOM_LINE_TEXT) == 1
         check_no_forbidden_words(texts)
     check_no_forbidden_words(figure_texts(plotting.plot_vector_rmse_vs_horizon(scores)))
+
+
+def span_width_hours(patch):
+    """axvspan で塗った範囲の横幅（時間）。matplotlib の版によって長方形か多角形になる。"""
+    if hasattr(patch, "get_width"):
+        width_days = patch.get_width()
+    else:
+        xs = patch.get_xy()[:, 0]
+        width_days = xs.max() - xs.min()
+    return round(width_days * 24, 6)
+
+
+def test_split_figure_uses_and_states_the_max_horizon(two_year_weather):
+    """分割の図の濃い部分は、計算に渡した max_horizon の長さで、その値を図に書く。"""
+    split = wp.last_days_split(two_year_weather, test_days=120, validation_days=60)
+    fig = plotting.plot_time_split(two_year_weather, split, 48)
+    darker = [patch for patch in fig.axes[0].patches if patch.get_alpha() == 0.35]
+    assert len(darker) == 3 and all(span_width_hours(patch) == 48 for patch in darker)
+    texts = figure_texts(fig)
+    assert any("48 h" in text and "max_horizon" in text for text in texts)
 
 
 def test_every_panel_of_the_scenario_figure_has_the_full_label(scores):

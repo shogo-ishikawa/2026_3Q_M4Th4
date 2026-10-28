@@ -1229,6 +1229,9 @@ def run_horizon_experiment(weather, horizons, models=DEFAULT_MODELS, split=None,
         split = test_start_split(weather, test_start) if test_start is not None else year_split(weather)
     if max_horizon is None:
         max_horizon = max(COMMON_MAX_HORIZON, max(horizons))
+    if max(horizons) > max_horizon:  # 計算を始める前に知らせる（途中の予測時間まで計算してから止まらない）
+        raise ValueError(f"予測時間 {max(horizons)} が max_horizon（{max_horizon}）より長いです。"
+                         f"max_horizon を {max(horizons)} 以上にするか、予測時間を短くしてください。")
     tables = []
     for horizon in horizons:
         forecasts = forecast_stage(weather, horizon, models, split, stage, lags, max_horizon, seed)
