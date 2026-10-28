@@ -4,14 +4,18 @@
 同じ形式の合成CSVを、同じ関数で読み込みます。
 
 時刻は日本標準時（JST）で、タイムゾーン情報を持たない日時として扱います。
-各行の時刻は、その時刻に終わる1時間の終わりを表します。例えば「2024/1/1 1:00:00」の
+各行の時刻は、その行の値が表す1時間の終わりの時刻です。例えば「2024/1/1 1:00:00」の
 日照時間は0時から1時までの合計、気温と気圧は1時の値、風向・風速は1時までの
-10分間の平均です。1日の最後の行は翌日の「0:00:00」（＝24時）です。
+10分間の平均です。1日の最後の行は翌日の「00:00:00」（＝24時）です。
+
+予測を出す時刻を「予測時刻」（コードでは issue_time）、予測の対象になる時刻を
+「対象時刻」（target_time）と呼びます。
 """
 
 import csv
 import io
 import re
+import warnings
 from pathlib import Path
 
 import numpy as np
@@ -21,6 +25,7 @@ from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.multioutput import MultiOutputRegressor
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
+from threadpoolctl import threadpool_limits
 
 # 北から時計回りの16方位。番号 × 22.5 が角度（度）になる。
 DIRECTION_LABELS = [
@@ -31,7 +36,8 @@ CALM_LABEL = "静穏"
 CALM_SPEED_MS = 0.2  # 風速がこの値以下なら「静穏」（風向なし）とする
 
 # 正解と無関係に、0〜360度から一様ランダムに選んだ方向を予測とした場合の誤差の期待値。
-# 「あらゆる予測の限界」ではない。偏りのある風向なら、気候値予報などはこれより小さくなる。
+# 「あらゆる予測の限界」ではない。偏りのある風向なら、気候値予報などはこれより小さくなる
+# ことが多い（必ずではない）。
 RANDOM_DIRECTION_EXPECTED_ERROR_DEG = 90.0
 
 # 気象庁CSVの要素名 → このプログラムで使う列名
@@ -98,9 +104,11 @@ def direction_label_to_degrees(label):
 
 
 def degrees_to_direction_label(degrees):
-    """度を最も近い16方位の文字に変える（配列も可）。"""
-    index = np.round(np.asarray(degrees, dtype=float) / 22.5).astype(int) % 16
-    return np.array(DIRECTION_LABELS)[index]
+    """度を最も近い16方位の文字に変える（配列も可）。風向が決まらない（NaN）ときは None。"""
+    degrees = np.asarray(degrees, dtype=float)
+    index = np.round(np.nan_to_num(degrees) / 22.5).astype(int) % 16
+    labels = np.array(DIRECTION_LABELS, dtype=object)[index]
+    return np.where(np.isnan(degrees), None, labels)
 
 
 def normalise_degrees(degrees):
@@ -151,10 +159,15 @@ def angular_error(true_deg, predicted_deg):
 
 
 def circular_mean_deg(directions_deg):
-    """風向の平均。単位ベクトル（cos, sin）を平均してから角度に戻す。"""
+    """風向の平均。単位ベクトル（cos, sin）を平均してから角度に戻す。
+
+    北と南のように向きが打ち消し合うと、平均の向きは決まらないので NaN を返す。
+    """
     radians = np.deg2rad(np.asarray(directions_deg, dtype=float))
     mean_sin = np.nanmean(np.sin(radians))
     mean_cos = np.nanmean(np.cos(radians))
+    if not np.hypot(mean_sin, mean_cos) > 1e-9:
+        return np.nan
     degrees = np.round(np.rad2deg(np.arctan2(mean_sin, mean_cos)), 9)  # 359.9999… を 0 にそろえる
     return float(normalise_degrees(degrees)) + 0.0  # + 0.0 で「-0.0」を「0.0」にする
 
@@ -185,17 +198,26 @@ def read_text(path, encoding=None):
         return raw.decode("cp932")
 
 
-LITERAL_TIME_PATTERN = r"(\d{4})/(\d{1,2})/(\d{1,2}) (\d{1,2}):(\d{2})(?::\d{2})?"
+# 「2024/2/28 1:00:00」の形（表計算ソフトで保存し直したときの「2024-02-28 01:00:00」も読む）
+LITERAL_TIME_PATTERN = r"(\d{4})[/-](\d{1,2})[/-](\d{1,2}) (\d{1,2}):(\d{2})(?::\d{2})?"
+
+
+def count_time_columns(row):
+    """日時の見出しの行なら、日時の列数（「年月日時」は1、「年,月,日,時」は4）。見出しでなければ0。"""
+    first_cells = [cell.strip() for cell in row[:4]]
+    if first_cells[:1] == ["年月日時"]:
+        return 1
+    if first_cells == ["年", "月", "日", "時"]:
+        return 4
+    return 0
 
 
 def find_header_row(rows):
-    """日時の見出し（「年月日時」または「年,月,日,時」）がある行の番号と、日時の列数を返す。"""
+    """日時の見出しがある行の番号と、日時の列数を返す。"""
     for number, row in enumerate(rows):
-        first_cells = [cell.strip() for cell in row[:4]]
-        if first_cells[:1] == ["年月日時"]:
-            return number, 1
-        if first_cells == ["年", "月", "日", "時"]:
-            return number, 4
+        n_time_columns = count_time_columns(row)
+        if n_time_columns > 0:
+            return number, n_time_columns
     raise ValueError(
         "「年月日時」の見出し行が見つかりません。気象庁の「過去の気象データ・ダウンロード」で、"
         "時別値を「すべて数値で格納」でダウンロードしたCSV"
@@ -210,11 +232,29 @@ def is_data_row(row, n_time_columns):
     return len(row) >= 4 and all(cell.strip().isdigit() for cell in row[:4])
 
 
+def drop_trailing_empty_cells(row):
+    """表計算ソフトで保存し直すと行末に付くことがある、空の列を除く。"""
+    while row and not row[-1].strip():
+        row = row[:-1]
+    return row
+
+
 def check_single_station(station_row):
-    """複数地点が1つのファイルに入っていないか確かめる。"""
+    """複数地点が1つのファイルに入っていないか確かめ、地点名を返す。"""
     names = {name.strip() for name in station_row if name.strip()}
     if len(names) > 1:
         raise ValueError(f"複数の地点が含まれています: {sorted(names)}。1地点ずつダウンロードしてください。")
+    return names.pop() if names else ""
+
+
+def check_unique_names(names):
+    """同じ列名が2回以上ないか確かめる（同じ名前の地点が2つ入っているときなど）。"""
+    repeated = sorted({name for name in names if names.count(name) > 1})
+    if repeated:
+        raise ValueError(
+            f"同じ名前の列が複数あります: {repeated[:3]}。同じ名前の地点が2つ入っていないか確かめ、"
+            "1地点ずつダウンロードしてください。"
+        )
 
 
 def make_column_names(header, sub_rows, n_time_columns):
@@ -258,37 +298,23 @@ def parse_time_cells(time_cells, n_time_columns):
     return make_times(numbers[0], numbers[1], numbers[2], numbers[3])
 
 
-def read_jma_csv(path, encoding=None):
-    """気象庁形式の時別値CSVを読み、時刻を行の名前（index）にした表を返す。
-
-    path にファイルの一覧を渡すと、つなげて1つの表にする（重複した時刻は最初のものを使う）。
-    風向は文字のまま（wind_direction 列）、そのほかの値と品質情報は数値に変える。
-    空欄は欠損（NaN）になる。
-    """
-    if isinstance(path, (list, tuple)):
-        tables = [read_jma_csv(one_path, encoding) for one_path in path]
-        combined = pd.concat(tables).sort_index()
-        return combined[~combined.index.duplicated(keep="first")]
-
-    rows = list(csv.reader(io.StringIO(read_text(path, encoding))))
-    header_number, n_time_columns = find_header_row(rows)
-    if header_number > 0:
-        check_single_station(rows[header_number - 1])
-    first_data = header_number + 1
-    while first_data < len(rows) and not is_data_row(rows[first_data], n_time_columns):
-        first_data += 1
-    names = make_column_names(rows[header_number], rows[header_number + 1:first_data], n_time_columns)
-
+def collect_data_rows(rows, n_time_columns, n_values):
+    """データの行から、日時の部分と値の部分を取り出す。"""
     time_cells = []
     value_cells = []
-    for row in rows[first_data:]:
+    for row in rows:
+        if count_time_columns(row) > 0:
+            raise ValueError("見出し行が2回以上あります。ファイルをつなげずに、"
+                             "ファイルの一覧（例：[\"2023.csv\", \"2024.csv\"]）を渡してください。")
         if is_data_row(row, n_time_columns):
-            values = row[n_time_columns:n_time_columns + len(names)]
+            values = row[n_time_columns:n_time_columns + n_values]
             time_cells.append(row[:n_time_columns])
-            value_cells.append(values + [""] * (len(names) - len(values)))
-    if not value_cells:
-        raise ValueError("データの行がありません。期間や項目を選び直してダウンロードしてください。")
+            value_cells.append(values + [""] * (n_values - len(values)))
+    return time_cells, value_cells
 
+
+def make_table(time_cells, value_cells, names, n_time_columns):
+    """取り出した文字列から表を作る。風向は文字のまま、ほかは数値にする（空欄は NaN）。"""
     table = pd.DataFrame(value_cells, columns=names, dtype=object)
     table.index = parse_time_cells(time_cells, n_time_columns)
     for column in table.columns:
@@ -298,6 +324,51 @@ def read_jma_csv(path, encoding=None):
         else:
             table[column] = pd.to_numeric(table[column].str.strip(), errors="coerce")
     return table.sort_index()
+
+
+def join_tables(tables, paths):
+    """同じ地点・同じ形式の表をつなげる。重複した時刻は、先に渡したファイルの値を使う。"""
+    for table, path in zip(tables[1:], paths[1:]):
+        if table.attrs.get("station") != tables[0].attrs.get("station"):
+            raise ValueError(f"{path} は別の地点（{table.attrs.get('station')}）のファイルです。"
+                             "同じ地点のファイルだけを渡してください。")
+        if set(table.columns) != set(tables[0].columns):
+            raise ValueError(f"{path} は、ほかのファイルと項目や表示オプションが違います。"
+                             "同じ設定でダウンロードしたファイルだけを渡してください。")
+    combined = pd.concat(tables)
+    combined = combined[~combined.index.duplicated(keep="first")]  # 並べ替える前に除くと、先のファイルの行が残る
+    combined = combined.sort_index()
+    combined.attrs["station"] = tables[0].attrs.get("station", "")
+    return combined
+
+
+def read_jma_csv(path, encoding=None):
+    """気象庁形式の時別値CSVを読み、時刻を行の名前（index）にした表を返す。
+
+    path にファイルの一覧を渡すと、つなげて1つの表にする。重複した時刻は、先に渡したファイルの
+    値を使う（新しくダウンロードしたファイルを先に渡すと、修正後の値が使われる）。
+    風向は文字のまま（wind_direction 列）、そのほかの値と品質情報は数値に変える。
+    空欄は欠損（NaN）になる。地点名は表の attrs["station"] に入れる。
+    """
+    if isinstance(path, (list, tuple)):
+        return join_tables([read_jma_csv(one_path, encoding) for one_path in path], path)
+
+    rows = list(csv.reader(io.StringIO(read_text(path, encoding))))
+    header_number, n_time_columns = find_header_row(rows)
+    station = check_single_station(rows[header_number - 1]) if header_number > 0 else ""
+    first_data = header_number + 1
+    while first_data < len(rows) and not is_data_row(rows[first_data], n_time_columns):
+        first_data += 1
+    if first_data == len(rows):
+        raise ValueError("日時で始まるデータの行がありません。日時が「2024/2/28 1:00:00」の形か"
+                         "（表計算ソフトで保存し直すと変わることがある）、期間や項目を確かめてください。")
+    header = drop_trailing_empty_cells(rows[header_number])
+    names = make_column_names(header, rows[header_number + 1:first_data], n_time_columns)
+    check_unique_names(names)
+    time_cells, value_cells = collect_data_rows(rows[first_data:], n_time_columns, len(names))
+    table = make_table(time_cells, value_cells, names, n_time_columns)
+    table.attrs["station"] = station
+    return table
 
 
 # ---------------------------------------------------------------------------
@@ -311,15 +382,23 @@ def fill_no_phenomenon(raw, min_quality=5):
     現象なし情報の列がない地点（アメダス）では、夜の日照時間が空欄で、品質情報は正常（8）だった
     （2026年10月にダウンロードしたファイルで確認。気象庁のヘルプには書かれていない）。
     どちらも「その1時間に日照（降水）がなかった」として 0 時間（0 mm）にそろえる。
-    品質情報が低い空欄（欠測など）は 0 にしない。0 にした行は「列名_blank_as_zero」に記録する。
+    品質情報が 4 未満の空欄（疑問値・欠測・観測していない）は、min_quality に関係なく 0 にしない。
+    0 にした行は「列名_blank_as_zero」に記録する。
+    品質情報も現象なし情報もない日照時間は、夜の空欄と欠測を区別できないので使わない（すべて欠損にする）。
     """
     table = raw.copy()
     for column in ["sunshine_h", "precipitation_mm"]:
         if column not in raw.columns:
             continue
+        flags = {column + "_no_phenomenon", column + "_quality"} & set(raw.columns)
+        if column == "sunshine_h" and not flags:
+            # 昼の値だけ残すと、予測の表から夜の行がすべて消えてしまうので、日照時間は使わない
+            table[column] = np.nan
+            table[column + "_blank_as_zero"] = False
+            continue
         blank = raw[column].isna()
         no_phenomenon = raw.get(column + "_no_phenomenon", pd.Series(np.nan, index=raw.index)) == 1
-        good_quality = raw.get(column + "_quality", pd.Series(np.nan, index=raw.index)) >= min_quality
+        good_quality = raw.get(column + "_quality", pd.Series(np.nan, index=raw.index)) >= max(min_quality, 4)
         filled = (blank & (no_phenomenon | good_quality)).to_numpy()
         table.loc[filled, column] = 0.0
         table[column + "_blank_as_zero"] = filled
@@ -374,8 +453,7 @@ def to_hourly_index(table):
     """
     if (table.index.minute != 0).any() or (table.index.second != 0).any():
         raise ValueError("毎正時でない時刻があります。1時間ごとの値（時別値）を使ってください。")
-    table = table.sort_index()
-    table = table[~table.index.duplicated(keep="first")]
+    table = table[~table.index.duplicated(keep="first")].sort_index()  # 重複は先に除き、最初の行を残す
     full_index = pd.date_range(table.index.min(), table.index.max(),
                                freq=pd.Timedelta(hours=1), name="time")
     hourly = table.reindex(full_index)
@@ -396,6 +474,9 @@ def prepare_weather(raw, min_quality=5):
     """
     if "wind_speed_ms" not in raw.columns or "wind_direction" not in raw.columns:
         raise ValueError("風速と風向の列がありません。ダウンロードの項目で「風向・風速」を選んでください。")
+    if raw["wind_speed_ms"].notna().sum() == 0:
+        raise ValueError("風速の値が1つもありません。品質情報が0なら、この地点では風向・風速を観測していません。"
+                         "風向・風速を観測している地点を選んでください。")
     table = fill_no_phenomenon(raw, min_quality)
     table = apply_quality(table, min_quality)
     table = add_direction_degrees(table)
@@ -449,7 +530,7 @@ def summarise_weather(weather):
     for column in ["temperature_c", "sea_level_pressure_hpa", "station_pressure_hpa", "sunshine_h"]:
         if column in weather.columns:
             missing = int(weather[column].isna().sum())
-            note = "（すべて欠損：この地点では観測していない可能性）" if missing == len(weather) else ""
+            note = "（すべて欠損：この地点では観測していないか、品質情報がなく使えない）" if missing == len(weather) else ""
             rows.append((f"{column} が欠損の時刻", f"{missing}{note}"))
     if "sunshine_h_blank_as_zero" in weather.columns:
         filled = weather["sunshine_h_blank_as_zero"].to_numpy(dtype=bool)
@@ -464,7 +545,10 @@ def summarise_weather(weather):
     rows.append(("品質情報の列", "あり" if has_quality else
                  "なし（欠測・疑問値を区別できない。「利用上注意が必要なデータの扱い」で"
                  "情報をつける設定にしてダウンロードし直すとよい）"))
-    rows.append(("均質番号が変わった時刻（観測環境の変化。ファイルの境目も含む）", homogeneity_changes(weather)))
+    has_homogeneity = any(column.endswith("_homogeneity") for column in weather.columns)
+    rows.append(("均質番号が変わった時刻（観測環境の変化。ファイルの境目も含む）",
+                 homogeneity_changes(weather) if has_homogeneity else
+                 "均質番号の列なし（観測環境の変化を確かめられない）"))
     return pd.DataFrame(rows, columns=["項目", "値"])
 
 
@@ -513,8 +597,19 @@ def pressure_column(weather):
     return None
 
 
+def check_hours(horizon, lags):
+    """予測時間と「何時間前」が0以上の整数か確かめる。
+
+    負の値を使うと、予測時刻より後の観測が入力に入ってしまう（リーク）。
+    """
+    for value in [horizon, *lags]:
+        if not isinstance(value, (int, np.integer)) or value < 0:
+            raise ValueError(f"予測時間と lags は0以上の整数（時間）にしてください: {value!r}")
+
+
 def make_forecast_table(weather, horizon, lags=LAG_HOURS):
-    """予測時刻 t の情報から、horizon 時間後（t + horizon）の風を予測するための表を作る。
+    """予測時刻（予測を出す時刻）t の情報から、horizon 時間後の対象時刻 t + horizon の風を
+    予測するための表を作る。
 
     1行が1つの予測時刻 t（行の名前 issue_time）。
     - 目的変数：t + horizon の u, v（target_u, target_v）
@@ -523,6 +618,7 @@ def make_forecast_table(weather, horizon, lags=LAG_HOURS):
     lags には必ず 0（予測時刻の値）を含める（持続予報に使うため）。
     """
     check_hourly(weather)
+    check_hours(horizon, lags)
     lags = sorted(set(lags) | {0})
     table = pd.DataFrame(index=weather.index.rename("issue_time"))
     table["target_time"] = weather.index + pd.Timedelta(hours=horizon)
@@ -668,10 +764,15 @@ def make_regressor(method, seed=0):
 
 
 def fit_predict_uv(method, train, test, columns, seed=0):
-    """学習用の表でモデルを学習し、テスト用の表で u, v を予測する。"""
+    """学習用の表でモデルを学習し、テスト用の表で u, v を予測する。
+
+    並列計算は1スレッドにする。ほかの処理と同時に動かしたときに勾配ブースティングが
+    極端に遅くなるのを防ぐためで、結果は変わらない。
+    """
     model = make_regressor(method, seed)
-    model.fit(train[columns].to_numpy(), train[["target_u", "target_v"]].to_numpy())
-    predicted = model.predict(test[columns].to_numpy())
+    with threadpool_limits(limits=1):
+        model.fit(train[columns].to_numpy(), train[["target_u", "target_v"]].to_numpy())
+        predicted = model.predict(test[columns].to_numpy())
     return predicted[:, 0], predicted[:, 1]
 
 
@@ -680,6 +781,7 @@ def fit_predict_degrees_as_numbers(train, test):
 
     入力は予測時刻の風向（度）と対象時刻の時（0〜23）、出力は対象時刻の風向（度）。
     350度と10度が近いことを知らないため、北寄りの風で大きく外れやすい。
+    時刻もふつうの数として使うので、23時と0時が近いことも知らない。
     """
     columns = ["issue_direction_deg", "target_hour"]
     usable = train.dropna(subset=columns + ["target_direction_deg"])
@@ -712,6 +814,51 @@ def predict_direction(spec, train, test, climatology, recent, seed=0):
 # 実験と評価
 # ---------------------------------------------------------------------------
 
+def warn_if_optional_inputs_drop_rows(table, recent, test_start):
+    """気温・気圧・日照の欠損だけが理由で、テスト期間の行が5%より多く評価から外れるなら知らせる。"""
+    test = table[table.index >= pd.Timestamp(test_start)]
+    optional = [name for name in recent if name in OPTIONAL_RECENT_COLUMNS]
+    wind = [name for name in recent if name not in OPTIONAL_RECENT_COLUMNS] + ["target_u", "target_v"]
+    wind_ok = test[wind].notna().all(axis=1)
+    if not optional or not wind_ok.any():
+        return
+    share = test.loc[wind_ok, optional].isna().any(axis=1).mean()
+    if share > 0.05:
+        missing = [name for name in optional if test.loc[wind_ok, name].isna().any()]
+        warnings.warn(f"テスト期間の {share:.0%} の時刻で {missing} が欠けているため、すべての手法の評価から外しました。"
+                      "途中で観測が止まった要素の列を weather から消してから実験すると、評価する時刻が減りません。")
+
+
+def prepare_split(weather, horizon, test_start, lags=LAG_HOURS):
+    """予測用の表を作り、使う列を決め、欠けた行を除いて、学習用とテスト用に分ける。"""
+    table = make_forecast_table(weather, horizon, lags)
+    recent = recent_columns(table[table.index < pd.Timestamp(test_start)])
+    warn_if_optional_inputs_drop_rows(table, recent, test_start)
+    table = table.dropna(subset=list(CALENDAR_COLUMNS) + recent + ["target_u", "target_v"])
+    train, test = split_train_test(table, test_start)
+    if len(train) < 24 * 30:
+        raise ValueError(
+            f"学習用のデータが {len(train)} 行しかありません。テスト期間は {pd.Timestamp(test_start)} から最後までで、"
+            f"学習にはそれより前の30日以上のデータが必要です（データは {weather.index.min()}〜{weather.index.max()}）。"
+            "test_days を短くするか、期間を延ばしてください。"
+        )
+    return train, test, recent
+
+
+def rows_with_directions(table):
+    """予測時刻と対象時刻の両方で風向が決まる（静穏・欠測でない）行だけを残す。"""
+    return table[table["target_direction_deg"].notna() & table["issue_direction_deg"].notna()]
+
+
+def forecast_rows(rows, train, models, weather, test_start, recent, seed=0):
+    """rows の各行について、各手法の予測風向を並べた表を作る（学習は train で行う）。"""
+    climatology = fit_climatology(weather, test_start)
+    forecasts = rows[["target_time", "target_hour", "target_direction_deg"]].copy()
+    for spec in models:
+        forecasts[spec] = predict_direction(spec, train, rows, climatology, recent, seed)
+    return forecasts
+
+
 def forecast_one_horizon(weather, horizon, models=DEFAULT_MODELS, test_start=None,
                          lags=LAG_HOURS, seed=0):
     """1つの予測時間について、テスト期間の各時刻での各手法の予測風向を並べた表を返す。
@@ -721,22 +868,24 @@ def forecast_one_horizon(weather, horizon, models=DEFAULT_MODELS, test_start=Non
     """
     if test_start is None:
         test_start = default_test_start(weather)
-    table = make_forecast_table(weather, horizon, lags)
-    recent = recent_columns(table[table.index < pd.Timestamp(test_start)])
-    table = table.dropna(subset=list(CALENDAR_COLUMNS) + recent + ["target_u", "target_v"])
-    train, test = split_train_test(table, test_start)
-    test = test[test["target_direction_deg"].notna() & test["issue_direction_deg"].notna()]
-    if len(train) < 24 * 30 or len(test) == 0:
-        raise ValueError(
-            f"学習用（{len(train)}行）またはテスト用（{len(test)}行）のデータが足りません。"
-            "期間とテスト開始時刻を確認してください。"
-        )
+    train, test, recent = prepare_split(weather, horizon, test_start, lags)
+    test = rows_with_directions(test)
+    if len(test) == 0:
+        raise ValueError(f"テスト期間（{pd.Timestamp(test_start)} 以降）に評価できる時刻がありません。期間を確認してください。")
+    return forecast_rows(test, train, models, weather, test_start, recent, seed)
 
-    climatology = fit_climatology(weather, test_start)
-    forecasts = test[["target_time", "target_hour", "target_direction_deg"]].copy()
-    for spec in models:
-        forecasts[spec] = predict_direction(spec, train, test, climatology, recent, seed)
-    return forecasts
+
+def forecast_training_period(weather, horizon, models=DEFAULT_MODELS, test_start=None,
+                             lags=LAG_HOURS, seed=0):
+    """学習期間の各時刻を、その期間で学習したモデル自身で予測する（過学習を調べる用）。
+
+    学習に使った時刻の成績なので、ふつうの評価には使わない。テスト期間の成績と比べて、
+    学習期間だけよく当たるなら、学習期間の偶然の変動まで覚えている（過学習）と考えられる。
+    """
+    if test_start is None:
+        test_start = default_test_start(weather)
+    train, _, recent = prepare_split(weather, horizon, test_start, lags)
+    return forecast_rows(rows_with_directions(train), train, models, weather, test_start, recent, seed)
 
 
 def score_forecasts(forecasts, models):
@@ -748,7 +897,8 @@ def score_forecasts(forecasts, models):
             "model": spec,
             "label": model_label(spec),
             "mae_deg": float(np.mean(errors)),
-            "within_45_pct": float(100 * np.mean(errors <= 45)),
+            # 16方位どうしのちょうど45度を、計算の丸め誤差で「外れ」にしない
+            "within_45_pct": float(100 * np.mean(errors <= 45 + 1e-9)),
             "n_test": int(len(errors)),
         })
     return pd.DataFrame(rows)

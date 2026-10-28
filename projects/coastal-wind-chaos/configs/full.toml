@@ -1,4 +1,4 @@
-# 予測時間・手法・シナリオを増やした設定（CPUだけで数分程度を想定）。
+# 予測時間・手法・シナリオを増やした設定（CPUだけで1〜2分程度を想定）。
 # パスは作品フォルダ projects/coastal-wind-chaos/ を基準にします。
 # 使い方：python scripts/run_experiments.py --config configs/full.toml
 

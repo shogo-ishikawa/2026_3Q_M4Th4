@@ -24,8 +24,21 @@ def git_commit(folder="."):
     return result.stdout.strip()
 
 
+def git_has_changes(folder="."):
+    """folder の中に、コミットしていない変更があれば True（Gitが使えなければ None）。"""
+    try:
+        result = subprocess.run(["git", "status", "--porcelain", "--", "."], cwd=Path(folder),
+                                capture_output=True, text=True, check=True)
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return result.stdout.strip() != ""
+
+
 def environment_info(folder="."):
-    """実行環境（Pythonと主なライブラリの版、Gitのコミット）を辞書で返す。結果の記録用。"""
+    """実行環境（Pythonと主なライブラリの版、Gitのコミット）を辞書で返す。結果の記録用。
+
+    git_has_uncommitted_changes が True なら、記録したコミットとは違うコードで実行している。
+    """
     info = {"python": platform.python_version(), "coastal_wind_chaos": __version__}
     for package in ["numpy", "pandas", "scikit-learn", "matplotlib"]:
         try:
@@ -33,4 +46,5 @@ def environment_info(folder="."):
         except PackageNotFoundError:
             info[package] = None
     info["git_commit"] = git_commit(folder)
+    info["git_has_uncommitted_changes"] = git_has_changes(folder)
     return info

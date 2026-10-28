@@ -1,4 +1,4 @@
-# 授業中にすぐ試すための軽い設定（CPUだけで1分程度を想定）。
+# 授業中にすぐ試すための軽い設定（CPUだけで1分以内を想定）。
 # パスは作品フォルダ projects/coastal-wind-chaos/ を基準にします。
 # 使い方：python scripts/run_experiments.py --config configs/fast.toml
 

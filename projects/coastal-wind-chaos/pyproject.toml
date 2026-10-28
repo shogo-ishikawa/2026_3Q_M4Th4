@@ -12,12 +12,13 @@ dependencies = [
     "numpy>=1.26",
     "pandas>=2.2",
     "scikit-learn>=1.4",
+    "threadpoolctl>=3.1",
     "matplotlib>=3.8",
 ]
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
-notebook = ["nbclient>=0.10", "nbformat>=5.9", "ipykernel>=6.17"]
+notebook = ["nbclient>=0.11", "nbformat>=5.11.1", "ipykernel>=6.17.1"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

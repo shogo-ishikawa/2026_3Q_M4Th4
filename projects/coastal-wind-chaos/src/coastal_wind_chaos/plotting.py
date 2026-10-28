@@ -50,8 +50,8 @@ BLUE_RAMP = LinearSegmentedColormap.from_list(
     "blue_ramp",
     [SURFACE, "#cde2fb", "#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95", "#0d366b"],
 )
+# 90度の線の説明。「予測の限界」ではなく「独立な一様ランダム方向予測の期待誤差」と書く。
 RANDOM_LINE_TEXT = "Independent uniform random direction: expected error 90°"
-RANDOM_LINE_SHORT_TEXT = "Uniform random guess: 90°"
 
 
 def apply_style():
@@ -89,11 +89,13 @@ def model_style(spec):
     return MODEL_STYLES.get(spec, (INK_MUTED, "."))
 
 
-def add_random_reference(ax, x_right, text=RANDOM_LINE_TEXT):
+def add_random_reference(ax, x_right):
     """90度の参照線（独立な一様ランダム方向予測の期待誤差）を引く。予測の限界を表す線ではない。"""
     ax.axhline(RANDOM_DIRECTION_EXPECTED_ERROR_DEG, color=INK_MUTED, linewidth=1.0, zorder=1)
-    ax.text(x_right, RANDOM_DIRECTION_EXPECTED_ERROR_DEG + 1.5, text,
-            ha="right", va="bottom", color=INK_SECONDARY, fontsize=8)
+    # 線と重なっても読めるよう、文字の後ろに半透明の背景を付ける
+    ax.text(x_right, RANDOM_DIRECTION_EXPECTED_ERROR_DEG + 1.5, RANDOM_LINE_TEXT,
+            ha="right", va="bottom", color=INK_SECONDARY, fontsize=8, zorder=4,
+            bbox={"boxstyle": "square,pad=0.1", "facecolor": SURFACE, "edgecolor": "none", "alpha": 0.8})
 
 
 # ---------------------------------------------------------------------------
@@ -190,7 +192,7 @@ def plot_scenario_comparison(scenario_scores, models, title="Same methods on dif
             colour, marker, label = SCENARIO_STYLES.get(scenario, (INK_MUTED, ".", scenario))
             ax.plot(part["horizon_h"], part["mae_deg"], color=colour, marker=marker,
                     linewidth=1.5, markersize=5, label=label, zorder=3)
-        add_random_reference(ax, horizons[-1], RANDOM_LINE_SHORT_TEXT)
+        add_random_reference(ax, horizons[-1])
         ax.set_xticks(horizons)
         ax.set_title(model_label(spec, "en"))
         ax.set_xlabel("Lead time (hours ahead)")
@@ -254,7 +256,7 @@ def plot_predictability_times(table, tolerance, growth_rate=lorenz_demo.REFERENC
     errors = np.array(table["initial_error"], dtype=float)
     guide = anchor_time + np.log(anchor_error / errors) / growth_rate
     ax.plot(errors, guide, color=COLOURS[1], linewidth=1.2,
-            label=f"Slope 1/λ: +{np.log(10) / growth_rate:.1f} time units per 10× smaller error")
+            label=f"Guide: ln(10)/λ = {np.log(10) / growth_rate:.1f} time units per 10× smaller error (λ = {growth_rate:.2f})")
     ax.set_xscale("log")
     ax.set_xlabel("Size of the initial error (log scale)")
     ax.set_ylabel(f"Time until distance > {tolerance} (Lorenz units)")

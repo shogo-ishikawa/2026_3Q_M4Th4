@@ -157,7 +157,11 @@ def fit_growth_rate(times, distances, lower, upper):
     log_distance = typical_log_distance(distances)
     in_range = (log_distance > np.log(lower)) & (log_distance < np.log(upper))
     if in_range.sum() < 10:
-        raise ValueError("傾きを求める区間が短すぎます。lower と upper、または n_steps を見直してください。")
+        raise ValueError(
+            "距離が lower から upper の範囲にある時間が短すぎて、傾きを求められません。"
+            "lower・upper・n_steps を見直してください。距離がそもそも増えていない"
+            "（カオスでない。例：RHO = 20）場合にも、このエラーになります。"
+        )
     slope, _ = np.polyfit(times[in_range], log_distance[in_range], 1)
     return slope
 

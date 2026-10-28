@@ -3,7 +3,7 @@
 作品フォルダ（projects/coastal-wind-chaos/）で実行する例：
     python scripts/generate_sample_jma_csv.py
     python scripts/generate_sample_jma_csv.py --preset periodic_only --output data/periodic_only.csv
-    python scripts/generate_sample_jma_csv.py --set ar_strength=2.0 --set front_precursor_hours=0
+    python scripts/generate_sample_jma_csv.py --set ar_strength=2.0 --set front_precursor_hours=0 --output data/strong_ar.csv
 
 できるCSVは合成データで、気象庁の観測値ではありません。
 """
@@ -50,6 +50,7 @@ def parse_args():
 
 
 def main():
+    sys.stdout.reconfigure(encoding="utf-8")  # 出力をファイルに書き出しても、日本語で失敗しないようにする
     args = parse_args()
     changes = dict(args.changes)
     for name in ["seed", "years", "start"]:

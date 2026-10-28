@@ -1,7 +1,8 @@
 """気象庁形式CSVの読込を、実際のダウンロードファイルと同じ構造の小さな例で確かめる。
 
-例の値は作ったもの（実データではない）。見出しの構造・真夜中の書き方・品質情報・
-現象なし情報・静穏の表し方は、気象庁「過去の気象データ・ダウンロード」のCSVに合わせた。
+例の値とダウンロード時刻は、テストのために作ったもの（実際の観測値ではない）。
+見出しの構造・真夜中の書き方・品質情報・現象なし情報・静穏の表し方は、
+気象庁「過去の気象データ・ダウンロード」のCSVの書き方に合わせた。
 """
 
 import numpy as np
@@ -12,11 +13,10 @@ from conftest import write_text
 from coastal_wind_chaos import sample_data
 from coastal_wind_chaos import wind_pipeline as wp
 
-STATION_ROW_OFFICE = "," + ",".join(["テスト地点"] * 22)
 HEADER_OFFICE = [
-    "ダウンロードした時刻：2026/10/28 00:41:57",
+    "ダウンロードした時刻：2000/1/1 00:00:00",
     "",
-    STATION_ROW_OFFICE,
+    "," + ",".join(["テスト地点"] * 22),
     "年月日時,気温(℃),気温(℃),気温(℃),降水量(mm),降水量(mm),降水量(mm),降水量(mm),"
     "日照時間(時間),日照時間(時間),日照時間(時間),日照時間(時間),"
     "風速(m/s),風速(m/s),風速(m/s),風速(m/s),風速(m/s),"
@@ -26,16 +26,16 @@ HEADER_OFFICE = [
     ",品質情報,,品質情報,均質番号,,品質情報,均質番号,,品質情報,均質番号",
 ]
 ROWS_OFFICE = [
-    "2024/2/28 22:00:00,8.0,8,1,0,1,8,1,0,1,8,1,2.5,8,北北東,8,1,1025.0,8,1,1026.0,8,1",
-    "2024/2/28 23:00:00,6.8,8,1,0,1,8,1,0,1,8,1,0.1,8,静穏,8,1,1025.2,8,1,1026.2,8,1",
-    "2024/2/29 00:00:00,6.2,8,1,0,1,8,1,0,1,8,1,2.2,8,南,8,1,1025.4,8,1,1026.4,8,1",
+    "2024/2/28 22:00:00,7.6,8,1,0,1,8,1,0,1,8,1,2.7,8,北北東,8,1,1012.4,8,1,1013.1,8,1",
+    "2024/2/28 23:00:00,7.1,8,1,0,1,8,1,0,1,8,1,0.1,8,静穏,8,1,1012.6,8,1,1013.3,8,1",
+    "2024/2/29 00:00:00,6.9,8,1,0,1,8,1,0,1,8,1,2.4,8,南,8,1,1012.8,8,1,1013.5,8,1",
     "2024/2/29 1:00:00,,1,1,,,1,1,,,1,1,,1,,1,1,,1,1,,1,1",  # 欠測：値と現象なし情報は空欄
-    "2024/2/29 2:00:00,5.4,4,1,0.0,0,8,1,0,1,8,1,2.0,8,西,8,1,1025.3,8,1,1026.3,8,1",
-    "2024/2/29 9:00:00,7.0,8,1,0,1,8,1,0.6,0,8,1,3.0,8,東,8,1,1024.0,8,1,1025.0,8,1",
+    "2024/2/29 2:00:00,5.1,4,1,0.0,0,8,1,0,1,8,1,1.8,8,西,8,1,1012.9,8,1,1013.6,8,1",
+    "2024/2/29 9:00:00,8.3,8,1,0,1,8,1,0.6,0,8,1,3.3,8,東,8,1,1013.4,8,1,1014.1,8,1",
 ]
 
 HEADER_AMEDAS = [
-    "ダウンロードした時刻：2026/10/28 00:42:51",
+    "ダウンロードした時刻：2000/1/1 00:00:00",
     "",
     "," + ",".join(["テスト地点"] * 20),
     "年月日時,気温(℃),気温(℃),気温(℃),降水量(mm),降水量(mm),降水量(mm),"
@@ -46,9 +46,19 @@ HEADER_AMEDAS = [
     ",品質情報,均質番号,,品質情報,均質番号",
 ]
 ROWS_AMEDAS = [
-    "2024/2/28 6:00:00,4.9,8,1,0.0,8,1,,8,1,3.1,8,西北西,8,1,,0,1,,0,1",
-    "2024/2/28 7:00:00,5.7,8,1,0.0,8,1,0.5,8,1,3.9,8,北西,8,1,,0,1,,0,1",
+    "2024/2/28 6:00:00,3.2,8,1,0.0,8,1,,8,1,2.6,8,西北西,8,1,,0,1,,0,1",
+    "2024/2/28 7:00:00,4.4,8,1,0.0,8,1,0.5,8,1,3.3,8,北西,8,1,,0,1,,0,1",
 ]
+
+
+def at(text):
+    return pd.Timestamp(text)
+
+
+def office_row(time, temperature):
+    """気象台の形式の1行（気温だけ変えられる）。"""
+    clock = sample_data.format_time_jma(time)
+    return f"{clock},{temperature},8,1,0,1,8,1,0,1,8,1,2.0,8,北,8,1,1012.0,8,1,1013.0,8,1"
 
 
 @pytest.fixture
@@ -63,80 +73,106 @@ def test_reads_office_layout_column_names_and_midnight(office_csv):
                    "wind_speed_ms_homogeneity", "station_pressure_hpa", "sea_level_pressure_hpa"]:
         assert column in raw.columns
     # 「2024/2/29 00:00:00」は 2/28 の24時 = 2/29 の0時
-    assert pd.Timestamp("2024-02-29 00:00") in raw.index
-    assert raw.loc["2024-02-29 00:00", "wind_direction"] == "南"
+    assert at("2024-02-29 00:00") in raw.index
+    assert raw.loc[at("2024-02-29 00:00"), "wind_direction"] == "南"
+    assert raw.attrs["station"] == "テスト地点"
 
 
 def test_prepare_weather_handles_calm_missing_quality_and_no_phenomenon(office_csv):
     weather = wp.prepare_weather(wp.read_jma_csv(office_csv))
     # 静穏：風向なし、u = v = 0
-    calm = weather.loc["2024-02-28 23:00"]
+    calm = weather.loc[at("2024-02-28 23:00")]
     assert calm["wind_is_calm"] and np.isnan(calm["wind_direction_deg"])
     assert calm["u_ms"] == 0.0 and calm["v_ms"] == 0.0
     # 欠測（品質情報1）はすべて欠損
-    missing = weather.loc["2024-02-29 01:00"]
+    missing = weather.loc[at("2024-02-29 01:00")]
     assert np.isnan(missing["temperature_c"]) and np.isnan(missing["u_ms"])
     # 資料不足値（品質情報4）は既定では使わない
-    assert np.isnan(weather.loc["2024-02-29 02:00", "temperature_c"])
+    assert np.isnan(weather.loc[at("2024-02-29 02:00"), "temperature_c"])
     # 夜の日照時間（現象なし）は 0、昼の値はそのまま
-    assert weather.loc["2024-02-28 22:00", "sunshine_h"] == 0.0
-    assert weather.loc["2024-02-29 09:00", "sunshine_h"] == pytest.approx(0.6)
+    assert weather.loc[at("2024-02-28 22:00"), "sunshine_h"] == 0.0
+    assert weather.loc[at("2024-02-29 09:00"), "sunshine_h"] == pytest.approx(0.6)
     # 南風（南から吹く）は北向き：v > 0
-    assert weather.loc["2024-02-29 00:00", "v_ms"] == pytest.approx(2.2)
+    assert weather.loc[at("2024-02-29 00:00"), "v_ms"] == pytest.approx(2.4)
+
+
+def test_quality_5_is_used_and_quality_2_is_not_by_default(tmp_path):
+    rows = [ROWS_OFFICE[0].replace("7.6,8,1,", "7.6,5,1,", 1), ROWS_OFFICE[2].replace("6.9,8,1,", "6.9,2,1,", 1)]
+    weather = wp.prepare_weather(wp.read_jma_csv(write_text(tmp_path / "q.csv", HEADER_OFFICE + rows)))
+    assert weather.loc[at("2024-02-28 22:00"), "temperature_c"] == pytest.approx(7.6)  # 準正常値（5）は使う
+    assert np.isnan(weather.loc[at("2024-02-29 00:00"), "temperature_c"])  # 疑問値（2）は使わない
 
 
 def test_min_quality_can_accept_insufficient_data(office_csv):
     weather = wp.prepare_weather(wp.read_jma_csv(office_csv), min_quality=4)
-    assert weather.loc["2024-02-29 02:00", "temperature_c"] == pytest.approx(5.4)
+    assert weather.loc[at("2024-02-29 02:00"), "temperature_c"] == pytest.approx(5.1)
 
 
 def test_missing_hours_become_rows_so_shift_means_hours(office_csv):
     weather = wp.prepare_weather(wp.read_jma_csv(office_csv))
     assert len(weather) == 12  # 22時〜翌9時の12時間。3〜8時は行がなかった
-    assert weather.loc["2024-02-29 05:00"].isna()["u_ms"]
+    assert np.isnan(weather.loc[at("2024-02-29 05:00"), "u_ms"])
     wp.check_hourly(weather)
 
 
 def test_amedas_layout_night_sunshine_and_unobserved_pressure(tmp_path):
     path = write_text(tmp_path / "amedas.csv", HEADER_AMEDAS + ROWS_AMEDAS)
     weather = wp.prepare_weather(wp.read_jma_csv(path))
-    assert weather.loc["2024-02-28 06:00", "sunshine_h"] == 0.0  # 空欄だが品質は正常（夜）
-    assert weather.loc["2024-02-28 07:00", "sunshine_h"] == pytest.approx(0.5)
+    assert weather.loc[at("2024-02-28 06:00"), "sunshine_h"] == 0.0  # 空欄だが品質は正常（夜）
+    assert weather.loc[at("2024-02-28 07:00"), "sunshine_h"] == pytest.approx(0.5)
     assert weather["sea_level_pressure_hpa"].isna().all()  # 品質情報0：観測していない
     summary = dict(wp.summarise_weather(weather).to_numpy())
     assert "観測していない" in summary["sea_level_pressure_hpa が欠損の時刻"]
 
 
+def test_blank_sunshine_with_low_quality_never_becomes_zero(tmp_path):
+    rows = [ROWS_AMEDAS[0].replace(",,8,1,2.6,", ",,0,1,2.6,", 1),   # 観測していない（0）
+            ROWS_AMEDAS[1].replace(",0.5,8,1,", ",,1,1,", 1)]        # 欠測（1）
+    weather = wp.prepare_weather(wp.read_jma_csv(write_text(tmp_path / "low.csv", HEADER_AMEDAS + rows)),
+                                 min_quality=0)
+    assert weather["sunshine_h"].isna().all()
+
+
 def test_split_date_columns_with_hour_24_match_literal_dates(tmp_path):
     literal = write_text(tmp_path / "literal.csv", [
-        "ダウンロードした時刻：2026/10/28 00:43:21", "", ",テスト地点,テスト地点,テスト地点,テスト地点,テスト地点,"
-        "テスト地点,テスト地点,テスト地点",
+        "ダウンロードした時刻：2000/1/1 00:00:00", "", "," + ",".join(["テスト地点"] * 8),
         "年月日時,気温(℃),気温(℃),気温(℃),風速(m/s),風速(m/s),風速(m/s),風速(m/s),風速(m/s)",
         ",,,,,,風向,風向,",
         ",,品質情報,均質番号,,品質情報,,品質情報,均質番号",
-        "2024/2/28 23:00:00,6.8,8,1,2.5,8,北東,8,1",
-        "2024/2/29 00:00:00,6.2,8,1,2.2,8,北北東,8,1",
-        "2024/2/29 1:00:00,6.0,8,1,2.0,8,北北東,8,1",
+        "2024/2/28 23:00:00,7.3,8,1,2.7,8,北東,8,1",
+        "2024/2/29 00:00:00,6.9,8,1,2.4,8,北北東,8,1",
+        "2024/2/29 1:00:00,6.6,8,1,2.1,8,北北東,8,1",
     ])
     split = write_text(tmp_path / "split.csv", [
-        "ダウンロードした時刻：2026/10/28 00:43:21", "", ",,,,テスト地点,テスト地点,テスト地点,テスト地点,"
-        "テスト地点,テスト地点,テスト地点,テスト地点",
+        "ダウンロードした時刻：2000/1/1 00:00:00", "", ",,,," + ",".join(["テスト地点"] * 8),
         "年,月,日,時,気温(℃),気温(℃),気温(℃),風速(m/s),風速(m/s),風速(m/s),風速(m/s),風速(m/s)",
         ",,,,,,,,,風向,風向,",
         ",,,,,品質情報,均質番号,,品質情報,,品質情報,均質番号",
-        "2024,2,28,23,6.8,8,1,2.5,8,北東,8,1",
-        "2024,2,28,24,6.2,8,1,2.2,8,北北東,8,1",
-        "2024,2,29,1,6.0,8,1,2.0,8,北北東,8,1",
+        "2024,2,28,23,7.3,8,1,2.7,8,北東,8,1",
+        "2024,2,28,24,6.9,8,1,2.4,8,北北東,8,1",
+        "2024,2,29,1,6.6,8,1,2.1,8,北北東,8,1",
     ])
     from_literal = wp.read_jma_csv(literal)
     from_split = wp.read_jma_csv(split)
     pd.testing.assert_frame_equal(from_literal, from_split)
-    assert from_split.index[1] == pd.Timestamp("2024-02-29 00:00")
+    assert from_split.index[1] == at("2024-02-29 00:00")
+
+
+def test_dates_resaved_with_hyphens_are_read(tmp_path, office_csv):
+    rows = [row.replace("2024/2/28 22:00:00", "2024-02-28 22:00:00") for row in ROWS_OFFICE]
+    resaved = wp.read_jma_csv(write_text(tmp_path / "iso.csv", HEADER_OFFICE + rows))
+    pd.testing.assert_frame_equal(resaved, wp.read_jma_csv(office_csv))
+
+
+def test_trailing_empty_columns_from_a_spreadsheet_are_ignored(tmp_path, office_csv):
+    lines = [line + ",," for line in HEADER_OFFICE + ROWS_OFFICE]
+    pd.testing.assert_frame_equal(wp.read_jma_csv(write_text(tmp_path / "wide.csv", lines)),
+                                  wp.read_jma_csv(office_csv))
 
 
 def test_symbol_mode_file_gives_a_clear_error(tmp_path):
     path = write_text(tmp_path / "symbol.csv", [
-        "ダウンロードした時刻：2026/10/28 00:43:21", "", ",テスト地点,テスト地点",
+        "ダウンロードした時刻：2000/1/1 00:00:00", "", ",テスト地点,テスト地点",
         ",気温(℃),気温(℃)", ",,均質番号", "2024年2月28日1時,5.9,1",
     ])
     with pytest.raises(ValueError, match="すべて数値で格納"):
@@ -145,7 +181,7 @@ def test_symbol_mode_file_gives_a_clear_error(tmp_path):
 
 def test_several_stations_in_one_file_are_rejected(tmp_path):
     path = write_text(tmp_path / "two.csv", [
-        "ダウンロードした時刻：2026/10/28 00:43:21", "", ",地点A,地点A,地点A,地点B,地点B,地点B",
+        "ダウンロードした時刻：2000/1/1 00:00:00", "", ",地点A,地点A,地点A,地点B,地点B,地点B",
         "年月日時,気温(℃),気温(℃),気温(℃),気温(℃),気温(℃),気温(℃)",
         ",,品質情報,均質番号,,品質情報,均質番号",
         "2024/2/28 1:00:00,5.9,8,1,6.0,8,1",
@@ -154,9 +190,26 @@ def test_several_stations_in_one_file_are_rejected(tmp_path):
         wp.read_jma_csv(path)
 
 
+def test_two_stations_with_the_same_name_are_rejected(tmp_path):
+    path = write_text(tmp_path / "same_name.csv", [
+        "ダウンロードした時刻：2000/1/1 00:00:00", "", ",高松,高松,高松,高松,高松,高松",
+        "年月日時,気温(℃),気温(℃),気温(℃),気温(℃),気温(℃),気温(℃)",
+        ",,品質情報,均質番号,,品質情報,均質番号",
+        "2024/2/28 1:00:00,5.9,8,1,6.0,8,1",
+    ])
+    with pytest.raises(ValueError, match="同じ名前の列"):
+        wp.read_jma_csv(path)
+
+
+def test_files_joined_into_one_file_are_rejected(tmp_path):
+    lines = HEADER_OFFICE + ROWS_OFFICE[:2] + HEADER_OFFICE + ROWS_OFFICE[2:]
+    with pytest.raises(ValueError, match="見出し行が2回以上"):
+        wp.read_jma_csv(write_text(tmp_path / "joined.csv", lines))
+
+
 def test_file_without_wind_cannot_be_prepared(tmp_path):
     path = write_text(tmp_path / "nowind.csv", [
-        "ダウンロードした時刻：2026/10/28 00:43:21", "", ",テスト地点,テスト地点,テスト地点",
+        "ダウンロードした時刻：2000/1/1 00:00:00", "", ",テスト地点,テスト地点,テスト地点",
         "年月日時,気温(℃),気温(℃),気温(℃)", ",,品質情報,均質番号", "2024/2/28 1:00:00,5.9,8,1",
     ])
     raw = wp.read_jma_csv(path)
@@ -164,10 +217,18 @@ def test_file_without_wind_cannot_be_prepared(tmp_path):
         wp.prepare_weather(raw)
 
 
+def test_station_that_does_not_observe_wind_gets_a_clear_error(tmp_path):
+    rows = [row.replace(",2.6,8,西北西,8,1,", ",,0,,0,1,").replace(",3.3,8,北西,8,1,", ",,0,,0,1,")
+            for row in ROWS_AMEDAS]
+    raw = wp.read_jma_csv(write_text(tmp_path / "rain_only.csv", HEADER_AMEDAS + rows))
+    with pytest.raises(ValueError, match="観測していません"):
+        wp.prepare_weather(raw)
+
+
 @pytest.mark.parametrize("encoding", ["cp932", "utf-8", "utf-8-sig"])
 def test_encoding_is_detected(tmp_path, encoding):
     path = write_text(tmp_path / "office.csv", HEADER_OFFICE + ROWS_OFFICE, encoding=encoding)
-    assert wp.read_jma_csv(path).loc["2024-02-29 00:00", "wind_direction"] == "南"
+    assert wp.read_jma_csv(path).loc[at("2024-02-29 00:00"), "wind_direction"] == "南"
 
 
 def test_several_files_are_joined_without_duplicate_times(tmp_path):
@@ -178,8 +239,34 @@ def test_several_files_are_joined_without_duplicate_times(tmp_path):
     assert len(joined) == len(ROWS_OFFICE)
 
 
+def test_overlapping_files_keep_the_values_of_the_first_file(tmp_path):
+    header = HEADER_OFFICE
+    old_times = pd.date_range("2024-03-01 01:00", periods=48, freq=pd.Timedelta(hours=1))
+    new_times = pd.date_range("2024-03-02 01:00", periods=48, freq=pd.Timedelta(hours=1))
+    old = write_text(tmp_path / "old.csv", header + [office_row(time, 10.0) for time in old_times])
+    new = write_text(tmp_path / "new.csv", header + [office_row(time, 20.0) for time in new_times])
+    overlap = old_times.intersection(new_times)
+    assert len(overlap) == 24
+    assert (wp.read_jma_csv([old, new]).loc[overlap, "temperature_c"] == 10.0).all()
+    assert (wp.read_jma_csv([new, old]).loc[overlap, "temperature_c"] == 20.0).all()
+
+
+def test_files_from_different_stations_or_options_are_not_joined(tmp_path):
+    first = write_text(tmp_path / "a.csv", HEADER_OFFICE + ROWS_OFFICE[:3])
+    other_station = [line.replace("テスト地点", "別の地点") for line in HEADER_OFFICE]
+    second = write_text(tmp_path / "b.csv", other_station + ROWS_OFFICE[3:])
+    with pytest.raises(ValueError, match="別の地点"):
+        wp.read_jma_csv([first, second])
+    plain = write_text(tmp_path / "c.csv", [
+        "ダウンロードした時刻：2000/1/1 00:00:00", "", ",テスト地点,テスト地点,テスト地点",
+        "年月日時,気温(℃),風速(m/s),風速(m/s)", ",,,風向", ",,,", "2024/3/1 1:00:00,5.9,2.5,北東",
+    ])
+    with pytest.raises(ValueError, match="項目や表示オプション"):
+        wp.read_jma_csv([first, plain])
+
+
 def test_homogeneity_change_is_reported(tmp_path):
-    rows = [ROWS_OFFICE[0], ROWS_OFFICE[2].replace("6.2,8,1,", "6.2,8,2,", 1)]
+    rows = [ROWS_OFFICE[0], ROWS_OFFICE[2].replace("6.9,8,1,", "6.9,8,2,", 1)]
     path = write_text(tmp_path / "moved.csv", HEADER_OFFICE + rows)
     changes = wp.homogeneity_changes(wp.prepare_weather(wp.read_jma_csv(path)))
     assert changes == {"temperature_c": ["2024-02-29 00:00:00"]}
@@ -219,22 +306,26 @@ def test_synthetic_csv_looks_like_a_jma_download_but_says_it_is_synthetic(tmp_pa
 def test_prefecture_row_above_the_station_row_is_accepted(tmp_path):
     lines = HEADER_OFFICE[:2] + ["," + ",".join(["テスト県"] * 22)] + HEADER_OFFICE[2:] + ROWS_OFFICE
     weather = wp.load_weather(write_text(tmp_path / "pref.csv", lines))
-    assert weather.loc[pd.Timestamp("2024-02-29 00:00"), "wind_direction"] == "南"
+    assert weather.loc[at("2024-02-29 00:00"), "wind_direction"] == "南"
 
 
-def test_file_without_quality_columns_is_read_with_a_note(tmp_path):
+def test_file_without_quality_columns_does_not_use_sunshine(tmp_path):
     path = write_text(tmp_path / "plain.csv", [
-        "ダウンロードした時刻：2026/10/28 00:43:21", "", ",テスト地点,テスト地点,テスト地点,テスト地点",
+        "ダウンロードした時刻：2000/1/1 00:00:00", "", ",テスト地点,テスト地点,テスト地点,テスト地点",
         "年月日時,気温(℃),日照時間(時間),風速(m/s),風速(m/s)",
         ",,,,風向", ",,,,",
         "2024/2/28 1:00:00,5.9,,2.5,北東",
         "2024/2/28 2:00:00,5.6,,0.1,静穏",
+        "2024/2/28 12:00:00,8.0,0.7,2.0,南",
     ])
     weather = wp.load_weather(path)
-    assert weather.loc[pd.Timestamp("2024-02-28 01:00"), "wind_direction_deg"] == 45.0
-    assert weather["sunshine_h"].isna().all()  # 品質情報がないと、夜の空欄と欠測を区別できない
+    assert weather.loc[at("2024-02-28 01:00"), "wind_direction_deg"] == 45.0
+    # 品質情報も現象なし情報もないと、夜の空欄と欠測を区別できないので日照時間は使わない
+    assert weather["sunshine_h"].isna().all()
+    assert "sunshine_now" not in wp.recent_columns(wp.make_forecast_table(weather, 1))
     summary = dict(wp.summarise_weather(weather).to_numpy())
     assert summary["品質情報の列"].startswith("なし")
+    assert summary["均質番号が変わった時刻（観測環境の変化。ファイルの境目も含む）"].startswith("均質番号の列なし")
 
 
 def test_daytime_blank_sunshine_is_reported(tmp_path):

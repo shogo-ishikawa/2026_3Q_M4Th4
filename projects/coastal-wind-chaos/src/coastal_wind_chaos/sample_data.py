@@ -111,8 +111,23 @@ def make_settings(preset="default", **changes):
         settings[name] = value
     if not -1 < settings["ar_phi"] < 1:
         raise ValueError("安定なAR(1)にするため、ar_phi は -1 より大きく 1 より小さくしてください。")
+    if settings["front_interval_days"] <= 0:
+        raise ValueError("front_interval_days は0より大きくしてください。前線をなくすときは use_fronts=False にします。")
+    if settings["background_days"] <= 0:
+        raise ValueError("background_days は0より大きくしてください。背景成分をなくすときは use_background=False にします。")
+    if not isinstance(settings["years"], int) or settings["years"] < 1:
+        raise ValueError("years は1以上の整数（年）にしてください。")
     settings["preset"] = preset
     return settings
+
+
+def changed_settings(settings):
+    """プリセットの値から変えた設定（seed を除く）を「名前=値」で並べた文字列。"""
+    base = dict(DEFAULT_SETTINGS)
+    base.update(PRESETS.get(settings.get("preset"), {}))
+    changes = [f"{name}={value}" for name, value in settings.items()
+               if name in base and name != "seed" and value != base[name]]
+    return "、".join(changes)
 
 
 def make_hourly_times(start, years):
@@ -442,9 +457,15 @@ def format_cell(value, column, no_phenomenon):
 
 
 def jma_header_rows(settings):
-    """CSVの先頭の見出し行（気象庁のダウンロードファイルと同じ構造）。"""
+    """CSVの先頭の見出し行（気象庁のダウンロードファイルと同じ構造）。
+
+    1行目には、合成データであることと、作ったときの設定（プリセット、seed、変えた設定）を書く。
+    """
     note = (f"合成データ（気象庁の観測値ではありません）：coastal_wind_chaos で生成、"
-            f"プリセット {settings['preset']}、seed={settings['seed']}")
+            f"プリセット {settings.get('preset', '指定なし')}、seed={settings['seed']}")
+    changes = changed_settings(settings)
+    if changes:
+        note += f"、変更 {changes}"
     return [
         [note],
         [],
@@ -470,9 +491,14 @@ def write_jma_csv(observed, path, settings, encoding="cp932"):
         cells = [format_cell(value, column, no_phenomenon[row_number])
                  for value, column in zip(values[row_number], columns)]
         writer.writerow([format_time_jma(time)] + cells)
+    try:
+        data = buffer.getvalue().encode(encoding)
+    except UnicodeEncodeError as error:
+        raise ValueError(f"{encoding} で書けない文字があります（地点名など）: {error.object[error.start:error.end]}。"
+                         "encoding=\"utf-8\"（CLIでは --encoding utf-8）を使ってください。") from error
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(buffer.getvalue().encode(encoding))
+    path.write_bytes(data)
     return path
 
 

@@ -43,8 +43,10 @@ def parse_args():
     parser.add_argument("--data", type=Path, nargs="+",
                         help="気象庁形式の時別値CSV（複数可）。省略すると設定の合成データを使う")
     parser.add_argument("--regenerate", action="store_true", help="合成データがあっても作り直す")
-    parser.add_argument("--results-dir", type=Path, default=PROJECT_DIR / "results")
-    parser.add_argument("--figures-dir", type=Path, default=PROJECT_DIR / "figures")
+    parser.add_argument("--results-dir", type=Path, default=PROJECT_DIR / "results",
+                        help="結果の表を保存するフォルダ（既定：results/）")
+    parser.add_argument("--figures-dir", type=Path, default=PROJECT_DIR / "figures",
+                        help="図を保存するフォルダ（既定：figures/）")
     parser.add_argument("--skip-wind", action="store_true", help="風向き予測の実験をしない")
     parser.add_argument("--skip-scenarios", action="store_true", help="合成データのシナリオ比較をしない")
     parser.add_argument("--skip-lorenz", action="store_true", help="ローレンツ系の実験をしない")
@@ -70,7 +72,7 @@ def file_sha256(path):
 def prepare_data_paths(args, config):
     """使うデータファイルの一覧。指定がなければ合成データを（なければ作って）使う。"""
     if args.data:
-        return list(args.data), False
+        return list(args.data)
     settings = config["sample_data"]
     output = project_path(settings["output"])
     if args.regenerate or not output.exists():
@@ -79,7 +81,9 @@ def prepare_data_paths(args, config):
             output, settings["preset"], project_path(settings["truth_output"]),
             seed=settings["seed"], years=settings["years"],
         )
-    return [output], True
+    else:
+        print(f"既存の合成データを使います: {output}（設定を変えたときは --regenerate で作り直す）")
+    return [output]
 
 
 def run_wind(config, data_paths, results_dir, figures_dir):
@@ -179,6 +183,7 @@ def run_lorenz(config, results_dir, figures_dir):
 
 
 def main():
+    sys.stdout.reconfigure(encoding="utf-8")  # 出力をファイルに書き出しても、日本語で失敗しないようにする
     args = parse_args()
     config = load_config(args.config)
     args.results_dir.mkdir(parents=True, exist_ok=True)
@@ -188,14 +193,15 @@ def main():
     started = time.perf_counter()
 
     if not args.skip_wind:
-        data_paths, synthetic = prepare_data_paths(args, config)
+        data_paths = prepare_data_paths(args, config)
         # 1行目には、気象庁のファイルなら「ダウンロードした時刻」が書かれている（データは後で修正されることがある）
         info["data_files"] = [
             {"path": str(path), "sha256": file_sha256(path),
              "first_line": wind_pipeline.read_text(path).splitlines()[0][:200]}
             for path in data_paths
         ]
-        info["data_is_synthetic"] = synthetic
+        # 合成データのCSVは1行目が「合成データ」で始まる（--data で渡したときも同じ）
+        info["data_is_synthetic"] = all(entry["first_line"].startswith("合成データ") for entry in info["data_files"])
         info["wind"] = run_wind(config, data_paths, args.results_dir, args.figures_dir)
     if not args.skip_scenarios and config["scenarios"]["enabled"]:
         run_scenarios(config, args.results_dir, args.figures_dir)

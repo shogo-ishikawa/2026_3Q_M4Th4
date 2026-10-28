@@ -24,6 +24,10 @@ def test_degrees_to_label_round_trip_and_nearest_label():
     assert list(wp.degrees_to_direction_label([359.0, 11.0, 12.0, 348.0])) == ["北", "北", "北北東", "北北西"]
 
 
+def test_undefined_direction_has_no_label():
+    assert list(wp.degrees_to_direction_label([0.0, np.nan, 90.0])) == ["北", None, "東"]
+
+
 @pytest.mark.parametrize("direction, expected_u, expected_v", [
     (0.0, 0.0, -2.0),    # 北風（北から吹く）は南向き：v < 0
     (90.0, -2.0, 0.0),   # 東風は西向き：u < 0
@@ -75,6 +79,13 @@ def test_circular_mean_differs_from_naive_mean():
     assert np.mean([350.0, 10.0]) == pytest.approx(180.0)  # 普通の平均では南になってしまう
     assert wp.circular_mean_deg([350.0, 10.0]) == 0.0
     assert wp.circular_mean_deg([90.0, 180.0]) == pytest.approx(135.0)
+
+
+def test_circular_mean_of_opposite_directions_is_undefined():
+    """北と南のように打ち消し合うと、平均の向きは決まらない（NaN）。欠損は無視する。"""
+    assert np.isnan(wp.circular_mean_deg([0.0, 180.0]))
+    assert np.isnan(wp.circular_mean_deg([90.0, 270.0, 0.0, 180.0]))
+    assert wp.circular_mean_deg([0.0, 180.0, np.nan, 90.0]) == pytest.approx(90.0)
 
 
 def test_random_direction_guess_has_expected_error_of_90_degrees():
