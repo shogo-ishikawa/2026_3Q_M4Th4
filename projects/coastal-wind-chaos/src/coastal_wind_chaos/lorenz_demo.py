@@ -185,6 +185,26 @@ def estimate_lyapunov_benettin(start_point, n_steps=20000, dt=DEFAULT_DT, separa
     return total_log_growth / (n_steps * dt)
 
 
+def time_step_check(start_points, dts=(0.01, 0.005), perturbation_sizes=(1e-8, 1e-4), tolerance=1.0,
+                    total_time=35.0, benettin_time=100.0, seed=0):
+    """積分の刻み dt を小さくしても、結果がほぼ変わらないことを確かめる（数値計算の確認）。
+
+    同じ出発点と同じずれを使い、dt ごとに「距離が tolerance に達するまでの時間」の中央値と、
+    Benettin法による最大リアプノフ指数を求める。時間はどれも無次元で、同じ total_time まで進める。
+    dt を小さくすると計算の回数が増えるので、時間がかかる。
+    """
+    rows = []
+    for dt in dts:
+        n_steps = int(round(total_time / dt))
+        table = predictability_table(start_points, perturbation_sizes, tolerance, n_steps, dt, seed)
+        lyapunov = estimate_lyapunov_benettin(start_points[0], int(round(benettin_time / dt)), dt)
+        table.insert(0, "dt", dt)
+        table["tolerance"] = tolerance
+        table["benettin_lyapunov"] = lyapunov
+        rows.append(table)
+    return pd.concat(rows, ignore_index=True)
+
+
 def ar1_twin(phi=0.85, n_steps=48, initial_gap=1.0, noise_std=1.0, seed=0):
     """同じ乱数（外乱）を与えた2つのAR(1)過程を、初期値だけ変えて進める。
 

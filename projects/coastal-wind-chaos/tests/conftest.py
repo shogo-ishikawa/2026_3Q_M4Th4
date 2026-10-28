@@ -17,6 +17,12 @@ def two_year_weather():
     return sample_data.generate_weather("default", years=2, seed=11)
 
 
+@pytest.fixture(scope="session")
+def three_year_weather():
+    """3年分の合成データ（すべての成分）。1年目学習・2年目検証・3年目最終テストに分けて使う。"""
+    return sample_data.generate_weather("default", years=3, seed=5)
+
+
 def write_text(path, lines, encoding="cp932"):
     """気象庁のファイルと同じく CRLF で行をつないで保存する。"""
     path.write_bytes(("\r\n".join(lines) + "\r\n").encode(encoding))

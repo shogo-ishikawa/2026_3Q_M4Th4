@@ -185,5 +185,6 @@ def test_scenario_experiment_uses_the_given_test_period():
     short = wp.run_scenario_experiment({"periodic_only": weather}, [1], ["persistence"], test_days=30)
     longer = wp.run_scenario_experiment({"periodic_only": weather}, [1], ["persistence"], test_days=60)
     assert list(short.columns[:2]) == ["scenario", "horizon_h"]
-    assert 25 * 24 < short.loc[0, "n_test"] <= 30 * 24
-    assert 50 * 24 < longer.loc[0, "n_test"] <= 60 * 24
+    # 予測起点は、72時間先まで評価期間に収まる時刻（どの予測時間でも同じ）なので、3日分短い
+    assert 22 * 24 < short.loc[0, "n_test"] <= 27 * 24
+    assert 52 * 24 < longer.loc[0, "n_test"] <= 57 * 24

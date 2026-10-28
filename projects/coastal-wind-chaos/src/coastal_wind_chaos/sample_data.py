@@ -24,9 +24,13 @@ import pandas as pd
 from .wind_pipeline import (
     CALM_LABEL,
     CALM_SPEED_MS,
+    UNDEFINED_DIRECTION_ERROR_DEG,
+    angle_errors,
+    angle_rows,
     angular_error,
     degrees_to_direction_label,
     prepare_weather,
+    read_text,
     uv_to_direction,
     year_fraction,
 )
@@ -502,13 +506,35 @@ def write_jma_csv(observed, path, settings, encoding="cp932"):
     return path
 
 
+def check_can_overwrite(path, first_text):
+    """path がすでにあって、このプログラムで作ったファイル（1行目が first_text で始まる）でなければ止める。
+
+    ダウンロードした気象庁のCSVなどを、合成データで上書きしてしまわないようにする。
+    """
+    path = Path(path)
+    if not path.exists():
+        return
+    try:
+        first_line = read_text(path).splitlines()[0] if path.stat().st_size > 0 else ""
+    except (UnicodeDecodeError, IndexError):
+        first_line = ""
+    if not first_line.startswith(first_text):
+        raise ValueError(f"{path} は、このプログラムで作ったファイルではないので上書きしません。"
+                         "出力先に別の名前を指定してください。")
+
+
 def generate_sample_csv(path="data/sample_coastal_amedas.csv", preset="default",
                         truth_path=None, encoding="cp932", **changes):
     """合成データを作り、気象庁形式のCSVに保存する。設定（辞書）を返す。
 
     truth_path を指定すると、観測誤差を含まない真の状態と成分の内訳も UTF-8 のCSVで保存する
     （観測誤差や外れる原因を調べる教材用。予測の入力には使わない）。
+    出力先に、このプログラムで作ったのではないファイル（ダウンロードした実データなど）があれば、
+    上書きせずに止める。
     """
+    check_can_overwrite(path, "合成データ")
+    if truth_path is not None:
+        check_can_overwrite(truth_path, "time,")
     settings = make_settings(preset, **changes)
     truth = simulate_truth(settings)
     write_jma_csv(observe(truth, settings), path, settings, encoding)
@@ -542,16 +568,24 @@ def observation_error_summary(weather, truth):
 
 
 def errors_against_truth(forecasts, models, truth):
-    """各手法の誤差を、観測値に対してと、観測誤差のない真の風向に対しての両方で計算する。"""
-    true_direction = truth["direction_true_deg"].reindex(forecasts["target_time"]).to_numpy()
-    rows = []
+    """各手法の誤差を、観測値に対してと、観測誤差のない真の風向に対しての両方で計算する。
+
+    どちらも角度の評価に使う行（観測した風向が決まる行）で計算し、予測の向きが決まらない行は
+    90度として数える（score_forecasts と同じ決まり）。
+    """
+    rows = angle_rows(forecasts)
+    true_direction = truth["direction_true_deg"].reindex(forecasts.loc[rows, "target_time"]).to_numpy()
+    table = []
     for spec in models:
-        rows.append({
+        predicted = forecasts.loc[rows, spec].to_numpy(dtype=float)
+        versus_truth = np.where(np.isnan(predicted), UNDEFINED_DIRECTION_ERROR_DEG,
+                                angular_error(true_direction, predicted))
+        table.append({
             "model": spec,
-            "mae_vs_observation_deg": float(np.mean(angular_error(forecasts["target_direction_deg"], forecasts[spec]))),
-            "mae_vs_truth_deg": float(np.nanmean(angular_error(true_direction, forecasts[spec]))),
+            "mae_vs_observation_deg": float(angle_errors(forecasts, spec).mean()),
+            "mae_vs_truth_deg": float(np.nanmean(versus_truth)),
         })
-    return pd.DataFrame(rows)
+    return pd.DataFrame(table)
 
 
 def hours_from_nearest_front(truth, times):
@@ -569,13 +603,12 @@ def error_around_fronts(forecasts, models, truth, edges=(-24, -12, -6, -3, 0, 3,
     """対象時刻が前線通過の前後どのあたりかで分けて、平均絶対角度誤差を表にする。
 
     行の [0, 3) は「通過した時刻から3時間未満」、[-3, 0) は「通過の3時間前から直前まで」。
+    角度の評価に使う行で計算し、予測の向きが決まらない行は90度として数える。
     """
-    relative = hours_from_nearest_front(truth, forecasts["target_time"])
+    rows = angle_rows(forecasts)
+    relative = hours_from_nearest_front(truth, forecasts.loc[rows, "target_time"])
     groups = pd.cut(relative, list(edges), right=False)
-    errors = pd.DataFrame(
-        {spec: angular_error(forecasts["target_direction_deg"], forecasts[spec]) for spec in models},
-        index=forecasts.index,
-    )
+    errors = pd.DataFrame({spec: angle_errors(forecasts, spec).to_numpy() for spec in models})
     table = errors.groupby(groups, observed=True).mean()
     table["n"] = errors.groupby(groups, observed=True).size()
     table.index.name = "hours_from_front"

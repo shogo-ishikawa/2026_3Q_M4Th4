@@ -14,6 +14,7 @@
 
 import csv
 import io
+import math
 import re
 import warnings
 from pathlib import Path
@@ -58,36 +59,73 @@ INFO_SUFFIXES = {
     "現象なし情報": "_no_phenomenon",
 }
 
-LAG_HOURS = (0, 1, 2, 3, 6, 12, 24)
+# 品質情報の既定：正常値（8）だけを使う。準正常値（5）も使うときは min_quality=5 を明示して渡す。
+DEFAULT_MIN_QUALITY = 8
+
+LAG_HOURS = (0, 1, 2, 3, 6, 12, 24)     # u, v の「何時間前」（0 は予測起点の値）
+TEMPERATURE_LAG_HOURS = (1, 2, 3, 6)   # 気温の「何時間前」
+COMMON_MAX_HORIZON = 72                 # 予測時間を比べるとき、この時間先まで評価期間に収まる予測起点だけを使う
+
+# 季節・日周期（calendar）：対象時刻の周期特徴量と、学習期間だけから計算した月×時刻の平均の風
 CALENDAR_COLUMNS = [
     "hour_sin", "hour_cos", "hour2_sin", "hour2_cos", "season_sin", "season_cos",
 ]
+CLIMATOLOGY_COLUMNS = ["clim_u", "clim_v"]
+# 過去・直近の観測（recent）：u_lag*, v_lag* に加えて必ず使う、過去24時間の平均の風
+WIND_STATE_COLUMNS = ["u_mean24", "v_mean24"]
+# 気温・気圧・日照から作る列。観測していない地点もあるので、学習期間に半分以上ある列だけ使う
 OPTIONAL_RECENT_COLUMNS = [
-    "temperature_now", "temperature_change_3h", "pressure_now", "pressure_change_3h",
-    "sunshine_now",
+    "temperature_now", "temperature_lag1", "temperature_lag2", "temperature_lag3", "temperature_lag6",
+    "temperature_change_3h", "temperature_change_24h",
+    "pressure_now", "pressure_change_1h", "pressure_change_3h",
+    "sunshine_now", "sunshine_today",
 ]
-DEFAULT_MODELS = [
-    "persistence",
-    "climatology",
+# 24時間周期の持続予報が使う、予測起点 t 以前で対象時刻と同じ時刻（t + h − 24 × ⌈h/24⌉）の風
+CYCLE_COLUMNS = ["u_cycle24", "v_cycle24"]
+# 特徴量の組の別名（元の仕様の名前）。どれも1地点の時間的な情報の区分で、広い範囲の大気を観測した値ではない
+FEATURE_SET_ALIASES = {"global_only": "calendar", "local_only": "recent", "combined": "calendar+recent"}
+
+BASELINE_MODELS = ["persistence", "climatology", "persistence_24h"]
+DEFAULT_MODELS = BASELINE_MODELS + [
     "linear:calendar",
     "linear:recent",
     "linear:calendar+recent",
     "boosting:calendar+recent",
     "degrees_as_numbers",
 ]
+# 回帰モデルの設定。ここに名前を足すと「名前:calendar+recent」のように使える。
+# 名前の後ろに _angle を付けると、同じ設定で u, v の代わりに角度を直接回帰する（例：linear_angle）。
+MODEL_SETTINGS = {
+    "linear": {"kind": "linear", "alpha": 1.0},
+    "boosting_shallow": {"kind": "boosting", "max_depth": 2},
+    "boosting": {"kind": "boosting", "max_depth": 3},
+    "boosting_deep": {"kind": "boosting", "max_depth": 6},
+}
+BOOSTING_DEFAULTS = {"max_iter": 200, "learning_rate": 0.05, "min_samples_leaf": 200}
+# 検証期間で選ぶ、統合モデル（季節・日周期＋過去・直近の観測）の候補。最終テスト期間では選ばない。
+INTEGRATED_CANDIDATES = ["linear", "boosting_shallow", "boosting", "boosting_deep"]
+
 METHOD_NAMES = {
     "persistence": ("持続予報", "Persistence"),
     "climatology": ("気候値予報（月×時刻の平均）", "Climatology (month x hour)"),
+    "persistence_24h": ("24時間周期の持続予報", "Repeat of the last 24 h"),
     "linear": ("線形回帰", "Linear"),
-    "boosting": ("勾配ブースティング", "Boosting"),
-    "degrees_as_numbers": ("悪い例：角度を数値のまま回帰", "Bad example: degrees as numbers"),
+    "boosting_shallow": ("勾配ブースティング（深さ2）", "Boosting (depth 2)"),
+    "boosting": ("勾配ブースティング（深さ3）", "Boosting (depth 3)"),
+    "boosting_deep": ("勾配ブースティング（深さ6）", "Boosting (depth 6)"),
+    "degrees_as_numbers": ("悪い例：角度と時刻を数値のまま回帰", "Bad example: degrees and hour as numbers"),
 }
 FEATURE_NAMES = {
-    "calendar": ("季節・時刻", "calendar"),
-    "recent": ("直近の観測", "recent obs."),
-    "calendar+recent": ("季節・時刻＋直近の観測", "calendar + recent obs."),
+    "calendar": ("季節・日周期", "season & time of day"),
+    "recent": ("過去・直近の観測", "past & recent obs."),
+    "calendar+recent": ("季節・日周期＋過去・直近の観測", "combined"),
 }
-
+# 予測した風ベクトルがほぼ0で向きが決まらないとき、角度の誤差として数える値。
+# 向きを一様ランダムに選んだときの誤差の期待値と同じにする（件数は別に数えて示す）。
+UNDEFINED_DIRECTION_ERROR_DEG = RANDOM_DIRECTION_EXPECTED_ERROR_DEG
+# 評価から外した理由（forecast の excluded 列）
+EXCLUDED_INPUT = "予測起点までの入力の欠測"
+EXCLUDED_TARGET = "対象時刻の観測なし（欠測）"
 
 # ---------------------------------------------------------------------------
 # 風向の変換
@@ -375,7 +413,7 @@ def read_jma_csv(path, encoding=None):
 # 予測に使える形へ整える
 # ---------------------------------------------------------------------------
 
-def fill_no_phenomenon(raw, min_quality=5):
+def fill_no_phenomenon(raw, min_quality=DEFAULT_MIN_QUALITY):
     """日照時間・降水量で「現象がない」ため空欄の値を 0 にする。
 
     気象庁のCSVでは、現象なし情報が 1 の行（例：夜の日照時間）は値が 0 と書かれる。
@@ -405,11 +443,12 @@ def fill_no_phenomenon(raw, min_quality=5):
     return table
 
 
-def apply_quality(raw, min_quality=5):
+def apply_quality(raw, min_quality=DEFAULT_MIN_QUALITY):
     """品質情報が min_quality 未満（または不明）の値を欠損にする。
 
     気象庁の品質情報は 8 が正常値、5 が準正常値、4 が資料不足値、2 が疑問値、
-    1 が欠測、0 が観測していないことを表す。既定では 8 と 5 を使う。
+    1 が欠測、0 が観測していないことを表す。既定では正常値（8）だけを使う。
+    準正常値も使うときは min_quality=5 とする。
     品質情報の列がない要素は、そのまま使う。
     """
     table = raw.copy()
@@ -463,7 +502,7 @@ def to_hourly_index(table):
     return hourly
 
 
-def prepare_weather(raw, min_quality=5):
+def prepare_weather(raw, min_quality=DEFAULT_MIN_QUALITY):
     """読み込んだ表を、予測に使う1時間ごとの表に整える。
 
     1. 現象がないため空欄の日照時間・降水量を 0 にする
@@ -484,7 +523,7 @@ def prepare_weather(raw, min_quality=5):
     return to_hourly_index(table)
 
 
-def load_weather(path, encoding=None, min_quality=5):
+def load_weather(path, encoding=None, min_quality=DEFAULT_MIN_QUALITY):
     """CSVの読込（read_jma_csv）と整形（prepare_weather）をまとめて行う。"""
     return prepare_weather(read_jma_csv(path, encoding), min_quality)
 
@@ -607,24 +646,52 @@ def check_hours(horizon, lags):
             raise ValueError(f"予測時間と lags は0以上の整数（時間）にしてください: {value!r}")
 
 
+def cycle_lag(horizon):
+    """24時間周期の持続予報で、予測起点 t の何時間前の観測を使うか。
+
+    対象時刻 t + h と同じ時刻で、t 以前の最も新しい観測は t + h − 24 × ⌈h/24⌉。
+    これは t の 24 × ⌈h/24⌉ − h 時間前（0〜23時間前）で、t より後になることはない。
+    例：h = 1 → 23時間前、h = 24, 48, 72 → 0時間前（t の値）、h = 25 → 23時間前。
+    """
+    return 24 * math.ceil(horizon / 24) - horizon
+
+
+def day_cumulative(values, times):
+    """その日の1時から各時刻までの合計（当日の累積）。
+
+    気象庁の時別値と同じく、0時の行は前日の24時として前日に数える。その日のうちに欠損が
+    あれば、それより後の累積は欠損にする（欠けた値を0とみなさない）。
+    """
+    times = pd.DatetimeIndex(times)
+    day = (times - pd.Timedelta(hours=1)).normalize()
+    values = pd.Series(np.asarray(values, dtype=float), index=times)
+    missing_so_far = values.isna().astype(int).groupby(day).cummax() > 0
+    total = values.fillna(0.0).groupby(day).cumsum()
+    return total.where(~missing_so_far).to_numpy()
+
+
 def make_forecast_table(weather, horizon, lags=LAG_HOURS):
-    """予測時刻（予測を出す時刻）t の情報から、horizon 時間後の対象時刻 t + horizon の風を
+    """予測起点（予測を出す時刻）t までの情報から、horizon 時間後の対象時刻 t + horizon の風を
     予測するための表を作る。
 
-    1行が1つの予測時刻 t（行の名前 issue_time）。
-    - 目的変数：t + horizon の u, v（target_u, target_v）
-    - 季節・時刻：t + horizon の暦。暦は前もって分かるので使ってよい。
-    - 直近の観測：t とそれより前の観測だけ。shift(k) は k 時間前の値。
-    lags には必ず 0（予測時刻の値）を含める（持続予報に使うため）。
+    1行が1つの予測起点 t（行の名前 issue_time）。t より後の観測は、目的変数（target_ で始まる列）にだけ入る。
+    - 目的変数：t + horizon の u, v と風向（静穏なら風向は NaN、u = v = 0）
+    - 季節・日周期：t + horizon の暦（暦は前もって分かる）。月×時刻の平均の風（clim_u, clim_v）は、
+      学習期間が決まってから add_climatology_columns で加える。
+    - 過去・直近の観測：t とそれより前の観測。shift(k) は k 時間前の値。
+    - 24時間周期の持続予報に使う、t 以前で対象時刻と同じ時刻の風（u_cycle24, v_cycle24）
+    lags には必ず 0（予測起点の値）を含める（持続予報に使うため）。
     """
     check_hourly(weather)
     check_hours(horizon, lags)
     lags = sorted(set(lags) | {0})
+    u = weather["u_ms"]
+    v = weather["v_ms"]
     table = pd.DataFrame(index=weather.index.rename("issue_time"))
     table["target_time"] = weather.index + pd.Timedelta(hours=horizon)
     table["target_hour"] = table["target_time"].dt.hour
-    table["target_u"] = weather["u_ms"].shift(-horizon).to_numpy()
-    table["target_v"] = weather["v_ms"].shift(-horizon).to_numpy()
+    table["target_u"] = u.shift(-horizon).to_numpy()
+    table["target_v"] = v.shift(-horizon).to_numpy()
     table["target_direction_deg"] = weather["wind_direction_deg"].shift(-horizon).to_numpy()
     table["issue_direction_deg"] = weather["wind_direction_deg"].to_numpy()
 
@@ -633,29 +700,57 @@ def make_forecast_table(weather, horizon, lags=LAG_HOURS):
         table[column] = calendar[column].to_numpy()
 
     for lag in lags:
-        table[f"u_lag{lag}"] = weather["u_ms"].shift(lag).to_numpy()
-        table[f"v_lag{lag}"] = weather["v_ms"].shift(lag).to_numpy()
+        table[f"u_lag{lag}"] = u.shift(lag).to_numpy()
+        table[f"v_lag{lag}"] = v.shift(lag).to_numpy()
+    table["u_mean24"] = u.rolling(24, min_periods=24).mean().to_numpy()  # t を含む過去24時間の平均
+    table["v_mean24"] = v.rolling(24, min_periods=24).mean().to_numpy()
+    cycle = cycle_lag(horizon)
+    table["u_cycle24"] = u.shift(cycle).to_numpy()
+    table["v_cycle24"] = v.shift(cycle).to_numpy()
+    add_optional_columns(table, weather)
+    return table
+
+
+def add_optional_columns(table, weather):
+    """気温・気圧・日照の観測があれば、予測起点 t までの値から作る列を table に加える。"""
     if "temperature_c" in weather.columns:
         temperature = weather["temperature_c"]
         table["temperature_now"] = temperature.to_numpy()
+        for lag in TEMPERATURE_LAG_HOURS:
+            table[f"temperature_lag{lag}"] = temperature.shift(lag).to_numpy()
         table["temperature_change_3h"] = (temperature - temperature.shift(3)).to_numpy()
+        table["temperature_change_24h"] = (temperature - temperature.shift(24)).to_numpy()
     pressure_name = pressure_column(weather)
     if pressure_name is not None:
         pressure = weather[pressure_name]
         table["pressure_now"] = pressure.to_numpy()
+        table["pressure_change_1h"] = (pressure - pressure.shift(1)).to_numpy()
         table["pressure_change_3h"] = (pressure - pressure.shift(3)).to_numpy()
     if "sunshine_h" in weather.columns:
-        table["sunshine_now"] = weather["sunshine_h"].to_numpy()
+        table["sunshine_now"] = weather["sunshine_h"].to_numpy()  # その1時間の日照時間
+        table["sunshine_today"] = day_cumulative(weather["sunshine_h"], weather.index)  # その日の t までの合計
+
+
+def add_climatology_columns(table, climatology):
+    """対象時刻の（月, 時刻）の平均の風を、入力の列 clim_u, clim_v として加えた表を返す。
+
+    climatology は、学習期間だけから fit_climatology で作ったものを渡す。値は基準予報の
+    「気候値予報」と同じだが、こちらは統合モデルなどの入力（特徴量）として使う。
+    """
+    table = table.copy()
+    u, v = predict_climatology(climatology, table["target_time"])
+    table["clim_u"] = u
+    table["clim_v"] = v
     return table
 
 
 def recent_columns(table, min_available=0.5):
-    """直近の観測の特徴量のうち、使える列を返す。
+    """過去・直近の観測の列のうち、使う列を返す（学習用の行を渡す）。
 
-    風の u, v は必ず使う。気温・気圧・日照は、半分以上の行に値がある場合だけ使う
-    （その観測をしていない地点もあるため）。
+    風の列（u_lag*, v_lag*, u_mean24, v_mean24）は必ず使う。気温・気圧・日照の列は、
+    渡した行の半分以上に値がある場合だけ使う（その観測をしていない地点もあるため）。
     """
-    columns = [name for name in table.columns if name.startswith(("u_lag", "v_lag"))]
+    columns = [name for name in table.columns if name.startswith(("u_lag", "v_lag"))] + WIND_STATE_COLUMNS
     for name in OPTIONAL_RECENT_COLUMNS:
         if name in table.columns and table[name].notna().mean() >= min_available:
             columns.append(name)
@@ -663,22 +758,83 @@ def recent_columns(table, min_available=0.5):
 
 
 def feature_columns(feature_set, recent):
-    """特徴量の組の名前（calendar, recent, calendar+recent）から列名の一覧を作る。
+    """特徴量の組の名前から列名の一覧を作る。
 
-    recent には recent_columns で選んだ「直近の観測」の列名の一覧を渡す。
+    - calendar（元の名前 global_only）：季節・日周期。対象時刻の周期特徴量と月×時刻の平均の風
+    - recent（local_only）：過去・直近の観測。recent_columns で選んだ列
+    - calendar+recent（combined）：両方
+    どれも1地点の時間的な情報の区分で、広い範囲の大気の状態を観測した値ではない。
     """
+    feature_set = FEATURE_SET_ALIASES.get(feature_set, feature_set)
+    calendar = list(CALENDAR_COLUMNS) + list(CLIMATOLOGY_COLUMNS)
     if feature_set == "calendar":
-        return list(CALENDAR_COLUMNS)
+        return calendar
     if feature_set == "recent":
         return list(recent)
     if feature_set == "calendar+recent":
-        return list(CALENDAR_COLUMNS) + list(recent)
+        return calendar + list(recent)
     raise ValueError(f"未知の特徴量の組です: {feature_set}（calendar, recent, calendar+recent のどれか）")
 
 
 # ---------------------------------------------------------------------------
 # 時間分割
 # ---------------------------------------------------------------------------
+
+def year_split(weather):
+    """1年目を学習、2年目を検証、3年目以降を最終テストにする分割（暦の上の1年ずつ）。
+
+    最初の時刻が 2023-01-01 01:00 なら、検証は 2024-01-01 01:00、最終テストは 2025-01-01 01:00 から。
+    """
+    start = weather.index.min()
+    validation_start = start + pd.DateOffset(years=1)
+    test_start = start + pd.DateOffset(years=2)
+    if test_start + pd.Timedelta(days=60) > weather.index.max():
+        raise ValueError(
+            f"年ごとの分割（1年目学習・2年目検証・3年目テスト）には3年分ほどのデータが必要です"
+            f"（データは {start}〜{weather.index.max()}）。分割の mode を \"last_days\" にしてください。"
+        )
+    return {"mode": "years", "start": start, "validation_start": validation_start,
+            "test_start": test_start, "end": weather.index.max()}
+
+
+def last_days_split(weather, test_days=365, validation_days=0):
+    """最後の test_days 日を最終テスト、その前の validation_days 日を検証にする分割（0 なら検証なし）。"""
+    end = weather.index.max()
+    test_start = end - pd.Timedelta(days=test_days) + pd.Timedelta(hours=1)
+    validation_start = test_start - pd.Timedelta(days=validation_days) if validation_days > 0 else None
+    return {"mode": "last_days", "start": weather.index.min(), "validation_start": validation_start,
+            "test_start": test_start, "end": end}
+
+
+def test_start_split(weather, test_start):
+    """test_start より前を学習、test_start 以降を最終テストにする分割（検証なし）。"""
+    return {"mode": "test_start", "start": weather.index.min(), "validation_start": None,
+            "test_start": pd.Timestamp(test_start), "end": weather.index.max()}
+
+
+def make_split(weather, mode="years", test_days=365, validation_days=365):
+    """分割を作る。mode は "years"（1年目学習・2年目検証・3年目テスト）または "last_days"。"""
+    if mode == "years":
+        return year_split(weather)
+    if mode == "last_days":
+        return last_days_split(weather, test_days, validation_days)
+    raise ValueError(f"未知の分割です: {mode}（years または last_days）")
+
+
+def stage_bounds(split, stage):
+    """段階の学習期間と評価期間：(学習の開始, 学習の終わり, 評価の開始, 評価の終わり)。
+
+    終わりの時刻はその期間に含まない。stage は "validation"（学習期間で学習し検証期間で評価）
+    または "test"（検証期間までで学習し最終テスト期間で評価）。
+    """
+    if stage == "validation":
+        if split.get("validation_start") is None:
+            raise ValueError("この分割には検証期間がありません。")
+        return split["start"], split["validation_start"], split["validation_start"], split["test_start"]
+    if stage == "test":
+        return split["start"], split["test_start"], split["test_start"], split["end"] + pd.Timedelta(hours=1)
+    raise ValueError(f"未知の段階です: {stage}（validation または test）")
+
 
 def default_test_start(weather, test_days=365):
     """最後の test_days 日をテスト期間にするときの、テスト開始時刻。"""
@@ -688,7 +844,7 @@ def default_test_start(weather, test_days=365):
 def split_train_test(table, test_start):
     """時間で学習用とテスト用に分ける（ランダムには分けない）。
 
-    - テスト：予測時刻 t がテスト開始以降の行
+    - テスト：予測起点 t がテスト開始以降の行
     - 学習：予測の対象時刻 t + horizon がテスト開始より前の行
     学習の答え（目的変数）がテスト期間に入らないよう、境界の手前 horizon 時間分は使わない。
     """
@@ -698,29 +854,124 @@ def split_train_test(table, test_start):
     return train, test
 
 
+def exclusion_reasons(rows, inputs):
+    """評価に使えない行の理由を返す（使える行は空の文字列）。"""
+    reasons = pd.Series("", index=rows.index, dtype=object)
+    reasons[rows[["target_u", "target_v"]].isna().any(axis=1).to_numpy()] = EXCLUDED_TARGET
+    reasons[rows[inputs].isna().any(axis=1).to_numpy()] = EXCLUDED_INPUT
+    return reasons
+
+
+def warn_if_optional_inputs_drop_rows(evaluation, recent):
+    """気温・気圧・日照の欠損だけが理由で、評価する行が5%より多く減るなら知らせる。"""
+    optional = [name for name in recent if name in OPTIONAL_RECENT_COLUMNS]
+    wind = [name for name in recent if name not in OPTIONAL_RECENT_COLUMNS] + ["target_u", "target_v"]
+    wind_ok = evaluation[wind].notna().all(axis=1)
+    if not optional or not wind_ok.any():
+        return
+    share = evaluation.loc[wind_ok, optional].isna().any(axis=1).mean()
+    if share > 0.05:
+        missing = [name for name in optional if evaluation.loc[wind_ok, name].isna().any()]
+        warnings.warn(f"評価する予測起点の {share:.0%} で {missing} が欠けているため、すべての手法の評価から外しました。"
+                      "途中で観測が止まった要素の列を weather から消してから実験すると、評価する時刻が減りません。")
+
+
+def prepare_stage(weather, horizon, split, stage="test", lags=LAG_HOURS, max_horizon=COMMON_MAX_HORIZON):
+    """1つの段階（検証または最終テスト）で使う、学習用の行と評価用の行を作る。
+
+    - 学習用：予測起点も対象時刻も学習期間の中にある行（対象時刻が次の期間に入る行は除く）
+    - 評価用：予測起点が評価期間の中にあり、max_horizon 時間先まで評価期間に収まる行。どの予測時間でも
+      同じ予測起点になる。行は消さずに残し、使えない行には理由を excluded 列に書く。
+    - 気候値（入力の列と基準予報）と、使う任意の列は、学習期間だけから決める。標準化はモデルの中で
+      学習用の行だけから決まる。欠けた値の補完はしない（欠けた行は使わない）。
+    戻り値は辞書：train, evaluation, inputs（評価に必要な入力の列）, recent, climatology, bounds。
+    """
+    if horizon > max_horizon:
+        raise ValueError(f"予測時間 {horizon} が max_horizon（{max_horizon}）より長いです。")
+    train_start, train_end, eval_start, eval_end = stage_bounds(split, stage)
+    climatology = fit_climatology(weather, train_end, train_start)
+    table = add_climatology_columns(make_forecast_table(weather, horizon, lags), climatology)
+    in_train = (table.index >= train_start) & (table["target_time"] < train_end)
+    in_eval = (table.index >= eval_start) & (table.index + pd.Timedelta(hours=max_horizon) < eval_end)
+    recent = recent_columns(table[in_train])
+    inputs = list(CALENDAR_COLUMNS) + list(CLIMATOLOGY_COLUMNS) + recent + list(CYCLE_COLUMNS)
+    train = table[in_train].dropna(subset=inputs + ["target_u", "target_v"])
+    evaluation = table[in_eval].copy()
+    evaluation["excluded"] = exclusion_reasons(evaluation, inputs)
+    warn_if_optional_inputs_drop_rows(evaluation, recent)
+    if len(train) < 24 * 30:
+        raise ValueError(
+            f"学習用のデータが {len(train)} 行しかありません。学習期間は {train_start}〜{train_end} の前までで、"
+            f"30日以上のデータが必要です（データは {weather.index.min()}〜{weather.index.max()}）。"
+            "test_days を短くするか、期間を延ばしてください。"
+        )
+    if (evaluation["excluded"] == "").sum() == 0:
+        raise ValueError(f"評価期間（{eval_start} から）に、{max_horizon} 時間先まで収まって評価できる時刻がありません。"
+                         "期間を確認してください。")
+    return {"train": train, "evaluation": evaluation, "inputs": inputs, "recent": recent,
+            "climatology": climatology, "bounds": (train_start, train_end, eval_start, eval_end)}
+
+
+def input_missing_counts(stage_data):
+    """評価用の行で、入力の列ごとに欠けている数（欠けている列だけ）。どの観測で行が減ったかを見る。"""
+    counts = stage_data["evaluation"][stage_data["inputs"]].isna().sum()
+    return counts[counts > 0]
+
+
+def input_column_table(stage_data):
+    """入力の列ごとに、使うかどうか（used）と、評価用の行で欠けている数（n_missing）を表にする。
+
+    気温・気圧・日照の列は、データにないとき（n_missing は空）や、学習期間に値が半分未満のときは使わない。
+    """
+    evaluation = stage_data["evaluation"]
+    inputs = stage_data["inputs"]
+    names = inputs + [name for name in OPTIONAL_RECENT_COLUMNS if name not in inputs]
+    rows = []
+    for name in names:
+        n_missing = int(evaluation[name].isna().sum()) if name in evaluation.columns else None
+        rows.append({"column": name, "used": name in inputs, "n_missing": n_missing})
+    return pd.DataFrame(rows).astype({"n_missing": "Int64"})
+
+
 # ---------------------------------------------------------------------------
 # 予測の方法
 # ---------------------------------------------------------------------------
 
 def parse_model(spec):
-    """「linear:calendar」のような文字列を、手法と特徴量の組に分ける。"""
+    """「linear:calendar」のような文字列を、手法と特徴量の組に分ける（特徴量の組の別名も受け付ける）。"""
     method, _, feature_set = spec.partition(":")
+    if feature_set:
+        feature_set = FEATURE_SET_ALIASES.get(feature_set, feature_set)
     return method, (feature_set or None)
+
+
+def split_method(method):
+    """手法の名前を、回帰モデルの設定名と「角度を直接回帰するか」に分ける（例：linear_angle → linear, True）。"""
+    if method.endswith("_angle"):
+        return method[: -len("_angle")], True
+    return method, False
 
 
 def model_label(spec, language="ja"):
     """手法の表示名。language="en" で図用の英語名。"""
     method, feature_set = parse_model(spec)
+    base, angle = split_method(method)
     position = 0 if language == "ja" else 1
-    label = METHOD_NAMES.get(method, (method, method))[position]
+    label = METHOD_NAMES.get(base, (base, base))[position]
+    if angle:
+        label += "・角度を直接回帰" if language == "ja" else ", angle as target"
     if feature_set:
-        label += f"（{FEATURE_NAMES[feature_set][0]}）" if language == "ja" else f" ({FEATURE_NAMES[feature_set][1]})"
+        names = FEATURE_NAMES.get(feature_set, (feature_set, feature_set))
+        label += f"（{names[0]}）" if language == "ja" else f" ({names[1]})"
     return label
 
 
-def fit_climatology(weather, train_end):
-    """学習期間（train_end より前）の、（月, 時刻）ごとの平均の風ベクトル。"""
-    past = weather[weather.index < pd.Timestamp(train_end)]
+def fit_climatology(weather, train_end, train_start=None):
+    """学習期間（train_start 以上 train_end 未満）の、（月, 時刻）ごとの平均の風ベクトル。"""
+    in_train = weather.index < pd.Timestamp(train_end)
+    if train_start is not None:
+        in_train &= weather.index >= pd.Timestamp(train_start)
+    past = weather[in_train]
     month = pd.Index(past.index.month, name="month")
     hour = pd.Index(past.index.hour, name="hour")
     return past.groupby([month, hour])[["u_ms", "v_ms"]].mean()
@@ -744,27 +995,26 @@ def predict_climatology(climatology, target_times):
     return u, v
 
 
-def make_regressor(method, seed=0):
-    """機械学習のモデルを作る。
+def make_regressor(method, seed=0, n_outputs=2):
+    """MODEL_SETTINGS の名前から回帰モデルを作る。n_outputs=2 は u と v、1 は角度。
 
     - linear：標準化してからリッジ回帰（係数が大きくなりすぎないよう少し抑えた線形回帰）
-    - boosting：勾配ブースティング木（u 用と v 用に1つずつ）。浅い木（max_depth=3）と
-      大きめの葉（min_samples_leaf=200）で、学習期間だけの偶然の変動を覚えにくくする。
-      early_stopping=False で、学習データをランダムに分ける内部の検証を使わない。
+    - boosting：勾配ブースティング木（u 用と v 用に1つずつ）。min_samples_leaf=200 の大きめの葉で、
+      学習期間だけの偶然の変動を覚えにくくする。early_stopping=False で、学習データをランダムに分ける
+      内部の検証を使わない。木の深さ（max_depth）は候補ごとに違い、検証期間の成績で選ぶ。
     """
-    if method == "linear":
-        return make_pipeline(StandardScaler(), Ridge(alpha=1.0))
-    if method == "boosting":
-        booster = HistGradientBoostingRegressor(
-            max_iter=200, learning_rate=0.05, max_depth=3, min_samples_leaf=200,
-            early_stopping=False, random_state=seed,
-        )
-        return MultiOutputRegressor(booster)
-    raise ValueError(f"未知の手法です: {method}")
+    if method not in MODEL_SETTINGS:
+        raise ValueError(f"未知の手法です: {method}（{', '.join(MODEL_SETTINGS)} のどれか）")
+    settings = MODEL_SETTINGS[method]
+    if settings["kind"] == "linear":
+        return make_pipeline(StandardScaler(), Ridge(alpha=settings.get("alpha", 1.0)))
+    params = {**BOOSTING_DEFAULTS, **{name: value for name, value in settings.items() if name != "kind"}}
+    booster = HistGradientBoostingRegressor(early_stopping=False, random_state=seed, **params)
+    return MultiOutputRegressor(booster) if n_outputs == 2 else booster
 
 
-def fit_predict_uv(method, train, test, columns, seed=0):
-    """学習用の表でモデルを学習し、テスト用の表で u, v を予測する。
+def fit_predict_uv(method, train, rows, columns, seed=0):
+    """学習用の行でモデルを学習し、rows の u, v を予測する。
 
     並列計算は1スレッドにする。ほかの処理と同時に動かしたときに勾配ブースティングが
     極端に遅くなるのを防ぐためで、結果は変わらない。
@@ -772,144 +1022,208 @@ def fit_predict_uv(method, train, test, columns, seed=0):
     model = make_regressor(method, seed)
     with threadpool_limits(limits=1):
         model.fit(train[columns].to_numpy(), train[["target_u", "target_v"]].to_numpy())
-        predicted = model.predict(test[columns].to_numpy())
+        predicted = model.predict(rows[columns].to_numpy())
     return predicted[:, 0], predicted[:, 1]
 
 
-def fit_predict_degrees_as_numbers(train, test):
+def fit_predict_angle(method, train, rows, columns, seed=0):
+    """u, v の代わりに、対象時刻の風向（度）を数として直接回帰する（同じ入力・同じ設定で比べる用）。
+
+    静穏の行は風向がないので、学習から外す。予測は0以上360未満にそろえる。
+    """
+    usable = train.dropna(subset=["target_direction_deg"])
+    model = make_regressor(method, seed, n_outputs=1)
+    with threadpool_limits(limits=1):
+        model.fit(usable[columns].to_numpy(), usable["target_direction_deg"].to_numpy())
+        predicted = model.predict(rows[columns].to_numpy())
+    return normalise_degrees(predicted)
+
+
+def fit_predict_degrees_as_numbers(train, rows):
     """悪い例：風向を普通の数値として線形回帰する。
 
-    入力は予測時刻の風向（度）と対象時刻の時（0〜23）、出力は対象時刻の風向（度）。
+    入力は予測起点の風向（度）と対象時刻の時（0〜23）、出力は対象時刻の風向（度）。
     350度と10度が近いことを知らないため、北寄りの風で大きく外れやすい。
     時刻もふつうの数として使うので、23時と0時が近いことも知らない。
+    予測起点が静穏で風向がない行は予測できない（NaN）。
     """
     columns = ["issue_direction_deg", "target_hour"]
     usable = train.dropna(subset=columns + ["target_direction_deg"])
     model = LinearRegression()
     model.fit(usable[columns].to_numpy(), usable["target_direction_deg"].to_numpy())
-    return normalise_degrees(model.predict(test[columns].to_numpy()))
+    predicted = np.full(len(rows), np.nan)
+    known = rows[columns].notna().all(axis=1).to_numpy()
+    if known.any():
+        predicted[known] = normalise_degrees(model.predict(rows.loc[known, columns].to_numpy()))
+    return predicted
 
 
-def predict_direction(spec, train, test, climatology, recent, seed=0):
-    """手法 spec で、テスト用の各行の風向（度）を予測する。
-
-    recent は「直近の観測」として使う列名の一覧。
-    """
+def predict_one(spec, stage_data, rows, seed=0):
+    """手法 spec で rows の各行を予測し、(風向, u, v) を返す。風向だけを予測する手法は u, v が None。"""
     method, feature_set = parse_model(spec)
     if method == "persistence":
-        u, v = test["u_lag0"].to_numpy(), test["v_lag0"].to_numpy()
+        u, v = rows["u_lag0"].to_numpy(), rows["v_lag0"].to_numpy()
+    elif method == "persistence_24h":
+        u, v = rows["u_cycle24"].to_numpy(), rows["v_cycle24"].to_numpy()
     elif method == "climatology":
-        u, v = predict_climatology(climatology, test["target_time"])
-    elif method in ("linear", "boosting"):
-        columns = feature_columns(feature_set, recent)
-        u, v = fit_predict_uv(method, train, test, columns, seed)
+        u, v = rows["clim_u"].to_numpy(), rows["clim_v"].to_numpy()
     elif method == "degrees_as_numbers":
-        return fit_predict_degrees_as_numbers(train, test)
+        return fit_predict_degrees_as_numbers(stage_data["train"], rows), None, None
     else:
-        raise ValueError(f"未知の手法です: {spec}")
-    return uv_to_direction(u, v)
+        base, angle = split_method(method)
+        if base not in MODEL_SETTINGS:
+            raise ValueError(f"未知の手法です: {spec}")
+        if feature_set is None:
+            raise ValueError(f"特徴量の組を「{method}:calendar+recent」のように指定してください: {spec}")
+        columns = feature_columns(feature_set, stage_data["recent"])
+        if angle:
+            return fit_predict_angle(base, stage_data["train"], rows, columns, seed), None, None
+        u, v = fit_predict_uv(base, stage_data["train"], rows, columns, seed)
+    return uv_to_direction(u, v), u, v
 
 
 # ---------------------------------------------------------------------------
 # 実験と評価
 # ---------------------------------------------------------------------------
 
-def warn_if_optional_inputs_drop_rows(table, recent, test_start):
-    """気温・気圧・日照の欠損だけが理由で、テスト期間の行が5%より多く評価から外れるなら知らせる。"""
-    test = table[table.index >= pd.Timestamp(test_start)]
-    optional = [name for name in recent if name in OPTIONAL_RECENT_COLUMNS]
-    wind = [name for name in recent if name not in OPTIONAL_RECENT_COLUMNS] + ["target_u", "target_v"]
-    wind_ok = test[wind].notna().all(axis=1)
-    if not optional or not wind_ok.any():
-        return
-    share = test.loc[wind_ok, optional].isna().any(axis=1).mean()
-    if share > 0.05:
-        missing = [name for name in optional if test.loc[wind_ok, name].isna().any()]
-        warnings.warn(f"テスト期間の {share:.0%} の時刻で {missing} が欠けているため、すべての手法の評価から外しました。"
-                      "途中で観測が止まった要素の列を weather から消してから実験すると、評価する時刻が減りません。")
+def forecast_rows(stage_data, models, seed=0, rows=None):
+    """評価用の行（rows を省略すると stage_data["evaluation"]）について、各手法の予測を表にする。
 
-
-def prepare_split(weather, horizon, test_start, lags=LAG_HOURS):
-    """予測用の表を作り、使う列を決め、欠けた行を除いて、学習用とテスト用に分ける。"""
-    table = make_forecast_table(weather, horizon, lags)
-    recent = recent_columns(table[table.index < pd.Timestamp(test_start)])
-    warn_if_optional_inputs_drop_rows(table, recent, test_start)
-    table = table.dropna(subset=list(CALENDAR_COLUMNS) + recent + ["target_u", "target_v"])
-    train, test = split_train_test(table, test_start)
-    if len(train) < 24 * 30:
-        raise ValueError(
-            f"学習用のデータが {len(train)} 行しかありません。テスト期間は {pd.Timestamp(test_start)} から最後までで、"
-            f"学習にはそれより前の30日以上のデータが必要です（データは {weather.index.min()}〜{weather.index.max()}）。"
-            "test_days を短くするか、期間を延ばしてください。"
-        )
-    return train, test, recent
-
-
-def rows_with_directions(table):
-    """予測時刻と対象時刻の両方で風向が決まる（静穏・欠測でない）行だけを残す。"""
-    return table[table["target_direction_deg"].notna() & table["issue_direction_deg"].notna()]
-
-
-def forecast_rows(rows, train, models, weather, test_start, recent, seed=0):
-    """rows の各行について、各手法の予測風向を並べた表を作る（学習は train で行う）。"""
-    climatology = fit_climatology(weather, test_start)
-    forecasts = rows[["target_time", "target_hour", "target_direction_deg"]].copy()
+    列：target_time, target_hour, target_u, target_v, target_direction_deg（静穏なら NaN）, excluded（使えない理由）、
+    手法ごとの予測風向（列名は手法名）と、u, v を予測する手法では予測した u, v（列名の後ろに __u, __v）。
+    使えない行（excluded が空でない行）の予測は NaN にする。
+    """
+    rows = stage_data["evaluation"] if rows is None else rows
+    used = (rows["excluded"] == "").to_numpy()
+    columns = ["target_time", "target_hour", "target_u", "target_v", "target_direction_deg", "excluded"]
+    forecasts = rows[columns].copy()
+    predictions = {}
     for spec in models:
-        forecasts[spec] = predict_direction(spec, train, rows, climatology, recent, seed)
+        direction, u, v = predict_one(spec, stage_data, rows[used], seed)
+        predictions[spec] = direction
+        if u is not None:
+            predictions[f"{spec}__u"] = u
+            predictions[f"{spec}__v"] = v
+    for name, values in predictions.items():
+        column = np.full(len(rows), np.nan)
+        column[used] = values
+        forecasts[name] = column
     return forecasts
 
 
-def forecast_one_horizon(weather, horizon, models=DEFAULT_MODELS, test_start=None,
-                         lags=LAG_HOURS, seed=0):
-    """1つの予測時間について、テスト期間の各時刻での各手法の予測風向を並べた表を返す。
+def forecast_stage(weather, horizon, models, split, stage="test", lags=LAG_HOURS,
+                   max_horizon=COMMON_MAX_HORIZON, seed=0):
+    """1つの段階・1つの予測時間について、評価用の各行での各手法の予測を表にする（列は forecast_rows）。"""
+    stage_data = prepare_stage(weather, horizon, split, stage, lags, max_horizon)
+    return forecast_rows(stage_data, models, seed)
 
-    すべての手法を同じ行（時刻）で比べる。評価に使うのは、使う特徴量がそろっていて、
-    予測時刻と対象時刻の両方で風向が決まる（静穏・欠測でない）行。
+
+def forecast_one_horizon(weather, horizon, models=DEFAULT_MODELS, test_start=None, lags=LAG_HOURS, seed=0):
+    """簡易版：test_start より前で学習し、それ以降で評価する（既定は最後の365日がテスト期間、検証なし）。
+
+    評価の予測起点は、horizon 時間先まで評価期間に収まる時刻。予測時間どうしを比べるときは、
+    どの予測時間でも同じ予測起点を使う forecast_stage と run_horizon_experiment を使う。
     """
     if test_start is None:
         test_start = default_test_start(weather)
-    train, test, recent = prepare_split(weather, horizon, test_start, lags)
-    test = rows_with_directions(test)
-    if len(test) == 0:
-        raise ValueError(f"テスト期間（{pd.Timestamp(test_start)} 以降）に評価できる時刻がありません。期間を確認してください。")
-    return forecast_rows(test, train, models, weather, test_start, recent, seed)
+    split = test_start_split(weather, test_start)
+    return forecast_stage(weather, horizon, models, split, "test", lags, max_horizon=horizon, seed=seed)
 
 
-def forecast_training_period(weather, horizon, models=DEFAULT_MODELS, test_start=None,
-                             lags=LAG_HOURS, seed=0):
+def forecast_training_period(weather, horizon, models, split, stage="test", lags=LAG_HOURS,
+                             max_horizon=COMMON_MAX_HORIZON, seed=0):
     """学習期間の各時刻を、その期間で学習したモデル自身で予測する（過学習を調べる用）。
 
-    学習に使った時刻の成績なので、ふつうの評価には使わない。テスト期間の成績と比べて、
+    学習に使った時刻の成績なので、ふつうの評価には使わない。評価期間の成績と比べて、
     学習期間だけよく当たるなら、学習期間の偶然の変動まで覚えている（過学習）と考えられる。
     """
-    if test_start is None:
-        test_start = default_test_start(weather)
-    train, _, recent = prepare_split(weather, horizon, test_start, lags)
-    return forecast_rows(rows_with_directions(train), train, models, weather, test_start, recent, seed)
+    stage_data = prepare_stage(weather, horizon, split, stage, lags, max_horizon)
+    rows = stage_data["train"].assign(excluded="")
+    return forecast_rows(stage_data, models, seed, rows)
+
+
+def angle_rows(forecasts):
+    """角度の評価に使う行：評価に使える行のうち、対象時刻の風向が決まる（静穏でない）行。"""
+    used = forecasts["excluded"] == "" if "excluded" in forecasts else pd.Series(True, index=forecasts.index)
+    return (used & forecasts["target_direction_deg"].notna()).to_numpy()
+
+
+def angle_errors(forecasts, spec):
+    """角度の評価に使う行での、手法 spec の誤差（度）。予測の向きが決まらない行は90度として数える。"""
+    rows = angle_rows(forecasts)
+    errors = angular_error(forecasts.loc[rows, "target_direction_deg"], forecasts.loc[rows, spec])
+    return pd.Series(np.where(np.isnan(errors), UNDEFINED_DIRECTION_ERROR_DEG, errors),
+                     index=forecasts.index[rows])
+
+
+def vector_rmse(forecasts, spec):
+    """予測と観測の風ベクトルの差の大きさの二乗平均平方根（m/s）。風向だけを予測する手法は NaN。
+
+    静穏（u = v = 0）の対象時刻も含める。対象時刻の観測がない行と、評価から外した行は使わない。
+    """
+    if f"{spec}__u" not in forecasts:
+        return np.nan
+    used = forecasts["excluded"] == "" if "excluded" in forecasts else pd.Series(True, index=forecasts.index)
+    part = forecasts[used & forecasts["target_u"].notna()]
+    squared = (part[f"{spec}__u"] - part["target_u"]) ** 2 + (part[f"{spec}__v"] - part["target_v"]) ** 2
+    return float(np.sqrt(squared.mean()))
 
 
 def score_forecasts(forecasts, models):
-    """各手法の平均絶対角度誤差（度）と、誤差45度以内の割合（%）をまとめる。"""
+    """各手法の成績と、評価に使った件数・外した件数を表にする。
+
+    - mae_deg：角度の平均絶対誤差（度）。対象時刻の風向が決まる行で計算する。予測の向きが決まらない
+      行（予測した風ベクトルが0）は、向きを一様ランダムに選んだときの期待誤差（90度）として数える。
+    - within_45_pct：誤差45度以内の割合（%）。向きが決まらない予測は「外れ」として数える。
+    - vector_rmse_ms：風ベクトルの差の二乗平均平方根（m/s）。静穏も含める。風向だけを予測する手法は NaN（対象外）。
+    - n_test：角度の評価件数。n_vector：ベクトルの評価件数。n_undefined・undefined_pct：予測の向きが決まらない
+      件数と、角度の評価件数に対する割合（%）。n_calm_target：対象時刻が静穏で角度の評価から外した件数。
+      n_missing_target：対象時刻の観測がない件数。n_missing_input：予測起点までの入力が欠けていた件数。
+      n_issue：予測起点の数（これらの合計の元）。どの手法も同じ行で評価する。
+    """
+    has_status = "excluded" in forecasts
+    used = forecasts["excluded"] == "" if has_status else pd.Series(True, index=forecasts.index)
+    rows_for_angle = angle_rows(forecasts)
+    has_target_vector = "target_u" in forecasts
     rows = []
     for spec in models:
-        errors = angular_error(forecasts["target_direction_deg"], forecasts[spec])
+        predicted = forecasts.loc[rows_for_angle, spec].to_numpy(dtype=float)
+        undefined = np.isnan(predicted)
+        errors = angle_errors(forecasts, spec).to_numpy()
+        within = ~undefined & (errors <= 45 + 1e-9)  # 16方位どうしのちょうど45度を丸め誤差で外さない
         rows.append({
             "model": spec,
             "label": model_label(spec),
-            "mae_deg": float(np.mean(errors)),
-            # 16方位どうしのちょうど45度を、計算の丸め誤差で「外れ」にしない
-            "within_45_pct": float(100 * np.mean(errors <= 45 + 1e-9)),
-            "n_test": int(len(errors)),
+            "mae_deg": float(np.mean(errors)) if len(errors) else np.nan,
+            "within_45_pct": float(100 * np.mean(within)) if len(errors) else np.nan,
+            "vector_rmse_ms": vector_rmse(forecasts, spec) if has_target_vector else np.nan,
+            "n_test": int(rows_for_angle.sum()),
+            "n_vector": int((used & forecasts["target_u"].notna()).sum()) if has_target_vector else 0,
+            "n_undefined": int(undefined.sum()),
+            "undefined_pct": float(100 * np.mean(undefined)) if len(errors) else np.nan,
+            "n_calm_target": int((used & forecasts["target_direction_deg"].isna()).sum()),
+            "n_missing_target": int((forecasts["excluded"] == EXCLUDED_TARGET).sum()) if has_status else 0,
+            "n_missing_input": int((forecasts["excluded"] == EXCLUDED_INPUT).sum()) if has_status else 0,
+            "n_issue": int(len(forecasts)),
         })
     return pd.DataFrame(rows)
 
 
-def run_horizon_experiment(weather, horizons, models=DEFAULT_MODELS, test_start=None,
-                           lags=LAG_HOURS, seed=0):
-    """予測時間を変えながら同じ評価を繰り返し、結果を1つの表にまとめる。"""
+def run_horizon_experiment(weather, horizons, models=DEFAULT_MODELS, split=None, stage="test",
+                           lags=LAG_HOURS, max_horizon=None, seed=0, test_start=None):
+    """予測時間を変えながら同じ評価を繰り返し、結果を1つの表にまとめる。
+
+    どの予測時間でも同じ予測起点（max_horizon 時間先まで評価期間に収まる時刻）を使う。max_horizon を
+    省略すると、COMMON_MAX_HORIZON（72）と horizons の最大値の大きい方。split を省略すると、
+    test_start があればその前後で、なければ年ごとに分ける。
+    """
+    if split is None:
+        split = test_start_split(weather, test_start) if test_start is not None else year_split(weather)
+    if max_horizon is None:
+        max_horizon = max(COMMON_MAX_HORIZON, max(horizons))
     tables = []
     for horizon in horizons:
-        forecasts = forecast_one_horizon(weather, horizon, models, test_start, lags, seed)
+        forecasts = forecast_stage(weather, horizon, models, split, stage, lags, max_horizon, seed)
         scores = score_forecasts(forecasts, models)
         scores.insert(0, "horizon_h", horizon)
         tables.append(scores)
@@ -917,25 +1231,40 @@ def run_horizon_experiment(weather, horizons, models=DEFAULT_MODELS, test_start=
 
 
 def error_by_hour(forecasts, models):
-    """対象時刻の時（0〜23時）ごとの平均絶対角度誤差。"""
-    errors = pd.DataFrame(
-        {spec: angular_error(forecasts["target_direction_deg"], forecasts[spec]) for spec in models},
-        index=forecasts.index,
-    )
-    return errors.groupby(forecasts["target_hour"].to_numpy()).mean().rename_axis("target_hour")
+    """対象時刻の時（0〜23時）ごとの平均絶対角度誤差（向きが決まらない予測は90度）。"""
+    rows = angle_rows(forecasts)
+    errors = pd.DataFrame({spec: angle_errors(forecasts, spec) for spec in models})
+    hours = forecasts.loc[rows, "target_hour"].to_numpy()
+    return errors.groupby(hours).mean().rename_axis("target_hour")
 
 
-def run_scenario_experiment(weather_by_scenario, horizons, models, test_days=365,
-                            lags=LAG_HOURS, seed=0):
+def select_on_validation(weather, split, candidates=INTEGRATED_CANDIDATES, horizon=3,
+                         feature_set="calendar+recent", lags=LAG_HOURS, max_horizon=COMMON_MAX_HORIZON, seed=0):
+    """検証期間の成績で、統合モデルの設定（MODEL_SETTINGS の名前）を選ぶ。最終テスト期間は見ない。
+
+    学習期間で学習し、検証期間の horizon 時間先の平均絶対角度誤差が最も小さい候補を選ぶ
+    （同じなら一覧で先の候補）。戻り値は（候補ごとの検証期間の成績の表, 選んだ名前）。
+    """
+    specs = [f"{name}:{feature_set}" for name in candidates]
+    forecasts = forecast_stage(weather, horizon, specs, split, "validation", lags, max_horizon, seed)
+    scores = score_forecasts(forecasts, specs)
+    scores.insert(0, "candidate", list(candidates))
+    best = int(np.argmin(scores["mae_deg"].to_numpy()))
+    scores["selected"] = np.arange(len(scores)) == best
+    return scores, candidates[best]
+
+
+def run_scenario_experiment(weather_by_scenario, horizons, models, test_days=None,
+                            lags=LAG_HOURS, seed=0, max_horizon=None):
     """複数のデータ（シナリオ）に同じ実験を行い、結果を1つの表にまとめる。
 
-    weather_by_scenario は {シナリオ名: prepare_weather 済みの表} の辞書。
-    どのシナリオも、最後の test_days 日をテスト期間にする。
+    weather_by_scenario は {シナリオ名: prepare_weather 済みの表} の辞書。test_days を省略すると
+    年ごとに分けて3年目を最終テストにし、指定すると最後の test_days 日を最終テストにする。
     """
     tables = []
     for name, weather in weather_by_scenario.items():
-        test_start = default_test_start(weather, test_days)
-        scores = run_horizon_experiment(weather, horizons, models, test_start, lags, seed)
+        split = last_days_split(weather, test_days) if test_days else year_split(weather)
+        scores = run_horizon_experiment(weather, horizons, models, split, "test", lags, max_horizon, seed)
         scores.insert(0, "scenario", name)
         tables.append(scores)
     return pd.concat(tables, ignore_index=True)

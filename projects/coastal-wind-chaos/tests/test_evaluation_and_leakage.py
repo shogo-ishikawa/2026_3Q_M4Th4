@@ -44,14 +44,19 @@ def test_within_45_counts_errors_of_exactly_45_degrees():
 
 def test_persistence_with_zero_lead_time_has_zero_error(two_year_weather):
     forecasts = wp.forecast_one_horizon(two_year_weather, 0, ["persistence"], test_start="2024-07-01")
-    assert wp.angular_error(forecasts["target_direction_deg"], forecasts["persistence"]).max() < 1e-9
+    assert wp.angle_errors(forecasts, "persistence").max() < 1e-9
 
 
 def test_persistence_repeats_the_direction_at_the_issue_time(two_year_weather):
     forecasts = wp.forecast_one_horizon(two_year_weather, 6, ["persistence"], test_start="2024-07-01 01:00")
     assert (forecasts["target_time"] - forecasts.index == pd.Timedelta(hours=6)).all()
-    observed_then = two_year_weather.loc[forecasts.index, "wind_direction_deg"]
-    assert wp.angular_error(observed_then, forecasts["persistence"]).max() < 1e-9
+    used = forecasts["excluded"] == ""
+    observed_then = two_year_weather.loc[forecasts.index[used], "wind_direction_deg"].to_numpy()
+    predicted = forecasts.loc[used, "persistence"].to_numpy()
+    # 予測起点が静穏なら、持続予報の向きも決まらない（0ベクトル）
+    np.testing.assert_array_equal(np.isnan(observed_then), np.isnan(predicted))
+    defined = ~np.isnan(predicted)
+    assert wp.angular_error(observed_then[defined], predicted[defined]).max() < 1e-9
 
 
 def test_split_keeps_training_targets_before_the_test_period(two_year_weather):
@@ -121,7 +126,9 @@ def test_predictions_do_not_use_observations_after_the_issue_time(two_year_weath
     assert len(answer_changed) > 0
     assert not np.allclose(original.loc[answer_changed, "target_direction_deg"],
                            modified.loc[answer_changed, "target_direction_deg"])
-    pd.testing.assert_frame_equal(original.loc[issued_by_cut, models], modified.loc[issued_by_cut, models])
+    predictions = [name for name in original.columns if name.split("__")[0] in models]
+    assert len(predictions) == len(models) + 2 * 4  # u, v を予測する4つの手法は __u, __v の列もある
+    pd.testing.assert_frame_equal(original.loc[issued_by_cut, predictions], modified.loc[issued_by_cut, predictions])
 
 
 def test_optional_inputs_are_chosen_from_the_training_part_only(two_year_weather):
@@ -141,7 +148,10 @@ def test_warns_when_a_missing_optional_input_removes_test_rows(two_year_weather)
     changed.loc[changed.index >= pd.Timestamp("2024-10-01"), "temperature_c"] = np.nan
     with pytest.warns(UserWarning, match="評価から外しました"):
         forecasts = wp.forecast_one_horizon(changed, 1, ["persistence"], test_start="2024-07-01 01:00")
-    assert forecasts.index.max() < pd.Timestamp("2024-10-01")
+    late = forecasts.index >= pd.Timestamp("2024-10-01")
+    assert (forecasts.loc[late, "excluded"] == wp.EXCLUDED_INPUT).all()  # 行は残し、理由を書く
+    assert forecasts.loc[late, "persistence"].isna().all()
+    assert wp.score_forecasts(forecasts, ["persistence"]).loc[0, "n_missing_input"] >= late.sum()
     with warnings.catch_warnings():
         warnings.filterwarnings("error", message=".*評価から外しました")
         wp.forecast_one_horizon(two_year_weather, 1, ["persistence"], test_start="2024-07-01 01:00")
@@ -155,11 +165,12 @@ def test_too_little_training_data_is_explained():
 
 def test_training_period_forecasts_cover_only_the_training_rows(two_year_weather):
     test_start = pd.Timestamp("2024-07-01 01:00")
+    split = wp.test_start_split(two_year_weather, test_start)
     models = ["persistence", "linear:calendar+recent"]
-    in_sample = wp.forecast_training_period(two_year_weather, 6, models, test_start)
+    in_sample = wp.forecast_training_period(two_year_weather, 6, models, split)
     assert in_sample["target_time"].max() < test_start
     assert len(in_sample) > 300 * 24
-    assert in_sample[models].notna().all().all()
+    assert in_sample["linear:calendar+recent"].notna().all()
 
 
 def test_boosting_does_not_use_a_random_internal_validation_split():

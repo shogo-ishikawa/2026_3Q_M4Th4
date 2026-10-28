@@ -96,11 +96,16 @@ def test_prepare_weather_handles_calm_missing_quality_and_no_phenomenon(office_c
     assert weather.loc[at("2024-02-29 00:00"), "v_ms"] == pytest.approx(2.4)
 
 
-def test_quality_5_is_used_and_quality_2_is_not_by_default(tmp_path):
+def test_only_normal_values_are_used_by_default_and_quality_5_can_be_chosen(tmp_path):
     rows = [ROWS_OFFICE[0].replace("7.6,8,1,", "7.6,5,1,", 1), ROWS_OFFICE[2].replace("6.9,8,1,", "6.9,2,1,", 1)]
-    weather = wp.prepare_weather(wp.read_jma_csv(write_text(tmp_path / "q.csv", HEADER_OFFICE + rows)))
-    assert weather.loc[at("2024-02-28 22:00"), "temperature_c"] == pytest.approx(7.6)  # 準正常値（5）は使う
-    assert np.isnan(weather.loc[at("2024-02-29 00:00"), "temperature_c"])  # 疑問値（2）は使わない
+    raw = wp.read_jma_csv(write_text(tmp_path / "q.csv", HEADER_OFFICE + rows))
+    assert wp.DEFAULT_MIN_QUALITY == 8
+    weather = wp.prepare_weather(raw)
+    assert np.isnan(weather.loc[at("2024-02-28 22:00"), "temperature_c"])  # 既定では準正常値（5）も使わない
+    with_semi_normal = wp.prepare_weather(raw, min_quality=5)  # 準正常値を使うと明示したとき
+    assert with_semi_normal.loc[at("2024-02-28 22:00"), "temperature_c"] == pytest.approx(7.6)
+    for weather in [weather, with_semi_normal]:
+        assert np.isnan(weather.loc[at("2024-02-29 00:00"), "temperature_c"])  # 疑問値（2）は使わない
 
 
 def test_min_quality_can_accept_insufficient_data(office_csv):

@@ -1,4 +1,4 @@
-# 授業中にすぐ試すための軽い設定（CPUだけで1分以内を想定）。
+# 授業中にすぐ試すための軽い設定（CPUだけで1分程度を想定）。
 # パスは作品フォルダ projects/coastal-wind-chaos/ を基準にします。
 # 使い方：python scripts/run_experiments.py --config configs/fast.toml
 
@@ -10,29 +10,43 @@ years = 3
 output = "data/sample_coastal_amedas.csv"
 truth_output = "data/sample_coastal_truth.csv"
 
-[wind]
-horizons = [1, 3, 6, 12, 24, 48]          # 何時間先を予測するか
-lags = [0, 1, 2, 3, 6, 12, 24]            # 直近の観測として使う「何時間前」の値
-models = [
-  "persistence",
-  "climatology",
-  "linear:calendar",
-  "linear:recent",
-  "linear:calendar+recent",
-  "boosting:calendar+recent",
-  "degrees_as_numbers",
-]
-test_days = 365                           # 最後の何日をテスト期間にするか
-min_quality = 5                           # 使う品質情報の下限（8 正常値, 5 準正常値）
+[data]
+min_quality = 8               # 使う品質情報の下限：8 = 正常値だけ（既定）、5 = 準正常値も使う
+
+[split]
+mode = "years"                # "years"：1年目学習・2年目検証・3年目最終テスト、"last_days"：最後の日数で分ける
+test_days = 365               # mode = "last_days" のときの最終テスト期間（日）
+validation_days = 365         # mode = "last_days" のときの検証期間（日、0 なら検証なし）
+max_horizon = 72              # この時間先まで評価期間に収まる予測起点だけを使う（どの予測時間でも同じ起点）
+
+[models]
+# 統合モデル（季節・日周期＋過去・直近の観測）の設定の候補。検証期間の成績で選び、最終テスト期間では選ばない。
+candidates = ["linear", "boosting_shallow", "boosting", "boosting_deep"]
+selection_horizon = 3
+lags = [0, 1, 2, 3, 6, 12, 24]   # u, v の「何時間前」
 seed = 0
-hourly_error_horizon = 6                  # 時刻別の誤差を描く予測時間
+
+[experiment1]
+# 角度の罠：同じ入力・同じ設定で、u, v の回帰と角度の直接回帰を比べる（検証期間）
+horizon = 3
+methods = ["linear", "boosting"]
+
+[experiment2]
+# 3時間先：季節・日周期だけ／過去・直近の観測だけ／統合と、3つの基準予報（最終テスト期間）
+horizon = 3
+window_hours = 48
+
+[experiment3]
+# 予測時間の比較：統合モデルと3つの基準予報（最終テスト期間）
+horizons = [1, 3, 6, 12, 18, 24, 36, 48, 72]
+extra_models = []             # 例：["boosting:calendar+recent"]
 
 [scenarios]
-# 合成データの成分を変えて、同じ手法の誤差を比べます（実データでは意味を持ちません）。
+# 補足：合成データの成分を変えて、同じ手法の誤差を比べます（--data で実データを使うときは行いません）。
 enabled = true
 names = ["periodic_only", "periodic_ar"]
-horizons = [1, 3, 6, 12, 24, 48]
-models = ["persistence", "climatology", "linear:calendar+recent"]
+horizons = [1, 3, 6, 12, 18, 24, 36, 48, 72]
+models = ["persistence", "climatology", "persistence_24h", "linear:calendar+recent"]
 
 [lorenz]
 # ローレンツ系の時間は無次元です。時間（hour）には換算しません。
@@ -42,4 +56,5 @@ n_steps = 3000
 dt = 0.01
 tolerance = 1.0
 benettin_steps = 20000
+check_dts = [0.01, 0.005]      # 積分の刻みを小さくした確認
 seed = 0

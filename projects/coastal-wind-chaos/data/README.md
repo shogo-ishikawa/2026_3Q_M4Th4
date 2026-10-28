@@ -54,10 +54,12 @@
 ```bash
 python scripts/generate_sample_jma_csv.py --preset periodic_only --output data/periodic_only.csv
 python scripts/generate_sample_jma_csv.py --set ar_strength=2.0 --set front_precursor_hours=0 --output data/strong_ar.csv
-python scripts/run_experiments.py --data data/strong_ar.csv --skip-scenarios   # 作ったデータで実験する
+python scripts/run_experiments.py --data data/strong_ar.csv   # 作ったデータで実験する
 ```
 
 設定を変えるときは、`--output` で別の名前を付けてください。付けないと既定の `data/sample_coastal_amedas.csv` を上書きし、`run_experiments.py` は（`--data` を付けなければ）その上書きしたファイルを使います。どの設定で作ったファイルかは、1行目と `results/run_info.json` の `data_files` で確かめられます。
+
+出力先に、このプログラムで作ったのではないファイル（1行目が「合成データ」で始まらないファイル。ダウンロードした気象庁のCSVなど）があるときは、上書きせずにエラーで止まります。`--data` で渡したファイルは読むだけで、書き換えません。
 
 すべての設定の名前と既定値は `src/coastal_wind_chaos/sample_data.py` の `DEFAULT_SETTINGS` にあります。
 
@@ -102,24 +104,36 @@ python scripts/run_experiments.py --data data/strong_ar.csv --skip-scenarios   #
 1. [過去の気象データ・ダウンロード](https://www.data.jma.go.jp/risk/obsdl/index.php)を開きます。
 2. 「地点を選ぶ」で、**風向・風速を観測している地点**を1つ選びます。現地気圧・海面気圧は気象台など（官署）だけで観測しています。アメダスの多くの地点では、降水量・気温・風向・風速・湿度を観測し、日照時間は推計値です。
 3. 「項目を選ぶ」で「時別値」を選び、「気温」「風向・風速」「日照時間」を選びます。気象台などなら「海面気圧」も選べます。
-4. 「期間を選ぶ」で2〜3年を選びます。一度にダウンロードできるデータ量には上限があります（画面右上の棒グラフ）。上限を超えるときは、1年ずつに分けてダウンロードします。
+4. 「期間を選ぶ」で3年を目安に選びます。既定の分け方（1年目＝学習、2年目＝検証、3年目＝最終テスト）には3年分ほど必要です。それより短いときは、最後の日数で分ける分け方（下の `--split last_days`）を使います。一度にダウンロードできるデータ量には上限があります（画面右上の棒グラフ）。上限を超えるときは、1年ずつに分けてダウンロードします。
 5. 「表示オプションを選ぶ」は既定のままにします。
    - 利用上注意が必要なデータ：値を格納し、注意が必要なことを示す情報をつける（これで「品質情報」の列が入ります）
    - 観測環境などの変化の前後で不均質となったデータ：すべての期間の値を格納し、不均質を示す情報をつける（これで「均質番号」の列が入ります）
    - ダウンロードCSVファイルのデータ仕様：「すべて数値で格納」、日付の形式は「日付リテラルで格納」（「年月日などに分けて格納」も読み込めます）
    - 「都道府県名を格納」を選んでも読み込めます（地点名の行の上に1行増えます）。
-6. 「CSVファイルをダウンロード」を押し、ファイル（`data.csv`）を `data/raw/` に分かりやすい名前で保存します（`data/raw/` は最初はないので作ります。Notebook では10節のセルを実行すると作られます）。**ダウンロードした日**を記録しておきます（ファイルの1行目にも書かれています。`run_experiments.py` はこの行を `results/run_info.json` に記録します）。
+6. 「CSVファイルをダウンロード」を押し、ファイル（`data.csv`）を `data/raw/` に分かりやすい名前で保存します（`data/raw/` は最初はないので作ります。Notebook では7節のセルを実行すると作られます）。**ダウンロードした日**を記録しておきます（ファイルの1行目にも書かれています。`run_experiments.py` はこの行を `results/run_info.json` に記録します）。
    地点名・観測所の種類・風速計の高さなども記録しておくと、結果を説明するときに役立ちます。CSVにはこれらは入っていません。アメダスの観測所の情報（緯度・経度・高さ、風速計の高さ、観測の開始日・終了日など）は、気象庁の[アメダス観測所の一覧（CSV形式のテキスト、Shift_JIS）](https://www.data.jma.go.jp/stats/data/mdrr/chiten/meta/amdmaster.index4)で確かめられます。
 7. 読み込みます。1年ずつのファイルは、一覧で渡すとつながります。
 
 ```python
 from coastal_wind_chaos import wind_pipeline as wp
 
-weather = wp.load_weather(["data/raw/station_2023.csv", "data/raw/station_2024.csv"])
+files = ["data/raw/station_2023.csv", "data/raw/station_2024.csv", "data/raw/station_2025.csv"]
+weather = wp.load_weather(files)                     # 品質情報が8（正常値）の値だけを使う
+# weather = wp.load_weather(files, min_quality=5)    # 準正常値（5）も使うときは、明示して指定する
 wp.summarise_weather(weather)
 ```
 
-コマンドラインでは `python scripts/run_experiments.py --data data/raw/station_2023.csv data/raw/station_2024.csv --skip-scenarios` で同じ実験ができます。
+コマンドラインでは、作品フォルダで次のように実行すると、合成データと同じ実験1〜3ができます（補足のシナリオ比較は合成データだけで行います）。
+
+```bash
+python scripts/run_experiments.py --data data/raw/station_2023.csv data/raw/station_2024.csv data/raw/station_2025.csv
+# 3年分ほどないとき：最後の180日を最終テスト、その前の180日を検証にする
+python scripts/run_experiments.py --data data/raw/station_2024.csv data/raw/station_2025.csv --split last_days --test-days 180 --validation-days 180
+# 準正常値（品質情報5）も使うとき
+python scripts/run_experiments.py --data data/raw/station_2023.csv data/raw/station_2024.csv data/raw/station_2025.csv --min-quality 5
+```
+
+画面と `results/input_columns.csv` に、使う入力の列、使わない気温・気圧・日照の列（データにない、または学習期間に値が半分未満）、入力が欠けていて評価から外す予測起点の数が出ます。気圧や日照を観測していない地点でも実験できます。
 
 「数値以外の記号を含む」形式（表示用の記号つき）のCSVは読み込めません。そのときは「すべて数値で格納」でダウンロードし直すよう、エラーで知らせます。複数の地点を1つのファイルにまとめたCSVも読み込めないので、1地点ずつダウンロードしてください。
 
@@ -141,16 +155,18 @@ wp.summarise_weather(weather)
 
 **時刻**　日本標準時（日本中央標準時、24時制）です。風向・風速は観測時刻の前10分間の平均、日照時間と降水量は前1時間の合計、気温と気圧はその時刻の値です。日付を1列にした形式では24時が翌日の `00:00:00`、年・月・日・時を分けた形式では同じ日の `24` 時と書かれます。どちらも同じ日時として読み込みます。
 
-**品質情報**　気象庁のヘルプによる意味と、このプログラムでの既定の扱いです（`min_quality` で変えられます）。
+**品質情報**　気象庁のヘルプによる意味と、このプログラムでの既定の扱いです（`min_quality`、CLIでは `--min-quality` で変えられます）。
 
 | 値 | 意味 | 既定の扱い |
 | --- | --- | --- |
 | 8 | 正常値 | 使う |
-| 5 | 準正常値（統計のもとの資料が許容範囲で欠けている） | 使う |
+| 5 | 準正常値（統計のもとの資料が許容範囲で欠けている） | 欠損にする（`min_quality=5` を明示したときだけ使う） |
 | 4 | 資料不足値（許容範囲を超えて欠けている） | 欠損にする |
 | 2 | 疑問値 | 欠損にする |
 | 1 | 欠測 | 欠損にする |
 | 0 | 観測・統計項目ではない（その地点では観測していない） | 欠損にする |
+
+欠損にした値や欠測は、前後の値から補ったり（補間）、後の時刻の値で埋めたりしません。予測起点までの入力が欠けている予測起点と、対象時刻の観測がない予測は評価から外し、理由ごとの件数を結果の表（`n_missing_input`, `n_missing_target`）に出します。
 
 **現象なし情報**　気象台などの日照時間・降水量に付きます。`1`（現象なし）の行は値が `0` と書かれます。欠測などの行では空欄です。アメダスの地点では現象なし情報の列がなく、夜の日照時間が空欄で品質情報が正常（8）になっていました。どちらも「その1時間に日照（降水）がなかった」として0にそろえます。後者は2026年10月に実際にダウンロードしたファイルで確かめた扱いで、気象庁のヘルプには書かれていません。念のため、`summarise_weather` は空欄を0とした時刻の数と、そのうち必ず日中になる10〜14時の数を表示します。10〜14時の数が0でなければ、元のCSVを確かめてください。
 
