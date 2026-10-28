@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tomllib
@@ -195,21 +196,54 @@ def blank_wind_every(path, every_hours):
 
 def test_experiment2_keeps_the_scores_when_an_example_window_cannot_be_chosen(tmp_path):
     """36時間ごとに風が欠測すると、欠測のない48時間がないので穏やかな期間を選べない。
-    成績の表は保存し、その期間の図だけを理由を付けて省く。"""
+    成績の表は保存し、その期間の図だけを理由を付けて省く。同じフォルダで前に実行したときの
+    その期間の図と表は消す（別のデータの結果と取り違えないように）。"""
     config = write_small_config(tmp_path, years=1)
-    data = tmp_path / "gappy.csv"
-    run([SCRIPTS / "generate_sample_jma_csv.py", "--output", data, "--years", "1", "--seed", "8"])
-    blank_wind_every(data, 36)
+    complete, gappy = tmp_path / "complete.csv", tmp_path / "gappy.csv"
+    run([SCRIPTS / "generate_sample_jma_csv.py", "--output", complete, "--years", "1", "--seed", "8"])
+    shutil.copy(complete, gappy)
+    blank_wind_every(gappy, 36)
     results, figures = tmp_path / "results", tmp_path / "figures"
-    stdout = run([SCRIPTS / "run_experiments.py", "--config", config, "--data", data, "--split", "last_days",
-                  "--test-days", "90", "--validation-days", "60", "--experiments", "2",
-                  "--results-dir", results, "--figures-dir", figures, "--language", "en"]).stdout
-    assert "図を省略します" in stdout
+    arguments = ["--split", "last_days", "--test-days", "90", "--validation-days", "60", "--experiments", "2",
+                 "--results-dir", results, "--figures-dir", figures, "--language", "en"]
+    # 1回目：欠測のないデータ。どちらの期間も選べる
+    run([SCRIPTS / "run_experiments.py", "--config", config, "--data", complete, *arguments])
+    assert (figures / "exp2_calm_48h.png").exists() and (results / "exp2_calm_48h.csv").exists()
+    # 2回目：同じフォルダに、欠測の多いデータ
+    stdout = run([SCRIPTS / "run_experiments.py", "--config", config, "--data", gappy, *arguments]).stdout
+    assert "図を省略します" in stdout and "前の実行で作った exp2_calm_48h.png を削除しました" in stdout
     windows = pd.read_csv(results / "exp2_windows.csv").set_index("window")
     assert pd.isna(windows.loc["calm", "first_target_time"]) and "欠測" in windows.loc["calm", "note"]
-    assert not (figures / "exp2_calm_48h.png").exists() and (figures / "exp2_abrupt_48h.png").exists()
+    assert not (figures / "exp2_calm_48h.png").exists() and not (results / "exp2_calm_48h.csv").exists()
+    assert (figures / "exp2_abrupt_48h.png").exists() and (results / "exp2_abrupt_48h.csv").exists()
     scores = pd.read_csv(results / "exp2_scores.csv")
     assert scores["mae_deg"].notna().all() and (scores["n_test"] > 0).all()
+    info = json.loads((results / "run_info.json").read_text(encoding="utf-8"))
+    assert info["experiment2"]["windows"]["calm"] is None
+    assert [entry["path"] for entry in info["data_files"]] == [str(gappy)]
+
+
+def test_only_experiment3_does_not_use_the_settings_of_experiment2(tmp_path):
+    """実行しない実験の予測時間は使わない。実験2の既定（3時間先）が max_horizon = 1 より長くても、
+    実験3だけなら、入力の確認も含めて1時間先で実行できる。"""
+    config = write_small_config(tmp_path)
+    text = config.read_text(encoding="utf-8")
+    for old, new in [("max_horizon = 48", "max_horizon = 1"), ("selection_horizon = 3", "selection_horizon = 1"),
+                     ("horizons = [1, 25, 48]", "horizons = [1]")]:
+        assert text.count(old) == 1
+        text = text.replace(old, new)
+    config.write_text(text, encoding="utf-8")
+    results = tmp_path / "results"
+    stdout = run([SCRIPTS / "run_experiments.py", "--config", config, "--experiments", "3", "--skip-scenarios",
+                  "--results-dir", results, "--figures-dir", tmp_path / "figures", "--language", "en"]).stdout
+    assert "入力の列（最終テストの段階、1時間先）" in stdout
+    info = json.loads((results / "run_info.json").read_text(encoding="utf-8"))
+    assert info["input_check_horizon"] == 1 and info["model_options"]["max_horizon"] == 1
+    scores = pd.read_csv(results / "exp3_scores.csv")
+    split = {name: pd.Timestamp(value) for name, value in info["split"].items() if name != "mode"}
+    n_test = (split["end"] - split["test_start"]) // pd.Timedelta(hours=1) + 1 - 1   # 1時間先まで収まる予測起点
+    assert list(scores["horizon_h"].unique()) == [1] and (scores["n_issue"] == n_test).all()
+    assert not (results / "exp2_scores.csv").exists()
 
 
 def split_into_two_files(source, first, second):

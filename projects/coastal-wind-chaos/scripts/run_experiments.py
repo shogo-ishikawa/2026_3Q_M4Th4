@@ -177,6 +177,26 @@ def model_options(config):
     return {"lags": tuple(config["models"]["lags"]), "max_horizon": config["split"]["max_horizon"]}
 
 
+def input_check_horizon(config, wind_experiments):
+    """入力の確認に使う予測時間。実行する実験の設定から選ぶ（実行しない実験の設定は使わない）。
+
+    実験2を実行するならその予測時間、しなければ実験3の最短の予測時間、それもなければ実験1の予測時間。
+    """
+    if 2 in wind_experiments:
+        return config["experiment2"]["horizon"]
+    if 3 in wind_experiments:
+        return min(horizons_from(config["experiment3"]))
+    return config["experiment1"]["horizon"]
+
+
+def remove_old_outputs(*paths):
+    """今回は作らない出力が、同じフォルダに前の実行から残っていれば消す（別のデータ・期間の結果と取り違えないように）。"""
+    for path in paths:
+        if path.exists():
+            path.unlink()
+            print(f"前の実行で作った {path.name} を削除しました（今回は作らないため）")
+
+
 def run_input_check(weather, split, horizon, config, results_dir):
     """最終テストの段階で使う入力の列と、欠けている入力で評価から外す予測起点の数。"""
     options = model_options(config)
@@ -227,6 +247,7 @@ def run_experiment2(weather, split, integrated, config, results_dir, figures_dir
         if fig is None:  # 成績の表は保存し、省略した図と理由を記録する（条件を緩めて別の期間を選ばない）
             windows.append({"window": name, "first_target_time": None, "last_target_time": None,
                             "note": result["window_notes"][name]})
+            remove_old_outputs(results_dir / f"exp2_{name}_48h.csv", figures_dir / f"exp2_{name}_48h.png")
             continue
         result["examples"][name].to_csv(results_dir / f"exp2_{name}_48h.csv", index=False)
         windows.append({"window": name, "first_target_time": window[0], "last_target_time": window[1], "note": ""})
@@ -350,7 +371,8 @@ def main():
         print(f"時間の分け方：{info['split']}")
         print(f"u, v の「何時間前」（lags）：{info['model_options']['lags']}　"
               f"共通の予測起点を決める最長の予測時間（max_horizon）：{info['model_options']['max_horizon']}")
-        run_input_check(weather, split, config["experiment2"]["horizon"], config, args.results_dir)
+        info["input_check_horizon"] = input_check_horizon(config, wind_experiments)
+        run_input_check(weather, split, info["input_check_horizon"], config, args.results_dir)
 
         models = config["models"]
         selection, integrated = experiments.select_integrated(weather, split, models["selection_horizon"],
@@ -359,6 +381,7 @@ def main():
         info["integrated_model"] = integrated
         if selection is None:
             print(f"\n検証期間がないので、統合モデルの設定は既定の {integrated} を使います。")
+            remove_old_outputs(args.results_dir / "selection_validation.csv")
         else:
             selection.to_csv(args.results_dir / "selection_validation.csv", index=False)
             print_table(f"検証期間で統合モデルの設定を選ぶ（{models['selection_horizon']}時間先）→ {integrated}",
