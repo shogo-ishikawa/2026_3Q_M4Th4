@@ -64,6 +64,7 @@ guitar-chord-lab analyse 録音.wav --annotation 正解.csv --pdf         # 評�
 guitar-chord-lab analyse 合奏.wav --separate --device auto            # ギターを分離してから解析
 guitar-chord-lab separate 合奏.wav --duration 20                      # 分離した音だけを保存
 guitar-chord-lab evaluate outputs/demo/chords.csv 正解.csv            # 保存した結果を評価
+guitar-chord-lab evaluate 予測.csv 正解.csv --offset 30 --duration 20  # analysis.json のない CSV を評価
 guitar-chord-lab guitarset                                            # GuitarSet の録音5本を取り出し、実験設定を作る
 guitar-chord-lab experiment configs/experiment_demo.toml              # 比較実験
 guitar-chord-lab --help
@@ -71,7 +72,7 @@ guitar-chord-lab --help
 
 `python -m guitar_chord_lab ...` でも同じように実行できます。
 
-`evaluate` は、`chords.csv` の `source_start_s` 列（元ファイルでの時刻）から切り出し位置を求め、正解注釈をその範囲に合わせて比べます。切り出し位置を自分で指定するときは `--offset 30` のようにします。同じフォルダの `analysis.json` から元の音声ファイルが見つかれば、注釈が音源より長くないかも確かめます。
+`evaluate` は、評価する区間を「切り出し位置」と「解析した長さ」で決め、正解注釈をその区間に合わせて比べます。切り出し位置は `chords.csv` の `source_start_s` 列（元ファイルでの時刻）か同じフォルダの `analysis.json` から、解析した長さは `analysis.json` から読みます（元ファイル全体の長さではありません）。区間の中で予測のない時間（末尾や途中の欠落）は「予測なし」として不正解に数えます。切り出し位置を自分で指定するときは `--offset 30` のようにします（切り出してから保存したファイルを解析した場合など、記録と違う位置を指定したときは、注釈が元の音源より長くないかは確かめません）。`analysis.json` のない CSV では、`--duration 20` のように解析した長さを指定してください（区間が分からないときは、指定方法を示すエラーになります）。`analysis.json` から元の音声ファイルが見つかれば、注釈が音源より長くないかも確かめます。
 
 `separate` は分離した音（WAV）と一緒に `separation.json`（元ファイル、切り出し位置、モデル、分離の設定、ライブラリの版、コミット）を保存します。WAV には切り出し位置を書き込めないため、分離した音を元ファイルの時刻で解析するときは、`analyse 元の音源 --start … --duration … --separate` を使います（分離結果はキャッシュから再利用します）。
 

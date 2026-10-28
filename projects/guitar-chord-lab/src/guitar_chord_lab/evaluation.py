@@ -131,17 +131,22 @@ def read_annotation_csv(path, duration_s=None):
     return intervals
 
 
-def reference_for_clip(annotation_path, clip):
-    """正解注釈を読み込み、clip（切り出した音声）の範囲だけを、切り出し位置を0秒とする時刻で返します。
+def reference_for_range(annotation_path, source_path, start_s, duration_s):
+    """正解注釈を読み込み、元ファイルの start_s 秒から duration_s 秒間だけを、start_s を0秒とする時刻で返します。
 
-    clip の元ファイルが分かるときは、元ファイルの長さを超える注釈をエラーにします
+    元ファイル（source_path）が分かるときは、元ファイルの長さを超える注釈をエラーにします
     （別の長さのファイル用の注釈を使っていないかを確かめるためです）。
     """
-    duration_s = None
-    if clip.source_path and Path(clip.source_path).exists():
-        duration_s = file_duration(clip.source_path)
-    full = read_annotation_csv(annotation_path, duration_s)
-    return crop_intervals(full, clip.offset_s, clip.offset_s + clip.duration_s)
+    total_s = None
+    if source_path and Path(source_path).exists():
+        total_s = file_duration(source_path)
+    full = read_annotation_csv(annotation_path, total_s)
+    return crop_intervals(full, start_s, start_s + duration_s)
+
+
+def reference_for_clip(annotation_path, clip):
+    """正解注釈を読み込み、clip（切り出した音声）の範囲だけを、切り出し位置を0秒とする時刻で返します。"""
+    return reference_for_range(annotation_path, clip.source_path, clip.offset_s, clip.duration_s)
 
 
 def write_annotation_csv(path, intervals):
@@ -267,7 +272,7 @@ def read_prediction_csv(path):
     """推定結果CSV（chords.csv）を読み込み、(予測区間のリスト, 切り出し位置 [秒]) を返します。
 
     切り出し位置は、source_start_s 列（元ファイルでの時刻）と start_s 列の差から求めます。
-    source_start_s 列がなければ0秒とします。
+    source_start_s 列がなければ、切り出し位置は分からないので None を返します。
     """
     path = Path(path)
     if not path.exists():
@@ -288,7 +293,7 @@ def read_prediction_csv(path):
     segments = []
     for row in rows:
         segments.append(PredictedSegment(float(row["start_s"]), float(row["end_s"]), row["status"], row["chord"]))
-    offset_s = 0.0
+    offset_s = None
     if "source_start_s" in columns:
-        offset_s = float(rows[0]["source_start_s"]) - float(rows[0]["start_s"])
-    return segments, round(offset_s, 6)
+        offset_s = round(float(rows[0]["source_start_s"]) - float(rows[0]["start_s"]), 6)
+    return segments, offset_s

@@ -18,7 +18,7 @@ import librosa
 import numpy as np
 from scipy.signal import correlate, correlation_lags
 
-from .audio import AudioClip, load_audio, make_clip, prepare_for_analysis, save_audio
+from .audio import AudioClip, file_sha256, load_audio, make_clip, prepare_for_analysis, save_audio
 from .evaluation import evaluate_segments, find_gaps, reference_for_clip
 from .recognition import MIN_DURATION_S, ChordSettings, recognise_chords, segment_rows, settings_from_dict
 from .results import analysis_info, code_version, library_versions, now_utc, save_json, write_rows_csv
@@ -40,6 +40,9 @@ ALLOWED_KEYS = {
     ],
     "accompaniments": ["id", "path", "material", "offset_s", "note"],
 }
+
+# 聴き比べで、条件どうしの長さ・開始位置の比較に許すずれ [秒]（分離のリサンプリングで1〜2サンプルずれるため）
+LENGTH_TOLERANCE_S = 0.01
 
 # 集計表が空のときにも書き出す列（前の実行の結果が残らないように、毎回ファイルを作り直します）
 PAIR_COLUMNS = [
@@ -363,13 +366,27 @@ def lag_ms(reference_clip, other_clip):
     return round(1000 * seconds, 3)
 
 
-def run_mixture_conditions(experiment, recording, mixture_clip, guitar_clip, reference, labels, folder):
-    """混合音と、そこから分離したギターを解析し、結果の行のリストを返します。"""
+def saved_audio_info(output_dir, path):
+    """今回の実行で保存した音のファイル（出力先からの相対パス）と、内容の SHA-256 を返します。
+
+    結果の行（items.csv）に記録し、後で聴き比べるときに、前の実行で残ったファイルと取り違えないようにします。
+    """
+    return {"audio_file": Path(path).relative_to(output_dir).as_posix(), "audio_sha256": file_sha256(path)}
+
+
+def run_mixture_conditions(experiment, recording, mixture_clip, guitar_clip, reference, labels, folder,
+                           mixture_audio=None):
+    """混合音と、そこから分離したギターを解析し、結果の行のリストを返します。
+
+    mixture_audio は、今回の実行で保存した混合音の記録（saved_audio_info の戻り値）です。
+    """
     rows = []
     settings = experiment.settings
     if "mixture" in experiment.conditions:
         row = analyse_condition(mixture_clip, reference, settings, dict(labels, condition="mixture"),
                                 folder / "mixture", experiment.save_figures)
+        if mixture_audio:
+            row.update(mixture_audio)
         if guitar_clip is not None:
             row["lag_vs_solo_ms"] = lag_ms(guitar_clip, mixture_clip)
         rows.append(row)
@@ -379,11 +396,15 @@ def run_mixture_conditions(experiment, recording, mixture_clip, guitar_clip, ref
         result = separate_for_experiment(experiment, mixture_clip)
         separated = prepare_for_analysis(result.guitar, experiment.mix_sample_rate)
         separated = fit_length(separated, mixture_clip.samples.shape[1])
+        separated_audio = None
         if experiment.save_audio:
-            save_audio(folder / "separated" / "separated_guitar.wav", result.guitar)
+            path = save_audio(folder / "separated" / "separated_guitar.wav", result.guitar)
+            separated_audio = saved_audio_info(experiment.output_dir, path)
         row = analyse_condition(separated, reference, settings, dict(labels, condition="separated"),
                                 folder / "separated", experiment.save_figures,
                                 {"separation": describe_separation(result)})
+        if separated_audio:
+            row.update(separated_audio)
         row["separation_model"] = result.model_name
         row["separation_s"] = round(result.seconds, 3)
         row["separation_from_cache"] = result.from_cache
@@ -431,11 +452,128 @@ def run_recording(experiment, recording):
             labels["measured_db"] = round(mix.measured_db, 3)
             labels["clip_guard_gain"] = round(mix.clip_guard_gain, 5)
             sub_folder = folder / f"{accompaniment['id']}_{level:+.1f}dB"
+            mixture_audio = None
             if experiment.save_audio:
-                save_audio(sub_folder / "mixture.wav", mixture_clip)
+                path = save_audio(sub_folder / "mixture.wav", mixture_clip)
+                mixture_audio = saved_audio_info(experiment.output_dir, path)
             rows += run_mixture_conditions(experiment, recording, mixture_clip, guitar_clip, reference, labels,
-                                           sub_folder)
+                                           sub_folder, mixture_audio)
     return rows
+
+
+@dataclass
+class ListeningClips:
+    """聴き比べに使う、今回の実行結果にある条件の音です（Notebook 3 で使います）。"""
+
+    clips: dict  # 条件名（solo / mixture / separated）→ AudioClip。今回の実行で使える条件だけ
+    reference: list  # 正解注釈（切り出した範囲の先頭を0秒とする時刻）
+    notes: list  # 聴けない条件と、その理由
+    description: str = ""  # 図の題名に使う、選んだ条件の説明（英語）
+
+
+def find_condition_row(rows, condition, accompaniment_id, level_db):
+    """1つの録音の結果の行から、条件と伴奏・音量が一致する行を探します。なければ None を返します。"""
+    for row in rows:
+        if row["condition"] != condition:
+            continue
+        if condition == "solo" or row["mixture_type"] == "recorded":
+            return row  # 単独ギターと合奏録音には、伴奏と音量の区別がありません
+        same_level = level_db is not None and abs(float(row["accompaniment_db"]) - float(level_db)) < 0.05
+        if row["accompaniment_id"] == accompaniment_id and same_level:
+            return row
+    return None
+
+
+def missing_condition_reason(conditions, rows, condition, accompaniment_id, level_db):
+    """今回の結果に、その条件の行がない理由を説明します。conditions は今回の実行の条件です。"""
+    if condition not in conditions:
+        return f"今回の実行の条件に含まれていません（実行した条件: {', '.join(conditions)}）"
+    if any(row["condition"] == condition for row in rows):
+        return f"伴奏 {accompaniment_id}・音量 {level_db} dB の結果は、今回の実行にありません"
+    return "今回の実行結果にありません"
+
+
+def load_saved_audio(output_dir, row):
+    """結果の行に記録された、今回の実行で保存した音を読み込みます。(AudioClip, None) か (None, 理由) を返します。
+
+    output_dir は、その実行の保存先です（記録したファイルは、保存先からの相対パスです）。
+    """
+    if not row.get("audio_file"):
+        return None, "今回の実行では音を保存していません（実験の設定で save_audio = true にすると保存します）"
+    path = Path(output_dir) / row["audio_file"]
+    if not path.exists():
+        return None, f"今回の実行で保存した {row['audio_file']} が見つかりません"
+    if file_sha256(path) != row["audio_sha256"]:
+        return None, f"{row['audio_file']} は今回の実行の後で書き換えられています（別の実行で上書きされた可能性があります）"
+    return load_audio(path), None
+
+
+def check_listening_range(clip, row, source):
+    """読み込んだ音の長さと時間範囲が、今回の解析と合っているかを確かめます。合わなければ理由を返します。"""
+    analysed_s, start_s = float(row["duration_s"]), float(row["start_s"])
+    if abs(clip.duration_s - analysed_s) > LENGTH_TOLERANCE_S:
+        return f"音の長さ（{clip.duration_s:.2f} 秒）が、今回解析した長さ（{analysed_s:.2f} 秒）と合いません"
+    same_length = abs(source.duration_s - analysed_s) <= LENGTH_TOLERANCE_S
+    same_start = abs(source.offset_s - start_s) <= LENGTH_TOLERANCE_S
+    if not (same_length and same_start):
+        return (
+            f"今回解析した範囲（{start_s:.2f} 秒から {analysed_s:.2f} 秒間）が、"
+            f"実験の設定の範囲（{source.offset_s:.2f} 秒から {source.duration_s:.2f} 秒間）と合いません"
+        )
+    return None
+
+
+def load_listening_clips(experiment, result, recording_id, accompaniment_id, level_db):
+    """今回の実行結果（result）にある条件の音だけを読み込み、ListeningClips を返します。
+
+    items/ に前の実行のファイルが残っていても使いません。今回の結果の行に記録されたファイルのうち、
+    内容（SHA-256）が一致し、長さと時間範囲が今回の解析と合うものだけを使います。
+    単独ギターと合奏録音（mixture）は元の音源から切り出し直します（合奏録音では accompaniment_id と level_db は使いません）。
+    分離したギターは、どの場合も今回の実行で保存したファイルを使います。
+    """
+    rows = [row for row in result["rows"] if row["recording_id"] == recording_id]
+    if not rows:
+        available = sorted({row["recording_id"] for row in result["rows"]})
+        raise ValueError(f"今回の実行結果に録音 {recording_id} がありません（結果にある録音: {available}）")
+    recording = next((item for item in experiment.recordings if item["id"] == recording_id), None)
+    if recording is None:
+        raise ValueError(
+            f"実験の設定に録音 {recording_id} がありません。実行の後で設定を読み込み直した可能性があります。"
+            "実験を実行し直してから聴き比べてください"
+        )
+    output_dir = result.get("output_dir", experiment.output_dir)  # その実行の保存先
+    conditions = result.get("conditions", experiment.conditions)  # その実行の条件
+    recorded = any(row["mixture_type"] == "recorded" for row in rows)
+    rate = experiment.mix_sample_rate
+    start_s, duration_s = recording["start_s"], recording["duration_s"]
+    source = load_mono(recording.get("guitar") or recording["mixture"], start_s, duration_s, rate)
+    clips, notes = {}, []
+    for condition in CONDITIONS:
+        row = find_condition_row(rows, condition, accompaniment_id, level_db)
+        if row is None:
+            reason = missing_condition_reason(conditions, rows, condition, accompaniment_id, level_db)
+            notes.append(f"{condition}: {reason}")
+            continue
+        if condition == "solo":
+            clip, reason = source, None
+        elif condition == "mixture" and row["mixture_type"] == "recorded":
+            clip, reason = load_mono(recording["mixture"], start_s, duration_s, rate), None
+        else:  # 人工の混合音と、分離したギター（合奏録音から分離した場合も）
+            clip, reason = load_saved_audio(output_dir, row)
+            if clip is not None:  # 保存した WAV には切り出し位置がないので、元の音源の位置を付けます
+                clip.source_path, clip.offset_s = source.source_path, source.offset_s
+        if clip is not None:
+            reason = check_listening_range(clip, row, source)
+        if reason:
+            notes.append(f"{condition}: {reason}")
+            continue
+        clips[condition] = clip
+    if recorded:
+        description = "recorded mixture"
+    else:
+        level = "" if level_db is None else f" {float(level_db):+.1f} dB"
+        description = f"accompaniment {accompaniment_id}{level}"
+    return ListeningClips(clips, reference_for_clip(recording["annotation"], source), notes, description)
 
 
 def paired_differences(rows):
@@ -551,6 +689,8 @@ def run_experiment(experiment, split="all", conditions=None, output_dir=None):
         rows += run_recording(experiment, recording)
     pairs = paired_differences(rows)
     result = {
+        "output_dir": str(experiment.output_dir),  # この実行の保存先（聴き比べで、保存した音を探すときに使う）
+        "conditions": list(experiment.conditions),  # この実行の条件
         "rows": rows,
         "pairs": pairs,
         "summary": summarise(rows, ["material", "mixture_type", "condition", "accompaniment_id", "accompaniment_db"], "accuracy"),

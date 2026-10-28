@@ -117,7 +117,7 @@ GuitarSet（Xi ほか、ISMIR 2018、CC BY 4.0）は、6人の奏者が5つの�
 
 | 出力ファイル | 内容 |
 | --- | --- |
-| `items.csv` | 1行＝1つの録音・条件・伴奏の音量。処理時間、分離の時間とキャッシュ利用の有無、時間ずれを含む |
+| `items.csv` | 1行＝1つの録音・条件・伴奏の音量。処理時間、分離の時間とキャッシュ利用の有無、時間ずれ、今回の実行で保存した音のファイル（`audio_file`）と内容の SHA-256（`audio_sha256`）を含む |
 | `paired_differences.csv` | 同じ録音の分離前後の対応付け |
 | `summary_by_condition.csv`、`summary_differences.csv` | 素材・条件・伴奏・音量ごとの平均、標準偏差、最小、最大と、元素材数（`n_sources`）・切り出し数（`n_clips`） |
 | `experiment.json` | 設定ファイルの内容、実際に使った設定（省略した項目の既定値を含む `effective_settings`）、件数（元録音数・切り出し数・人工混合の条件数・合奏録音数）、ライブラリの版、コミット |
@@ -125,7 +125,7 @@ GuitarSet（Xi ほか、ISMIR 2018、CC BY 4.0）は、6人の奏者が5つの�
 | `items/<録音>/...` | 条件ごとの推定結果（`chords.csv`、`analysis.json`）と音（`mixture.wav`、`separated_guitar.wav`） |
 
 - 集計では、同じ元素材から複数の切り出しがあるとき、まず元素材ごとに平均してから、元素材の間で平均・標準偏差・最小・最大を計算します。同じ録音の切り出しを、独立した曲として数えないためです。
-- `items.csv` と集計のファイルは実行のたびに書き直します（分離を行わない実行でも、`paired_differences.csv` と `summary_differences.csv` は見出しだけのファイルに書き直します）。一方、`items/` には前の実行のファイルが残ることがあります。条件や設定を変えて比べるときは、`--output-dir outputs/別の名前` のように保存先を分けてください。
+- `items.csv` と集計のファイルは実行のたびに書き直します（分離を行わない実行でも、`paired_differences.csv` と `summary_differences.csv` は見出しだけのファイルに書き直します）。一方、`items/` には前の実行のファイルが残ることがあります。条件や設定を変えて比べるときは、`--output-dir outputs/別の名前` のように保存先を分けてください。Notebook 3 の聴き比べ（`load_listening_clips`）は、今回の実行の結果（`run_experiment` が返す `result`。`items.csv` と同じ行）に記録されたファイルだけを、内容と長さを確かめてから使うので、前の実行のファイルが残っていても混ざりません。
 
 ## 7. 既定の解析設定の決め方
 

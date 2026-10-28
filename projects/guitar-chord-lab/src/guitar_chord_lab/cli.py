@@ -5,12 +5,14 @@
     guitar-chord-lab analyse data/generated/demo/demo_a_guitar.wav --start 0 --duration 18
     guitar-chord-lab analyse song.wav --separate --device auto
     guitar-chord-lab evaluate outputs/demo/chords.csv data/generated/demo/demo_a_annotation.csv
+    guitar-chord-lab evaluate 予測.csv 正解.csv --offset 30 --duration 20   # analysis.json のない CSV
     guitar-chord-lab experiment configs/experiment_demo.toml
     guitar-chord-lab guitarset   # GuitarSet の実録音を取り出して実験設定を作る
 """
 
 import argparse
 import json
+import math
 import sys
 from dataclasses import fields, replace
 from pathlib import Path
@@ -77,14 +79,16 @@ def report_analysis(analysis, output_dir, annotation_path=None, pdf=False, title
     """解析結果を表示して保存します。正解注釈があれば、切り出し位置に合わせて評価もします。"""
     import matplotlib.pyplot as plt
 
-    from .evaluation import evaluate_segments, reference_for_clip
+    from .evaluation import evaluate_segments, reference_for_range
     from .plots import plot_analysis
     from .results import print_segments, save_analysis, save_json
 
     reference = None
     extra = dict(extra or {})
     if annotation_path:
-        reference = reference_for_clip(annotation_path, analysis.clip)
+        # 解析した入力の範囲（analysis.json に記録する値）で切り取り、evaluate コマンドと同じ区間で評価します
+        info = analysis.input_info
+        reference = reference_for_range(annotation_path, info["source_path"], info["offset_s"], info["duration_s"])
         extra["evaluation"] = evaluate_segments(reference, analysis.segments)
         extra["annotation"] = str(annotation_path)
     figure = plot_analysis(analysis, title, reference)
@@ -171,40 +175,147 @@ def run_separate(args):
     )
 
 
-def source_duration_for(prediction_path):
-    """chords.csv と同じフォルダの analysis.json から元の音声ファイルを探し、その長さ [秒] を返します。
-
-    analysis.json や音声ファイルが見つからなければ None を返します。
-    """
-    from .audio import file_duration
-
+def read_analysis_input(prediction_path):
+    """chords.csv と同じフォルダの analysis.json から、解析した範囲の記録（input）を返します。なければ空の辞書です。"""
     info_path = Path(prediction_path).with_name("analysis.json")
     if not info_path.exists():
-        return None
+        return {}
     try:
-        with open(info_path, encoding="utf-8") as file:
-            source = json.load(file).get("input", {}).get("source_path", "")
+        with open(info_path, encoding="utf-8-sig") as file:  # 先頭に BOM が付いたファイルも読めるようにします
+            info = json.load(file)
     except ValueError:  # JSON として読めないファイル
-        return None
-    if not source or not Path(source).exists():
-        return None
-    return file_duration(source)
+        raise ValueError(
+            f"{info_path} を読み込めませんでした（JSON の形式ではありません）。analyse で解析し直すか、"
+            "このファイルを別の場所に移してから --offset と --duration で評価する区間を指定してください"
+        ) from None
+    if not isinstance(info, dict) or not isinstance(info.get("input"), dict):
+        return {}
+    return info["input"]
+
+
+def recorded_start(csv_offset_s, recorded_offset_s):
+    """保存した記録から、評価する区間の開始 [秒] を返します（analysis.json → chords.csv の順。分からなければ None）。"""
+    from .evaluation import TIME_TOLERANCE_S
+
+    if recorded_offset_s is None:
+        return csv_offset_s
+    if csv_offset_s is not None and abs(csv_offset_s - float(recorded_offset_s)) > TIME_TOLERANCE_S:
+        raise ValueError(
+            f"chords.csv の切り出し位置（{csv_offset_s} 秒）と analysis.json の切り出し位置（{recorded_offset_s} 秒）が"
+            "一致しません。別の解析のファイルが混ざっていないか確かめ、--offset で開始時刻を指定してください"
+        )
+    return recorded_offset_s  # analysis.json の方が細かい値
+
+
+def checked_range(prediction_path, start_s, length_s):
+    """区間の開始と長さ [秒] が分かっていて正しい値かを確かめ、float にして返します。
+
+    分からないときは、--offset・--duration での指定方法を示すエラーにします。
+    """
+    missing = []
+    if start_s is None:
+        missing.append("開始時刻を --offset（切り出さずに解析したときは --offset 0）")
+    if length_s is None:
+        missing.append("解析した長さを --duration（例: --duration 20）")
+    if missing:
+        if Path(prediction_path).with_name("analysis.json").exists():
+            reason = "analysis.json に、解析した範囲（offset_s・duration_s）の記録がありません"
+        else:
+            reason = "chords.csv と同じフォルダに、解析した範囲を記録した analysis.json がありません"
+        raise ValueError(f"評価する区間が分かりません（{reason}）。" + "、".join(missing) + "で指定してください")
+    start_s, length_s = float(start_s), float(length_s)
+    if not (math.isfinite(start_s) and math.isfinite(length_s)) or start_s < 0 or length_s <= 0:
+        raise ValueError(
+            f"評価する区間が正しくありません（開始 {start_s} 秒、長さ {length_s} 秒）。"
+            "--offset には0以上、--duration には0より大きい有限の数（秒）を指定してください"
+        )
+    return start_s, length_s
+
+
+def source_length(source_path, start_s, length_s):
+    """元の音声ファイル全体の長さ [秒] と、長さを確かめないときの理由を返します。
+
+    ファイルが見つからなければ (None, 理由) を返します。区間がファイルの長さを超えるときはエラーにします。
+    """
+    from .audio import file_duration
+    from .evaluation import TIME_TOLERANCE_S
+
+    if not source_path or not Path(source_path).exists():
+        return None, "元の音声ファイルが見つからないため"
+    total_s = file_duration(source_path)
+    if start_s + length_s > total_s + TIME_TOLERANCE_S:
+        raise ValueError(
+            f"評価する区間（{start_s:.2f}〜{start_s + length_s:.2f} 秒）が、"
+            f"元の音声ファイル全体の長さ {total_s:.2f} 秒を超えています"
+        )
+    return total_s, ""
+
+
+def evaluation_range(prediction_path, csv_offset_s, offset_s=None, duration_s=None):
+    """評価する区間（元ファイルでの開始 [秒]、解析した長さ [秒]）と、元の音声ファイル全体の長さ [秒] を返します。
+
+    - 開始：--offset の指定 → analysis.json の切り出し位置 → chords.csv の source_start_s の順に使います。
+    - 長さ：--duration の指定 → analysis.json に記録した「解析した範囲の長さ」（元ファイル全体の長さではありません）。
+    区間を決められないときはエラーにします。予測の最後の時刻から決めると、末尾の予測欠落が評価から消えるためです。
+    元ファイル全体の長さは、注釈が音源より長くないかの確認だけに使います。
+    --offset で記録と違う位置を指定したときは、解析したファイルが注釈の元ファイルとは別の（切り出し済みの）
+    ファイルだと考え、元ファイルの長さは確かめません。
+    戻り値は (開始, 長さ, 元ファイル全体の長さ, 理由) です。元ファイルの長さを確かめないときは、長さを None にし、
+    確かめない理由を返します（確かめたときの理由は空の文字列です）。
+    """
+    from .evaluation import TIME_TOLERANCE_S
+
+    try:
+        saved = read_analysis_input(prediction_path)
+    except ValueError:
+        if offset_s is None or duration_s is None:
+            raise
+        saved = {}  # 区間は両方とも指定されているので、読めない analysis.json は使いません
+    recorded_offset_s = saved.get("offset_s")
+    if offset_s is None:
+        offset_s, overridden = recorded_start(csv_offset_s, recorded_offset_s), False
+    else:
+        overridden = recorded_offset_s is None or abs(offset_s - float(recorded_offset_s)) > TIME_TOLERANCE_S
+    if duration_s is None:
+        duration_s = saved.get("duration_s")
+    offset_s, duration_s = checked_range(prediction_path, offset_s, duration_s)
+    source = saved.get("source_path") or ""
+    if overridden and source:
+        reason = "--offset で指定した切り出し位置が analysis.json の記録と違うため（解析したファイルを、注釈を付けた元のファイルとは見なしません）"
+        return offset_s, duration_s, None, reason
+    total_s, reason = source_length(source, offset_s, duration_s)
+    return offset_s, duration_s, total_s, reason
+
+
+def evaluate_saved_prediction(prediction_path, annotation_path, offset_s=None, duration_s=None):
+    """保存した chords.csv を正解注釈と比べます。
+
+    戻り値は (評価結果の辞書, 区間の開始 [秒], 解析した長さ [秒], 元の音声ファイル全体の長さ [秒] または None,
+    元ファイルの長さを確かめなかった理由) です。
+    予測のない時間（末尾や途中の欠落）も、評価する区間の中なら「予測なし」として不正解に数えます。
+    """
+    from .evaluation import TIME_TOLERANCE_S, crop_intervals, evaluate_segments, read_annotation_csv, read_prediction_csv
+
+    segments, csv_offset_s = read_prediction_csv(prediction_path)
+    start_s, length_s, total_s, unchecked = evaluation_range(prediction_path, csv_offset_s, offset_s, duration_s)
+    if segments[-1].end_s > length_s + TIME_TOLERANCE_S:
+        raise ValueError(
+            f"予測（0〜{segments[-1].end_s:.2f} 秒）が、評価する区間の長さ {length_s:.2f} 秒を超えています。"
+            "--duration や analysis.json が、この chords.csv の解析と合っているか確かめてください"
+        )
+    reference = crop_intervals(read_annotation_csv(annotation_path, total_s), start_s, start_s + length_s)
+    return evaluate_segments(reference, segments), start_s, length_s, total_s, unchecked
 
 
 def run_evaluate(args):
-    """保存した推定結果CSVを正解注釈CSVと比べます。注釈は、解析した範囲の分だけを使います。"""
-    from .evaluation import crop_intervals, evaluate_segments, read_annotation_csv, read_prediction_csv
-
-    segments, offset_s = read_prediction_csv(args.prediction)
-    if args.offset is not None:
-        offset_s = args.offset
-    end_s = offset_s + segments[-1].end_s
-    duration_s = source_duration_for(args.prediction)
-    if duration_s is None:
-        print("注意: 元の音声ファイルが見つからないため、注釈が音源より長くないかは確かめていません")
-    reference = crop_intervals(read_annotation_csv(args.annotation, duration_s), offset_s, end_s)
-    print(f"元ファイルの {offset_s:.2f}〜{end_s:.2f} 秒の注釈と比べます")
-    print_evaluation(evaluate_segments(reference, segments))
+    """保存した推定結果CSVを正解注釈CSVと比べます。注釈は、解析した範囲（切り出し位置と長さ）の分だけを使います。"""
+    metrics, start_s, length_s, _, unchecked = evaluate_saved_prediction(
+        args.prediction, args.annotation, args.offset, args.duration
+    )
+    if unchecked:
+        print(f"注意: {unchecked}、注釈が音源より長くないかは確かめていません")
+    print(f"元ファイルの {start_s:.2f}〜{start_s + length_s:.2f} 秒（解析した長さ {length_s:.2f} 秒）の注釈と比べます")
+    print_evaluation(metrics)
 
 
 def run_make_demo(args):
@@ -281,7 +392,11 @@ def build_parser():
     evaluate.add_argument("annotation", help="正解注釈CSV")
     evaluate.add_argument(
         "--offset", type=float, default=None,
-        help="推定に使った音源が元ファイルの何秒目から始まるか（省略時は chords.csv の source_start_s から求める）",
+        help="推定に使った音源が元ファイルの何秒目から始まるか（省略時は analysis.json か chords.csv の source_start_s から求める）",
+    )
+    evaluate.add_argument(
+        "--duration", type=float, default=None,
+        help="解析した長さ [秒]（評価する区間の長さ。省略時は chords.csv と同じフォルダの analysis.json から読む）",
     )
     evaluate.set_defaults(handler=run_evaluate)
 

@@ -9,9 +9,11 @@ from datetime import datetime, timezone
 from importlib import metadata
 from pathlib import Path
 
+import numpy as np
+
 from . import __version__
 from .audio import file_sha256
-from .chords import CHORD_LABELS
+from .chords import CHORD_LABELS, PITCH_NAMES
 from .recognition import CQT_LOWEST_NOTE, CQT_OCTAVES, STFT_WINDOW, segment_rows, settings_to_dict
 
 PROJECT_DIR = Path(__file__).resolve().parents[2]  # projects/guitar-chord-lab
@@ -182,6 +184,24 @@ def save_analysis(analysis, output_dir, extra_info=None, figure=None, pdf=False)
             saved["figure_pdf"] = output_dir / "analysis.pdf"
             figure.savefig(saved["figure_pdf"])
     return saved
+
+
+def chroma_frame_lines(values, width=30):
+    """1フレームのクロマ（12音の値）を、最大値を1にそろえた棒（#）の行のリストにします。
+
+    12音の値がすべて0のフレーム（無音）は、0で割らずに説明の行を先頭に付け、0のまま表示します。
+    """
+    values = np.asarray(values, dtype=float)
+    peak = float(values.max())
+    lines = []
+    if peak > 0:
+        scaled = values / peak
+    else:  # 最大値が0（無音）なので割り算をしません
+        scaled = np.zeros_like(values)
+        lines.append("  このフレームは無音です（12音の値がすべて0なので、最大値を1にそろえずに0のまま表示します）")
+    for name, value in zip(PITCH_NAMES, scaled):
+        lines.append(f"  {name:>2}: {'#' * int(value * width):{width}} {value:.2f}")
+    return lines
 
 
 def print_segments(analysis):

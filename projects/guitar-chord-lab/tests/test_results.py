@@ -8,6 +8,7 @@ import zipfile
 from pathlib import Path
 
 import matplotlib
+import numpy as np
 from conftest import SAMPLE_RATE, sine_chord
 
 from guitar_chord_lab import ChordSettings, make_clip, recognise_chords
@@ -64,3 +65,19 @@ def test_release_zip_records_uncommitted_changes(tmp_path):
         info = json.loads(archive.read("v0.1.0/release_info.json"))
     assert names == ["v0.1.0/pyproject.toml", "v0.1.0/release_info.json"]
     assert info["git_commit"] == "abc123" and info["uncommitted_changes"] is True
+
+
+def test_chroma_frame_of_silence_is_shown_without_dividing_by_zero():
+    lines = results.chroma_frame_lines(np.zeros(12))
+    assert "無音" in lines[0]
+    assert len(lines) == 13 and all(line.endswith("0.00") for line in lines[1:])
+
+
+def test_chroma_frame_display_keeps_the_usual_bars():
+    values = np.zeros(12)
+    values[0], values[4], values[7] = 2.0, 1.0, 0.5  # C、E、G
+    lines = results.chroma_frame_lines(values)
+    assert len(lines) == 12  # 説明の行はない
+    assert lines[0] == "   C: " + "#" * 30 + " 1.00"
+    assert lines[4] == "   E: " + "#" * 15 + " " * 15 + " 0.50"
+    assert lines[7].endswith("0.25") and lines[1].endswith("0.00")

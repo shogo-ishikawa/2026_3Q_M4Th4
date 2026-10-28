@@ -212,6 +212,9 @@ def test_prediction_csv_with_bom_and_missing_columns(tmp_path):
     bad.write_text("start_s,end_s,chord\n0,2,C:maj\n", encoding="utf-8")
     with pytest.raises(ValueError, match="status"):
         read_prediction_csv(bad)
+    plain = tmp_path / "plain.csv"
+    plain.write_text("start_s,end_s,status,chord\n0,2,chord,C:maj\n", encoding="utf-8")
+    assert read_prediction_csv(plain)[1] is None  # source_start_s 列がなければ、切り出し位置は分からない
 
 
 def test_reference_for_clip_rejects_annotations_longer_than_the_source(tmp_path):
