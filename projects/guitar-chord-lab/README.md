@@ -40,6 +40,35 @@
 
 Notebook 1 は CPU だけで動きます。Notebook 2・3 は GPU があると速くなります（「ランタイム」→「ランタイムのタイプを変更」）。
 
+## 楽曲の伴奏ギターを解析する（Notebook 4）
+
+[04_song_analysis.ipynb](notebooks/04_song_analysis.ipynb) を上から実行し、YouTube の動画 URL または手元の音声ファイルを指定します。曲の範囲、全体 BPM、曲中の BPM とその中央値を確認し、推定値の採用・再解析・手入力から選んでください。4拍ごとの表に、コード名、候補、判定できない区間（`N`）、拍途中の変化時刻が表示されます。3拍子などの可能性は推定結果に記録し、小節の拍数は表示設定で指定できます。
+
+対象はメジャー、マイナー、セブンス（`C7`、`Cmaj7`、`Cm7`、`Cm7b5` など）、パワーコード（`C5`）です。持続するベース音を別に推定して `C/E` などのオンコードも判定します。テンションコードは候補として表示します。判定スコアは特徴量の一致度などを組み合わせた内部指標です。
+
+Demucs のギターステムから伴奏を推定し、同時に鳴る複数音やアルペジオの反復が足りなければ、理由を表示して解析を止めます。リードと伴奏が同じステムに入るため、複数音を弾くリードや、反復の少ない伴奏では誤判定があり得ます。モデルの取得や実行に失敗した場合や、伴奏の手掛かりはあるもののギターステムが弱い場合は、混合音を使って候補を表示します。変化時刻は音の変化から推定し、4分の1拍は時刻の分解能の目安です。小節番号は推定した拍位置を基準に振ります。
+
+ローカルではこの作品のフォルダで実行します。
+
+```bash
+python -m pip install -e ".[separation,youtube]"
+guitar-chord-lab song my-recording.wav
+guitar-chord-lab song 'https://www.youtube.com/watch?v=動画ID' --allow-youtube
+```
+
+YouTube の取得には FFmpeg、ffprobe、yt-dlp が対応する JavaScript ランタイムが必要です。ダウンロードと解析が許可されている動画を使ってください。取得した MP3 は読み込み後に削除します。強制終了で残った一時ファイルは、Linux・macOS では次回取得時に使用中のものを除いて削除します。Windows では強制終了で残ったファイルを手動で削除してください。 [yt-dlp のランタイム要件](https://github.com/yt-dlp/yt-dlp/wiki/EJS)
+
+| 出力 | 内容 |
+| --- | --- |
+| `song.json` | 元動画 URL またはファイル名、BPM、拍位置、分離・伴奏判定の条件 |
+| `chords.csv` / `chords.json` | コード ID、名前、種類、構成音 |
+| `timing.csv` / `timing.json` | チェンジ ID、コード ID、小節・拍と実時刻 |
+| `judgements.csv` / `judgements.json` | チェンジ ID ごとの確定・候補・N、ベース音、内部スコア、判定根拠 |
+
+Notebook では保存結果を ZIP にしてダウンロードし、展開したフォルダを指定して拍ごとの表を再表示できます。確認した条件と結果は [検証記録](docs/verification.md) にあります。
+
+処理を読むときは、全体をつなぐ [song.py](src/guitar_chord_lab/song.py) から始めます。BPM は [tempo.py](src/guitar_chord_lab/tempo.py)、コードと変化時刻は [song_harmony.py](src/guitar_chord_lab/song_harmony.py)、ベース音は [song_bass.py](src/guitar_chord_lab/song_bass.py) で推定しています。
+
 ## ローカルでの最短の実行手順
 
 Python 3.12 以上が必要です（確認したのは 3.13。3.12 は分離を除いて確認）。
@@ -80,7 +109,7 @@ guitar-chord-lab --help
 
 `guitar-chord-lab-v0.1.0.zip` を展開すると `v0.1.0/` フォルダができます。そのフォルダで上と同じく `pip install -e .` を実行してください。ZIP に含まれる `release_info.json` に、作成したときのコミットが記録されています。
 
-## 入力と出力
+## 単独ギター・比較実験の入力と出力
 
 **入力**
 - 音声：WAV、FLAC、OGG、MP3（M4A・AAC は `ffmpeg` で WAV に変換）。開始時刻と長さを指定して切り出せます。最初は10〜30秒程度がおすすめです。
@@ -145,7 +174,7 @@ Notebook 1 の練習に、期待される観察と解答例があります。
 | 場所 | 役割 |
 | --- | --- |
 | [src/guitar_chord_lab/](src/guitar_chord_lab/) | Python パッケージ（Notebook と CLI が同じ関数を使います） |
-| [notebooks/](notebooks/) | Colab 教材（1：単独ギター、2：分離、3：比較実験） |
+| [notebooks/](notebooks/) | Colab 教材（1：単独ギター、2：分離、3：比較実験、4：楽曲の伴奏ギター解析） |
 | [configs/](configs/) | 解析設定と比較実験の設定例 |
 | [data/](data/) | 正解注釈の形式、例、データの取得方法 |
 | [tests/](tests/) | 自動テスト（`pytest`） |

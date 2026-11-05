@@ -46,12 +46,22 @@ class SeparationResult:
     options: dict  # 分離の設定（モデル名、shifts、overlap、segment、seed）
 
 
+@dataclass
+class StemSeparation:
+    """同じサンプル時刻にそろった混合音と、モデルが返したステム。"""
+
+    mixture: AudioClip
+    stems: dict[str, AudioClip]
+    device: str
+    seconds: float
+
+
 def import_demucs():
     """PyTorch と Demucs を読み込みます。見つからなければ対処を示します。"""
     try:
         import demucs.api
         import torch
-    except ImportError as error:
+    except (ImportError, OSError) as error:
         raise SeparationError(
             "Demucs または PyTorch が見つかりません。作品フォルダ（projects/guitar-chord-lab）で "
             "pip install -e \".[separation]\" を実行してください。"
@@ -261,6 +271,29 @@ def run_separator(separator, samples, device, seed):
     return {name: stem.cpu().numpy() for name, stem in stems.items()}
 
 
+def separate_stems(clip, model_name=DEFAULT_MODEL, device="auto", shifts=0, overlap=0.25, segment=None, seed=0):
+    """ギターを含む全ステムを一度に分離し、音声配列だけをメモリ内に返します。"""
+    check_separation_options(shifts, overlap, segment)
+    device = choose_device(device)
+    separator = load_separator(model_name, device, shifts, overlap, segment)
+    samples = to_model_input(clip, separator.samplerate, separator.audio_channels)
+    started = time.perf_counter()
+    stems = run_separator(separator, samples, device, seed)
+    seconds = time.perf_counter() - started
+    if GUITAR_SOURCE not in stems:
+        raise SeparationError("分離結果に guitar ステムがありません")
+    for name, stem in stems.items():
+        if stem.shape != samples.shape or not np.isfinite(stem).all():
+            raise SeparationError(f"{name} の分離結果の長さ・チャンネル数・値に問題があります")
+    rate = separator.samplerate
+    mixture = AudioClip(samples, rate, clip.source_path, clip.offset_s)
+    tracks = {
+        name: AudioClip(stem.astype(np.float32, copy=False), rate, clip.source_path, clip.offset_s)
+        for name, stem in stems.items()
+    }
+    return StemSeparation(mixture, tracks, device, seconds)
+
+
 def separate_guitar(
     clip, model_name=DEFAULT_MODEL, device="auto", shifts=0, overlap=0.25, segment=None, seed=0, cache_dir=None
 ):
@@ -280,24 +313,15 @@ def separate_guitar(
         if cached is not None:
             return cached
 
-    device = choose_device(device)
-    separator = load_separator(model_name, device, shifts, overlap, segment)
-    samples = to_model_input(clip, separator.samplerate, separator.audio_channels)
-    started = time.perf_counter()
-    stems = run_separator(separator, samples, device, seed)
-    seconds = time.perf_counter() - started
-
-    guitar = stems[GUITAR_SOURCE]
-    if guitar.shape != samples.shape:
-        raise SeparationError(f"分離結果の長さが入力と違います（入力 {samples.shape}、出力 {guitar.shape}）")
-    rate = separator.samplerate
+    separated = separate_stems(clip, model_name, device, shifts, overlap, segment, seed)
+    guitar = separated.stems[GUITAR_SOURCE]
+    rest = separated.mixture.samples - guitar.samples
     result = SeparationResult(
-        AudioClip(guitar.astype(np.float32), rate, clip.source_path, clip.offset_s),
-        AudioClip((samples - guitar).astype(np.float32), rate, clip.source_path, clip.offset_s),
-        model_name, device, False, seconds, options,
+        guitar, AudioClip(rest, guitar.sample_rate, clip.source_path, clip.offset_s),
+        model_name, separated.device, False, separated.seconds, options,
     )
     if cache_dir is not None:
-        save_cached(cache_dir, key, result, seconds)
+        save_cached(cache_dir, key, result, separated.seconds)
     return result
 
 
