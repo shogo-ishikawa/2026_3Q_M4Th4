@@ -30,8 +30,9 @@
 | 1：単独ギター | 読み込み・再生 → クロマ → コード推定 → 保存 → 設定を変える練習 | [開く](https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/guitar-chord-lab/notebooks/01_single_guitar_chords.ipynb) | [Open in Colab](https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/guitar-chord-lab/notebooks/01_single_guitar_chords.ipynb) |
 | 2：分離して推定 | 混合音 → Demucs でギターを分離 → 同じ設定で推定 → 聴き比べ | [開く](https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/guitar-chord-lab/notebooks/02_separate_and_recognise.ipynb) | [Open in Colab](https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/guitar-chord-lab/notebooks/02_separate_and_recognise.ipynb) |
 | 3：比較実験 | 単独・混合・分離の3条件、分離前後の差、件数と分割の確認 | [開く](https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/guitar-chord-lab/notebooks/03_comparison_experiment.ipynb) | [Open in Colab](https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/guitar-chord-lab/notebooks/03_comparison_experiment.ipynb) |
+| 4：楽曲解析 | 教材音源・WAV・YouTube URL → BPM の確認 → 伴奏ギターのコード推定 → 保存 | [開く](notebooks/04_song_analysis.ipynb) | [Open in Colab](https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/guitar-chord-lab/notebooks/04_song_analysis.ipynb) |
 
-各 Notebook の最初のセルが、次の準備を行います。
+Notebook 1〜3 の最初のセルが、次の準備を行います。
 
 - リポジトリを HTTPS で `/content/2026_3Q_M4Th4` に取得し、この作品だけをインストールします（Notebook 2・3 は分離用の追加機能も入れます）。
 - 作業ディレクトリを `/content/2026_3Q_M4Th4/projects/guitar-chord-lab` にします。Notebook の相対パスはここが基準です。
@@ -39,6 +40,37 @@
 - 結果は作業ディレクトリの `outputs/` に保存します。Colab のファイルはランタイムの終了で消えるため、必要な結果はダウンロードしてください。
 
 Notebook 1 は CPU だけで動きます。Notebook 2・3 は GPU があると速くなります（「ランタイム」→「ランタイムのタイプを変更」）。
+
+## 楽曲の伴奏ギターを解析する（Notebook 4）
+
+最初は既定の `demo` を使い、教材音源を作ります。12秒間に C → Am → G が4秒ずつ鳴ります。BPM 確認では `C` を選び、正解の `120` を入力できます。コード候補や変化時刻を正解と比べ、`DOWNLOAD` にチェックして保存セルを実行すると、提出用の ZIP を取得できます。手元の録音は `upload`、動画 URL は `youtube` で指定します。 [04_song_analysis.ipynb](notebooks/04_song_analysis.ipynb)
+
+曲の範囲、全体 BPM、曲中の BPM とその中央値を確認し、推定値の採用・再解析・手入力から選びます。4拍ごとの表にコード名、候補、判定できない区間（`N`）、拍途中の変化時刻が表示されます。3拍子などの可能性は推定結果に記録し、小節の拍数は表示設定で指定できます。
+
+対象はメジャー、マイナー、セブンス（`C7`、`Cmaj7`、`Cm7`、`Cm7b5` など）、パワーコード（`C5`）です。持続するベース音を別に推定して `C/E` などのオンコードも判定します。テンションコードは候補として表示します。判定スコアは特徴量の一致度などを組み合わせた内部指標です。
+
+Demucs のギターステムから、持続する同時発音や規則的なアルペジオを手掛かりに伴奏を推定します。手掛かりが足りなければ、理由を表示して解析を止めます。リードと伴奏が同じステムに入るため、弱い伴奏や単音の演奏では誤判定があり得ます。モデルの取得や実行に失敗した場合や、伴奏の手掛かりはあるもののギターステムが弱い場合は、混合音を使って候補を表示します。4分の1拍は変化時刻を探す細かさの目安です。最初に検出した拍を仮の1小節1拍目とし、それより前は0小節以下に表示します。
+
+ローカルではこの作品のフォルダで実行します。Intel Mac では分離用パッケージと NumPy の依存条件が衝突するため、Colab を使ってください。
+
+```bash
+python -m pip install -e ".[separation,youtube]"
+guitar-chord-lab song my-recording.wav
+guitar-chord-lab song 'https://www.youtube.com/watch?v=動画ID' --allow-youtube
+```
+
+YouTube の取得には FFmpeg、ffprobe、yt-dlp が対応する JavaScript ランタイムが必要です。ダウンロードと解析が許可されている動画を使ってください。取得した MP3 は読み込み後に削除します。強制終了で残った一時ファイルは、Linux・macOS では次回取得時に使用中のものを除いて削除します。Windows では強制終了で残ったファイルを手動で削除してください。 [yt-dlp のランタイム要件](https://github.com/yt-dlp/yt-dlp/wiki/EJS)
+
+| 出力 | 内容 |
+| --- | --- |
+| `song.json` | 元動画 URL またはファイル名、BPM、拍位置、分離・伴奏判定の条件 |
+| `chords.csv` / `chords.json` | コード ID、名前、種類、構成音 |
+| `timing.csv` / `timing.json` | チェンジ ID、コード ID、小節・拍と実時刻 |
+| `judgements.csv` / `judgements.json` | チェンジ ID ごとの確定・候補・N、ベース音、内部スコア、判定根拠 |
+
+Notebook では保存結果を ZIP にしてダウンロードし、展開したフォルダを指定して拍ごとの表を再表示できます。確認した条件と結果は [検証記録](docs/verification.md) にあります。
+
+処理を読むときは、全体をつなぐ [song.py](src/guitar_chord_lab/song.py) から始めます。BPM は [tempo.py](src/guitar_chord_lab/tempo.py)、コードと変化時刻は [song_harmony.py](src/guitar_chord_lab/song_harmony.py)、ベース音は [song_bass.py](src/guitar_chord_lab/song_bass.py) で推定しています。
 
 ## ローカルでの最短の実行手順
 
@@ -80,7 +112,7 @@ guitar-chord-lab --help
 
 `guitar-chord-lab-v0.1.0.zip` を展開すると `v0.1.0/` フォルダができます。そのフォルダで上と同じく `pip install -e .` を実行してください。ZIP に含まれる `release_info.json` に、作成したときのコミットが記録されています。
 
-## 入力と出力
+## 単独ギター・比較実験の入力と出力
 
 **入力**
 - 音声：WAV、FLAC、OGG、MP3（M4A・AAC は `ffmpeg` で WAV に変換）。開始時刻と長さを指定して切り出せます。最初は10〜30秒程度がおすすめです。
@@ -145,7 +177,7 @@ Notebook 1 の練習に、期待される観察と解答例があります。
 | 場所 | 役割 |
 | --- | --- |
 | [src/guitar_chord_lab/](src/guitar_chord_lab/) | Python パッケージ（Notebook と CLI が同じ関数を使います） |
-| [notebooks/](notebooks/) | Colab 教材（1：単独ギター、2：分離、3：比較実験） |
+| [notebooks/](notebooks/) | Colab 教材（1：単独ギター、2：分離、3：比較実験、4：楽曲の伴奏ギター解析） |
 | [configs/](configs/) | 解析設定と比較実験の設定例 |
 | [data/](data/) | 正解注釈の形式、例、データの取得方法 |
 | [tests/](tests/) | 自動テスト（`pytest`） |

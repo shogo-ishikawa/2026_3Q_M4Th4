@@ -8,6 +8,7 @@
     guitar-chord-lab evaluate 予測.csv 正解.csv --offset 30 --duration 20   # analysis.json のない CSV
     guitar-chord-lab experiment configs/experiment_demo.toml
     guitar-chord-lab guitarset   # GuitarSet の実録音を取り出して実験設定を作る
+    guitar-chord-lab song song.wav   # BPM を確認して楽曲の伴奏を解析する
 """
 
 import argparse
@@ -350,6 +351,28 @@ def run_guitarset(args):
     print(f"実行例: guitar-chord-lab experiment {config}")
 
 
+def run_song(args):
+    """BPMの選択を待ってから楽曲解析を実行します。"""
+    from .song import SongError, analyse_song, beat_rows, confirm_bpm, prepare_song, save_song
+
+    try:
+        session = prepare_song(args.input, youtube_allowed=args.allow_youtube)
+        choice = confirm_bpm(session)
+        analysis = analyse_song(session, choice, device=args.device, meter=args.beats_per_bar)
+    except SongError as error:
+        raise ValueError(str(error)) from error
+    info = analysis.metadata["separation"]
+    if info["status"] == "fallback":
+        print(f"分離に失敗したため、混合音から得た候補を表示します。\n{info['reason']}")
+    elif info["harmony_note"]:
+        print(info["harmony_note"])
+    print(f"採用したBPM {choice.bpm:.2f} ／ 1小節 {analysis.metadata['beats_per_bar']} 拍")
+    for row in beat_rows(analysis):
+        print(f"{row['bar']:>3}小節 {row['beat']:>2}拍  {row['start_s']:>8.3f}秒  {row['chord']}  {row['changes']}")
+    path = save_song(analysis, args.output_dir)
+    print(f"解析結果を保存しました: {path.resolve()}")
+
+
 def build_parser():
     """コマンドの引数の定義を作ります。"""
     parser = argparse.ArgumentParser(prog="guitar-chord-lab", description="ギター音源のコード候補推定と比較実験")
@@ -420,6 +443,13 @@ def build_parser():
     guitarset.add_argument("--levels", type=float, nargs="+", default=[0.0, 6.0, 12.0], help="伴奏の音量 [dB]")
     guitarset.add_argument("--output-dir", default="outputs/experiment_guitarset", help="実験結果の保存先")
     guitarset.set_defaults(handler=run_guitarset)
+    song = commands.add_parser("song", help="BPMを確認し、伴奏ギターのコードと変化時刻を推定する")
+    song.add_argument("input", help="音声ファイルまたはYouTubeの動画URL")
+    song.add_argument("--allow-youtube", action="store_true", help="許可された動画の取得を自分で確認した場合に指定")
+    song.add_argument("--device", choices=("auto", "cpu", "cuda"), default="auto", help="Demucsの実行装置")
+    song.add_argument("--beats-per-bar", type=int, default=4, help="表示する1小節の拍数（既定は4）")
+    song.add_argument("--output-dir", default="outputs/song", help="解析結果を置くフォルダ")
+    song.set_defaults(handler=run_song)
     return parser
 
 

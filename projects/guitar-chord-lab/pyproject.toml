@@ -25,6 +25,9 @@ dependencies = [
 separation = [
     "demucs>=4.1.0",
 ]
+youtube = [
+    "yt-dlp[default]",
+]
 # テストとNotebookの自動実行に使います。
 dev = [
     "pytest>=8",
