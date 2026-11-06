@@ -63,6 +63,22 @@ class NoteEvidence:
     lowest_hz: np.ndarray  # 根拠のある最も低いピーク。見つからない場合は nan。
 
 
+@dataclass(frozen=True)
+class ArpeggioSpan:
+    start_s: float
+    end_s: float
+    repeated: bool
+
+
+@dataclass(frozen=True)
+class _NoteRun:
+    pitch: int
+    start_s: float
+    end_s: float
+    lowest_hz: float
+    low_register: bool
+
+
 def _audio_vector(samples, name):
     values = np.asarray(samples, dtype=np.float32)
     if values.ndim != 1 or not len(values) or not np.all(np.isfinite(values)):
@@ -168,8 +184,35 @@ def guitar_note_evidence(samples, sample_rate, *, hop_s=0.02):
     return NoteEvidence(centres / rate, strengths, rms, lowest_hz)
 
 
-def find_arpeggios(evidence, bpm=None):
-    """基本和音の構成音を短く順に弾く、2回以上の反復区間を探します。"""
+def _progressing_arpeggios(runs, longest_gap):
+    """根音から1オクターブ上まで弾く三和音が、連続して変わる区間を探します。"""
+    chains = []
+    previous_index = -4
+    previous_end = -np.inf
+    for first in range(len(runs) - 3):
+        pattern = runs[first:first + 4]
+        freqs = [run.lowest_hz for run in pattern]
+        if not pattern[0].low_register or not all(np.isfinite(freqs)):
+            continue
+        intervals = tuple(round(12 * np.log2(freq / freqs[0])) for freq in freqs)
+        if intervals not in {(0, 3, 7, 12), (0, 4, 7, 12)}:
+            continue
+        if any(b.start_s - a.end_s > longest_gap for a, b in zip(pattern, pattern[1:])):
+            continue
+        if not chains or first != previous_index + 4 or pattern[0].start_s - previous_end > longest_gap:
+            chains.append([])
+        chains[-1].append(pattern)
+        previous_index = first
+        previous_end = pattern[-1].end_s
+    return [
+        ArpeggioSpan(notes[0].start_s, notes[-1].end_s, False)
+        for chain in chains if len(chain) >= 3 and len({notes[0].pitch for notes in chain}) >= 2
+        for notes in chain
+    ]
+
+
+def detect_arpeggios(evidence, bpm=None):
+    """基本和音の反復と、規則的に切り替わるアルペジオの候補を探します。"""
     if len(evidence.times_s) < 2:
         return []
     hop = evidence.times_s[1] - evidence.times_s[0]
@@ -182,18 +225,24 @@ def find_arpeggios(evidence, bpm=None):
     edges = np.flatnonzero(np.r_[True, dominant[1:] != dominant[:-1], True])
     single = np.count_nonzero(evidence.strengths >= 0.18, axis=1) == 1
 
-    runs = [
-        (int(dominant[first]), float(evidence.times_s[first]), float(evidence.times_s[last - 1] + hop),
-         bool(np.mean(evidence.lowest_hz[first:last] <= 430) >= 0.5))
-        for first, last in zip(edges, edges[1:])
-        if dominant[first] >= 0 and 0.065 <= (last - first) * hop <= longest_note
-        and np.mean(single[first:last]) >= 0.60
-    ]
+    runs = []
+    for first, last in zip(edges, edges[1:]):
+        if dominant[first] < 0 or not 0.065 <= (last - first) * hop <= longest_note:
+            continue
+        if np.mean(single[first:last]) < 0.60:
+            continue
+        frequencies = evidence.lowest_hz[first:last]
+        valid = frequencies[np.isfinite(frequencies)]
+        lowest = float(np.median(valid)) if len(valid) >= (last - first) / 2 else np.nan
+        runs.append(_NoteRun(
+            int(dominant[first]), float(evidence.times_s[first]), float(evidence.times_s[last - 1] + hop),
+            lowest, bool(np.mean(frequencies <= 430) >= 0.5),
+        ))
     allowed = {
         frozenset((root + step) % 12 for step in intervals)
         for root in range(12) for _, _, intervals in _QUALITIES if len(intervals) >= 3
     }
-    pitches = [pitch for pitch, _, _, _ in runs]
+    pitches = [run.pitch for run in runs]
     spans = []
     covered = 0
     for start in range(len(runs) - 5):
@@ -201,19 +250,30 @@ def find_arpeggios(evidence, bpm=None):
             continue
         for period in range(3, min(8, (len(runs) - start) // 2) + 1):
             pattern = pitches[start:start + period]
-            if frozenset(pattern) not in allowed or not any(run[3] for run in runs[start:start + period]):
+            if frozenset(pattern) not in allowed or not any(run.low_register for run in runs[start:start + period]):
                 continue
             end = start + period
             while pitches[end:end + period] == pattern and all(
-                runs[index][1] - runs[index - 1][2] <= longest_gap for index in range(end - period + 1, end + period)
+                runs[index].start_s - runs[index - 1].end_s <= longest_gap
+                for index in range(end - period + 1, end + period)
             ):
                 end += period
             if end < start + 2 * period:
                 continue
-            spans.append((runs[start][1], runs[end - 1][2]))
+            spans.append(ArpeggioSpan(runs[start].start_s, runs[end - 1].end_s, True))
             covered = end
             break
-    return spans
+    progressions = _progressing_arpeggios(runs, longest_gap)
+    spans += [
+        span for span in progressions
+        if not any(repeated.start_s < span.end_s and span.start_s < repeated.end_s for repeated in spans)
+    ]
+    return sorted(spans, key=lambda span: span.start_s)
+
+
+def find_arpeggios(evidence, bpm=None):
+    """アルペジオ区間の開始・終了時刻を返します。"""
+    return [(span.start_s, span.end_s) for span in detect_arpeggios(evidence, bpm)]
 
 
 def _normalise_rows(values):
@@ -247,9 +307,9 @@ def _change_times(guitar, bass_track, duration, bpm, arpeggios):
     # 立ち上がりだけでは判定せず、前後の音名の違いがある場所の補助にします。
     flux = np.r_[0.0, np.maximum(0, np.diff(profiles, axis=0)).sum(axis=1)]
     novelty *= 1 + 0.15 * np.minimum(flux, 1)
-    # 1音ずつ弾く反復は和音の内部です。ベースの変化はこの後で別に調べます。
-    for start, end in arpeggios:
-        novelty[(guitar.times_s >= start - 0.06) & (guitar.times_s < end + 0.06)] = 0
+    # 1音ずつ弾く部分は和音の内部です。ベースの変化はこの後で別に調べます。
+    for span in arpeggios:
+        novelty[(guitar.times_s >= span.start_s - 0.06) & (guitar.times_s < span.end_s + 0.06)] = 0
     if bass_track is not None and len(bass_track.times_s):
         indices = np.clip(np.searchsorted(bass_track.times_s, guitar.times_s), 0, len(bass_track.times_s) - 1)
         pitches = bass_track.pitch_classes[indices]
@@ -270,7 +330,7 @@ def _change_times(guitar, bass_track, duration, bpm, arpeggios):
     peaks, _ = find_peaks(novelty, height=0.17, prominence=0.08, distance=edges)
     times = [0.0, *(float(guitar.times_s[i]) for i in peaks if guitar.times_s[i] < duration), duration]
     for arpeggio in arpeggios:
-        for time in arpeggio:
+        for time in (arpeggio.start_s, arpeggio.end_s):
             if min(abs(existing - time) for existing in times) >= 0.065:
                 times.append(time)
     return sorted(times)
@@ -351,7 +411,8 @@ def _choices(profile, occupancy, quiet_occupancy, bass):
 
 
 def _event(guitar, bass_track, mixture, start, end, independent_bass, arpeggio=None):
-    frames = _frames(guitar, *(arpeggio or (start, end)), hop_limit=2)
+    window = (arpeggio.start_s, arpeggio.end_s) if arpeggio is not None else (start, end)
+    frames = _frames(guitar, *window, hop_limit=2)
     profile, occupancy = _profile(frames)
     bass, bass_fraction = stable_bass(bass_track, start, end)
     if not np.any(profile):
@@ -373,7 +434,7 @@ def _event(guitar, bass_track, mixture, start, end, independent_bass, arpeggio=N
         evidence.append(f"{description} {bass} の区間占有率 {bass_fraction:.2f}")
     agreement = 1.0
     if mixture is not None:
-        mix_profile, _ = _profile(_frames(mixture, *(arpeggio or (start, end)), hop_limit=2))
+        mix_profile, _ = _profile(_frames(mixture, *window, hop_limit=2))
         denominator = np.linalg.norm(profile) * np.linalg.norm(mix_profile)
         if denominator > 0:
             agreement = float(np.clip(np.dot(profile, mix_profile) / denominator, 0, 1))
@@ -384,13 +445,15 @@ def _event(guitar, bass_track, mixture, start, end, independent_bass, arpeggio=N
     together = float(np.mean(np.count_nonzero(frames[:, best.notes] >= 0.18, axis=1) >= 2))
     if arpeggio is None:
         evidence.append(f"構成音のうち2音以上が重なる割合 {together:.2f}")
-    else:
+    elif arpeggio.repeated:
         evidence.append("和音の構成音を順に弾く並びが繰り返されています")
+    else:
+        evidence.append("アルペジオに聞こえる音の並びです。単音メロディーの可能性を残します")
     names = tuple(choice.name for choice in choices[:3])
     confirmed = (
         best.supported and best.purity >= 0.74 and score >= 0.80
         and best.score - runner_up >= 0.030 and agreement >= 0.34
-        and (arpeggio is not None or together >= 0.25)
+        and (arpeggio.repeated if arpeggio is not None else together >= 0.25)
     )
     if not confirmed:
         evidence.append("候補間の差または構成音の持続が十分ではありません")
@@ -470,12 +533,12 @@ def analyse_harmony(guitar, bass, sample_rate, bpm, *, mixture=None):
     else:
         bass_track = None
     duration = len(guitar) / sample_rate
-    arpeggios = [(start, min(end, duration)) for start, end in find_arpeggios(guitar_evidence, bpm)]
+    arpeggios = [replace(span, end_s=min(span.end_s, duration)) for span in detect_arpeggios(guitar_evidence, bpm)]
     times = _change_times(guitar_evidence, bass_track, duration, bpm, arpeggios)
     events = [
         _event(
             guitar_evidence, bass_track, mixture_evidence, start, end, bass is not None,
-            next((span for span in arpeggios if span[0] <= (start + end) / 2 < span[1]), None),
+            next((span for span in arpeggios if span.start_s <= (start + end) / 2 < span.end_s), None),
         )
         for start, end in zip(times, times[1:])
     ]

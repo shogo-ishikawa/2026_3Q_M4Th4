@@ -227,9 +227,8 @@ def _track_beats(
         return np.array([])
     # FFT窓が実際の打音より先に音を拾う分を補正します。
     times = peaks * step_s + 0.012
-    active = [window for window in local if window.bpm is not None and window.score >= LOCAL_SCORE_MINIMUM]
-    centres = [(window.start_s + window.end_s) / 2 - start_s for window in active]
-    tempos = [window.bpm for window in active]
+    centres = [(window.start_s + window.end_s) / 2 - start_s for window in local]
+    tempos = [window.bpm for window in local]
 
     def period_at(time: float) -> float:
         tempo = np.interp(time, centres, tempos) if variable and centres else bpm
@@ -318,14 +317,31 @@ def estimate_tempo(samples: np.ndarray, sample_rate: int, *, retry: bool = False
     total, low_mid = _onset_strength(onsets, retry)
     bpm, score, octave = _periodicity(total, low_mid, step_s)
     windows = _local_tempos(total, low_mid, step_s, start_s, end_s, retry)
-    reliable = [window.bpm for window in windows if window.bpm is not None and window.score >= LOCAL_SCORE_MINIMUM]
-    median = round(float(np.median(reliable)), 2) if reliable else None
-    spread = round(float(max(reliable) - min(reliable)), 2) if reliable else None
+    reliable = tuple(window for window in windows if window.bpm is not None and window.score >= LOCAL_SCORE_MINIMUM)
+    local_bpms = [window.bpm for window in reliable]
+    median = round(float(np.median(local_bpms)), 2) if local_bpms else None
+    spread = round(float(max(local_bpms) - min(local_bpms)), 2) if local_bpms else None
     notes = []
-    variable = len(reliable) >= 3 and spread is not None and median is not None and spread > max(5, 0.085 * median)
+    tolerance = max(5, 0.085 * median) if median is not None else 5
+    tracking_windows = reliable
+    # 全体と多数の部分が一致する場合、単独の倍・半テンポ候補だけを拍追跡から除きます。
+    # 区間が続く実際のテンポ変化は追跡し、除いた推定値も確認画面には残します。
+    if len(reliable) >= 4 and median is not None and (bpm is None or abs(bpm - median) <= tolerance):
+        agreeing = sum(abs(value - median) <= tolerance for value in local_bpms)
+        aliases = [
+            window for window in reliable
+            if abs(2 * window.bpm - median) <= 0.06 * median
+            or abs(window.bpm / 2 - median) <= 0.06 * median
+        ]
+        if len(aliases) == 1 and agreeing > len(reliable) / 2:
+            tracking_windows = tuple(window for window in reliable if window is not aliases[0])
+            octave = True
+            notes.append("他の区間と合わない倍・半テンポ候補が1区間あったため、その値を拍位置の推定から外しました。")
+    tracked_bpms = [window.bpm for window in tracking_windows]
+    variable = len(tracked_bpms) >= 3 and round(max(tracked_bpms) - min(tracked_bpms), 2) > tolerance
     if variable:
         notes.append("部分BPMに差があり、テンポ変化または倍・半テンポの可能性があります。拍位置は局所のテンポを使って推定しました。")
-    if median is not None and any(abs(value - median) > 0.25 * median for value in reliable):
+    if median is not None and any(abs(value - median) > 0.25 * median for value in local_bpms):
         notes.append("部分BPMに中央値から25%以上離れた値があります。該当区間を聴いて、外れ値かテンポの変化かを確認してください。")
     if octave:
         notes.append("倍・半テンポにも周期性があるため、拍の速さは聴いて確認してください。")
@@ -342,7 +358,7 @@ def estimate_tempo(samples: np.ndarray, sample_rate: int, *, retry: bool = False
         notes.append("全体BPMと部分BPMの中央値に差があります。")
     beat_bpm = bpm if bpm is not None else median
     beats = (
-        _track_beats(total, step_s, beat_bpm, end_s - start_s, windows, start_s, variable)
+        _track_beats(total, step_s, beat_bpm, end_s - start_s, tracking_windows, start_s, variable)
         if beat_bpm is not None else np.array([])
     )
     meter = _meter_hint(beats, samples[start:end], sample_rate)

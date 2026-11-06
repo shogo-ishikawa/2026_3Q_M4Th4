@@ -127,11 +127,12 @@ class BackingEvidence:
     polyphonic_s: float
     repeated_arpeggio: bool
     reason: str
+    arpeggio_progression: bool = False
 
 
-def detect_backing(guitar, mixture, rate):
+def detect_backing(guitar, mixture, rate, bpm=None):
     """ギターステムの音量、同時発音、短いアルペジオの反復から伴奏を推定します。"""
-    from .song_harmony import find_arpeggios, guitar_note_evidence
+    from .song_harmony import detect_arpeggios, guitar_note_evidence
 
     db = float(rms_db(guitar))
     relative = db - float(rms_db(mixture))
@@ -147,15 +148,19 @@ def detect_backing(guitar, mixture, rate):
     polyphonic_s = float(durations[durations >= 0.08].sum())
     sustained = polyphonic_s >= max(0.24, 0.08 * int(audible.sum()) * hop)
 
-    arpeggio = not sustained and bool(find_arpeggios(notes))
-    present = sustained or arpeggio
+    arpeggios = [] if sustained else detect_arpeggios(notes, bpm)
+    repeated = any(span.repeated for span in arpeggios)
+    progression = any(not span.repeated for span in arpeggios)
+    present = sustained or repeated or progression
     if sustained:
         reason = "ギターステムに複数の音が持続する区間があります。"
-    elif arpeggio:
+    elif repeated:
         reason = "ギターステムに複数の音を順に弾く短い反復があります。"
+    elif progression:
+        reason = "ギターステムに和音が順に切り替わるアルペジオの候補があります。"
     else:
-        reason = "ギター音はありますが、持続した複数音やアルペジオの反復が不足しています。"
-    return BackingEvidence(present, db, relative, polyphonic_s, arpeggio, reason)
+        reason = "ギター音はありますが、持続した複数音やアルペジオの規則的な並びが不足しています。"
+    return BackingEvidence(present, db, relative, polyphonic_s, repeated, reason, progression)
 
 
 def crop_song(session):
@@ -168,7 +173,7 @@ def crop_song(session):
     return AudioClip(clip.samples[:, start:end], clip.sample_rate, "", start / clip.sample_rate)
 
 
-def separated_inputs(clip, device):
+def separated_inputs(clip, device, bpm):
     """ギター・ベース・混合音を同じサンプル時刻で返します。"""
     try:
         result = separate_stems(clip, device=device)
@@ -182,7 +187,7 @@ def separated_inputs(clip, device):
 
     mixture = prepare_for_analysis(result.mixture, ANALYSIS_RATE).samples[0]
     guitar = prepare_for_analysis(result.stems["guitar"], ANALYSIS_RATE).samples[0]
-    backing = detect_backing(guitar, mixture, ANALYSIS_RATE)
+    backing = detect_backing(guitar, mixture, ANALYSIS_RATE, bpm)
     if not backing.present:
         raise NoBackingGuitar(backing)
     bass_stem = result.stems.get("bass")
@@ -234,7 +239,7 @@ def analyse_song(session, choice, *, device="auto", meter=None):
         raise SongError("表示上の1小節の拍数は2〜12の整数を指定してください")
 
     clip = crop_song(session)
-    harmonic_audio, bass, mixture, separation = separated_inputs(clip, device)
+    harmonic_audio, bass, mixture, separation = separated_inputs(clip, device, choice.bpm)
     reason = separation["harmony_note"]
     events = analyse_harmony(harmonic_audio, bass, ANALYSIS_RATE, choice.bpm, mixture=mixture)
     if reason:
@@ -247,13 +252,16 @@ def analyse_song(session, choice, *, device="auto", meter=None):
             for event in events
         ]
     start, end = clip.offset_s, clip.offset_s + clip.duration_s
-    grid, method = beat_grid(start, end, session.report.beats_s, choice.bpm, use_detected=choice.method == "estimated")
+    grid, method, anchor_index = beat_grid(
+        start, end, session.report.beats_s, choice.bpm, use_detected=choice.method == "estimated",
+    )
     metadata = {
         "schema_version": 1, "analysis_id": f"song-{uuid4().hex[:12]}",
         "source": session.source, "start_s": start, "end_s": end,
         "tempo": asdict(session.report), "accepted_bpm": choice.bpm, "bpm_choice": choice.method,
         "beat_grid_s": grid, "beat_grid_method": method, "beats_per_bar": 4 if meter is None else meter,
-        "measure_origin": "先頭のビート位置を基準にした仮の小節番号",
+        "beat_anchor_index": anchor_index,
+        "measure_origin": "最初に検出した拍を仮の1小節1拍とし、それ以前は0小節以下",
         "target_resolution_s": 60 / choice.bpm / 4,
         "separation": separation, "software": library_versions(), "code": code_version(),
     }

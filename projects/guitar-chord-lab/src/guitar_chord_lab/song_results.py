@@ -34,7 +34,7 @@ class SongAnalysis:
 
 
 def beat_grid(start_s, end_s, beats, bpm, *, use_detected):
-    """検出ビートを優先し、手入力時は最初のビートを基準に等間隔にします。"""
+    """拍の境界、算出方法、最初に検出した拍の位置を返します。"""
     step = 60 / bpm
     observed = sorted({float(t) for t in beats if math.isfinite(t) and start_s <= t < end_s})
     anchor = observed[0] if observed else start_s
@@ -54,18 +54,24 @@ def beat_grid(start_s, end_s, beats, bpm, *, use_detected):
         grid = [anchor - i * first_step for i in range(before, 0, -1)] + grid
         while grid[-1] < end_s - 1e-8:
             grid.append(grid[-1] + last_step)
-        return grid, "detected_with_gap_interpolation"
+        return grid, "detected_with_gap_interpolation", before
     before = math.ceil((anchor - start_s) / step)
     first = anchor - before * step
     count = max(1, math.ceil((end_s - first) / step))
-    return [first + i * step for i in range(count + 1)], "regular_from_anchor"
+    return [first + i * step for i in range(count + 1)], "regular_from_anchor", before
 
 
-def beat_position(time_s, grid, meter):
+def _measure_beat(index, meter, anchor_index):
+    bar, beat = divmod(index - anchor_index, meter)
+    return bar + 1, beat + 1
+
+
+def beat_position(time_s, grid, meter, anchor_index=0):
     index = max(0, min(len(grid) - 2, bisect_right(grid, time_s + 1e-8) - 1))
     left, right = grid[index:index + 2]
     quarter = max(0, min(3, math.floor(4 * (time_s - left) / (right - left) + 1e-8)))
-    return index // meter + 1, index % meter + 1, quarter, left + (right - left) * quarter / 4
+    bar, beat = _measure_beat(index, meter, anchor_index)
+    return bar, beat, quarter, left + (right - left) * quarter / 4
 
 
 def assemble_song(metadata, events):
@@ -73,6 +79,7 @@ def assemble_song(metadata, events):
     end = metadata["end_s"]
     grid = metadata["beat_grid_s"]
     meter = metadata["beats_per_bar"]
+    anchor_index = metadata.get("beat_anchor_index", 0)
     chords, timing, judgements = [], [], []
     ids = {}
     for event in events:
@@ -90,7 +97,7 @@ def assemble_song(metadata, events):
                     "description": _QUALITY_DESCRIPTION.get(event.quality, ""),
                 })
             chord_id = ids[event.chord]
-        bar, beat, quarter, grid_s = beat_position(left, grid, meter)
+        bar, beat, quarter, grid_s = beat_position(left, grid, meter, anchor_index)
         change_id = f"T{len(timing) + 1:04d}"
         timing.append({
             "change_id": change_id, "chord_id": chord_id, "bar": bar, "beat": beat,
@@ -112,6 +119,7 @@ def beat_rows(analysis):
     decisions = {row["change_id"]: row for row in analysis.judgements}
     grid = analysis.metadata["beat_grid_s"]
     meter = analysis.metadata["beats_per_bar"]
+    anchor_index = analysis.metadata.get("beat_anchor_index", 0)
     events = analysis.timing
     rows = []
     event_index = 0
@@ -140,8 +148,9 @@ def beat_rows(analysis):
                 break
             if event["start_s"] > start + 1e-6:
                 changes.append(f"+{event['quarter']}/4拍（{event['start_s']:.3f}秒）→ {label(event)}")
+        bar, beat = _measure_beat(index, meter, anchor_index)
         rows.append({
-            "bar": index // meter + 1, "beat": index % meter + 1,
+            "bar": bar, "beat": beat,
             "start_s": round(start, 6), "end_s": round(end, 6),
             "chord": name, "changes": "、".join(changes),
         })

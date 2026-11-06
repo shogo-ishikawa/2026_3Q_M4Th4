@@ -30,8 +30,9 @@
 | 1：単独ギター | 読み込み・再生 → クロマ → コード推定 → 保存 → 設定を変える練習 | [開く](https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/guitar-chord-lab/notebooks/01_single_guitar_chords.ipynb) | [Open in Colab](https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/guitar-chord-lab/notebooks/01_single_guitar_chords.ipynb) |
 | 2：分離して推定 | 混合音 → Demucs でギターを分離 → 同じ設定で推定 → 聴き比べ | [開く](https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/guitar-chord-lab/notebooks/02_separate_and_recognise.ipynb) | [Open in Colab](https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/guitar-chord-lab/notebooks/02_separate_and_recognise.ipynb) |
 | 3：比較実験 | 単独・混合・分離の3条件、分離前後の差、件数と分割の確認 | [開く](https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/guitar-chord-lab/notebooks/03_comparison_experiment.ipynb) | [Open in Colab](https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/guitar-chord-lab/notebooks/03_comparison_experiment.ipynb) |
+| 4：楽曲解析 | 教材音源・WAV・YouTube URL → BPM の確認 → 伴奏ギターのコード推定 → 保存 | [開く](notebooks/04_song_analysis.ipynb) | [Open in Colab](https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/guitar-chord-lab/notebooks/04_song_analysis.ipynb) |
 
-各 Notebook の最初のセルが、次の準備を行います。
+Notebook 1〜3 の最初のセルが、次の準備を行います。
 
 - リポジトリを HTTPS で `/content/2026_3Q_M4Th4` に取得し、この作品だけをインストールします（Notebook 2・3 は分離用の追加機能も入れます）。
 - 作業ディレクトリを `/content/2026_3Q_M4Th4/projects/guitar-chord-lab` にします。Notebook の相対パスはここが基準です。
@@ -42,13 +43,15 @@ Notebook 1 は CPU だけで動きます。Notebook 2・3 は GPU があると�
 
 ## 楽曲の伴奏ギターを解析する（Notebook 4）
 
-[04_song_analysis.ipynb](notebooks/04_song_analysis.ipynb) を上から実行し、YouTube の動画 URL または手元の音声ファイルを指定します。曲の範囲、全体 BPM、曲中の BPM とその中央値を確認し、推定値の採用・再解析・手入力から選んでください。4拍ごとの表に、コード名、候補、判定できない区間（`N`）、拍途中の変化時刻が表示されます。3拍子などの可能性は推定結果に記録し、小節の拍数は表示設定で指定できます。
+最初は既定の `demo` を使い、教材音源を作ります。12秒間に C → Am → G が4秒ずつ鳴ります。BPM 確認では `C` を選び、正解の `120` を入力できます。コード候補や変化時刻を正解と比べ、`DOWNLOAD` にチェックして保存セルを実行すると、提出用の ZIP を取得できます。手元の録音は `upload`、動画 URL は `youtube` で指定します。 [04_song_analysis.ipynb](notebooks/04_song_analysis.ipynb)
+
+曲の範囲、全体 BPM、曲中の BPM とその中央値を確認し、推定値の採用・再解析・手入力から選びます。4拍ごとの表にコード名、候補、判定できない区間（`N`）、拍途中の変化時刻が表示されます。3拍子などの可能性は推定結果に記録し、小節の拍数は表示設定で指定できます。
 
 対象はメジャー、マイナー、セブンス（`C7`、`Cmaj7`、`Cm7`、`Cm7b5` など）、パワーコード（`C5`）です。持続するベース音を別に推定して `C/E` などのオンコードも判定します。テンションコードは候補として表示します。判定スコアは特徴量の一致度などを組み合わせた内部指標です。
 
-Demucs のギターステムから伴奏を推定し、同時に鳴る複数音やアルペジオの反復が足りなければ、理由を表示して解析を止めます。リードと伴奏が同じステムに入るため、複数音を弾くリードや、反復の少ない伴奏では誤判定があり得ます。モデルの取得や実行に失敗した場合や、伴奏の手掛かりはあるもののギターステムが弱い場合は、混合音を使って候補を表示します。変化時刻は音の変化から推定し、4分の1拍は時刻の分解能の目安です。小節番号は推定した拍位置を基準に振ります。
+Demucs のギターステムから、持続する同時発音や規則的なアルペジオを手掛かりに伴奏を推定します。手掛かりが足りなければ、理由を表示して解析を止めます。リードと伴奏が同じステムに入るため、弱い伴奏や単音の演奏では誤判定があり得ます。モデルの取得や実行に失敗した場合や、伴奏の手掛かりはあるもののギターステムが弱い場合は、混合音を使って候補を表示します。4分の1拍は変化時刻を探す細かさの目安です。最初に検出した拍を仮の1小節1拍目とし、それより前は0小節以下に表示します。
 
-ローカルではこの作品のフォルダで実行します。
+ローカルではこの作品のフォルダで実行します。Intel Mac では分離用パッケージと NumPy の依存条件が衝突するため、Colab を使ってください。
 
 ```bash
 python -m pip install -e ".[separation,youtube]"

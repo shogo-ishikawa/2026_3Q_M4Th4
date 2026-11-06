@@ -5,7 +5,9 @@ from dataclasses import asdict
 
 import numpy as np
 import pytest
+import soundfile as sf
 
+from guitar_chord_lab.synth import normalise_peak, synthesise_drums, synthesise_progression
 from guitar_chord_lab.tempo import estimate_tempo
 
 RATE = 11025
@@ -54,17 +56,33 @@ def test_global_and_six_local_tempos_keep_the_pulse(bpm, rate, hat_delay):
     assert json.loads(json.dumps(asdict(report), allow_nan=False))["bpm"] == report.bpm
 
 
-def test_variable_tempo_uses_local_intervals_for_the_beat_times():
-    beats = np.r_[np.arange(0.3, 12, 0.5), np.arange(12.3, 24, 2 / 3)]
-    report = estimate_tempo(percussion(beats, 25), RATE)
+def test_one_half_tempo_window_does_not_warp_steady_beats(tmp_path):
+    progression = [("C:maj", 4), ("A:min", 4), ("G:maj", 4)]
+    guitar = normalise_peak(synthesise_progression(progression), peak=0.8)
+    mixture = normalise_peak(guitar + 0.12 * synthesise_drums(12))
+    path = tmp_path / "steady.wav"
+    sf.write(path, mixture, 44100, subtype="PCM_16")
+    samples, rate = sf.read(path, dtype="float32")
+    report = estimate_tempo(samples, rate)
+
+    assert report.bpm == pytest.approx(120, abs=2)
+    assert not report.variable_tempo
+    assert report.beats_s == pytest.approx(tuple(np.arange(24) * 0.5), abs=0.075)
+
+
+@pytest.mark.parametrize("later_bpm,change_s", [(90, 12), (60, 30)])
+def test_variable_tempo_uses_local_intervals_for_the_beat_times(later_bpm, change_s):
+    later_interval = 60 / later_bpm
+    beats = np.r_[np.arange(0.3, change_s, 0.5), np.arange(change_s + 0.3, 2 * change_s, later_interval)]
+    report = estimate_tempo(percussion(beats, 2 * change_s + 1), RATE)
 
     assert report.variable_tempo
     assert report.local_bpm[0].bpm == pytest.approx(120, abs=2)
-    assert report.local_bpm[-1].bpm == pytest.approx(90, abs=2)
+    assert report.local_bpm[-1].bpm == pytest.approx(later_bpm, abs=2)
     assert report.local_spread_bpm > 25
     intervals = np.diff(report.beats_s)
     assert np.median(intervals[:10]) == pytest.approx(0.5, abs=0.03)
-    assert np.median(intervals[-10:]) == pytest.approx(2 / 3, abs=0.03)
+    assert np.median(intervals[-10:]) == pytest.approx(later_interval, abs=0.03)
 
 
 def test_bounds_keep_activity_after_a_break_and_during_a_fade():

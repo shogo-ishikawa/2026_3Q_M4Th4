@@ -11,7 +11,7 @@ from guitar_chord_lab import song, song_harmony
 from guitar_chord_lab.audio import make_clip, save_audio
 from guitar_chord_lab.cli import main
 from guitar_chord_lab.separation import SeparationError, StemSeparation
-from guitar_chord_lab.synth import synthesise_drums
+from guitar_chord_lab.synth import midi_to_hz, synthesise_drums
 
 RATE = 22050
 
@@ -106,6 +106,48 @@ def test_no_backing_stops_cli_before_harmony_or_saving(monkeypatch, recording, t
     assert main(["song", str(path), "--output-dir", str(output)]) == 1
     assert "コード解析を停止しました" in capsys.readouterr().err
     assert not output.exists()
+
+
+def arpeggiated_waveform(patterns, duration_s, gap_s):
+    times = np.arange(round(duration_s * RATE)) / RATE
+    envelope = np.sin(np.pi * times / duration_s) ** 0.4
+    notes = []
+    for pattern in patterns:
+        for midi in pattern:
+            notes.append(0.1 * envelope * np.sin(2 * np.pi * midi_to_hz(midi) * times))
+            notes.append(silence(gap_s))
+    return np.concatenate(notes)
+
+
+def test_unrepeated_arpeggio_progression_is_saved_as_candidates(monkeypatch, tmp_path):
+    patterns = [(60, 64, 67, 72), (57, 60, 64, 69), (53, 57, 60, 65), (55, 59, 62, 67)]
+    guitar = arpeggiated_waveform(patterns, 0.20, 0.09)
+    path = save_audio(tmp_path / "arp.wav", make_clip(guitar, RATE))
+    install_separator(monkeypatch, (path, guitar, np.zeros_like(guitar)), guitar)
+
+    analysis = song.analyse_song(song.prepare_song(path), song.TempoChoice(120, "manual"))
+    backing = analysis.metadata["separation"]["backing"]
+    assert backing["arpeggio_progression"] is True
+    assert backing["polyphonic_s"] == 0
+    assert analysis.chords == []
+    candidates = [item["candidates"][0] for item in analysis.judgements if item["status"] == "candidate"]
+    assert candidates == ["C", "Am", "F", "G"]
+    assert song.save_song(analysis, tmp_path / "results").is_dir()
+
+    short_phrase = arpeggiated_waveform(patterns[:1], 0.20, 0.09)
+    assert not song.detect_backing(short_phrase, short_phrase, RATE, 120).present
+
+
+def test_backing_and_harmony_both_use_confirmed_bpm(monkeypatch, tmp_path):
+    guitar = arpeggiated_waveform([(60, 64, 67)] * 3, 0.43, 0.08)
+    path = save_audio(tmp_path / "slow-arp.wav", make_clip(guitar, RATE))
+    install_separator(monkeypatch, (path, guitar, np.zeros_like(guitar)), guitar)
+    session = song.prepare_song(path)
+
+    analysis = song.analyse_song(session, song.TempoChoice(120, "manual"))
+    assert [chord["name"] for chord in analysis.chords] == ["C"]
+    with pytest.raises(song.NoBackingGuitar):
+        song.analyse_song(session, song.TempoChoice(180, "manual"))
 
 
 def test_fallback_only_proposes_candidates_from_the_mix(monkeypatch, recording, tmp_path):
