@@ -487,6 +487,7 @@
       const target = crossingTarget(game);
       if (!game.level.allowed.water && (has(game, 'water', 'freeze') || has(game, 'water', 'solidify'))) return 'cross-water';
       if (!has(game, target, 'float')) return 'define-' + target;
+      if ((has(game, target, 'shrink') || has(game, target, 'rotate')) && bridgeGeometry(game, target).h < game.level.rivers[0].h) return 'adjust-bridge-' + target;
       if (bank === 'river') return 'cross-bridge';
       if (bankOf(game, game[target]) === 'north') return 'recover-' + target;
       return distance(game.player, game[target]) < 115 ? 'carry-' + target : 'approach-' + target;
@@ -508,6 +509,14 @@
     if (key === 'complete') return null;
     if (key === 'goal') return { x: game.level.goal.x + game.level.goal.w / 2, y: game.level.goal.y + game.level.goal.h / 2, label: 'ゴール' };
     if (key === 'core') return { ...game.level.core, label: '青い結晶' };
+    if (key.startsWith('adjust-bridge-')) {
+      if (bankOf(game) === 'river') {
+        const river = game.level.rivers[0];
+        const y = game.player.y < river.y + river.h / 2 ? river.y - 24 : river.y + river.h + 24;
+        return { x: game[target].x, y, label: 'E＋移動で足場ごと近い岸へ' };
+      }
+      return { ...game.player, label: '岸で縮小・回転を外す' };
+    }
     if (key.startsWith('fetch-sensor-')) {
       const sensor = pendingSensor(game), river = game.level.rivers[0];
       const bridge = ['stone', 'tree'].find(item => isBridge(game, item) && bridgeGeometry(game, item).h >= river.h);
@@ -534,6 +543,21 @@
     if (key === 'complete') return ['このステージはクリア済みです。', game.stageIndex < LEVELS.length - 1 ? '「次のステージへ」で先へ進めます。' : '全' + LEVELS.length + 'ステージをクリアしました。ステージ選択から遊び直せます。', '同じステージで欠片の収集にも挑戦できます。'];
     if (key === 'goal') return ['ゲートは開いています。', 'ゲートの中央をまっすぐ上へ進みましょう。', '北側のGOALの枠へ入ればクリアです。', routeAdvice];
     if (key === 'core') return ['川はもう渡れています。次は青い結晶です。', 'この位置から北岸を' + coreDirection + 'へ進むと結晶があります。', '青いひし形へ近づくだけで回収でき、「加熱」が使えるようになります。'];
+    if (key.startsWith('adjust-bridge-')) {
+      const definition = game.stageIndex === 4 ? '浮遊＋成長' : '浮遊';
+      if (bankOf(game) === 'river') return [
+        '縮小や回転で足場の縦の長さが川の幅より短くなっています。置いたままでは岸まで届きません。',
+        'いまは川の上です。Eを押しながら上か下へ移動し、足場ごと近い岸へ進みましょう。',
+        '岸へ出てから' + targetName + 'の「縮小」「回転」を外し、「' + definition + '」を適用します。',
+        '今いる足場を失う変更は拒否されます。まず岸へ戻るか、「1手戻す」で変更前へ戻ってください。'
+      ];
+      return [
+        '縮小や回転で足場の縦の長さが川の幅より短くなっています。置くだけでは川をまたげません。',
+        '岸に立ったまま、' + targetName + 'の「縮小」「回転」を外し、「' + definition + '」を適用します。',
+        '物体が向こう岸にある場合は、このヒント内の「' + targetName + 'の配置を戻す」で出発側へ呼び戻せます。',
+        '物体へ近づき、E＋移動で川の中央へ運びます。Eを離してから、方向キーだけで足場の中央を上へ渡りましょう。'
+      ];
+    }
     if (key.startsWith('recover-')) return [
       targetName + 'が向こう岸にあるため、そのままでは近づけません。',
       'ヒント内の「' + targetName + 'の配置を戻す」で、いまいる出発側の岸へ戻せます。結晶や点灯した仕掛けは失われません。',

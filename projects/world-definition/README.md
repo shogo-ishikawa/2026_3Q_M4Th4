@@ -1,8 +1,8 @@
 # WORLD DEFINITION
 
-**世界のルールを変えて、進める道を作るパズルゲームです。** 水を凍らせる、石を浮かせる、木の光を運ぶ。物体と動作を組み合わせ、基本5面と応用4面の全9ステージに挑みます。公開版のバージョンは **v1.2.0** です。
+**世界のルールを変えて、進める道を作るパズルゲームです。** 水を凍らせる、石を浮かせる、木の光を運ぶ。物体と動作を組み合わせ、基本5面と応用4面の全9ステージに挑みます。公開版のバージョンは **v1.2.1** です。
 
-2026年度「計算科学基礎」の学生制作をもとにしています。C++・raylibの試作とJavaScript・Canvas版にあった「世界に働きかけて道を作る」という発想を引き継ぎました。公開版では定義による形・動き・光の変化を見やすくし、物体を運んで仕掛けを解くステージを追加しています。v1.2.0では基本5面を残し、縮小・回転を使う応用面、1手戻す操作、途中再開、文章からルールを提案する任意のローカルAI連携を加えました。
+2026年度「計算科学基礎」の学生制作をもとにしています。C++・raylibの試作とJavaScript・Canvas版にあった「世界に働きかけて道を作る」という発想を引き継ぎました。公開版では定義による形・動き・光の変化を見やすくし、物体を運んで仕掛けを解くステージを追加しています。v1.2.1では基本5面を残し、縮小・回転を使う応用面、1手戻す操作、途中再開、文章からルールを提案する任意のローカルAI連携を加えました。
 
 ## すぐに遊ぶ
 
@@ -171,6 +171,6 @@ python3 -m unittest discover -s tests -p 'test_*.py'
 
 ## 公開用ファイルの作成
 
-リポジトリのルートで `python3 scripts/build_public_site.py` を実行すると、`_site/world-definition/` に公開用ファイルと配布ZIPが作られます。ZIPを解凍すると `v1.2.0/` になり、`index.html` を開いて遊べます。ソースはこの `projects/world-definition/` で管理します。
+リポジトリのルートで `python3 scripts/build_public_site.py` を実行すると、`_site/world-definition/` に公開用ファイルと配布ZIPが作られます。ZIPを解凍すると `v1.2.1/` になり、`index.html` を開いて遊べます。ソースはこの `projects/world-definition/` で管理します。
 
 GitHub Pagesの初回設定は **Settings → Pages → Build and deployment → Source → GitHub Actions** です。その後はmainへの更新時に確認と配信を行います。Actionsの **Check and publish public works → Run workflow** からも再実行できます。

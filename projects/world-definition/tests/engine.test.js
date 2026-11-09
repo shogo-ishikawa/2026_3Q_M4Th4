@@ -711,8 +711,7 @@ function finish(game) {
   assert.equal(game.damageUntil, previousDamage, 'The middle of the opened gate must be usable without a respawn or invulnerability shortcut');
   assert.ok(game.complete, 'Movement must reach the goal');
 }
-function prepareStage(stageIndex, placementOffset = 0) {
-  const game = E.createGame(stageIndex);
+function prepareStage(stageIndex, placementOffset = 0, game = E.createGame(stageIndex)) {
   if (stageIndex === 0) {
     apply(game, 'water', ['solidify']);
     walkTo(game, 425, 316); walkTo(game, 245, 316);
@@ -827,6 +826,61 @@ test('stage 2 long carrying and later fire contact keep the north bank reachable
   apply(game, 'stone', ['glow']);
   frames(game, [], 250);
   finish(game);
+});
+
+test('short new-verb decks receive safe correction hints on land and in the river', () => {
+  for (let stage = 0; stage < 5; stage++) {
+    const target = stage === 2 ? 'tree' : 'stone';
+    for (const effect of ['shrink', 'rotate']) {
+      const game = E.createGame(stage); apply(game, target, ['float', effect]);
+      const key = 'adjust-bridge-' + target;
+      assert.equal(E.hintKey(game), key, 'A short deck needs correction before crossing in stage ' + (stage + 1));
+      assert.match(E.hints(game).join(' '), /縮小.*回転.*外し/);
+      assert.match(E.hints(game).join(' '), stage === 4 ? /浮遊＋成長/ : /浮遊/);
+      assert.deepEqual(E.hintTarget(game), { ...game.player, label: '岸で縮小・回転を外す' });
+      // An isolated on-deck state checks the recovery instructions separately
+      // from the spawn-to-goal journeys below.
+      const river = game.level.rivers[0];
+      game[target] = { x: game.level[target].x, y: river.y + river.h / 2 };
+      game.player = { ...game[target] };
+      assert.ok(E.walkable(game, game.player)); assert.equal(E.bankOf(game), 'river');
+      const before = JSON.stringify(game);
+      assert.equal(E.hintKey(game), key);
+      assert.match(E.hints(game).join(' '), /Eを押しながら上か下/);
+      assert.match(E.hints(game).join(' '), /今いる足場を失う変更は拒否/);
+      assert.notEqual(E.bankOf(game, E.hintTarget(game)), 'river', 'The recovery marker must point to a bank');
+      assert.equal(JSON.stringify(game), before, 'Reading recovery hints must not move or redefine the deck');
+      frames(game, ['e', 's'], 120);
+      assert.equal(E.bankOf(game), 'south', 'The advised ferry action must return to land');
+      assert.ok(E.walkable(game, game.player));
+      apply(game, target, stage === 4 ? ['float', 'grow'] : ['float']);
+      assert.notEqual(E.hintKey(game), key);
+    }
+  }
+  const water = E.createGame(); apply(water, 'stone', ['float', 'shrink']); apply(water, 'water', ['solidify']);
+  assert.equal(E.hintKey(water), 'cross-water', 'An already walkable river takes precedence over the short optional object');
+  const ferry = E.createGame(4); apply(ferry, 'tree', ['float', 'glow', 'pulse']);
+  ferry.tree = { x: 240, y: 415 }; ferry.player = { ...ferry.tree };
+  assert.ok(E.walkable(ferry, ferry.player)); assert.equal(E.hintKey(ferry), 'cross-bridge');
+  assert.match(E.hints(ferry).join(' '), /E＋上を押し続け/);
+  frames(ferry, ['e', 'w'], 100);
+  assert.equal(E.bankOf(ferry), 'north', 'The original stage-five tree ferry must remain usable');
+});
+
+test('correcting shrink and rotation on land still allows every basic stage to be cleared', () => {
+  for (let stage = 0; stage < 5; stage++) {
+    const target = stage === 2 ? 'tree' : 'stone';
+    for (const effect of ['shrink', 'rotate']) {
+      const game = E.createGame(stage); apply(game, target, ['float', effect]);
+      assert.equal(E.hintKey(game), 'adjust-bridge-' + target);
+      apply(game, target, stage === 4 ? ['float', 'grow'] : ['float']);
+      assert.ok(!E.hintKey(game).startsWith('adjust-bridge-'));
+      const ready = prepareStage(stage, 0, game);
+      assert.equal(ready, game, 'The correction journey must keep the same game from spawn');
+      finish(game);
+      assert.ok(game.complete); assert.equal(game.damageUntil, 0);
+    }
+  }
 });
 
 test('the five introductory stages provide actionable hints from crossing through the goal', () => {
