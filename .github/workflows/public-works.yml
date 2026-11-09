@@ -41,6 +41,7 @@ jobs:
           node projects/world-definition/tests/engine.test.js
           node projects/world-definition/tests/app-input.test.js
           node projects/world-definition/tests/progress.test.js
+          node projects/world-definition/tests/session.test.js
           python -m unittest discover -s projects/world-definition/tests -p 'test_*.py'
       - name: Build selected public files and distribution ZIP
         run: python scripts/build_public_site.py

@@ -9,7 +9,7 @@
     ruins: { edge: '#183f42', rim: '#7f9675', ground: '#bcc89a', grass: '#7e9d77', path: '#dfd5a4', water: '#57a7b1', deepWater: '#2b7b88', wall: '#a6a18b', ink: '#30533e', lightInk: '#fff8d8' }
   };
   const TARGET_LABELS = { water: '水', stone: '石', tree: '木', fire: '炎' };
-  const EFFECT_LABELS = { float: '浮遊', move: '移動', grow: '成長', glow: '発光', freeze: '凍結', solidify: '固体化', pulse: '脈動', heat: '加熱' };
+  const EFFECT_LABELS = { float: '浮遊', move: '移動', grow: '成長', glow: '発光', freeze: '凍結', solidify: '固体化', pulse: '脈動', heat: '加熱', shrink: '縮小', rotate: '回転' };
 
   function createRenderer(canvas, E, options = {}) {
     const ctx = canvas.getContext('2d');
@@ -108,6 +108,8 @@
       for (let y = level.spawn.y - 42; y < level.spawn.y + 40; y += 30) rect(level.spawn.x - 7, y, 14, 8, '#f0e8c680', 3);
       word('N ↑', 785, 132, 14, theme.ink, 'center');
       word(level.name, 77, 137, 16, theme.ink);
+      if (level.advanced) word('応用ステージ', 77, 161, 11, theme.ink);
+      if (Number.isFinite(level.parRules)) pill('挑戦目標：定義 ' + level.parRules + ' 回', 636, 133, '#f4ecd9e8', '#53603c', 11);
     }
 
     function snowflake(x, y, radius, colour) {
@@ -170,7 +172,9 @@
         const effects = game.rules.water?.effects || [];
         const heading = solid ? '水 → 石張りの通路' : frozen ? '水 → 氷の通路' : sealed ? '封印された水' : '水';
         const description = effects.length ? effects.map(id => EFFECT_LABELS[id]).join(' / ') : sealed ? '凍結・固体化は封印中' : 'そのままでは渡れません';
-        pill(heading + '  ·  ' + description, centre.x, river.y + river.h - 29, solid || frozen ? '#375951df' : '#1e5269e8');
+        const vertical = river.h > river.w;
+        const caption = vertical ? solid ? '水：固体化' : frozen ? '水：凍結' : sealed ? '水：封印中' : '水' : heading + '  ·  ' + description;
+        pill(caption, centre.x, vertical ? river.y + 10 : river.y + river.h - 29, solid || frozen ? '#375951df' : '#1e5269e8', '#fff8d7', vertical ? 11 : 12);
         if (sealed && !frozen && !solid) {
           // A lock at each bank identifies the stage restriction visually.
           for (const x of [river.x + 23, river.x + river.w - 23]) {
@@ -184,7 +188,7 @@
     function drawLight(game, target, x, y, radius, time) {
       const glowing = E.has(game, target, 'glow'), pulsing = E.has(game, target, 'pulse');
       if (!glowing && !pulsing) return;
-      const brightness = pulsing && !reducedMotion ? .58 + .32 * Math.sin(time * 3.2) : .8;
+      const brightness = pulsing && !reducedMotion ? .58 + .32 * Math.sin(time * 3) : .8;
       halo(x, y, radius, `rgba(255,238,136,${brightness})`);
       ring(x, y, radius * .45, '#fff2a1bb', 2.3);
       if (pulsing) {
@@ -204,7 +208,7 @@
     function drawTargetBadges(game, target, x, y) {
       const effects = game.rules[target]?.effects || [];
       let title = TARGET_LABELS[target];
-      if ((target === 'stone' || target === 'tree') && E.isBridge(game, target)) title += 'の足場';
+      if ((target === 'stone' || target === 'tree') && E.isBridge(game, target)) title += E.has(game, target, 'rotate') ? 'の足場 ↔' : 'の足場 ↕';
       else if (E.has(game, target, 'float')) title += '  ↑ 浮遊中';
       const top = E.clamp(y, 151, effects.length ? 602 : 626);
       const height = effects.length ? 52 : 25;
@@ -221,20 +225,64 @@
         rect(deck.x - 4, deck.y + 5, deck.w + 8, deck.h + 5, '#153d4d55', 8);
         drawLight(game, target, deck.x + deck.w / 2, deck.y + deck.h / 2, Math.max(deck.w, deck.h) * .66, time);
         rect(deck.x, deck.y, deck.w, deck.h, target === 'tree' ? '#b9945f' : '#aebcac', 6);
-        for (let y = deck.y + 7, row = 0; y < deck.y + deck.h - 5; y += 17, row++) {
-          const height = Math.min(14, deck.y + deck.h - 4 - y);
+        const horizontal = deck.w > deck.h;
+        const length = horizontal ? deck.w : deck.h;
+        const colours = target === 'tree' ? ['#d1b780', '#c5a46b'] : ['#bac8b1', '#ccd4bd'];
+        for (let offset = 7, row = 0; offset < length - 5; offset += 17, row++) {
+          const size = Math.min(14, length - 4 - offset);
+          const x = horizontal ? deck.x + offset : deck.x + 4;
+          const y = horizontal ? deck.y + 4 : deck.y + offset;
+          const width = horizontal ? size : deck.w - 8;
+          const height = horizontal ? deck.h - 8 : size;
+          rect(x, y, width, height, colours[row % 2], target === 'tree' ? 2 : 3);
           if (target === 'tree') {
-            rect(deck.x + 4, y, deck.w - 8, height, row % 2 ? '#c5a46b' : '#d1b780', 2);
-            circle(deck.x + 9, y + 6, 1.7, '#806244'); circle(deck.x + deck.w - 9, y + 6, 1.7, '#806244');
-          } else {
-            rect(deck.x + 4, y, deck.w - 8, height, row % 2 ? '#ccd4bd' : '#bac8b1', 3);
-            line(deck.x + 9, y + 3, deck.x + deck.w - 9, y + 3, '#eff1d6', 1);
-          }
+            circle(x + 5, y + 5, 1.7, '#806244'); circle(x + width - 5, y + height - 5, 1.7, '#806244');
+          } else if (horizontal) line(x + 3, y + 4, x + 3, y + height - 4, '#eff1d6', 1);
+          else line(x + 5, y + 3, x + width - 5, y + 3, '#eff1d6', 1);
         }
+        drawBridgeDirection(deck);
         const border = E.has(game, target, 'glow') ? '#fff3a2' : selectedTarget === target ? '#eaffbd' : '#60775b';
         ctx.save(); ctx.lineWidth = E.has(game, target, 'glow') ? 4 : 2; ctx.strokeStyle = border;
         ctx.beginPath(); ctx.roundRect(deck.x, deck.y, deck.w, deck.h, 6); ctx.stroke(); ctx.restore();
         drawTargetBadges(game, target, deck.x + deck.w / 2, deck.y + deck.h + 7);
+      }
+    }
+
+    function drawBridgeDirection(deck) {
+      // Use the engine's deck dimensions so direction and support always agree.
+      const x = deck.x + deck.w / 2, y = deck.y + deck.h / 2;
+      const horizontal = deck.w > deck.h;
+      const dx = horizontal ? Math.min(deck.w / 2 - 9, 30) : 0;
+      const dy = horizontal ? 0 : Math.min(deck.h / 2 - 9, 30);
+      line(x - dx, y - dy, x + dx, y + dy, '#486451aa', 2);
+      for (const side of [-1, 1]) {
+        const endX = x + dx * side, endY = y + dy * side;
+        if (horizontal) {
+          line(endX, endY, endX - side * 6, endY - 5, '#486451aa', 2);
+          line(endX, endY, endX - side * 6, endY + 5, '#486451aa', 2);
+        } else {
+          line(endX, endY, endX - 5, endY - side * 6, '#486451aa', 2);
+          line(endX, endY, endX + 5, endY - side * 6, '#486451aa', 2);
+        }
+      }
+    }
+
+    function drawSizeAndDirection(game, target, geometry) {
+      if (E.has(game, target, 'shrink')) {
+        // A dashed outline lets a small object remain identifiable next to its shadow.
+        const radius = target === 'stone' ? 20 : 34;
+        const y = geometry.y - (target === 'tree' ? 57 * geometry.scale : 0);
+        ring(geometry.x, y, radius, '#f5f0b380', 1.4, true);
+        for (const side of [-1, 1]) {
+          const x = geometry.x + side * (radius + 7);
+          line(x, y, x - side * 6, y, '#f7efb7', 1.7);
+          line(x - side * 6, y, x - side * 2, y - 4, '#f7efb7', 1.7);
+          line(x - side * 6, y, x - side * 2, y + 4, '#f7efb7', 1.7);
+        }
+      }
+      if (E.has(game, target, 'rotate')) {
+        const x = geometry.x, y = geometry.y - (target === 'tree' ? 57 * geometry.scale : 0);
+        word('↔', x, Math.max(117, y - geometry.radius - 24), 19, '#fff4bd', 'center');
       }
     }
 
@@ -272,7 +320,7 @@
         rect(gate.x, gate.y + gate.h + 7, gate.w * game.gateHeat, 8, '#ffbe65', 4);
       }
       const sensorCount = Object.values(game.sensorLit).filter(Boolean).length;
-      let status = !game.core ? '結晶が必要' : sensorCount < game.level.sensors.length ? `紋章 ${sensorCount}/${game.level.sensors.length}` : 'E長押しで加熱';
+      let status = !game.core ? '結晶が必要' : sensorCount < game.level.sensors.length ? `装置 ${sensorCount}/${game.level.sensors.length}` : game.level.gateMode === 'sensors' ? '装置を確認中' : 'E長押しで加熱';
       if (game.heating) status = '加熱 ' + Math.round(game.gateHeat * 100) + '%';
       pill(status, gate.x + gate.w / 2, gate.y - 32, game.heating ? '#a85d34ee' : '#425d4ce8');
       if (game.heating) {
@@ -317,19 +365,25 @@
           line(sensor.x - 9, sensor.y, sensor.x - 2, sensor.y + 7, '#e8ffd1', 3);
           line(sensor.x - 2, sensor.y + 7, sensor.x + 11, sensor.y - 8, '#e8ffd1', 3);
         } else {
-          const icon = sensor.requires.includes('pulse') ? '◎' : sensor.requires.includes('grow') ? '↗' : '✦';
+          const icon = sensor.target === 'water' ? '◈' : sensor.requires.includes('pulse') ? '◎' : sensor.requires.includes('rotate') ? '↔' : sensor.requires.includes('shrink') ? '↘' : sensor.requires.includes('grow') ? '↗' : '✦';
           word(icon, sensor.x, sensor.y - 12, 25, colour, 'center');
         }
-        const target = game[sensor.target];
-        const validEffects = sensor.requires.every(effect => E.has(game, sensor.target, effect));
-        if (validEffects && E.distance(target, sensor) <= sensor.radius) {
-          const from = targetPoint(game, sensor.target);
+        const target = sensor.target === 'water' ? game.player : game[sensor.target];
+        const active = E.sensorActive ? E.sensorActive(game, sensor) : sensor.requires.every(effect => E.has(game, sensor.target, effect)) && E.distance(target, sensor) <= sensor.radius;
+        if (active) {
+          const from = sensor.target === 'water' ? game.player : targetPoint(game, sensor.target);
           line(from.x, from.y, sensor.x, sensor.y, lit ? '#e8ffc780' : '#ffe4a2c0', 3, !lit);
           if (sensor.requires.includes('pulse')) ring(sensor.x, sensor.y, 32 + (reducedMotion ? 8 : (time * 18) % 20), '#ffeab67a', 2);
         }
         const shortName = sensor.label || '紋章';
-        const requirements = TARGET_LABELS[sensor.target] + '：' + sensor.requires.map(id => EFFECT_LABELS[id]).join('＋');
-        pill(lit ? shortName + ' ✓' : requirements, sensor.x, sensor.y + 32, lit ? '#306b4be8' : '#354f4ee8', '#fff2ce', 11);
+        const requirements = TARGET_LABELS[sensor.target] + '：' + sensor.requires.map(id => EFFECT_LABELS[id]).join('＋') + (sensor.waterEffect ? '／水：' + EFFECT_LABELS[sensor.waterEffect] : '');
+        const caption = lit ? shortName + (sensor.mode === 'hold' ? ' 維持中' : ' ✓') : requirements;
+        pill(caption, sensor.x, sensor.y + 32, lit ? '#306b4be8' : '#354f4ee8', '#fff2ce', 11);
+        if (sensor.mode === 'hold') pill('離すと消灯・同時に点灯', sensor.x, sensor.y + 57, '#f0ead7e8', '#4e664c', 10);
+        else if (sensor.pulsed) {
+          const receiving = E.pulseHigh ? E.pulseHigh(game) : Math.sin(game.elapsed * 3) > .45;
+          pill(lit ? '受信完了' : receiving ? '脈動：受信する時間' : '脈動：次の波を待つ', sensor.x, sensor.y + 57, '#f0ead7e8', '#4e664c', 10);
+        } else if (sensor.target === 'water') pill('プレイヤーが円へ入る', sensor.x, sensor.y + 57, '#f0ead7e8', '#4e664c', 10);
       }
     }
 
@@ -385,6 +439,7 @@
       ctx.strokeStyle = '#e4ead5'; ctx.lineWidth = 2; ctx.stroke();
       line(geometry.x - geometry.radius * .35, geometry.y + geometry.radius * .65, geometry.x + geometry.radius * .5, geometry.y + geometry.radius * .35, '#7f998b', 2);
       if (selectedTarget === 'stone') ring(geometry.x, geometry.y, geometry.radius + 8, '#f4f9c7', 1.7, true);
+      drawSizeAndDirection(game, 'stone', geometry);
       drawTargetBadges(game, 'stone', stone.x, stone.y + geometry.radius + 15);
       ctx.restore();
     }
@@ -399,7 +454,7 @@
         ring(geometry.x, geometry.y - 57, 34, '#ffffd1c0', 1.8, true);
         line(geometry.x - 8, geometry.y - 23, geometry.x + 8, geometry.y - 23, '#ffffd1aa', 1.5, true);
       }
-      rect(geometry.x - 8, geometry.y - 55 * scale, 16, 55 * scale, '#94714e', 3);
+      rect(geometry.x - 8 * scale, geometry.y - 55 * scale, 16 * scale, 55 * scale, '#94714e', 3);
       line(geometry.x + 3, geometry.y - 40 * scale, geometry.x + 3, geometry.y - 4, '#b79666', 2);
       circle(geometry.x, top, 34 * scale, '#39754e');
       circle(geometry.x - 13 * scale, geometry.y - 67 * scale, 19 * scale, '#589353');
@@ -410,6 +465,7 @@
         circle(geometry.x + Math.cos(angle) * 21 * scale, top + Math.sin(angle) * 17 * scale, 3 * scale, '#c7d989');
       }
       if (selectedTarget === 'tree') ring(geometry.x, top, 39 * scale, '#f4f9c7', 1.7, true);
+      drawSizeAndDirection(game, 'tree', geometry);
       drawTargetBadges(game, 'tree', tree.x, tree.y + 17);
       ctx.restore();
     }

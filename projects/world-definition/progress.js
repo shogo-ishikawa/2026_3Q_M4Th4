@@ -16,6 +16,8 @@
             data.best[index] = { rules: Math.floor(best.rules), shards: Math.min(2, Math.floor(best.shards)), time: best.time };
           }
         }
+        // v1.1 ended at stage 5. A recorded final clear also opens the new chapter.
+        if (levelCount > 5 && data.unlocked === 4 && data.best[4]) data.unlocked = 5;
       }
     } catch (_) { persistent = false; }
     const snapshot = () => JSON.parse(JSON.stringify(data));
