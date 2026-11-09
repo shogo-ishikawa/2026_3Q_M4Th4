@@ -10,14 +10,18 @@ const engine = require(process.argv[3] ? path.resolve(process.argv[3]) : path.jo
 const progress = require(process.argv[4] ? path.resolve(process.argv[4]) : path.join(path.dirname(appPath), 'progress.js'));
 const source = fs.readFileSync(appPath, 'utf8');
 const STORAGE_KEY = 'world-definition-progress-v1';
+const SESSION_KEY = 'world-definition-session-v1';
+const sessionPath = process.argv[5] ? path.resolve(process.argv[5]) : path.join(path.dirname(appPath), 'session.js');
+const session = fs.existsSync(sessionPath) ? require(sessionPath) : null;
 function memoryStorage(saved = null) {
   const items = new Map(saved === null ? [] : [[STORAGE_KEY, typeof saved === 'string' ? saved : JSON.stringify(saved)]]);
-  return { getItem: key => items.get(key) ?? null, setItem: (key, value) => items.set(key, value) };
+  return { getItem: key => items.get(key) ?? null, setItem: (key, value) => items.set(key, value), removeItem: key => items.delete(key) };
 }
 
 function harness(options = {}) {
   const elements = new Map(), all = [], updates = [], requests = [], draws = [];
-  let activeGame, frameCallback, timestamp = 0;
+  let activeGame, frameCallback, timestamp = 0, nextTimer = 0;
+  const timers = new Map();
   class Element {
     constructor(tag = 'DIV', id = '') {
       this.tagName = tag.toUpperCase(); this.children = []; this.dataset = {};
@@ -70,9 +74,12 @@ function harness(options = {}) {
   document.createElement = tag => new Element(tag);
   document.createTextNode = value => ({ textContent: value });
   document.querySelectorAll = selector => selector === 'dialog' ? all.filter(item => item.tagName === 'DIALOG') : selector === '[data-key]' ? all.filter(item => item.dataset.key) : [];
-  for (const id of ['game', 'objective', 'hudpower', 'progress', 'targets', 'effects', 'queue', 'unlock-message', 'apply', 'active-rules', 'generated-name', 'generated-desc', 'rule-status', 'use-ai', 'local-ai', 'hint-content', 'hint-button', 'hint-panel', 'hint-prev', 'hint-next', 'hint-close', 'hint-step', 'hint-title', 'hint-marker', 'interaction-status', 'recover-stone', 'recover-tree', 'hint-recovery-status', 'reset', 'again', 'close-win', 'lab-focus', 'lab-panel', 'help-button', 'close-help', 'start-button', 'start-intro', 'start-rule-hint', 'stage-select', 'stage-description', 'stage-record', 'stage-number', 'stage-name', 'shard-count', 'effect-summary', 'win-title', 'win-result', 'save-status', 'next-stage', 'change-stage']) new Element(id === 'game' ? 'canvas' : ['use-ai', 'hint-marker'].includes(id) ? 'input' : id === 'stage-select' ? 'select' : 'div', id);
+  for (const id of ['game', 'objective', 'hudpower', 'progress', 'targets', 'effects', 'queue', 'unlock-message', 'apply', 'active-rules', 'generated-name', 'generated-desc', 'rule-status', 'use-ai', 'local-ai', 'hint-content', 'hint-button', 'hint-panel', 'hint-prev', 'hint-next', 'hint-close', 'hint-step', 'hint-title', 'hint-marker', 'interaction-status', 'recover-stone', 'recover-tree', 'hint-recovery-status', 'reset', 'again', 'close-win', 'lab-focus', 'lab-panel', 'help-button', 'close-help', 'start-button', 'start-intro', 'start-rule-hint', 'stage-select', 'stage-description', 'stage-record', 'stage-number', 'stage-name', 'shard-count', 'effect-summary', 'win-title', 'win-result', 'save-status', 'next-stage', 'change-stage', 'undo', 'session-status', 'start-fresh', 'resume-note', 'ai-check', 'ai-model', 'ai-connection-status', 'ai-text', 'ai-interpret', 'ai-cancel', 'ai-status', 'ai-candidate', 'ai-candidate-text', 'ai-apply-candidate']) new Element(id === 'game' ? 'canvas' : ['use-ai', 'hint-marker'].includes(id) ? 'input' : id === 'ai-text' ? 'textarea' : ['stage-select', 'ai-model'].includes(id) ? 'select' : 'div', id);
   elements.get('hint-panel').hidden = true;
   elements.get('hint-content').hidden = true;
+  elements.get('ai-candidate').hidden = true;
+  elements.get('ai-text').value = '';
+  elements.get('ai-model').value = '';
   for (const id of ['start-dialog', 'help-dialog', 'win-dialog']) new Element('dialog', id);
   for (let index = 0; index < 4; index += 1) elements.get('progress').append(new Element('li'));
   const buttons = {};
@@ -92,17 +99,22 @@ function harness(options = {}) {
   if (options.storageGetterThrows) Object.defineProperty(window, 'localStorage', { get() { throw new Error('Storage denied'); } });
   else window.localStorage = storage;
   window.WorldDefinitionProgress = progress;
+  window.WorldDefinitionSession = session;
   window.WorldDefinitionRenderer = { createRenderer: () => ({
     draw(game, target, marker) { draws.push({ stageIndex: game.stageIndex, target, marker: marker ? JSON.parse(JSON.stringify(marker)) : null }); }
   }) };
   const sandbox = { window, document, HTMLElement: Element, location: { hostname: 'localhost' },
-    performance: { now: () => 0 }, requestAnimationFrame(callback) { frameCallback = callback; },
-    setTimeout() { return 1; }, clearTimeout() {}, AbortController,
+    performance: { now: () => timestamp }, requestAnimationFrame(callback) { frameCallback = callback; },
+    setTimeout(callback, ms = 0) { const id = ++nextTimer; timers.set(id, { callback, due: timestamp + ms }); return id; }, clearTimeout(id) { timers.delete(id); }, AbortController,
     fetch(url, options) { return new Promise(resolve => requests.push({ url, options, resolve })); }
   };
-  vm.runInNewContext(source, sandbox, { filename: 'app.js' });
-  const frame = () => { const count = updates.length; timestamp += 16; frameCallback(timestamp); return updates.length > count ? updates.at(-1) : null; };
-  return { document, window, buttons, requests, draws, frame, storage, get game() { return activeGame; },
+  // Observe the controller's actual game without confusing it with temporary
+  // games created while validating history/save snapshots. This hook only reads.
+  const observedSource = source.replace(/\}\)\(\);\s*$/, 'window.__readGameForInputTest = () => game;\n})();');
+  assert.notEqual(observedSource, source, 'The controller closure must expose the read-only test observer');
+  vm.runInNewContext(observedSource, sandbox, { filename: 'app.js' });
+  const frame = () => { const count = updates.length; timestamp += 16; for (const [id, timer] of timers) { if (timer.due <= timestamp) { timers.delete(id); timer.callback(); } } frameCallback(timestamp); return updates.length > count ? updates.at(-1) : null; };
+  return { document, window, buttons, requests, draws, frame, storage, get game() { return window.__readGameForInputTest(); },
     get: id => elements.get(id),
     begin() { elements.get('start-button').emit('click'); },
     key(name, key, target = elements.get('game')) { return window.emit(name, { key, target }); },
@@ -111,10 +123,11 @@ function harness(options = {}) {
     saved() { return JSON.parse(storage.getItem(STORAGE_KEY)); },
     // Simulate the engine's completed-state boundary; route solving is tested in engine.test.js.
     complete(record = {}) {
-      activeGame.complete = true;
-      activeGame.ruleCount = record.rules ?? 3;
-      activeGame.elapsed = record.time ?? 30;
-      activeGame.collectedShards = activeGame.level.shards.map((_, index) => index < (record.shards ?? 1));
+      const current = window.__readGameForInputTest();
+      current.complete = true;
+      current.ruleCount = record.rules ?? 3;
+      current.elapsed = record.time ?? 30;
+      current.collectedShards = current.level.shards.map((_, index) => index < (record.shards ?? 1));
       frame();
     }
 
@@ -378,7 +391,7 @@ async function test(name, run) {
     const pending = app.get('apply').emit('click').results[0];
     assert.equal(app.requests.length, 1);
     assert.equal(engine.has(app.game, 'water', 'freeze'), true);
-    assert.equal(app.get('apply').disabled, true);
+    assert.equal(app.get('apply').disabled, false, 'Naming must not block the next definition');
     app.key('keydown', 'r'); app.get('confirm-reset').emit('click');
     assert.equal(app.requests[0].options.signal.aborted, true);
     assert.equal(app.game.rules.water, null);
@@ -508,5 +521,155 @@ async function test(name, run) {
       assert.deepEqual(app.frame(), []);
     }
   });
+  await test('undo restores a definition and a rejected change does not consume its history', () => {
+    const app = harness(); app.begin();
+    app.chooseEffect('freeze'); app.get('apply').emit('click');
+    assert.equal(engine.has(app.game, 'water', 'freeze'), true);
+    app.chooseEffect('solidify'); app.get('apply').emit('click');
+    assert.equal(app.game.ruleCount, 1, 'A contradictory selection must not be applied');
+    assert.equal(app.get('undo').disabled, false);
+    app.get('undo').emit('click');
+    assert.equal(app.game.rules.water, null); assert.equal(app.game.ruleCount, 0);
+    assert.equal(app.get('undo').disabled, true); assert.deepEqual(app.frame(), []);
+    const saved = session.createStore(app.storage, engine).load(0);
+    assert.ok(saved); assert.equal(saved.rules.water, null);
+  });
+  await test('a continuous carry is one undo step and Z leaves editable fields alone', () => {
+    const app = harness(); app.begin(); app.game.player = { x: 650, y: 565 };
+    app.chooseTarget('stone'); app.chooseEffect('float'); app.get('apply').emit('click');
+    const beforeCarry = { player: { ...app.game.player }, stone: { ...app.game.stone } };
+    app.key('keydown', 'e'); app.key('keydown', 'w');
+    for (let frame = 0; frame < 30; frame++) app.frame();
+    app.key('keyup', 'w'); app.key('keyup', 'e'); app.frame();
+    assert.notDeepEqual(app.game.stone, beforeCarry.stone);
+    for (const target of [app.get('ai-text'), app.get('ai-model'), app.get('use-ai')]) assert.equal(app.key('keydown', 'z', target).event.defaultPrevented, false);
+    assert.equal(app.key('keydown', 'z').event.defaultPrevented, true);
+    assert.deepEqual(app.game.player, beforeCarry.player); assert.deepEqual(app.game.stone, beforeCarry.stone);
+    assert.equal(engine.has(app.game, 'stone', 'float'), true); assert.equal(app.game.ruleCount, 1);
+    app.key('keydown', 'z');
+    assert.equal(app.game.rules.stone, null); assert.equal(app.game.ruleCount, 0);
+    assert.equal(app.get('undo').disabled, true);
+  });
+  await test('reset discards undo history while keeping unlocked stages and best records', () => {
+    const best = { rules: 3, shards: 2, time: 40 };
+    const app = harness({ saved: { unlocked: 2, lastStage: 0, best: { 0: best } } }); app.begin();
+    app.chooseEffect('freeze'); app.get('apply').emit('click');
+    app.key('keydown', 'r'); app.get('confirm-reset').emit('click');
+    assert.equal(app.get('undo').disabled, true);
+    assert.equal(app.game.rules.water, null); assert.equal(app.saved().unlocked, 2); assert.deepEqual(app.saved().best[0], best);
+  });
+  await test('saved play resumes only after the welcome choice and can be restarted deliberately', () => {
+    const storage = memoryStorage({ unlocked: 1, lastStage: 0, best: {} });
+    const first = harness({ storage }); first.begin(); first.chooseEffect('freeze'); first.get('apply').emit('click');
+    first.key('keydown', 'w'); for (let i = 0; i < 24; i++) first.frame(); first.window.emit('blur');
+    const position = { ...first.game.player }, elapsed = first.game.elapsed, savedRaw = storage.getItem(SESSION_KEY);
+    const resumed = harness({ storage });
+    assert.equal(resumed.get('start-button').textContent, '続きから'); assert.equal(resumed.get('start-fresh').hidden, false);
+    assert.deepEqual(resumed.game.player, position); assert.equal(engine.has(resumed.game, 'water', 'freeze'), true);
+    resumed.key('keydown', 'w'); for (let i = 0; i < 80; i++) resumed.frame();
+    assert.equal(resumed.game.elapsed, elapsed); assert.equal(storage.getItem(SESSION_KEY), savedRaw, 'A waiting welcome dialog must not overwrite the saved session');
+    resumed.begin(); resumed.key('keydown', 'w'); resumed.frame(); resumed.window.emit('blur');
+    assert.ok(resumed.game.player.y < position.y);
+    const restarted = harness({ storage }); restarted.get('start-fresh').emit('click');
+    assert.deepEqual(restarted.game.player, restarted.game.level.spawn); assert.equal(restarted.game.rules.water, null);
+    assert.equal(restarted.get('start-dialog').open, false); assert.equal(restarted.saved().unlocked, 1);
+  });
+  await test('Escape begins or resumes play with autosaving still enabled', () => {
+    for (const shouldResume of [false, true]) {
+      const storage = memoryStorage();
+      if (shouldResume) {
+        const savedGame = engine.createGame(); engine.applyRule(savedGame, 'water', ['freeze']);
+        assert.ok(session.createStore(storage, engine).save(savedGame));
+      }
+      const app = harness({ storage });
+      const event = app.get('start-dialog').emit('cancel').event;
+      assert.equal(event.defaultPrevented, true); assert.equal(app.get('start-dialog').open, false);
+      if (!shouldResume) { app.chooseEffect('freeze'); app.get('apply').emit('click'); }
+      app.key('keydown', 'w'); for (let i = 0; i < 80; i++) app.frame(); app.window.emit('blur');
+      const continued = session.createStore(storage, engine).load(0);
+      assert.ok(continued); assert.deepEqual(continued.player, app.game.player); assert.equal(engine.has(continued, 'water', 'freeze'), true);
+    }
+  });
+  await test('a completed stage clears its resumable state and cannot be undone', () => {
+    const app = harness(); app.begin(); app.chooseEffect('freeze'); app.get('apply').emit('click');
+    assert.ok(app.storage.getItem(SESSION_KEY)); app.complete();
+    assert.equal(app.storage.getItem(SESSION_KEY), null); assert.equal(app.get('undo').disabled, true);
+    app.get('close-win').emit('click'); app.key('keydown', 'z');
+    assert.equal(app.game.complete, true); assert.equal(app.saved().unlocked, 1);
+  });
+  await test('AI naming stays in the background and stale names or invented descriptions are discarded', async () => {
+    const app = harness(); app.begin(); app.get('use-ai').checked = true;
+    app.chooseEffect('freeze'); const older = app.get('apply').emit('click').results[0];
+    assert.equal(app.get('apply').disabled, false);
+    app.chooseEffect('freeze'); app.chooseEffect('solidify'); const current = app.get('apply').emit('click').results[0];
+    assert.equal(app.requests.length, 2); assert.equal(app.requests[0].options.signal.aborted, true);
+    const fixedDescription = app.game.rules.water.description;
+    app.requests[0].resolve({ ok: true, json: async () => ({ target: 'water', effects: ['freeze'], name: 'OLD ICE', description: 'Invented flying ice' }) }); await older;
+    assert.equal(engine.has(app.game, 'water', 'solidify'), true); assert.notEqual(app.game.rules.water.name, 'OLD ICE');
+    app.requests[1].resolve({ ok: true, json: async () => ({ target: 'water', effects: ['solidify'], name: '石の道', description: '水が爆発して空を飛べます。' }) }); await current;
+    assert.equal(app.game.rules.water.name, '石の道'); assert.equal(app.game.rules.water.description, fixedDescription);
+    assert.equal(app.get('apply').disabled, false);
+  });
+  await test('AI connection checks are explicit and list installed models without blocking manual rules', async () => {
+    const app = harness(); app.begin(); assert.equal(app.requests.length, 0);
+    const pending = app.get('ai-check').emit('click').results[0];
+    assert.equal(app.requests[0].url, './api/status'); assert.equal(app.get('ai-check').disabled, true);
+    app.chooseEffect('freeze'); app.get('apply').emit('click'); assert.equal(engine.has(app.game, 'water', 'freeze'), true);
+    app.requests[0].resolve({ ok: true, json: async () => ({ available: true, models: ['small:latest', 'other:latest'], model: 'other:latest', message: '接続できました。' }) }); await pending;
+    assert.equal(app.get('ai-model').value, 'other:latest'); assert.equal(app.get('ai-model').children.length, 2);
+    assert.equal(app.get('ai-check').disabled, false); assert.match(app.get('ai-connection-status').textContent, /接続でき/);
+  });
+  await test('a natural-language proposal changes no rule until it is explicitly applied', async () => {
+    const app = harness(); app.begin(); app.get('ai-text').value = '石を小さくして浮かせたい';
+    const pending = app.get('ai-interpret').emit('click').results[0];
+    assert.equal(app.requests[0].url, './api/interpret');
+    assert.deepEqual(JSON.parse(app.requests[0].options.body), { text: '石を小さくして浮かせたい' });
+    app.requests[0].resolve({ ok: true, json: async () => ({ target: 'stone', effects: ['float', 'shrink'] }) }); await pending;
+    assert.equal(app.get('ai-candidate').hidden, false); assert.equal(app.game.rules.stone, null); assert.equal(app.game.ruleCount, 0);
+    assert.match(app.get('ai-candidate-text').textContent, /石.*浮遊.*縮小/);
+    app.get('ai-apply-candidate').emit('click');
+    assert.equal(engine.has(app.game, 'stone', 'shrink'), true); assert.equal(engine.has(app.game, 'stone', 'float'), true);
+    assert.equal(app.game.ruleCount, 1); assert.equal(app.get('ai-candidate').hidden, true);
+  });
+  await test('AI proposals still obey the current stage locks and cannot unlock heat', async () => {
+    const app = harness({ saved: { unlocked: 1, lastStage: 1, best: {} } }); app.begin();
+    for (const proposal of [{ target: 'water', effects: ['freeze'] }, { target: 'fire', effects: ['heat'] }]) {
+      app.get('ai-text').value = '対応するルールを提案';
+      const pending = app.get('ai-interpret').emit('click').results[0], request = app.requests.at(-1);
+      request.resolve({ ok: true, json: async () => proposal }); await pending;
+      app.get('ai-apply-candidate').emit('click');
+      assert.equal(app.game.rules[proposal.target], null); assert.equal(app.game.ruleCount, 0); assert.equal(app.game.core, false);
+    }
+  });
+  await test('text, model, manual definitions and undo each invalidate pending or visible AI proposals', async () => {
+    for (const action of ['text', 'model', 'manual', 'undo']) {
+      const app = harness(); app.begin(); app.chooseEffect('freeze'); app.get('apply').emit('click');
+      app.get('ai-text').value = '石を浮かせる';
+      const pending = app.get('ai-interpret').emit('click').results[0], request = app.requests.at(-1);
+      if (action === 'text') { app.get('ai-text').value = '木を光らせる'; app.get('ai-text').emit('input'); }
+      if (action === 'model') { app.get('ai-model').value = 'another:latest'; app.get('ai-model').emit('change'); }
+      if (action === 'manual') { app.chooseEffect('freeze'); app.chooseEffect('solidify'); app.get('apply').emit('click'); }
+      if (action === 'undo') app.get('undo').emit('click');
+      assert.equal(request.options.signal.aborted, true, action);
+      request.resolve({ ok: true, json: async () => ({ target: 'stone', effects: ['float'] }) }); await pending;
+      assert.equal(app.get('ai-candidate').hidden, true, action); assert.equal(app.game.rules.stone, null, action);
+      app.get('ai-apply-candidate').emit('click'); assert.equal(app.game.rules.stone, null, action);
+    }
+  });
+  await test('unsupported and malformed AI proposals leave the world unchanged', async () => {
+    for (const reply of [
+      { ok: false, data: { error: '時間を止める動作には対応していません。' } },
+      { ok: true, data: { target: 'stone', effects: ['explode'] } },
+      { ok: true, data: { target: 'water', effects: ['freeze', 'freeze'] } },
+      { ok: true, data: { target: '__proto__', effects: ['float'] } }
+    ]) {
+      const app = harness(); app.begin(); app.get('ai-text').value = '文章を解釈';
+      const pending = app.get('ai-interpret').emit('click').results[0], request = app.requests[0];
+      request.resolve({ ok: reply.ok, json: async () => reply.data }); await pending;
+      assert.equal(app.get('ai-candidate').hidden, true); assert.equal(app.game.ruleCount, 0); assert.equal(app.game.rules.stone, null);
+      assert.equal(app.get('ai-interpret').disabled, false); assert.ok(app.get('ai-status').textContent.length > 0);
+    }
+  });
+
   console.log(checks + ' app input checks passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

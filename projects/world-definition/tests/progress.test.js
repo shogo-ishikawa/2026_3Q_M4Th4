@@ -114,4 +114,15 @@ test('an explicit storage key keeps records separate', () => {
   assert.equal(createStore(storage, 5, 'second').snapshot().unlocked, 0);
   assert.equal(createStore(storage, 5, 'first').snapshot().unlocked, 1);
 });
+test('a previous five-stage final clear opens the first new challenge', () => {
+  const storage = memoryStorage();
+  storage.setItem('world-definition-progress-v1', JSON.stringify({ unlocked: 4, lastStage: 4, best: { 4: record() } }));
+  const expanded = createStore(storage, 9);
+  assert.equal(expanded.snapshot().unlocked, 5);
+  assert.equal(expanded.snapshot().lastStage, 4);
+  assert.deepEqual(expanded.snapshot().best[4], record());
+  assert.equal(createStore(storage, 5).snapshot().unlocked, 4);
+  storage.setItem('world-definition-progress-v1', JSON.stringify({ unlocked: 4, lastStage: 4, best: {} }));
+  assert.equal(createStore(storage, 9).snapshot().unlocked, 4);
+});
 console.log(checks + ' progress checks passed.');

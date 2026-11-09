@@ -6,8 +6,8 @@ import shutil
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / '_site'
 PROJECT = ROOT / 'projects' / 'world-definition'
-VERSION = 'v1.1.1'
-PUBLIC_FILES = ('index.html', 'guide.html', 'style.css', 'engine.js', 'progress.js', 'renderer.js', 'app.js')
+VERSION = 'v1.2.0'
+PUBLIC_FILES = ('index.html', 'guide.html', 'style.css', 'engine.js', 'progress.js', 'renderer.js', 'session.js', 'app.js')
 
 
 def main():
