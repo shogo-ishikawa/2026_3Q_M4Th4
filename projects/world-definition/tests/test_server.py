@@ -30,6 +30,8 @@ class LocalServerTests(unittest.TestCase):
         cls.temp = tempfile.TemporaryDirectory()
         cls.root = Path(cls.temp.name)
         (cls.root / "index.html").write_text("<!doctype html><title>WORLD DEFINITION</title>")
+        for filename in ["engine.js", "app.js", "progress.js", "renderer.js", "style.css", "guide.html"]:
+            (cls.root / filename).write_text("fixture " + filename)
         (cls.root / "server.py").write_text("DO NOT SERVE THIS SOURCE")
         (cls.root / "original.zip").write_bytes(b"DO NOT SERVE THIS ARCHIVE")
         (cls.root / "assets").mkdir()
@@ -81,7 +83,7 @@ class LocalServerTests(unittest.TestCase):
         model.assert_called_once_with(VALID_SELECTION)
 
     def test_static_game_and_assets_are_available(self):
-        for path in ["/", "/index.html", "/index.html?version=1", "/assets/test.svg"]:
+        for path in ["/", "/index.html", "/index.html?version=1", "/engine.js?v=1.1.0", "/app.js?v=1.1.0", "/progress.js?v=1.1.0", "/renderer.js?v=1.1.0", "/style.css?v=1.1.0", "/guide.html", "/assets/test.svg"]:
             with self.subTest(path=path):
                 status, _, body = self.request(method="GET", path=path, body=b"")
                 self.assertEqual(status, 200, body)

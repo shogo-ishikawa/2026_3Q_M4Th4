@@ -6,9 +6,11 @@
   <meta name="theme-color" content="#183e35">
   <meta name="description" content="水を固め、石を浮かせ、世界のルールを変えて進む小さなパズルゲーム。インストール不要で遊べます。">
   <title>WORLD DEFINITION — 世界のルールを変えるパズル</title>
-  <link rel="stylesheet" href="style.css">
-  <script src="engine.js" defer></script>
-  <script src="app.js" defer></script>
+  <link rel="stylesheet" href="style.css?v=1.1.0">
+  <script src="engine.js?v=1.1.0" defer></script>
+  <script src="progress.js?v=1.1.0" defer></script>
+  <script src="renderer.js?v=1.1.0" defer></script>
+  <script src="app.js?v=1.1.0" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#game">ゲームへ移動</a>
@@ -19,7 +21,7 @@
         <span><strong>WORLD DEFINITION</strong><small>世界のルールを変えて進むパズル</small></span>
       </a>
       <div class="header-actions">
-        <span class="version">v1.0.0</span>
+        <span class="version">v1.1.0</span>
         <a href="guide.html" class="text-link">遊び方</a>
         <button id="help-button" class="button quiet" type="button">操作ガイド <kbd>H</kbd></button>
         <button id="reset" class="button quiet" type="button">やり直す <kbd>R</kbd></button>
@@ -31,6 +33,10 @@
         <div><p class="eyebrow">A SMALL EXPERIMENT IN A DIFFERENT WORLD</p><h1>道がなければ、ルールを変えよう。</h1></div>
         <p class="availability"><span aria-hidden="true"></span>インストール不要・AI不要で遊べます</p>
       </div>
+      <section class="stage-toolbar" aria-label="ステージ選択と記録">
+        <div class="stage-picker"><label for="stage-select">ステージ</label><select id="stage-select" aria-describedby="stage-description"></select><button id="change-stage" class="button quiet" type="button">このステージを遊ぶ</button></div>
+        <p id="stage-description"></p><p id="stage-record" class="stage-record"></p>
+      </section>
       <ol id="progress" class="progress" aria-label="ステージの進み具合">
         <li data-step="river" aria-current="step"><span>01</span><div>川を渡る<small>水や物体の性質を変える</small></div></li>
         <li data-step="core"><span>02</span><div>結晶を拾う<small>新しい動作が使える</small></div></li>
@@ -41,7 +47,7 @@
       <div class="play-layout">
         <section class="world-column" aria-label="ゲーム">
           <div class="world-frame">
-            <div class="world-caption"><span><span class="status-dot" aria-hidden="true"></span>STAGE 01</span><strong>封印されたゴール</strong><span class="map-label">FIELD NOTES / 001</span></div>
+            <div class="world-caption"><span><span class="status-dot" aria-hidden="true"></span><span id="stage-number">STAGE 01 / 05</span></span><strong id="stage-name">封印されたゴール</strong><span id="shard-count" class="map-label">欠片 0 / 2</span></div>
             <canvas id="game" width="870" height="570" tabindex="0" aria-label="WORLD DEFINITION のゲーム画面。WASD または矢印キーで移動、E キーで操作できます。">このゲームには Canvas に対応したブラウザが必要です。</canvas>
             <div class="world-status"><p id="objective" aria-live="polite">目標：川を渡り、結晶を回収しよう</p><p id="hudpower">適用中のルール：なし</p></div>
           </div>
@@ -66,6 +72,7 @@
             <div id="local-ai" class="local-ai" hidden><label><input id="use-ai" type="checkbox"> ローカルAIで名前と説明を考える</label><p>AIは説明づくりを補助します。ゲームの効果は選択したルールで決まります。</p></div>
           </div>
           <div class="current-rule"><p class="eyebrow">SELECTED RULE</p><strong id="generated-name">まだルールがありません</strong><p id="generated-desc">どんな道を作れるでしょうか。</p></div>
+          <div class="effect-inspector"><strong>定義による変化</strong><ul id="effect-summary"><li>動作を選んで適用すると、ここに変化を表示します。</li></ul></div>
           <details class="active-rules-details"><summary>いまの世界のルール</summary><ul id="active-rules"><li>まだ適用されていません。</li></ul></details>
         </aside>
       </div>
@@ -75,14 +82,14 @@
 
   <dialog id="start-dialog" aria-labelledby="start-title">
     <div class="welcome-illustration" aria-hidden="true"><span>✦</span><div class="mini-river"></div><span>◈</span></div>
-    <p class="eyebrow">WELCOME TO WORLD DEFINITION</p><h2 id="start-title">この世界のルールは、<br>あなたが決める。</h2><p class="dialog-intro">川の向こうの結晶を拾い、封印されたゴールを目指す小さなパズルです。</p>
-    <ol class="welcome-steps"><li><span>1</span><p><strong>まずは川まで歩こう</strong>WASD・矢印キー、または画面の方向ボタンで移動。</p></li><li><span>2</span><p><strong>研究室でルールを作ろう</strong>迷ったら「水」＋「固体化」を選んで適用。</p></li><li><span>3</span><p><strong>結晶で新しい動作を解放</strong>「加熱」が使えるようになったら、ゲートを調べよう。</p></li></ol>
-    <button id="start-button" class="button primary start-button" type="button">遊び始める <span aria-hidden="true">↗</span></button><p class="dialog-footnote">AIやアカウントの準備は必要ありません。</p>
+    <p class="eyebrow">WELCOME TO WORLD DEFINITION</p><h2 id="start-title">この世界のルールは、<br>あなたが決める。</h2><p id="start-intro" class="dialog-intro">川を渡り、光を運び、脈動を響かせる全5ステージ。物体の性質を変えて、扉の向こうを目指しましょう。</p>
+    <ol class="welcome-steps"><li><span>1</span><p><strong>まずは川まで歩こう</strong>WASD・矢印キー、または画面の方向ボタンで移動。</p></li><li><span>2</span><p><strong>研究室でルールを作ろう</strong><span id="start-rule-hint">迷ったら「水」＋「固体化」を選んで適用。</span></p></li><li><span>3</span><p><strong>結晶で新しい動作を解放</strong>「加熱」が使えるようになったら、ゲートを調べよう。</p></li></ol>
+    <button id="start-button" class="button primary start-button" type="button">遊び始める <span aria-hidden="true">↗</span></button><p class="dialog-footnote">AIやアカウントの準備は不要です。クリアすると次のステージが開きます。</p>
   </dialog>
 
   <dialog id="help-dialog" aria-labelledby="help-title"><div class="dialog-head"><div><p class="eyebrow">HOW TO PLAY</p><h2 id="help-title">操作ガイド</h2></div><button id="close-help" class="button quiet" type="button">閉じる</button></div><p class="dialog-intro">ルールは研究室で選んで適用します。別の物体のルールも組み合わせて使えます。</p><table class="controls-table"><thead><tr><th>キー</th><th>できること</th></tr></thead><tbody><tr><td>WASD / 矢印</td><td>プレイヤーを移動</td></tr><tr><td>E ＋ 移動</td><td>近くの浮遊した石・木を運ぶ</td></tr><tr><td>E 長押し</td><td>「炎＋加熱」を適用後、近くのゲートを加熱</td></tr><tr><td>L</td><td>ルール研究室へ移動</td></tr><tr><td>H</td><td>操作ガイドを開く</td></tr><tr><td>R</td><td>確認してからステージをやり直す</td></tr><tr><td>Escape</td><td>ガイドなどの画面を閉じる</td></tr></tbody></table><p class="help-note">方向ボタンとEボタンでも同じ操作ができます。キーボードで動かないときは、一度ゲーム画面をクリックしてください。</p><a class="guide-link" href="guide.html">詳しい遊び方・ルールの説明を読む <span aria-hidden="true">↗</span></a></dialog>
 
-  <dialog id="win-dialog" aria-labelledby="win-title"><div class="win-symbol" aria-hidden="true">✦</div><p class="eyebrow">WORLD REDEFINED</p><h2 id="win-title">ステージクリア！</h2><p class="dialog-intro">世界に新しいルールを与えて、ゴールへの道を作りました。</p><p class="win-note">今度は別の方法で川を渡ってみませんか。</p><div class="win-actions"><button id="again" class="button primary" type="button">別の方法で遊ぶ</button><button id="close-win" class="button quiet" type="button">世界を眺める</button></div></dialog>
+  <dialog id="win-dialog" aria-labelledby="win-title"><div class="win-symbol" aria-hidden="true">✦</div><p class="eyebrow">WORLD REDEFINED</p><h2 id="win-title">ステージクリア！</h2><p class="dialog-intro">世界に新しいルールを与えて、ゴールへの道を作りました。</p><p id="win-result" class="win-note"></p><p id="save-status" class="win-note"></p><div class="win-actions"><button id="next-stage" class="button primary" type="button">次のステージへ</button><button id="again" class="button primary" type="button">このステージを再挑戦</button><button id="close-win" class="button quiet" type="button">世界を眺める</button></div></dialog>
   <noscript><p class="noscript">ゲームを遊ぶには、ブラウザで JavaScript を有効にしてください。</p></noscript>
 </body>
 </html>

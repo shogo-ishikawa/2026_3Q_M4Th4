@@ -1,7 +1,8 @@
 'use strict';
 // Run from the project directory with: node tests/engine.test.js
-// The four complete routes below use movement input, rather than moving the
-// player directly to the crystal, gate or goal.
+// The complete routes use movement input, rather than moving the player
+// directly to the crystal, sensors, gate or goal. Geometry unit tests below
+// construct isolated contact states separately from those full playthroughs.
 const assert = require('node:assert/strict');
 const gameEngine = require('../engine.js');
 const { createGame, applyRule, update, walkable, has, isBridge, fireGeometry, objective } = gameEngine;
@@ -244,9 +245,9 @@ test('fire contact uses the same animated geometry returned for drawing', () => 
     apply(game, 'fire', ['move', 'float', 'grow']);
     game.elapsed = time;
     const fire = fireGeometry(game);
-    close(fire.x, 680 + 28 * Math.sin(time * 2.4));
-    close(fire.y, 260 - 27 - 10 * Math.sin(time * 2.6));
-    assert.equal(fire.radius, 31);
+    close(fire.x, 680 + 52 * Math.sin(time * 2.4));
+    close(fire.y, 260 - 40 - 6 * Math.sin(time * 2.6));
+    assert.equal(fire.radius, 34);
     game.player = { x: fire.x + fire.radius + 13 + offset, y: fire.y };
     game.elapsed = time - dt;
     update(game, new Set(), dt);
@@ -307,5 +308,290 @@ test('a completed stage stops accepting movement and elapsed time', () => {
   frames(game, ['d', 's', 'e'], 100);
   assert.equal(JSON.stringify(game), before);
 });
+
+
+test('five stages have separate state, distinct layouts and two optional shards', () => {
+  assert.equal(gameEngine.LEVELS.length, 5);
+  const names = new Set();
+  for (let index = 0; index < gameEngine.LEVELS.length; index++) {
+    const game = createGame(index), fresh = createGame(index);
+    names.add(game.level.name);
+    assert.equal(game.stageIndex, index);
+    assert.equal(game.level, gameEngine.LEVELS[index]);
+    assert.equal(walkable(game, game.player), true);
+    assert.equal(game.level.shards.length, 2);
+    assert.notEqual(game.collectedShards, fresh.collectedShards);
+    assert.notEqual(game.sensorCharge, fresh.sensorCharge);
+    assert.notEqual(game.events, fresh.events);
+    assert.equal(gameEngine.progressSteps(game).length, 4);
+    assert.ok(gameEngine.hints(game).length >= 2);
+  }
+  assert.equal(names.size, 5);
+  assert.equal(createGame(-1).stageIndex, 0);
+  assert.equal(createGame(99).stageIndex, 0);
+  assert.equal(createGame(NaN).stageIndex, 0);
+});
+
+test('sealed water rejects freezing and solidification without changing the game', () => {
+  for (let index = 1; index < 5; index++) {
+    const game = createGame(index);
+    assert.deepEqual(gameEngine.supportedEffects(game, 'water'), ['glow', 'pulse']);
+    for (const effect of ['freeze', 'solidify']) {
+      const before = JSON.stringify(game);
+      const result = applyRule(game, 'water', [effect]);
+      assert.equal(result.ok, false);
+      assert.match(result.message, /封印/);
+      assert.equal(JSON.stringify(game), before);
+    }
+    apply(game, 'water', ['glow', 'pulse']);
+  }
+  assert.equal(gameEngine.supportedEffects(createGame(), 'water').includes('freeze'), true);
+  assert.deepEqual(gameEngine.supportedEffects(createGame(), '__proto__'), []);
+});
+
+test('contradictory temperature and material definitions are explicitly rejected', () => {
+  const game = createGame();
+  game.core = true;
+  for (const [target, effects] of [['fire', ['freeze', 'heat']], ['water', ['freeze', 'solidify']]]) {
+    const before = JSON.stringify(game);
+    const result = applyRule(game, target, effects);
+    assert.equal(result.ok, false);
+    assert.match(result.message, /同時/);
+    assert.equal(JSON.stringify(game), before);
+  }
+});
+
+test('float and grow change the geometry exposed to the renderer', () => {
+  for (const target of ['stone', 'tree']) {
+    const game = createGame();
+    const original = gameEngine.objectGeometry(game, target);
+    const deck = gameEngine.bridgeGeometry(game, target);
+    apply(game, target, ['float', 'grow']);
+    const changed = gameEngine.objectGeometry(game, target);
+    const largerDeck = gameEngine.bridgeGeometry(game, target);
+    assert.ok(changed.y <= original.y - 36);
+    assert.ok(changed.radius >= original.radius * 1.6);
+    assert.ok(changed.scale > original.scale);
+    assert.ok(largerDeck.w > deck.w);
+    assert.equal(deck.h, 102);
+    assert.equal(largerDeck.h, 174);
+    const cast = game.events.at(-1);
+    assert.equal(cast.type, 'rule');
+    assert.equal(cast.target, target);
+    close(cast.x, changed.x);
+    close(cast.y, changed.y);
+    assert.match(cast.label, /浮遊・成長/);
+  }
+});
+
+test('floating bob cannot move its collision shape into a stationary player', () => {
+  const game = createGame();
+  apply(game, 'stone', ['float']);
+  game.player = { x: 650, y: 447 };
+  assert.equal(walkable(game, game.player), true);
+  for (let index = 0; index < 360; index++) {
+    update(game, new Set(), 1 / 120);
+    assert.equal(walkable(game, game.player), true, 'Bob trapped the player at tick ' + index);
+  }
+  assert.ok(game.elapsed > 2.9);
+  const before = game.player.y;
+  frames(game, ['w'], 5);
+  assert.ok(game.player.y < before);
+});
+
+test('the light sensor requires the right object, position and a sustained glow', () => {
+  const game = createGame(2), sensor = game.level.sensors[0];
+  apply(game, 'tree', ['glow']);
+  frames(game, [], 100);
+  assert.equal(game.sensorLit[sensor.id], false, 'A distant glowing tree must not activate the sensor');
+  game.tree = { x: sensor.x, y: sensor.y };
+  frames(game, [], 30);
+  assert.ok(game.sensorCharge[sensor.id] > 0 && game.sensorCharge[sensor.id] < 1);
+  apply(game, 'tree', ['pulse']);
+  frames(game, [], 1);
+  assert.equal(game.sensorCharge[sensor.id], 0);
+  apply(game, 'tree', ['glow']);
+  frames(game, [], 65);
+  assert.equal(game.sensorLit[sensor.id], true);
+  assert.equal(game.sensorCharge[sensor.id], 1);
+  assert.ok(game.events.some(item => item.type === 'sensor' && item.target === 'tree'));
+  game.tree = { ...game.level.tree };
+  apply(game, 'tree', ['pulse']);
+  frames(game, [], 120);
+  assert.equal(game.sensorLit[sensor.id], true, 'A completed sensor remains latched');
+});
+
+test('the resonance sensor requires both glow and pulse on the stone', () => {
+  const game = createGame(3), sensor = game.level.sensors[0];
+  game.stone = { x: sensor.x, y: sensor.y };
+  for (const effects of [['glow'], ['pulse']]) {
+    apply(game, 'stone', effects);
+    frames(game, [], 100);
+    assert.equal(game.sensorLit[sensor.id], false);
+  }
+  apply(game, 'tree', ['glow', 'pulse']);
+  game.tree = { x: sensor.x, y: sensor.y };
+  frames(game, [], 100);
+  assert.equal(game.sensorLit[sensor.id], false, 'The wrong object does not activate the stone sensor');
+  apply(game, 'stone', ['glow', 'pulse']);
+  frames(game, [], 65);
+  assert.equal(game.sensorLit[sensor.id], true);
+});
+
+test('the last stage has independent grown-stone and pulsing-tree sensors', () => {
+  const game = createGame(4), [grown, signal] = game.level.sensors;
+  game.stone = { x: grown.x, y: grown.y };
+  apply(game, 'stone', ['glow', 'pulse']);
+  frames(game, [], 100);
+  assert.equal(game.sensorLit.grown, false);
+  apply(game, 'stone', ['grow']);
+  frames(game, [], 65);
+  assert.equal(game.sensorLit.grown, true);
+  assert.equal(game.sensorLit.signal, false);
+  game.tree = { x: signal.x, y: signal.y };
+  apply(game, 'tree', ['glow', 'pulse']);
+  frames(game, [], 65);
+  assert.equal(game.sensorLit.signal, true);
+});
+
+test('a crystal and heat alone cannot bypass an unfinished sensor', () => {
+  const game = createGame(2), gate = game.level.gate;
+  game.player = { x: gate.x + gate.w / 2, y: gate.y + 70 };
+  game.core = true;
+  apply(game, 'fire', ['heat']);
+  frames(game, ['e'], 120);
+  assert.equal(game.gateHeat, 0);
+  assert.equal(game.gateOpen, false);
+  assert.equal(game.heating, false);
+  const sensor = game.level.sensors[0];
+  game.tree = { x: sensor.x, y: sensor.y };
+  apply(game, 'tree', ['glow']);
+  frames(game, [], 65);
+  frames(game, ['e'], 20);
+  assert.equal(game.heating, true);
+  assert.ok(game.gateHeat > 0 && game.gateHeat < 1);
+  frames(game, ['e'], 65);
+  assert.equal(game.gateOpen, true);
+  assert.equal(game.heating, false);
+  assert.ok(game.events.some(item => item.type === 'gate'));
+});
+
+test('shards are collected by walking and do not unlock heat or complete a stage', () => {
+  const game = createGame();
+  walkTo(game, 120, 560);
+  assert.equal(game.collectedShards[0], true);
+  assert.equal(game.collectedShards[1], false);
+  assert.equal(game.core, false);
+  assert.equal(game.complete, false);
+  assert.equal(applyRule(game, 'fire', ['heat']).ok, false);
+  assert.ok(game.events.some(item => item.type === 'shard'));
+});
+
+test('effect feedback events expire after three seconds', () => {
+  const game = createGame();
+  apply(game, 'stone', ['glow', 'pulse']);
+  assert.equal(game.events.length, 1);
+  assert.equal(game.events[0].type, 'rule');
+  assert.match(game.rules.stone.description, /光/);
+  frames(game, [], 200);
+  assert.equal(game.events.length, 0);
+});
+
+
+// These full routes use ordinary movement/action input only.
+(function verifyCompleteStageRoutes() {
+const E = gameEngine;
+const dt = 1 / 120;
+function frames(game, keys, count) {
+  for (let i = 0; i < count; i++) E.update(game, new Set(keys), dt);
+}
+function walkTo(game, x, y) {
+  for (const [axis, destination] of [['x', x], ['y', y]]) {
+    let steps = 0;
+    while (Math.abs(game.player[axis] - destination) > 1 && !game.complete) {
+      assert.ok(steps++ < 2500, 'Walk blocked: ' + JSON.stringify({axis,destination,player:game.player,stone:game.stone,tree:game.tree}));
+      const key = axis === 'x' ? (game.player.x < destination ? 'd' : 'a') : (game.player.y < destination ? 's' : 'w');
+      E.update(game, new Set([key]), dt);
+      assert.ok(E.walkable(game, game.player), 'Player lost safe support');
+    }
+  }
+}
+function apply(game, target, effects) {
+  const result = E.applyRule(game, target, effects);
+  assert.ok(result.ok, result.message);
+}
+function carryTo(game, target, axis, destination) {
+  let steps = 0;
+  while (Math.abs(game[target][axis] - destination) > 1) {
+    assert.ok(steps++ < 2500, 'Carry blocked: ' + JSON.stringify({target,axis,destination,player:game.player,stone:game.stone,tree:game.tree}));
+    const key = axis === 'x' ? (game[target].x < destination ? 'd' : 'a') : (game[target].y < destination ? 's' : 'w');
+    E.update(game, new Set(['e', key]), dt);
+    assert.ok(E.walkable(game, game.player), 'Carrying lost safe support');
+  }
+}
+function finish(game) {
+  const gate = game.level.gate;
+  const x = game.stageIndex === 1 ? 730 : gate.x + gate.w / 2;
+  walkTo(game, x, gate.y + 70);
+  apply(game, 'fire', ['heat']);
+  frames(game, ['e'], 180);
+  assert.ok(game.gateOpen, 'All gate requirements must be completed: ' + JSON.stringify(game.sensorLit));
+  walkTo(game, x, game.level.goal.y + game.level.goal.h / 2);
+  assert.ok(game.complete, 'Movement must reach the goal');
+}
+function runStage(stageIndex) {
+  const game = E.createGame(stageIndex);
+  if (stageIndex === 0) {
+    apply(game, 'water', ['solidify']);
+    walkTo(game, 425, 316); walkTo(game, 245, 316);
+  } else if (stageIndex === 1) {
+    apply(game, 'stone', ['float']);
+    carryTo(game, 'stone', 'y', 430); frames(game, [], 2);
+    walkTo(game, 650, 320); walkTo(game, 160, 320);
+  } else if (stageIndex === 2) {
+    apply(game, 'tree', ['float', 'glow']);
+    walkTo(game, 240, 600); carryTo(game, 'tree', 'y', 430); frames(game, [], 2);
+    walkTo(game, 240, 374); walkTo(game, 180, 374);
+    carryTo(game, 'tree', 'y', 370); frames(game, [], 150);
+    assert.ok(game.sensorLit.light);
+    walkTo(game, 180, 350); walkTo(game, 700, 350); walkTo(game, 700, 330);
+  } else if (stageIndex === 3) {
+    apply(game, 'stone', ['float', 'glow', 'pulse']);
+    walkTo(game, 650, 565); carryTo(game, 'stone', 'y', 390); carryTo(game, 'stone', 'x', 280); frames(game, [], 2);
+    walkTo(game, game.player.x, 334); walkTo(game, 220, 334);
+    carryTo(game, 'stone', 'y', 340); frames(game, [], 150);
+    assert.ok(game.sensorLit.resonance);
+    // Return the stone to the river after the receiver latches, opening the
+    // north-bank corridor so the player can walk past the stone.
+    carryTo(game, 'stone', 'y', 390); frames(game, [], 2);
+    walkTo(game, game.player.x, 334); walkTo(game, 245, 316); walkTo(game, 245, 334);
+  } else {
+    apply(game, 'stone', ['float', 'grow']);
+    walkTo(game, 650, 600); carryTo(game, 'stone', 'y', 415); frames(game, [], 2);
+    walkTo(game, 650, 330); walkTo(game, 590, 330); carryTo(game, 'stone', 'y', 350);
+    walkTo(game, 700, 330); carryTo(game, 'stone', 'x', 560); frames(game, [], 150);
+    assert.ok(game.sensorLit.grown);
+    carryTo(game, 'stone', 'y', 415); frames(game, [], 2);
+    walkTo(game, 560, 570); walkTo(game, 240, 600);
+    apply(game, 'tree', ['float', 'glow', 'pulse']);
+    // Hold E continuously across the wide river: a small deck can be ferried,
+    // while the grown stone gives a fixed bridge for the earlier return trip.
+    carryTo(game, 'tree', 'y', 340); frames(game, [], 150);
+    assert.ok(game.sensorLit.signal);
+    walkTo(game, 700, 310);
+  }
+  finish(game);
+  return game;
+}
+for (let stage = 0; stage < E.LEVELS.length; stage++) {
+  test('complete all objectives and reach the goal in stage ' + (stage + 1), () => {
+    const game = runStage(stage);
+    assert.equal(game.core, true);
+    assert.equal(game.gateOpen, true);
+    assert.equal(game.complete, true);
+    assert.ok(game.level.sensors.every(sensor => game.sensorLit[sensor.id]));
+  });
+}
+})();
 
 console.log(checks + ' engine checks passed.');
