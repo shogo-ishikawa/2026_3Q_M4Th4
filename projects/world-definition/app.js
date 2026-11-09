@@ -16,6 +16,7 @@
   let hadCore = false;
   let hadComplete = false;
   let hintIndex = 0;
+  let currentHintKey = '';
   const pressed = new Set();
   const keyboardKeys = new Set();
   const heldButtons = new Map();
@@ -45,6 +46,7 @@
     text('objective', E.objective(game));
     const rule = game.rules[selectedTarget];
     text('hudpower', '定義 ' + game.ruleCount + ' 回');
+    text('interaction-status', E.interactionStatus(game));
     text('shard-count', '欠片 ' + game.collectedShards.filter(Boolean).length + ' / ' + game.level.shards.length);
     E.progressSteps(game).forEach((step, index) => {
       const item = el('progress').querySelectorAll('li')[index];
@@ -98,6 +100,7 @@
     }
   }
   function renderLab() {
+    game.preferredCarryTarget = ['stone', 'tree'].includes(selectedTarget) ? selectedTarget : null;
     el('targets').replaceChildren();
     for (const target of E.TARGETS) {
       const button = document.createElement('button');
@@ -204,8 +207,8 @@
   function reset(stageIndex = game.stageIndex) {
     requestGeneration++; pendingRequest?.abort(); pendingRequest = null; busy = false;
     clearKeys(); progressStore.select(stageIndex); game = E.createGame(stageIndex); selectedTarget = game.stageIndex === 2 ? 'tree' : game.stageIndex > 0 ? 'stone' : 'water'; selectedEffects = [];
-    hadCore = false; hadComplete = false; hintIndex = 0; sensorSignature = '';
-    el('hint-content').hidden = true; el('hint-button').setAttribute('aria-expanded', 'false');
+    hadCore = false; hadComplete = false; hintIndex = 0; currentHintKey = '';
+    el('hint-content').hidden = true; el('hint-panel').hidden = true; el('hint-marker').checked = false; text('hint-recovery-status', ''); el('hint-button').setAttribute('aria-expanded', 'false');
     dialogs.forEach(dialog => { if (dialog.open) dialog.close(); });
     status('新しく始めました。対象と動作を選んでみましょう。');
     renderStage(); renderLab(); canvas.focus({ preventScroll: true });
@@ -240,17 +243,42 @@
     dialog.addEventListener('close', () => { clearKeys(); canvas.focus({ preventScroll: true }); });
     dialog.addEventListener('cancel', clearKeys);
   }
-  el('hint-button').addEventListener('click', () => {
+  function renderHints() {
+    const key = E.hintKey(game);
+    if (key !== currentHintKey) { currentHintKey = key; hintIndex = 0; }
     const hints = E.hints(game);
-    const content = el('hint-content'); content.hidden = false;
-    content.textContent = hints[Math.min(hintIndex, hints.length - 1)]; hintIndex++;
-    el('hint-button').setAttribute('aria-expanded', 'true');
-  });
+    hintIndex = Math.min(hintIndex, hints.length - 1);
+    text('hint-title', E.objective(game));
+    text('hint-step', 'ヒント ' + (hintIndex + 1) + ' / ' + hints.length + (hintIndex === hints.length - 1 ? '：具体的な手順' : ''));
+    text('hint-content', hints[hintIndex]);
+    el('hint-prev').disabled = hintIndex === 0;
+    el('hint-next').disabled = hintIndex === hints.length - 1;
+    text('hint-next', hintIndex >= hints.length - 2 ? '答えの手順を見る' : 'もっと具体的に');
+  }
+  function showHints(open = el('hint-panel').hidden) {
+    clearKeys();
+    el('hint-panel').hidden = !open; el('hint-content').hidden = !open;
+    el('hint-button').setAttribute('aria-expanded', String(open));
+    if (open) { renderHints(); el('hint-content').focus({ preventScroll: true }); }
+    else canvas.focus({ preventScroll: true });
+  }
+  el('hint-button').addEventListener('click', () => showHints());
+  el('hint-close').addEventListener('click', () => showHints(false));
+  el('hint-prev').addEventListener('click', () => { hintIndex = Math.max(0, hintIndex - 1); renderHints(); });
+  el('hint-next').addEventListener('click', () => { hintIndex = Math.min(E.hints(game).length - 1, hintIndex + 1); renderHints(); });
+  for (const target of ['stone', 'tree']) {
+    el('recover-' + target).addEventListener('click', () => {
+      clearKeys(); const result = E.recoverObject(game, target);
+      text('hint-recovery-status', result.message); status(result.message);
+      if (result.ok) { renderLab(); renderHints(); }
+    });
+  }
   function editingField(target) { return target instanceof HTMLElement && (target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName)); }
   const movement = new Set(['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', 'e']);
   window.addEventListener('keydown', event => {
     const key = event.key.toLowerCase();
     if (paused() || editingField(event.target) || event.ctrlKey || event.metaKey || event.altKey) return;
+    if (!event.repeat && (key === 'j' || key === '?')) { event.preventDefault(); showHints(); return; }
     if (!event.repeat && key === 'h') { event.preventDefault(); showHelp(); return; }
     if (!event.repeat && key === 'r') { event.preventDefault(); askReset(); return; }
     if (!event.repeat && key === 'l') { event.preventDefault(); clearKeys(); el('lab-panel').focus(); return; }
@@ -288,17 +316,17 @@
     el('next-stage').hidden = finalStage;
     renderStage(); el('win-dialog').showModal();
   }
-  let sensorSignature = '';
   let previousTime = performance.now();
   function frame(timestamp) {
     const dt = Math.min((timestamp - previousTime) / 1000, .05); previousTime = timestamp;
     if (!paused()) E.update(game, pressed, dt);
-    if (game.core !== hadCore) { hadCore = game.core; hintIndex = 0; renderLab(); }
-    const signature = Object.values(game.sensorLit).join(',');
-    if (signature !== sensorSignature) { sensorSignature = signature; hintIndex = 0; }
+    if (game.core !== hadCore) { hadCore = game.core; renderLab(); }
     if (game.notice) { status(game.notice); game.notice = ''; }
     if (game.complete && !hadComplete) { hadComplete = true; clearKeys(); recordComplete(); }
-    updateHud(); renderer.draw(game, selectedTarget); requestAnimationFrame(frame);
+    updateHud();
+    if (!el('hint-panel').hidden) renderHints();
+    const marker = !el('hint-panel').hidden && el('hint-marker').checked ? E.hintTarget(game) : null;
+    renderer.draw(game, selectedTarget, marker); requestAnimationFrame(frame);
   }
   renderStage(); renderLab(); requestAnimationFrame(frame); el('start-dialog').showModal();
 })();

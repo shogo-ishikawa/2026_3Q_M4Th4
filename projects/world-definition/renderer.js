@@ -493,7 +493,7 @@
           }
         }
       }
-      if (game.damageUntil > game.elapsed) pill('炎に触れた！ スタートへ', 435, 198, '#965947eb');
+      if (game.damageUntil > game.elapsed) pill('炎に触れた！ 安全な岸へ戻ります', 435, 198, '#965947eb');
       if (game.complete) {
         for (let index = 0; index < 24; index++) {
           const x = 90 + index * 137 % 690;
@@ -503,7 +503,18 @@
       }
     }
 
-    function draw(game, selectedTarget) {
+    function drawHintMarker(point, time) {
+      if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return;
+      const x = E.clamp(point.x, 82, 788), y = E.clamp(point.y, 147, 624);
+      const bob = reducedMotion ? 0 : Math.sin(time * 3) * 4;
+      ring(x, y, 25, '#fff7b7', 3);
+      ring(x, y, 32, '#304c3ce0', 2, true);
+      ctx.fillStyle = '#fff2a3'; ctx.beginPath();
+      ctx.moveTo(x, y - 31 + bob); ctx.lineTo(x - 9, y - 45 + bob); ctx.lineTo(x + 9, y - 45 + bob); ctx.closePath(); ctx.fill();
+      pill('目印：' + point.label, x, E.clamp(y - 77 + bob, 118, 560), '#694f24ed', '#fff8d2', 13);
+    }
+
+    function draw(game, selectedTarget, hintMarker = null) {
       const theme = THEMES[game.level.theme] || THEMES.meadow;
       const time = reducedMotion ? 0 : game.elapsed;
       ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
@@ -525,6 +536,7 @@
       drawFire(game, selectedTarget, time);
       drawPlayer(game);
       drawEvents(game, time);
+      drawHintMarker(hintMarker, time);
       if (E.distance(game.player, game.level.spawn) < 50) word('START', game.level.spawn.x, Math.min(638, game.level.spawn.y + 36), 12, theme.ink, 'center');
       ctx.restore();
     }
