@@ -37,7 +37,7 @@
   }
   const LEVELS = [
     stage({ id: 'first-rules', name: '封印されたゴール', subtitle: '水を変える。物体を浮かせる。まずは自由に試そう。', theme: 'meadow', gate: { x: 355, y: 270, w: 140, h: 22 }, shards: [{ x: 120, y: 560 }, { x: 750, y: 320 }] }),
-    stage({ id: 'stone-crossing', name: '石の渡し場', subtitle: '水の定義は封印中。浮かせた物体で道を作ろう。', theme: 'quarry', rivers: [{ x: 55, y: 390, w: 760, h: 80 }], spawn: { x: 650, y: 600 }, stone: { x: 650, y: 550 }, tree: { x: 240, y: 550 }, gate: { x: 625, y: 250, w: 120, h: 22 }, core: { x: 160, y: 320 }, goal: { x: 630, y: 150, w: 110, h: 68 }, allowed: sealedWater, shards: [{ x: 125, y: 585 }, { x: 440, y: 320 }] }),
+    stage({ id: 'stone-crossing', name: '石の渡し場', subtitle: '水の定義は封印中。浮かせた物体で道を作ろう。', theme: 'quarry', rivers: [{ x: 55, y: 390, w: 760, h: 80 }], spawn: { x: 650, y: 600 }, stone: { x: 650, y: 550 }, tree: { x: 240, y: 550 }, gate: { x: 625, y: 250, w: 120, h: 22 }, fire: { x: 520, y: 195 }, core: { x: 160, y: 320 }, goal: { x: 630, y: 150, w: 110, h: 68 }, allowed: sealedWater, shards: [{ x: 125, y: 585 }, { x: 440, y: 320 }] }),
     stage({ id: 'light-garden', name: '光を運ぶ庭', subtitle: '浮かせた木を北岸へ運び、光の紋章を照らそう。', theme: 'night', rivers: [{ x: 55, y: 390, w: 760, h: 80 }], spawn: { x: 425, y: 600 }, stone: { x: 650, y: 550 }, tree: { x: 240, y: 550 }, gate: { x: 355, y: 250, w: 140, h: 22 }, core: { x: 700, y: 330 }, goal: { x: 370, y: 145, w: 110, h: 68 }, allowed: sealedWater, sensors: [{ id: 'light', target: 'tree', x: 245, y: 330, radius: 70, requires: ['glow'], label: '木の光の紋章' }], shards: [{ x: 125, y: 595 }, { x: 545, y: 335 }] }),
     stage({ id: 'resonance-hall', name: '脈動の回廊', subtitle: '石を発光・脈動させ、北岸の共鳴盤へ運ぼう。', theme: 'resonance', gate: { x: 355, y: 250, w: 140, h: 22 }, goal: { x: 370, y: 145, w: 110, h: 68 }, allowed: sealedWater, sensors: [{ id: 'resonance', target: 'stone', x: 280, y: 320, radius: 70, requires: ['glow', 'pulse'], label: '石の共鳴盤' }], shards: [{ x: 120, y: 565 }, { x: 745, y: 320 }] }),
     stage({ id: 'final-definition', name: '最後の定義', subtitle: '広い川と二つの台座。物体ごとに役割を分けよう。', theme: 'ruins', rivers: [{ x: 55, y: 345, w: 760, h: 140 }], spawn: { x: 425, y: 600 }, stone: { x: 650, y: 550 }, tree: { x: 240, y: 550 }, gate: { x: 355, y: 220, w: 140, h: 22 }, core: { x: 700, y: 310 }, goal: { x: 370, y: 135, w: 110, h: 68 }, fire: { x: 700, y: 190 }, allowed: sealedWater, sensors: [{ id: 'grown', target: 'stone', x: 560, y: 310, radius: 65, requires: ['grow'], label: '大きな石の台座' }, { id: 'signal', target: 'tree', x: 240, y: 300, radius: 65, requires: ['glow', 'pulse'], label: '木の共鳴盤' }], shards: [{ x: 120, y: 595 }, { x: 120, y: 295 }] })
@@ -51,7 +51,7 @@
     if (!Number.isInteger(stageIndex) || !LEVELS[stageIndex]) stageIndex = 0;
     const level = LEVELS[stageIndex];
     return {
-      stageIndex, level, player: { ...level.spawn }, stone: { ...level.stone }, tree: { ...level.tree },
+      stageIndex, level, player: { ...level.spawn }, checkpoint: { ...level.spawn }, preferredCarryTarget: null, stone: { ...level.stone }, tree: { ...level.tree },
       rules: { water: null, stone: null, tree: null, fire: null }, core: false,
       gateHeat: 0, gateOpen: false, complete: false, elapsed: 0, damageUntil: 0,
       ruleCount: 0, notice: '', heating: false, floatOffsets: { stone: 40, tree: 40 },
@@ -163,6 +163,45 @@
     event(game, 'rule', rulePosition(game, target), game.rules[target].name, target);
     return { ok: true, rule: game.rules[target], message: '「' + game.rules[target].name + '」を適用しました。' };
   }
+  function onDryLand(game, point) {
+    return !game.level.rivers.some(river => circleRect(point.x, point.y, 18, river));
+  }
+  function safeCheckpoint(game, point, fire) {
+    return onDryLand(game, point) && walkable(game, point) && (fire.extinguished || distance(point, fire) >= fire.radius + 60);
+  }
+  function respawnPoint(game, fire) {
+    const preferred = game.checkpoint || game.level.spawn;
+    if (safeCheckpoint(game, preferred, fire)) return { ...preferred };
+    // A carried object may now occupy the saved point. Find another spot on
+    // the same bank before considering the original starting position.
+    const bank = bankOf(game, preferred);
+    for (let radius = 12; radius <= 144; radius += 12) {
+      for (let direction = 0; direction < 16; direction++) {
+        const angle = direction * Math.PI / 8;
+        const point = { x: preferred.x + Math.cos(angle) * radius, y: preferred.y + Math.sin(angle) * radius };
+        if (bankOf(game, point) === bank && safeCheckpoint(game, point, fire)) return point;
+      }
+    }
+    if (safeCheckpoint(game, game.level.spawn, fire)) return { ...game.level.spawn };
+    return { ...preferred };
+  }
+  function recoverObject(game, target) {
+    if (target !== 'stone' && target !== 'tree') return { ok: false, message: '呼び戻せるのは石と木です。' };
+    if (bankOf(game) === 'river' || bankOf(game) !== bankOf(game, game.level[target])) {
+      return { ok: false, message: '初期位置と同じ岸で使えます。川の上や反対側の岸からは、通路を失わないよう呼び戻せません。' };
+    }
+    const previous = { ...game[target] };
+    Object.assign(game[target], game.level[target]);
+    if (!walkable(game, game.player)) {
+      Object.assign(game[target], previous);
+      return { ok: false, message: '今いる足場がなくなるか、呼び戻し先に重なります。岸の空いた場所へ移動してから呼び戻してください。' };
+    }
+    const label = TARGETS.find(item => item.id === target).jp;
+    const message = label + 'を最初の位置へ呼び戻しました。定義・結晶・点灯した仕掛けは残っています。';
+    game.notice = message;
+    event(game, 'rule', rulePosition(game, target), label + 'を呼び戻す', target);
+    return { ok: true, message };
+  }
   function tick(game, input, dt) {
     game.elapsed += dt;
     game.events = game.events.filter(item => game.elapsed - item.time < 3);
@@ -180,7 +219,7 @@
     if (length) { dx /= length; dy /= length; }
     if (input.has('e') && length) {
       const nearby = ['stone', 'tree'].filter(target => has(game, target, 'float') && distance(game.player, game[target]) < 115);
-      nearby.sort((a, b) => distance(game.player, game[a]) - distance(game.player, game[b]));
+      nearby.sort((a, b) => Number(b === game.preferredCarryTarget) - Number(a === game.preferredCarryTarget) || distance(game.player, game[a]) - distance(game.player, game[b]));
       if (nearby.length) {
         const object = game[nearby[0]], previous = { ...object };
         object.x = clamp(object.x + dx * 180 * dt, 95, 775);
@@ -218,9 +257,10 @@
       }
     }
     const fire = fireGeometry(game);
+    if (safeCheckpoint(game, game.player, fire)) game.checkpoint = { ...game.player };
     if (!fire.extinguished && game.elapsed >= game.damageUntil && distance(game.player, fire) < 13 + fire.radius) {
-      game.player = { ...game.level.spawn }; game.damageUntil = game.elapsed + 2;
-      game.notice = '炎に触れました。結晶と仕掛けはそのまま、スタートへ戻ります。'; event(game, 'damage', fire, 'スタートへ');
+      game.player = respawnPoint(game, fire); game.damageUntil = game.elapsed + 2;
+      game.notice = '炎に触れました。直前の安全な岸へ戻ります。結晶と仕掛けはそのままです。'; event(game, 'damage', fire, '安全な岸へ');
     }
     const gate = game.level.gate;
     const gatePoint = { x: gate.x + gate.w / 2, y: gate.y + gate.h / 2 };
@@ -254,22 +294,157 @@
       { label: 'ゴールへ', detail: '欠片の収集にも挑戦', done: game.complete }
     ];
   }
-  function hints(game) {
-    if (!game.core) return game.level.allowed.water ? [
-      'この川の水は封印されているため、凍結や固体化ができません。石か木の「浮遊」を試しましょう。',
-      '浮かせた物体の近くでE＋移動。川の中央でEを離すと橋になります。広い川では「成長」で橋を伸ばせます。',
-      game.stageIndex === 4 ? '石を「浮遊＋成長」で川へ運びましょう。川を渡った後も物体を運び、北岸の台座へ近づけられます。' : '川を渡ったら、北岸を横に歩いて青い結晶を回収しましょう。'
-    ] : ['川はそのままでは渡れません。研究室で水に使える動作を調べましょう。', '水＋凍結か水＋固体化で川を歩けます。', '別解：石・木を浮遊させ、近くでE＋移動。川へ運ぶと橋になります。'];
-    const sensor = game.level.sensors.find(item => !game.sensorLit[item.id]);
-    if (sensor) return [
-      '北岸の円形の仕掛けには、必要な物体と動作が表示されています。',
-      TARGETS.find(item => item.id === sensor.target).jp + 'をE＋移動で「' + sensor.label + '」へ運び、' + sensor.requires.map(id => EFFECTS.find(item => item.id === id).jp).join('＋') + 'を適用して約1秒待ちましょう。',
-      '仕掛けは一度点灯すると点いたままです。同じ対象のルールを変えても、別の対象のルールや点灯した仕掛けは残ります。'
-    ];
-    if (!game.gateOpen) return ['結晶で解放された加熱は、対象を「炎」にすると選べます。', '炎＋加熱を適用し、ゲートの南側中央で立ち止まってEを長押ししましょう。'];
-    return ['開いたゲートの中央を通り、北のGOALへ進みましょう。欠片は集めなくてもクリアできます。'];
+  function bankOf(game, point = game.player) {
+    const river = game.level.rivers[0];
+    if (point.y + 13 <= river.y) return 'north';
+    if (point.y - 13 >= river.y + river.h) return 'south';
+    return 'river';
   }
-  const api = { TARGETS, EFFECTS, SUPPORTED, LEVELS, createGame, has, supportedEffects, isBridge, bridgeHalfWidth, bridgeGeometry, objectGeometry, fireGeometry, walkable, applyRule, update, objective, progressSteps, hints, distance, clamp };
+  function crossingTarget(game) {
+    const floating = ['stone', 'tree'].filter(target => has(game, target, 'float'));
+    const supporting = floating.find(target => {
+      const deck = bridgeGeometry(game, target);
+      return isBridge(game, target) && game.player.x - 13 >= deck.x && game.player.x + 13 <= deck.x + deck.w;
+    });
+    if (supporting) return supporting;
+    if (floating.length === 1) return floating[0];
+    return game.stageIndex === 2 ? 'tree' : 'stone';
+  }
+  function pendingSensor(game) { return game.level.sensors.find(sensor => !game.sensorLit[sensor.id]); }
+  function gatePoint(game) { const gate = game.level.gate; return { x: gate.x + gate.w / 2, y: gate.y + gate.h / 2 }; }
+  function hintKey(game) {
+    if (game.complete) return 'complete';
+    if (game.gateOpen) return 'goal';
+    if (game.core && !pendingSensor(game) && distance(game.player, gatePoint(game)) < 105) {
+      return has(game, 'fire', 'heat') ? 'heat-gate' : 'define-heat';
+    }
+    const bank = bankOf(game);
+    if (bank !== 'north') {
+      const target = crossingTarget(game);
+      if (!game.level.allowed.water && (has(game, 'water', 'freeze') || has(game, 'water', 'solidify'))) return 'cross-water';
+      if (!has(game, target, 'float')) return 'define-' + target;
+      if (bank === 'river') return 'cross-bridge';
+      if (bankOf(game, game[target]) === 'north') return 'recover-' + target;
+      return distance(game.player, game[target]) < 115 ? 'carry-' + target : 'approach-' + target;
+    }
+    if (!game.core) return 'core';
+    const sensor = pendingSensor(game);
+    if (sensor) {
+      if (!sensor.requires.every(effect => has(game, sensor.target, effect)) || (!has(game, sensor.target, 'float') && distance(game[sensor.target], sensor) > sensor.radius)) return 'define-sensor-' + sensor.id;
+      if (bankOf(game, game[sensor.target]) === 'south') return 'fetch-sensor-' + sensor.id;
+      if (distance(game[sensor.target], sensor) <= sensor.radius) return 'charge-sensor-' + sensor.id;
+      return 'carry-sensor-' + sensor.id;
+    }
+    if (!has(game, 'fire', 'heat')) return 'define-heat';
+    return distance(game.player, gatePoint(game)) < 105 ? 'heat-gate' : 'approach-gate';
+  }
+  function hintTarget(game) {
+    const key = hintKey(game), target = crossingTarget(game);
+    if (key === 'complete') return null;
+    if (key === 'goal') return { x: game.level.goal.x + game.level.goal.w / 2, y: game.level.goal.y + game.level.goal.h / 2, label: 'ゴール' };
+    if (key === 'core') return { ...game.level.core, label: '青い結晶' };
+    if (key.startsWith('fetch-sensor-')) {
+      const sensor = pendingSensor(game), river = game.level.rivers[0];
+      const bridge = ['stone', 'tree'].find(item => isBridge(game, item) && bridgeGeometry(game, item).h >= river.h);
+      if (bridge) return { ...game[sensor.target], label: '橋で南岸へ戻って運ぶ' };
+      const helper = ['stone', 'tree'].find(item => item !== sensor.target && bankOf(game, game[item]) !== 'south');
+      if (helper) return { x: game[helper].x, y: river.y + river.h / 2, label: '物体を川へ戻して橋にする' };
+    }
+    if (key.includes('sensor')) { const sensor = pendingSensor(game); return { x: sensor.x, y: sensor.y, label: sensor.label }; }
+    if (key === 'define-heat') { const gate = game.level.gate; return { x: gate.x + gate.w / 2, y: gate.y + gate.h + 50, label: '先に研究室で炎＋加熱' }; }
+    if (key.endsWith('gate')) { const gate = game.level.gate; return { x: gate.x + gate.w / 2, y: gate.y + gate.h + 50, label: 'ここで止まってE長押し' }; }
+    if (key === 'cross-water' || key === 'cross-bridge' || key.startsWith('carry-')) {
+      const river = game.level.rivers[0];
+      return { x: key === 'cross-water' ? game.player.x : game[target].x, y: river.y + river.h / 2, label: '川の中央' };
+    }
+    const point = key.startsWith('recover-') ? game.level[target] : game[target];
+    return { ...point, label: TARGETS.find(item => item.id === target).jp };
+  }
+  function hints(game) {
+    const key = hintKey(game), target = crossingTarget(game), targetName = TARGETS.find(item => item.id === target).jp;
+    const coreDirection = game.level.core.x < game.player.x ? '左' : '右';
+    const crossing = game.stageIndex === 4 ? '浮遊＋成長' : game.stageIndex === 2 ? '浮遊＋発光' : game.stageIndex === 3 ? '浮遊＋発光＋脈動' : '浮遊';
+    const routeAdvice = game.stageIndex === 1 ? '結晶のある左側からは、川沿いに少し下へ回って右側のゲートへ進めます。石が邪魔なら、近くでE＋下を押し、川へ避けてEを離しましょう。' : '浮遊物体が道を塞ぐ場合は、岸でその物体を「発光」だけに切り替えると下へ降ろせます。';
+    if (key === 'complete') return ['このステージはクリア済みです。', game.stageIndex < LEVELS.length - 1 ? '「次のステージへ」で先へ進めます。' : '全5ステージをクリアしました。ステージ選択から遊び直せます。', '同じステージで欠片の収集にも挑戦できます。'];
+    if (key === 'goal') return ['ゲートは開いています。', 'ゲートの中央をまっすぐ上へ進みましょう。', '北側のGOALの枠へ入ればクリアです。', routeAdvice];
+    if (key === 'core') return ['川はもう渡れています。次は青い結晶です。', 'この位置から北岸を' + coreDirection + 'へ進むと結晶があります。', '青いひし形へ近づくだけで回収でき、「加熱」が使えるようになります。'];
+    if (key.startsWith('recover-')) return [
+      targetName + 'が向こう岸にあるため、そのままでは近づけません。',
+      'ヒント内の「' + targetName + 'の配置を戻す」で、いまいる出発側の岸へ戻せます。結晶や点灯した仕掛けは失われません。',
+      '呼び戻した' + targetName + 'に「' + crossing + '」を適用し、近くでE＋上を押して川へ運びましょう。'
+    ];
+    if (key.startsWith('define-') && !key.includes('sensor') && key !== 'define-heat') return [
+      game.level.allowed.water ? 'このステージの水は封印中です。物体を橋にしましょう。' : '川には通路が必要です。水や物体の定義を変えましょう。',
+      game.stageIndex === 0 ? '最初は「水＋固体化」が簡単です。「凍結」でも渡れます。' : '研究室で「' + targetName + '」を選び、「' + crossing + '」を適用します。',
+      '次に' + targetName + 'の近くへ歩き、Eを押しながら上へ運びます。',
+      '物体の影を川の中央へ置いたらEを離し、方向キーだけで橋の中央を上へ渡りましょう。'
+    ];
+    if (key.startsWith('approach-') && key !== 'approach-gate') return [
+      '「浮遊」は適用されています。物体を運ぶには近づく必要があります。',
+      targetName + 'の影の近くまで移動してください。',
+      '画面の操作案内に「E＋移動で運べます」と出たら、Eを押しながら上へ運びます。',
+      '別の浮遊物体も近くにあるときは、研究室で運びたい方を選んでください。'
+    ];
+    if (key.startsWith('carry-') && !key.includes('sensor')) return [
+      targetName + 'を運べる距離です。Eを押しながら上へ進みましょう。',
+      '物体の影が川の中央に来たらEを離してください。中央の目安は川の上下の岸の中間です。',
+      'Eを離すと足場が安定します。方向キーだけで足場の中央を上へ渡ります。',
+      '運びすぎて物体ごと北岸へ進んでも大丈夫です。青い結晶を回収しましょう。'
+    ];
+    if (key === 'cross-water') return ['水の定義が通路になっています。', 'Eを押さずに上へ進めば、川を歩けます。', '川を渡ったら北岸の青い結晶へ近づきましょう。'];
+    if (key === 'cross-bridge') return [
+      'いま川の足場に乗っています。',
+      game.stageIndex === 4 && !has(game, target, 'grow') ? '小さな足場で広い川を渡る場合は、E＋上を押し続けて物体と一緒に進みます。' : 'ここではEを離し、方向キーだけで上へ渡りましょう。',
+      '足場の左右の端へ寄ると川へ進めません。中央を通って北岸へ出てください。'
+    ];
+    if (key.startsWith('fetch-sensor-')) {
+      const sensor = pendingSensor(game), name = TARGETS.find(item => item.id === sensor.target).jp;
+      return [
+        '次に必要な' + name + 'は南岸にあります。橋で出発側の岸へ戻ってから運びます。',
+        '北岸にあるもう一方の物体に「浮遊＋成長」を適用し、川の中央へ戻してEを離します。点灯済みの盤は消えません。',
+        'その橋の中央を南へ渡り、研究室で「' + name + '」を選びます。影の近くでE＋上を押して、物体と一緒に北岸へ運びましょう。',
+        sensor.label + 'の光る円へ影を入れて約1秒待ちます。必要な定義が外れないようにしてください。'
+      ];
+    }
+    if (key.includes('sensor')) {
+      const sensor = pendingSensor(game), name = TARGETS.find(item => item.id === sensor.target).jp;
+      const definition = ['float', ...sensor.requires].filter((effect, index, array) => array.indexOf(effect) === index).map(id => EFFECTS.find(item => item.id === id).jp).join('＋');
+      return [
+        sensor.label + 'を点灯させる必要があります。盤に表示された物体と動作を使います。',
+        '「' + name + '」に「' + definition + '」を適用します。',
+        key.startsWith('charge-') ? '物体は範囲内です。そのまま約1秒待つと点灯します。' : name + 'へ近づき、E＋移動で光る円の中へ影を運んで約1秒待ちましょう。',
+        game.stageIndex === 4 ? '一度点灯した盤は点灯したままです。次の物体が南岸にある場合は、北岸にある物体を「浮遊＋成長」で川の中央へ戻し、橋にしてから取りに戻れます。' : '一度点灯した盤は点灯したままです。物体を動かしても大丈夫なので、ゲートへ進む通路を空けましょう。'
+      ];
+    }
+    if (key === 'define-heat') return [
+      '結晶と必要な仕掛けはそろっています。次は炎の定義です。',
+      '研究室で対象を「炎」、動作を「加熱」にして適用します。',
+      '炎に近づく必要はありません。ゲートの南側の中央へ進みましょう。',
+      'ゲートの前で方向キーを離し、Eだけを約2秒押し続けます。' + (game.stageIndex === 1 ? routeAdvice : '')
+    ];
+    if (key === 'approach-gate') return ['ゲートを加熱するには、もう少し近づく必要があります。', 'ゲートの下側の中央へ進んでください。', routeAdvice, '止まって方向キーを離し、Eだけを約2秒押し続けましょう。'];
+    return ['ゲートを加熱できる位置です。', '方向キーを離し、Eだけを約2秒押し続けてください。', '加熱ゲージが満ちて扉が開いたら、中央をまっすぐ上へ進みましょう。', routeAdvice];
+  }
+  function interactionStatus(game) {
+    if (game.complete) return 'ステージクリア';
+    if (game.heating) return 'ゲートを加熱中です。Eを押したまま待ちましょう。';
+    const nearby = ['stone', 'tree'].filter(target => has(game, target, 'float') && distance(game.player, game[target]) < 115);
+    nearby.sort((a, b) => Number(b === game.preferredCarryTarget) - Number(a === game.preferredCarryTarget) || distance(game.player, game[a]) - distance(game.player, game[b]));
+    if (distance(game.player, gatePoint(game)) < 105 && game.core && !pendingSensor(game) && has(game, 'fire', 'heat')) {
+      return game.gateOpen ? 'ゲートは開いています。中央を上へ進みましょう。' : 'ここで止まり、Eだけを長押しするとゲートが開きます。';
+    }
+    if (nearby.length) return TARGETS.find(item => item.id === nearby[0]).jp + '：E＋移動で運べます。Eを離すと置けます。';
+    if (distance(game.player, gatePoint(game)) < 105) {
+      if (game.gateOpen) return 'ゲートは開いています。中央を上へ進みましょう。';
+      if (!game.core) return 'ゲートには青い結晶が必要です。';
+      const sensor = pendingSensor(game);
+      if (sensor) return 'ゲートは「' + sensor.label + '」の点灯を待っています。';
+      if (!has(game, 'fire', 'heat')) return '炎に「加熱」を適用してください。炎へ近づく必要はありません。';
+      return 'ここで止まり、Eだけを長押しするとゲートが開きます。';
+    }
+    return '移動はWASD・矢印キー。運ぶときは浮遊した物体の影へ近づきましょう。';
+  }
+  const api = { TARGETS, EFFECTS, SUPPORTED, LEVELS, createGame, has, supportedEffects, isBridge, bridgeHalfWidth, bridgeGeometry, objectGeometry, fireGeometry, walkable, applyRule, update, objective, progressSteps, hints, hintKey, hintTarget, interactionStatus, recoverObject, bankOf, distance, clamp };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.WorldDefinition = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

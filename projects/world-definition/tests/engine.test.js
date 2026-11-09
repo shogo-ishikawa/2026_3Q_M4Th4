@@ -4,7 +4,8 @@
 // directly to the crystal, sensors, gate or goal. Geometry unit tests below
 // construct isolated contact states separately from those full playthroughs.
 const assert = require('node:assert/strict');
-const gameEngine = require('../engine.js');
+const path = require('node:path');
+const gameEngine = require(process.argv[2] ? path.resolve(process.argv[2]) : '../engine.js');
 const { createGame, applyRule, update, walkable, has, isBridge, fireGeometry, objective } = gameEngine;
 let checks = 0;
 
@@ -267,10 +268,12 @@ test('extinguished fire is harmless and damage preserves progress', () => {
   assert.deepEqual(safe.player, { x: 680, y: 260 });
   assert.equal(fireGeometry(safe).extinguished, true);
   const damaged = collectCrystal('freeze');
+  const checkpoint = { ...damaged.checkpoint };
   damaged.gateOpen = true;
   damaged.player = { x: 680, y: 260 };
   update(damaged, new Set(), 1 / 120);
-  assert.deepEqual(damaged.player, { x: 425, y: 565 });
+  assert.deepEqual(damaged.player, checkpoint);
+  assert.equal(gameEngine.bankOf(damaged), 'north');
   assert.equal(damaged.core, true);
   assert.equal(has(damaged, 'water', 'freeze'), true);
 });
@@ -497,6 +500,131 @@ test('effect feedback events expire after three seconds', () => {
   assert.equal(game.events.length, 0);
 });
 
+test('the selected nearby floating object is carried and feedback names the same object', () => {
+  for (const preferred of ['stone', 'tree']) {
+    const game = createGame();
+    // Isolated pickup geometry: both objects are within reach of the player.
+    game.stone = { x: 475, y: 565 };
+    game.tree = { x: 375, y: 565 };
+    apply(game, 'stone', ['float']); apply(game, 'tree', ['float']);
+    game.preferredCarryTarget = preferred;
+    const other = preferred === 'stone' ? 'tree' : 'stone';
+    const unchanged = { ...game[other] };
+    const previousX = game[preferred].x;
+    assert.match(gameEngine.interactionStatus(game), preferred === 'stone' ? /石/ : /木/);
+    frames(game, ['e', 'd'], 6);
+    assert.ok(game[preferred].x > previousX);
+    assert.deepEqual(game[other], unchanged);
+  }
+});
+
+test('an out-of-range selection does not prevent carrying the nearby object', () => {
+  const game = createGame();
+  game.stone = { x: 750, y: 565 }; game.tree = { x: 375, y: 565 };
+  apply(game, 'stone', ['float']); apply(game, 'tree', ['float']);
+  game.preferredCarryTarget = 'stone';
+  assert.match(gameEngine.interactionStatus(game), /木/);
+  frames(game, ['e', 'd'], 6);
+  assert.ok(game.tree.x > 375);
+  assert.equal(game.stone.x, 750);
+});
+
+test('calling an object back preserves rules, the crystal and latched sensors', () => {
+  const game = createGame(4);
+  // Separate recovery unit setup; complete routes below collect objectives
+  // using movement instead of these isolated sensor positions.
+  game.stone = { x: 560, y: 310 }; game.tree = { x: 240, y: 300 };
+  apply(game, 'stone', ['float', 'grow']);
+  apply(game, 'tree', ['float', 'glow', 'pulse']);
+  frames(game, [], 65);
+  assert.ok(game.sensorLit.grown && game.sensorLit.signal);
+  game.core = true;
+  game.collectedShards[0] = true;
+  const before = JSON.parse(JSON.stringify({ rules: game.rules, sensorLit: game.sensorLit,
+    core: game.core, shards: game.collectedShards, ruleCount: game.ruleCount }));
+  for (const target of ['stone', 'tree']) {
+    assert.equal(gameEngine.recoverObject(game, target).ok, true);
+    assert.deepEqual(game[target], game.level[target]);
+    assert.ok(walkable(game, game.player));
+  }
+  assert.deepEqual({ rules: game.rules, sensorLit: game.sensorLit,
+    core: game.core, shards: game.collectedShards, ruleCount: game.ruleCount }, before);
+});
+
+test('calling an object back cannot remove river support or strand the opposite bank', () => {
+  const onBridge = makeBridge('stone');
+  const northBank = collectCrystal('stone');
+  for (const game of [onBridge, northBank]) {
+    const before = JSON.stringify(game);
+    assert.equal(gameEngine.recoverObject(game, 'stone').ok, false);
+    assert.equal(JSON.stringify(game), before);
+    assert.ok(walkable(game, game.player));
+  }
+});
+
+test('calling an object back rejects an occupied destination and unsupported targets', () => {
+  const game = createGame(1);
+  apply(game, 'stone', ['float', 'grow']);
+  game.stone = { x: 720, y: 550 }; game.player = { x: 650, y: 530 };
+  assert.ok(walkable(game, game.player));
+  const before = JSON.stringify(game);
+  for (const target of ['stone', 'fire', 'water', 'invalid']) {
+    assert.equal(gameEngine.recoverObject(game, target).ok, false);
+    assert.equal(JSON.stringify(game), before);
+  }
+});
+
+test('fire recovery finds a nearby safe point if an object occupies the last checkpoint', () => {
+  const game = createGame(1);
+  apply(game, 'stone', ['float']);
+  game.player = { x: 650, y: 320 }; update(game, new Set(), 1 / 120);
+  const blockedCheckpoint = { ...game.checkpoint };
+  game.stone = { x: 650, y: 320 + game.floatOffsets.stone };
+  assert.equal(walkable(game, blockedCheckpoint), false);
+  game.player = { ...fireGeometry(game) };
+  update(game, new Set(), 1 / 120);
+  assert.notDeepEqual(game.player, blockedCheckpoint);
+  assert.equal(gameEngine.bankOf(game), 'north');
+  assert.ok(walkable(game, game.player));
+  assert.ok(gameEngine.distance(game.player, blockedCheckpoint) <= 144);
+  assert.ok(game.damageUntil > game.elapsed);
+});
+
+test('hints distinguish a missing float rule, a charging sensor and a return trip', () => {
+  const game = createGame(2);
+  // Isolated hint states complement the input-only complete routes below.
+  game.player = { x: 700, y: 330 }; game.core = true;
+  apply(game, 'tree', ['float', 'glow']);
+  assert.equal(gameEngine.hintKey(game), 'fetch-sensor-light');
+  assert.match(gameEngine.hints(game).join(' '), /南岸/);
+  game.tree = { x: 245, y: 365 };
+  apply(game, 'tree', ['glow']);
+  assert.equal(gameEngine.hintKey(game), 'charge-sensor-light');
+  game.tree = { x: 400, y: 365 };
+  assert.equal(gameEngine.hintKey(game), 'define-sensor-light');
+  apply(game, 'tree', ['float', 'glow']);
+  assert.equal(gameEngine.hintKey(game), 'carry-sensor-light');
+  game.tree = { x: 245, y: 365 };
+  assert.equal(gameEngine.hintKey(game), 'charge-sensor-light');
+  frames(game, [], 65);
+  assert.ok(game.sensorLit.light);
+  assert.equal(gameEngine.hintKey(game), 'define-heat');
+});
+
+test('hints offer recovery from the south bank and accept the alternative floating tree', () => {
+  const game = createGame(1);
+  apply(game, 'stone', ['float']);
+  game.stone = { x: 650, y: 350 };
+  assert.equal(gameEngine.hintKey(game), 'recover-stone');
+  assert.deepEqual(gameEngine.hintTarget(game), { ...game.level.stone, label: '石' });
+  assert.equal(gameEngine.recoverObject(game, 'stone').ok, true);
+  assert.equal(gameEngine.hintKey(game), 'carry-stone');
+  apply(game, 'stone', ['glow']);
+  apply(game, 'tree', ['float']);
+  assert.equal(gameEngine.hintKey(game), 'approach-tree');
+  assert.equal(gameEngine.hintTarget(game).label, '木');
+});
+
 
 // These full routes use ordinary movement/action input only.
 (function verifyCompleteStageRoutes() {
@@ -531,15 +659,18 @@ function carryTo(game, target, axis, destination) {
 }
 function finish(game) {
   const gate = game.level.gate;
-  const x = game.stageIndex === 1 ? 730 : gate.x + gate.w / 2;
+  // A natural route uses the middle of the gate, without a hidden edge shortcut.
+  const x = gate.x + gate.w / 2;
+  const previousDamage = game.damageUntil;
   walkTo(game, x, gate.y + 70);
   apply(game, 'fire', ['heat']);
   frames(game, ['e'], 180);
   assert.ok(game.gateOpen, 'All gate requirements must be completed: ' + JSON.stringify(game.sensorLit));
   walkTo(game, x, game.level.goal.y + game.level.goal.h / 2);
+  assert.equal(game.damageUntil, previousDamage, 'The middle of the opened gate must be usable without a respawn or invulnerability shortcut');
   assert.ok(game.complete, 'Movement must reach the goal');
 }
-function runStage(stageIndex) {
+function prepareStage(stageIndex, placementOffset = 0) {
   const game = E.createGame(stageIndex);
   if (stageIndex === 0) {
     apply(game, 'water', ['solidify']);
@@ -552,13 +683,16 @@ function runStage(stageIndex) {
     apply(game, 'tree', ['float', 'glow']);
     walkTo(game, 240, 600); carryTo(game, 'tree', 'y', 430); frames(game, [], 2);
     walkTo(game, 240, 374); walkTo(game, 180, 374);
-    carryTo(game, 'tree', 'y', 370); frames(game, [], 150);
+    carryTo(game, 'tree', 'y', 370 + placementOffset); frames(game, [], 150);
     assert.ok(game.sensorLit.light);
-    walkTo(game, 180, 350); walkTo(game, 700, 350); walkTo(game, 700, 330);
+    // A tree left near the south edge of the sensor can block the upper
+    // corridor. The open strip beside the river provides a wider detour.
+    const corridorY = placementOffset > 0 ? 370 : 350;
+    walkTo(game, 180, corridorY); walkTo(game, 700, corridorY); walkTo(game, 700, 330);
   } else if (stageIndex === 3) {
     apply(game, 'stone', ['float', 'glow', 'pulse']);
-    walkTo(game, 650, 565); carryTo(game, 'stone', 'y', 390); carryTo(game, 'stone', 'x', 280); frames(game, [], 2);
-    walkTo(game, game.player.x, 334); walkTo(game, 220, 334);
+    walkTo(game, 650, 565); carryTo(game, 'stone', 'y', 390); carryTo(game, 'stone', 'x', 280 + placementOffset); frames(game, [], 2);
+    walkTo(game, game.player.x, 334); walkTo(game, 220 + placementOffset, 334);
     carryTo(game, 'stone', 'y', 340); frames(game, [], 150);
     assert.ok(game.sensorLit.resonance);
     // Return the stone to the river after the receiver latches, opening the
@@ -569,7 +703,7 @@ function runStage(stageIndex) {
     apply(game, 'stone', ['float', 'grow']);
     walkTo(game, 650, 600); carryTo(game, 'stone', 'y', 415); frames(game, [], 2);
     walkTo(game, 650, 330); walkTo(game, 590, 330); carryTo(game, 'stone', 'y', 350);
-    walkTo(game, 700, 330); carryTo(game, 'stone', 'x', 560); frames(game, [], 150);
+    walkTo(game, 700, 330); carryTo(game, 'stone', 'x', 560 + placementOffset); frames(game, [], 150);
     assert.ok(game.sensorLit.grown);
     carryTo(game, 'stone', 'y', 415); frames(game, [], 2);
     walkTo(game, 560, 570); walkTo(game, 240, 600);
@@ -580,18 +714,121 @@ function runStage(stageIndex) {
     assert.ok(game.sensorLit.signal);
     walkTo(game, 700, 310);
   }
-  finish(game);
   return game;
 }
 for (let stage = 0; stage < E.LEVELS.length; stage++) {
   test('complete all objectives and reach the goal in stage ' + (stage + 1), () => {
-    const game = runStage(stage);
+    const game = prepareStage(stage);
+    finish(game);
     assert.equal(game.core, true);
     assert.equal(game.gateOpen, true);
     assert.equal(game.complete, true);
+    assert.equal(game.damageUntil, 0, 'The complete route must not depend on damage or invulnerability');
     assert.ok(game.level.sensors.every(sensor => game.sensorLit[sensor.id]));
   });
 }
+for (const stage of [2, 3, 4]) {
+  for (const offset of [-20, 20]) {
+    test('stage ' + (stage + 1) + ' accepts sensor/bridge placement offset ' + offset + 'px', () => {
+      const game = prepareStage(stage, offset);
+      assert.ok(game.level.sensors.every(sensor => game.sensorLit[sensor.id]));
+      finish(game);
+      assert.equal(game.damageUntil, 0);
+    });
+  }
+}
+for (const seconds of [0.55, 0.65, 0.75, 1, 1.5, 3]) {
+  test('stage 2 accepts a normal E+up hold of ' + seconds + ' seconds', () => {
+    const game = E.createGame(1);
+    apply(game, 'stone', ['float']);
+    frames(game, ['e', 'w'], Math.round(seconds / dt));
+    frames(game, [], 2);
+    assert.ok(E.walkable(game, game.player));
+    if (E.bankOf(game) === 'north') {
+      // After carrying all the way onto land, step away from the object
+      // before heading for the crystal, just as a player can do with arrows.
+      walkTo(game, 160, game.player.y);
+      walkTo(game, 160, 320);
+    } else {
+      walkTo(game, 650, 320);
+      walkTo(game, 160, 320);
+    }
+    assert.ok(game.core);
+    if (!E.isBridge(game, 'stone')) {
+      // The lifted stone can obstruct this narrow bank. Redefining it on
+      // dry land lowers it out of the route without resetting progress.
+      apply(game, 'stone', ['glow']);
+      assert.ok(game.core);
+    }
+    finish(game);
+    assert.equal(game.damageUntil, 0);
+  });
+}
+
+test('stage 2 long carrying and later fire contact keep the north bank reachable', () => {
+  const game = E.createGame(1);
+  apply(game, 'stone', ['float']);
+  frames(game, ['e', 'w'], 360);
+  frames(game, [], 2);
+  assert.equal(E.bankOf(game), 'north');
+  assert.equal(E.isBridge(game, 'stone'), false, 'Long carrying has removed the fixed bridge');
+  walkTo(game, 160, game.player.y); walkTo(game, 160, 320);
+  const checkpoint = { ...game.checkpoint };
+  // Isolate fire contact after the real input-only crossing and collection.
+  // The rest of this recovery route again uses ordinary input.
+  game.player = { ...E.fireGeometry(game) };
+  E.update(game, new Set(), dt);
+  assert.deepEqual(game.player, checkpoint);
+  assert.equal(E.bankOf(game), 'north');
+  assert.ok(E.walkable(game, game.player));
+  assert.ok(game.core);
+  assert.ok(E.has(game, 'stone', 'float'));
+  apply(game, 'stone', ['glow']);
+  frames(game, [], 250);
+  finish(game);
+});
+
+test('all five stages provide actionable hints from crossing through the goal', () => {
+  function checkHint(game, expectedKey) {
+    assert.equal(E.hintKey(game), expectedKey);
+    const hints = E.hints(game);
+    assert.ok(Array.isArray(hints) && hints.length >= 2);
+    assert.ok(hints.every(line => typeof line === 'string' && line.trim().length > 0));
+    assert.ok(typeof E.interactionStatus(game) === 'string');
+    const target = E.hintTarget(game);
+    if (expectedKey === 'complete') assert.equal(target, null);
+    else {
+      assert.ok(Number.isFinite(target.x) && Number.isFinite(target.y));
+      assert.ok(typeof target.label === 'string' && target.label.length);
+    }
+  }
+  for (let stage = 0; stage < E.LEVELS.length; stage++) {
+    const game = E.createGame(stage);
+    const crossing = stage === 2 ? 'tree' : 'stone';
+    checkHint(game, 'define-' + crossing);
+    if (stage === 0) {
+      apply(game, 'water', ['solidify']);
+      checkHint(game, 'cross-water');
+    } else {
+      apply(game, crossing, ['float']);
+      assert.ok(['approach-' + crossing, 'carry-' + crossing].includes(E.hintKey(game)));
+      assert.doesNotMatch(E.hints(game).join(' '), /水＋(?:凍結|固体化)/);
+    }
+    const ready = prepareStage(stage);
+    checkHint(ready, 'define-heat');
+    const heatMarker = E.hintTarget(ready), flame = E.fireGeometry(ready);
+    assert.ok(heatMarker.y > ready.level.gate.y + ready.level.gate.h, 'heat guidance stays south of the closed gate');
+    assert.ok(E.distance(heatMarker, flame) > flame.radius + 13, 'heat guidance does not lead into the flame');
+    apply(ready, 'fire', ['heat']);
+    const gate = ready.level.gate;
+    walkTo(ready, gate.x + gate.w / 2, gate.y + 70);
+    checkHint(ready, 'heat-gate');
+    frames(ready, ['e'], 180);
+    checkHint(ready, 'goal');
+    walkTo(ready, ready.level.goal.x + ready.level.goal.w / 2, ready.level.goal.y + ready.level.goal.h / 2);
+    checkHint(ready, 'complete');
+  }
+});
 })();
 
 console.log(checks + ' engine checks passed.');

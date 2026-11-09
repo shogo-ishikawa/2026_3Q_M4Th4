@@ -16,7 +16,7 @@ function memoryStorage(saved = null) {
 }
 
 function harness(options = {}) {
-  const elements = new Map(), all = [], updates = [], requests = [];
+  const elements = new Map(), all = [], updates = [], requests = [], draws = [];
   let activeGame, frameCallback, timestamp = 0;
   class Element {
     constructor(tag = 'DIV', id = '') {
@@ -70,7 +70,9 @@ function harness(options = {}) {
   document.createElement = tag => new Element(tag);
   document.createTextNode = value => ({ textContent: value });
   document.querySelectorAll = selector => selector === 'dialog' ? all.filter(item => item.tagName === 'DIALOG') : selector === '[data-key]' ? all.filter(item => item.dataset.key) : [];
-  for (const id of ['game', 'objective', 'hudpower', 'progress', 'targets', 'effects', 'queue', 'unlock-message', 'apply', 'active-rules', 'generated-name', 'generated-desc', 'rule-status', 'use-ai', 'local-ai', 'hint-content', 'hint-button', 'reset', 'again', 'close-win', 'lab-focus', 'lab-panel', 'help-button', 'close-help', 'start-button', 'start-intro', 'start-rule-hint', 'stage-select', 'stage-description', 'stage-record', 'stage-number', 'stage-name', 'shard-count', 'effect-summary', 'win-title', 'win-result', 'save-status', 'next-stage', 'change-stage']) new Element(id === 'game' ? 'canvas' : id === 'use-ai' ? 'input' : id === 'stage-select' ? 'select' : 'div', id);
+  for (const id of ['game', 'objective', 'hudpower', 'progress', 'targets', 'effects', 'queue', 'unlock-message', 'apply', 'active-rules', 'generated-name', 'generated-desc', 'rule-status', 'use-ai', 'local-ai', 'hint-content', 'hint-button', 'hint-panel', 'hint-prev', 'hint-next', 'hint-close', 'hint-step', 'hint-title', 'hint-marker', 'interaction-status', 'recover-stone', 'recover-tree', 'hint-recovery-status', 'reset', 'again', 'close-win', 'lab-focus', 'lab-panel', 'help-button', 'close-help', 'start-button', 'start-intro', 'start-rule-hint', 'stage-select', 'stage-description', 'stage-record', 'stage-number', 'stage-name', 'shard-count', 'effect-summary', 'win-title', 'win-result', 'save-status', 'next-stage', 'change-stage']) new Element(id === 'game' ? 'canvas' : ['use-ai', 'hint-marker'].includes(id) ? 'input' : id === 'stage-select' ? 'select' : 'div', id);
+  elements.get('hint-panel').hidden = true;
+  elements.get('hint-content').hidden = true;
   for (const id of ['start-dialog', 'help-dialog', 'win-dialog']) new Element('dialog', id);
   for (let index = 0; index < 4; index += 1) elements.get('progress').append(new Element('li'));
   const buttons = {};
@@ -90,7 +92,9 @@ function harness(options = {}) {
   if (options.storageGetterThrows) Object.defineProperty(window, 'localStorage', { get() { throw new Error('Storage denied'); } });
   else window.localStorage = storage;
   window.WorldDefinitionProgress = progress;
-  window.WorldDefinitionRenderer = { createRenderer: () => ({ draw() {} }) };
+  window.WorldDefinitionRenderer = { createRenderer: () => ({
+    draw(game, target, marker) { draws.push({ stageIndex: game.stageIndex, target, marker: marker ? JSON.parse(JSON.stringify(marker)) : null }); }
+  }) };
   const sandbox = { window, document, HTMLElement: Element, location: { hostname: 'localhost' },
     performance: { now: () => 0 }, requestAnimationFrame(callback) { frameCallback = callback; },
     setTimeout() { return 1; }, clearTimeout() {}, AbortController,
@@ -98,7 +102,7 @@ function harness(options = {}) {
   };
   vm.runInNewContext(source, sandbox, { filename: 'app.js' });
   const frame = () => { const count = updates.length; timestamp += 16; frameCallback(timestamp); return updates.length > count ? updates.at(-1) : null; };
-  return { document, window, buttons, requests, frame, storage, get game() { return activeGame; },
+  return { document, window, buttons, requests, draws, frame, storage, get game() { return activeGame; },
     get: id => elements.get(id),
     begin() { elements.get('start-button').emit('click'); },
     key(name, key, target = elements.get('game')) { return window.emit(name, { key, target }); },
@@ -197,6 +201,164 @@ async function test(name, run) {
     assert.equal(app.frame(), null);
     app.document.hidden = false; app.document.emit('visibilitychange');
     assert.deepEqual(app.frame(), []);
+  });
+  await test('hints reveal one step at a time and close with clean input and canvas focus', () => {
+    const app = harness(); app.begin();
+    assert.equal(app.get('hint-panel').hidden, true);
+    assert.equal(app.get('hint-content').hidden, true);
+    app.key('keydown', 'w'); app.buttons.e.emit('pointerdown', { pointerId: 1 });
+    app.get('hint-button').emit('click');
+    assert.equal(app.get('hint-panel').hidden, false);
+    assert.equal(app.get('hint-content').hidden, false);
+    assert.equal(app.get('hint-button').attributes.get('aria-expanded'), 'true');
+    assert.equal(app.document.activeElement, app.get('hint-content'));
+    assert.deepEqual(app.frame(), []);
+    const hints = engine.hints(app.game);
+    assert.equal(app.get('hint-content').textContent, hints[0]);
+    assert.match(app.get('hint-step').textContent, /^ヒント 1 \/ /);
+    assert.equal(app.get('hint-title').textContent, engine.objective(app.game));
+    assert.equal(app.get('hint-prev').disabled, true);
+    for (let index = 1; index < hints.length; index += 1) {
+      app.get('hint-next').emit('click');
+      assert.equal(app.get('hint-content').textContent, hints[index]);
+    }
+    assert.equal(app.get('hint-next').disabled, true);
+    app.get('hint-next').emit('click');
+    assert.equal(app.get('hint-content').textContent, hints.at(-1));
+    app.get('hint-prev').emit('click');
+    assert.equal(app.get('hint-content').textContent, hints.at(-2));
+    assert.equal(app.get('hint-next').disabled, false);
+    app.key('keydown', 'd'); app.buttons.e.emit('pointerdown', { pointerId: 2 });
+    app.get('hint-close').emit('click');
+    assert.equal(app.get('hint-panel').hidden, true);
+    assert.equal(app.get('hint-content').hidden, true);
+    assert.equal(app.get('hint-button').attributes.get('aria-expanded'), 'false');
+    assert.equal(app.document.activeElement, app.get('game'));
+    assert.deepEqual(app.frame(), []);
+  });
+  await test('J and question-mark toggle hints without capturing editable or modified shortcuts', () => {
+    const app = harness(); app.begin();
+    assert.equal(app.key('keydown', 'J').event.defaultPrevented, true);
+    assert.equal(app.get('hint-panel').hidden, false);
+    assert.equal(app.key('keydown', '?').event.defaultPrevented, true);
+    assert.equal(app.get('hint-panel').hidden, true);
+    for (const target of [app.get('use-ai'), app.get('stage-select'), app.document.createElement('textarea')]) {
+      assert.equal(app.key('keydown', 'j', target).event.defaultPrevented, false);
+      assert.equal(app.get('hint-panel').hidden, true);
+    }
+    const editable = app.document.createElement('div'); editable.isContentEditable = true;
+    assert.equal(app.key('keydown', '?', editable).event.defaultPrevented, false);
+    for (const values of [{ repeat: true }, { ctrlKey: true }, { metaKey: true }, { altKey: true }]) {
+      assert.equal(app.window.emit('keydown', { key: 'j', target: app.get('game'), ...values }).event.defaultPrevented, false);
+      assert.equal(app.get('hint-panel').hidden, true);
+    }
+    app.get('hint-button').emit('click'); app.get('hint-button').emit('click');
+    assert.equal(app.get('hint-panel').hidden, true);
+    assert.deepEqual(app.frame(), []);
+  });
+  await test('live hints restart at the first step when the game situation changes', () => {
+    const app = harness(); app.begin(); app.get('hint-button').emit('click');
+    app.get('hint-next').emit('click'); app.get('hint-next').emit('click');
+    const previousKey = engine.hintKey(app.game);
+    const previousText = app.get('hint-content').textContent;
+    app.chooseEffect('solidify'); app.get('apply').emit('click'); app.frame();
+    assert.notEqual(engine.hintKey(app.game), previousKey);
+    assert.equal(app.get('hint-panel').hidden, false);
+    assert.equal(app.get('hint-content').textContent, engine.hints(app.game)[0]);
+    assert.notEqual(app.get('hint-content').textContent, previousText);
+    assert.match(app.get('hint-step').textContent, /^ヒント 1 \/ /);
+    assert.equal(app.get('hint-prev').disabled, true);
+    assert.equal(app.get('hint-title').textContent, engine.objective(app.game));
+    assert.equal(app.get('interaction-status').textContent, engine.interactionStatus(app.game));
+  });
+  await test('hint markers are optional, follow the current situation and disappear when hints close', () => {
+    const app = harness(); app.begin(); app.frame();
+    assert.equal(app.draws.at(-1).marker, null);
+    app.get('hint-button').emit('click'); app.frame();
+    assert.equal(app.get('hint-marker').checked, false);
+    assert.equal(app.draws.at(-1).marker, null);
+    app.get('hint-marker').checked = true; app.frame();
+    assert.deepEqual(app.draws.at(-1).marker, engine.hintTarget(app.game));
+    const previousMarker = app.draws.at(-1).marker;
+    // Supply the north-bank state; engine route and collision checks live in engine.test.js.
+    app.game.player.y = app.game.level.rivers[0].y - 60; app.frame();
+    assert.equal(engine.hintKey(app.game), 'core');
+    assert.deepEqual(app.draws.at(-1).marker, engine.hintTarget(app.game));
+    assert.notDeepEqual(app.draws.at(-1).marker, previousMarker);
+    app.get('hint-marker').checked = false; app.frame();
+    assert.equal(app.draws.at(-1).marker, null);
+    app.get('hint-marker').checked = true; app.get('hint-close').emit('click'); app.frame();
+    assert.equal(app.draws.at(-1).marker, null);
+  });
+  await test('reset and stage changes clear old hint steps and markers', () => {
+    const app = harness({ saved: { unlocked: 1, lastStage: 0, best: {} } }); app.begin();
+    function showAdvancedHint() {
+      app.get('hint-button').emit('click'); app.get('hint-next').emit('click');
+      app.get('hint-marker').checked = true; app.frame();
+      assert.notEqual(app.draws.at(-1).marker, null);
+      assert.equal(app.get('hint-prev').disabled, false);
+    }
+    function assertFreshHints(stageIndex) {
+      app.frame();
+      assert.equal(app.game.stageIndex, stageIndex);
+      assert.equal(app.get('hint-panel').hidden, true);
+      assert.equal(app.get('hint-content').hidden, true);
+      assert.equal(app.get('hint-marker').checked, false);
+      assert.equal(app.draws.at(-1).marker, null);
+      app.get('hint-button').emit('click');
+      assert.equal(app.get('hint-content').textContent, engine.hints(app.game)[0]);
+      assert.equal(app.get('hint-prev').disabled, true);
+      assert.match(app.get('hint-step').textContent, /^ヒント 1 \/ /);
+      app.get('hint-close').emit('click');
+    }
+    showAdvancedHint();
+    app.key('keydown', 'r'); app.get('confirm-reset').emit('click');
+    assertFreshHints(0);
+    showAdvancedHint();
+    app.get('stage-select').value = '1'; app.get('change-stage').emit('click');
+    app.get('confirm-reset').emit('click'); assertFreshHints(1);
+  });
+  await test('the selected stone or tree becomes the preferred carry target and other targets clear it', () => {
+    const app = harness(); app.begin();
+    assert.equal(app.game.preferredCarryTarget, null);
+    for (const target of ['stone', 'tree', 'fire', 'stone', 'water']) {
+      app.chooseTarget(target); app.frame();
+      assert.equal(app.game.preferredCarryTarget, ['stone', 'tree'].includes(target) ? target : null);
+      assert.equal(app.draws.at(-1).target, target);
+    }
+    const stoneStage = harness({ saved: { unlocked: 2, lastStage: 1, best: {} } });
+    assert.equal(stoneStage.game.preferredCarryTarget, 'stone');
+    const treeStage = harness({ saved: { unlocked: 2, lastStage: 2, best: {} } });
+    assert.equal(treeStage.game.preferredCarryTarget, 'tree');
+  });
+  await test('object recovery preserves progress, refuses the opposite bank and clears its message on reset', () => {
+    const app = harness({ saved: { unlocked: 2, lastStage: 2, best: {} } }); app.begin();
+    engine.applyRule(app.game, 'tree', ['float', 'glow']);
+    app.game.core = true;
+    for (const id of Object.keys(app.game.sensorLit)) app.game.sensorLit[id] = true;
+    const lit = { ...app.game.sensorLit }, ruleCount = app.game.ruleCount;
+    app.game.tree.y = app.game.level.rivers[0].y - 80;
+    app.get('hint-button').emit('click');
+    app.key('keydown', 'w'); app.buttons.e.emit('pointerdown', { pointerId: 1 });
+    app.get('recover-tree').emit('click');
+    assert.deepEqual(app.game.tree, app.game.level.tree);
+    assert.equal(engine.has(app.game, 'tree', 'float'), true);
+    assert.equal(engine.has(app.game, 'tree', 'glow'), true);
+    assert.equal(app.game.core, true);
+    assert.deepEqual(app.game.sensorLit, lit);
+    assert.equal(app.game.ruleCount, ruleCount);
+    assert.match(app.get('hint-recovery-status').textContent, /戻しました/);
+    assert.equal(app.get('rule-status').textContent, app.get('hint-recovery-status').textContent);
+    assert.equal(app.get('hint-content').textContent, engine.hints(app.game)[0]);
+    assert.deepEqual(app.frame(), []);
+    app.game.player.y = app.game.level.rivers[0].y - 60;
+    const tree = { ...app.game.tree };
+    app.get('recover-tree').emit('click');
+    assert.deepEqual(app.game.tree, tree);
+    assert.match(app.get('hint-recovery-status').textContent, /岸/);
+    assert.doesNotMatch(app.get('hint-recovery-status').textContent, /戻しました/);
+    app.key('keydown', 'r'); app.get('confirm-reset').emit('click');
+    assert.equal(app.get('hint-recovery-status').textContent, '');
   });
   await test('reset confirmation pauses and cancellation does not reset progress', () => {
     const app = harness(); app.begin();
