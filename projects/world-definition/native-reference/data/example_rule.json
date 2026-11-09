@@ -1,0 +1,6 @@
+{
+  "target": "water",
+  "condition": "player_near",
+  "action": "solidify",
+  "radius": 95
+}

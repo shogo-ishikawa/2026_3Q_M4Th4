@@ -51,3 +51,6 @@ _private/
 !**/outputs/.gitkeep
 *.zip
 *.tar.gz
+
+# Generated public site and distribution archives
+_site/

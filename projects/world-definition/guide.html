@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="WORLD DEFINITIONの遊び方。ルールの作り方、操作、ヒント、困ったときの対処を説明します。">
+  <title>遊び方ガイド | WORLD DEFINITION</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,"Hiragino Kaku Gothic ProN","Yu Gothic",Meiryo,sans-serif;color:#243f34;background:#f3f1e7;line-height:1.85;font-size:16px}
+    *{box-sizing:border-box}body{margin:0}a{color:#23664f;text-underline-offset:4px}a:hover{color:#a45224}a:focus-visible,summary:focus-visible{outline:3px solid #b36531;outline-offset:5px;border-radius:4px}
+    header{background:#163d33;color:#f7f4e7;padding:36px max(24px,calc((100% - 1000px)/2));border-bottom:5px solid #b9844d}header a{color:#d7ead2}header .brand{letter-spacing:.18em;font-size:12px;font-weight:700;margin:14px 0 8px}h1{font-size:clamp(28px,5vw,42px);line-height:1.4;margin:0 0 12px}header p{max-width:700px;margin:0;color:#d7e4dc}
+    main{max-width:1048px;margin:auto;padding:28px 24px 64px}nav{display:flex;gap:10px 20px;flex-wrap:wrap;background:#fffdf5;border:1px solid #d9dfce;padding:14px 20px;border-radius:12px;margin-bottom:32px;font-size:14px}
+    section{background:#fffdf5;border:1px solid #d9dfce;border-radius:16px;padding:24px 30px;margin:20px 0;scroll-margin-top:20px}h2{font-size:24px;line-height:1.5;margin:0 0 16px;color:#244f3e}h3{font-size:18px;margin:23px 0 8px}p{margin:8px 0 16px}li{padding-left:4px;margin:8px 0}ol,ul{padding-left:24px}strong{color:#234e3b}.note{background:#e9efdf;border-left:4px solid #719567;padding:12px 16px;border-radius:0 8px 8px 0;font-size:14px}.label{font-size:12px;font-weight:700;letter-spacing:.14em;color:#6a7967;margin:0 0 8px}
+    .steps{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;list-style:none;padding:0;counter-reset:step}.steps li{counter-increment:step;background:#edf2e5;border-radius:12px;padding:18px;margin:0}.steps li:before{content:"0" counter(step);display:block;color:#69825a;font-size:13px;font-weight:800;letter-spacing:.12em}.steps strong{display:block;font-size:18px}.steps p{font-size:14px;margin:5px 0 0}
+    .table-wrap{overflow-x:auto}table{border-collapse:collapse;width:100%;font-size:14px;text-align:left}th,td{border-bottom:1px solid #dce2d4;padding:12px;vertical-align:top}th{background:#edf2e5;font-weight:700}tbody tr:last-child td{border-bottom:0}kbd,code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:.9em;background:#e9eee4;border-radius:4px;padding:2px 5px;color:#2c4d3e}pre{background:#e9eee4;padding:14px;overflow-x:auto;border-radius:9px;line-height:1.7}pre code{padding:0}
+    details{border:1px solid #d4ddc9;border-radius:10px;margin:12px 0;padding:0 16px;background:#fafbf6}summary{cursor:pointer;font-weight:700;padding:14px 0}details[open] summary{border-bottom:1px solid #dce3d4;margin-bottom:14px}details p,details ol{font-size:14px}footer{text-align:center;color:#657564;font-size:13px;padding:5px 20px 32px}.back{display:inline-block;background:#295c45;color:#fffdf2;padding:12px 20px;border-radius:9px;text-decoration:none;font-weight:700}.back:hover{color:white;background:#397459}
+    @media(max-width:600px){header{padding:24px}main{padding:20px 14px 40px}section{padding:20px}.steps{grid-template-columns:1fr}th,td{padding:9px 7px}h2{font-size:22px}}
+    @media print{body{background:white}header{background:white;color:#243f34;padding:10px 0;border-color:#71846b}header p,header a{color:#243f34}main{padding:0}section{break-inside:avoid;border-color:#bbb}nav,.back,footer{display:none}details{break-inside:avoid}details:not([open])>*:not(summary){display:none}}
+  </style>
+</head>
+<body>
+  <header>
+    <a href="index.html">← ゲームへ戻る</a>
+    <p class="brand">WORLD DEFINITION / v1.0.0</p>
+    <h1>世界を変える、最初の一歩。</h1>
+    <p>目の前の川を、どう渡りますか。物体と動作を組み合わせて、進める道を作ってみましょう。このガイドでは操作から順に説明します。</p>
+  </header>
+  <main>
+    <nav aria-label="ガイドの目次">
+      <a href="#start">始め方</a><a href="#controls">操作</a><a href="#rules">ルール</a><a href="#hints">ヒント</a><a href="#trouble">困ったとき</a><a href="#about">作品について</a>
+    </nav>
+    <section id="start">
+      <p class="label">FIRST PLAY</p><h2>まずは、そのまま遊んでみましょう</h2>
+      <p>ゲームの <a href="index.html">index.html</a> を開き、最初の説明から遊び始めます。標準モードは、ブラウザだけで動きます。インストールやログイン、AIモデルの準備は必要ありません。</p>
+      <ol class="steps">
+        <li><strong>少し歩いてみる</strong><p>WASD・矢印キー、または画面の方向ボタンで移動します。最初は川の手前まで進んでみてください。</p></li>
+        <li><strong>ルールを作る</strong><p>研究室で「物体」と「動作」を選び、ルールを適用します。選択しただけでは世界は変わりません。</p></li>
+        <li><strong>変化を確かめる</strong><p>色だけでなく、通れる場所や物体の扱い方が変わります。画面の目標と有効なルールも確認しましょう。</p></li>
+        <li><strong>結晶から、その先へ</strong><p>結晶を拾うと「加熱」が使えるようになります。金属ゲートを開き、その奥のゴールを目指します。</p></li>
+      </ol>
+      <p class="note">行き詰まったときは、ゲーム画面のヒントや、この下の「ヒント」を一つずつ開いてください。最初から解答を読む必要はありません。</p>
+    </section>
+    <section id="controls">
+      <p class="label">CONTROLS</p><h2>移動と操作</h2>
+      <div class="table-wrap"><table>
+        <thead><tr><th scope="col">操作</th><th scope="col">できること</th></tr></thead>
+        <tbody>
+          <tr><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / 矢印キー</td><td>プレイヤーを上下左右に移動します。斜めにも進めます。</td></tr>
+          <tr><td><kbd>E</kbd> ＋移動</td><td>近くにある、浮遊中の石や木を運びます。川の中央まで運び、Eを離すと足場として使えます。</td></tr>
+          <tr><td><kbd>E</kbd> を長押し</td><td>「炎＋加熱」を適用した後、金属ゲートの近くで押し続けると、加熱の進み具合が増えます。</td></tr>
+          <tr><td><kbd>L</kbd></td><td>ルール研究室へ選択を移します。</td></tr>
+          <tr><td><kbd>H</kbd></td><td>操作説明を開きます。</td></tr>
+          <tr><td><kbd>R</kbd></td><td>やり直すか確認します。やり直すと結晶、ルール、物体、ゲートも初期状態に戻ります。</td></tr>
+          <tr><td><kbd>Tab</kbd> / <kbd>Shift</kbd>＋<kbd>Tab</kbd></td><td>ボタンや選択肢を順に選びます。EnterやSpaceで、選んだボタンを押せます。</td></tr>
+          <tr><td><kbd>Escape</kbd></td><td>開いている説明を閉じます。</td></tr>
+        </tbody>
+      </table></div>
+      <h3>スマートフォン・タブレットの場合</h3>
+      <p>画面の方向ボタンを押し続けて移動します。「操作」ボタンがEキーに相当します。浮遊物体を運ぶときは、操作ボタンと方向ボタンを同時に押してください。画面が狭い場合、研究室はゲーム画面の下に並びます。</p>
+    </section>
+    <section id="rules">
+      <p class="label">RULE WORKSHOP</p><h2>物体と動作を組み合わせる</h2>
+      <p>研究室では、物体を一つと、動作を最大3つ選びます。「ルールを適用」を押したら、何が変わったかをゲーム画面で確かめます。動作を外す場合も、選び直してから適用してください。</p>
+      <div class="table-wrap"><table>
+        <thead><tr><th scope="col">物体</th><th scope="col">使える動作と効果</th></tr></thead>
+        <tbody>
+          <tr><td>水</td><td><strong>凍結・固体化</strong>で川を渡れます。<strong>発光・脈動</strong>では光の見え方が変わります。</td></tr>
+          <tr><td>石・木</td><td><strong>浮遊</strong>すると、近くでE＋移動を使って運べます。川へ置くと足場になります。<strong>成長</strong>で大きくなり、<strong>発光・脈動</strong>で光の見え方が変わります。</td></tr>
+          <tr><td>炎</td><td><strong>浮遊</strong>で位置が上がり、<strong>移動</strong>で左右に動き、<strong>成長</strong>で大きくなります。<strong>凍結</strong>で触れても戻されなくなります。<strong>発光・脈動</strong>は見た目を変えます。<strong>加熱</strong>は結晶取得後、ゲートを開くために使えます。</td></tr>
+        </tbody>
+      </table></div>
+      <h3>前のルールは、どうなりますか？</h3>
+      <p>ルールは物体ごとに残ります。水の凍結を適用した後、炎に加熱を適用しても、水の凍結は続きます。同じ物体へもう一度適用すると、その物体の動作を置き換えます。川の途中で足場を失う変更は受け付けないため、岸に戻ってから試してください。</p>
+      <h3>炎に触れたら？</h3>
+      <p>プレイヤーはスタート地点に戻ります。ゲームオーバーにはなりません。どこに炎があるかを確認して、進む道を変えてみましょう。</p>
+      <h3>AIは何をしますか？</h3>
+      <p>標準モードでは、選んだ動作から名前と説明を組み立てます。任意のローカルAI連携では、その名前と説明をOllamaが補助します。AIがゲームのプログラムを書き換える仕組みではありません。遊びに必要な効果は、どちらのモードでも同じです。</p>
+    </section>
+    <section id="hints">
+      <p class="label">HINTS</p><h2>少しずつ、手掛かりを見る</h2>
+      <p>自分で考える時間も楽しめるよう、ヒントと攻略例を分けています。必要なところだけ開いてください。</p>
+      <details><summary>ヒント1：川の向こうへ行きたい</summary><p>水そのものを変える方法と、別の物体を足場にする方法があります。「通れない」という性質を、どの動作で変えられるでしょうか。</p></details>
+      <details><summary>ヒント2：浮かせた物体をどう使う？</summary><p>浮遊した石や木の近くへ行き、Eを押しながら移動してみてください。物体を川へ運べます。川の中央付近でEを離し、できた足場を通ってみましょう。</p></details>
+      <details><summary>ヒント3：ゲートが開かない</summary><p>まず結晶を取ると「加熱」が解放されます。「炎」に「加熱」を適用し、ゲートのすぐ手前でEを押し続けてください。進み具合の表示が満たされると開きます。</p></details>
+      <details><summary>攻略例を見る（ここからは解答です）</summary>
+        <ol>
+          <li>研究室で「水」と「凍結」または「固体化」を選び、ルールを適用します。</li>
+          <li>川を渡り、左側にある結晶を回収します。</li>
+          <li>研究室で「炎」と、解放された「加熱」を選び、ルールを適用します。水のルールは残ります。</li>
+          <li>中央の金属ゲートの近くでEを押し続け、ゲートを開きます。</li>
+          <li>ゲートの奥の「GOAL」に入るとクリアです。</li>
+        </ol>
+        <p>別の解き方として、石や木を浮遊させて川へ運び、足場にできます。クリアした後は、異なるルールで同じ場所へ進めるか試してみましょう。</p>
+      </details>
+    </section>
+    <section id="trouble">
+      <p class="label">TROUBLESHOOTING</p><h2>困ったときは</h2>
+      <details><summary>キーを押しても動きません</summary><p>最初の説明やヘルプを閉じ、ゲーム画面を一度クリックしてください。壁や川に向かっている場合も、その方向へは進めません。別の方向へ少し動けるかを確かめましょう。</p></details>
+      <details><summary>物体を選びましたが、変化しません</summary><p>物体に加えて、動作を一つ以上選んでください。その後「ルールを適用」を押します。発光や脈動だけでは足場はできません。選択できない動作や、まだ解放されていない加熱も確認してください。</p></details>
+      <details><summary>石や木を運べません</summary><p>その物体に浮遊を適用したか確認します。プレイヤーを物体へ近づけ、Eを押したまま方向キーを押してください。画面のボタンでは「操作」と方向を同時に押します。</p></details>
+      <details><summary>AIへの接続で止まります</summary><p>通常の公開ページはAIを使わず遊べます。ローカルAI連携を選んでいる場合は、その選択を外して標準モードで試してください。ローカルAIの導入・モデル設定は、同じフォルダの<a href="README.md">README</a>にあります。公開ページから、自分のコンピューターのOllamaには接続しません。</p></details>
+      <details><summary>ダウンロードしたページが表示されません</summary><p>ZIPは先に解凍してください。index.htmlだけを移動せず、engine.js、app.js、style.cssを含むフォルダをまとめて置きます。JavaScriptを有効にしたブラウザで開いてください。</p></details>
+      <details><summary>最初からやり直したいです</summary><p>ゲームのやり直しボタン、またはRキーを使います。確認後に、結晶、適用したルール、物体の位置、ゲートを初期状態へ戻します。ブラウザを再読み込みした場合も最初から始まります。</p></details>
+    </section>
+    <section id="about">
+      <p class="label">ABOUT THIS WORK</p><h2>このゲームが生まれた考え方</h2>
+      <p>2026年度「計算科学基礎」の学生制作をもとにした作品です。「障害物に合わせて動くだけでなく、障害物の性質を変えられないか」という問いから、物体と動詞で世界を変える仕組みが生まれました。</p>
+      <p>C++・raylibでの試作とJavaScript・Canvas版を引き継ぎ、公開版ではインストール不要の動作、物体ごとのルール保持、操作や当たり判定、ガイドを整えました。現在遊べるのは1ステージです。自由な文章によるルールの作成や複数ステージは、今後の発展案です。</p>
+      <p>仕組みに興味が湧いたら、<a href="https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/world-definition/docs/design.md">コードの読み方と変更して試す課題（オンライン）</a>も見てみてください。色や速さを一つ変えるだけでも、遊びやすさがどう変わるかを確かめられます。</p>
+    </section>
+    <p><a class="back" href="index.html">ゲームを始める</a></p>
+  </main>
+  <footer>WORLD DEFINITION · 世界のルールを変えて進むパズル</footer>
+</body>
+</html>

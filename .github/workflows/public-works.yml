@@ -1,0 +1,61 @@
+name: Check and publish public works
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'projects/world-definition/**'
+      - 'scripts/build_public_site.py'
+      - 'web/**'
+      - '.github/workflows/public-works.yml'
+  pull_request:
+    paths:
+      - 'projects/world-definition/**'
+      - 'scripts/build_public_site.py'
+      - 'web/**'
+      - '.github/workflows/public-works.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-works-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check-and-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check game and local server
+        run: |
+          node --check projects/world-definition/app.js
+          node projects/world-definition/tests/engine.test.js
+          node projects/world-definition/tests/app-input.test.js
+          python -m unittest discover -s projects/world-definition/tests -p 'test_*.py'
+      - name: Build selected public files and distribution ZIP
+        run: python scripts/build_public_site.py
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: check-and-build
+    permissions:
+      pages: write
+      id-token: write
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/configure-pages@v5
+      - uses: actions/deploy-pages@v5
+        id: deployment
