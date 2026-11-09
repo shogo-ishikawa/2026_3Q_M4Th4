@@ -1331,3 +1331,10 @@ main { padding:18px 28px 0; }
   .progress li small { display:none; }
   .chapter-heading h1 { font-size:19px; }
 }
+
+/* Chapters and visible rule feedback. */
+.stage-toolbar{margin:0 0 15px;padding:13px 17px;background:#fffdf4;border:1px solid var(--line);border-radius:8px;display:grid;grid-template-columns:1fr auto;gap:8px 18px}
+.stage-picker{display:flex;gap:10px;align-items:center;flex-wrap:wrap;grid-column:1/-1}.stage-picker label{font-size:13px;font-weight:700}.stage-picker select{max-width:100%;font:inherit;font-size:14px;color:var(--ink);background:white;border:1px solid #adbca2;border-radius:5px;padding:9px;min-height:42px}.stage-picker .button{font-size:13px;padding:9px 13px;min-height:42px}
+#stage-description{margin:0;font-size:13px;line-height:1.6;color:#53694f}.stage-record{font-size:12px;color:#7f653e;line-height:1.6;margin:0}.effect-inspector{padding:0 18px 14px;font-size:13px;line-height:1.7;color:#466348}.effect-inspector>strong{font-size:13px;color:#254c37}.effect-inspector ul{margin:7px 0 0;padding-left:18px}.effect-inspector li{margin:4px 0}.choice.sealed{background:repeating-linear-gradient(-45deg,#eee8df,#eee8df 5px,#f4f0e9 5px,#f4f0e9 10px);color:#7e6656}.win-actions{flex-wrap:wrap}.win-actions .button{font-size:13px;min-height:44px}.world-frame{scroll-margin-top:10px}.world-caption #stage-number{font-size:11px}#shard-count{font-size:12px;font-weight:700;color:#927435}
+@media(min-width:821px){canvas{max-height:calc(100dvh - 365px)}}
+@media(max-width:820px){.stage-toolbar{display:block;padding:12px}.stage-picker{gap:7px}.stage-picker select{flex:1;min-width:170px}.stage-toolbar p{margin-top:10px}.stage-record{font-size:12px}.world-caption{flex-wrap:wrap;height:auto;min-height:40px;padding:9px;gap:8px}.world-caption>span:first-child{font-size:10px}.world-caption strong{font-size:12px;padding-left:8px}.world-caption #stage-number{font-size:10px}#shard-count{margin-left:auto;font-size:10px;display:block}.progress li{font-size:12px}.effect-inspector{font-size:13px}#stage-description{font-size:13px}}

@@ -1,14 +1,21 @@
 'use strict';
 // Input/lifecycle regression checks in a minimal DOM, not a browser layout test.
-// An optional source path lets a reviewer exercise an uncommitted app.js.
+// Optional app, engine and progress paths let reviewers test uncommitted integration files.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
-const engine = require('../engine.js');
-const source = fs.readFileSync(process.argv[2] || path.resolve(__dirname, '../app.js'), 'utf8');
+const appPath = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve(__dirname, '../app.js');
+const engine = require(process.argv[3] ? path.resolve(process.argv[3]) : path.join(path.dirname(appPath), 'engine.js'));
+const progress = require(process.argv[4] ? path.resolve(process.argv[4]) : path.join(path.dirname(appPath), 'progress.js'));
+const source = fs.readFileSync(appPath, 'utf8');
+const STORAGE_KEY = 'world-definition-progress-v1';
+function memoryStorage(saved = null) {
+  const items = new Map(saved === null ? [] : [[STORAGE_KEY, typeof saved === 'string' ? saved : JSON.stringify(saved)]]);
+  return { getItem: key => items.get(key) ?? null, setItem: (key, value) => items.set(key, value) };
+}
 
-function harness() {
+function harness(options = {}) {
   const elements = new Map(), all = [], updates = [], requests = [];
   let activeGame, frameCallback, timestamp = 0;
   class Element {
@@ -27,6 +34,7 @@ function harness() {
     }
     addEventListener(name, listener) { if (!this.listeners.has(name)) this.listeners.set(name, []); this.listeners.get(name).push(listener); }
     emit(name, values = {}) {
+      if (this.disabled && ['click', 'pointerdown', 'keydown'].includes(name)) return { event: null, results: [] };
       const event = { target: this, repeat: false, ctrlKey: false, metaKey: false, altKey: false,
         defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, ...values };
       const results = (this.listeners.get(name) || []).map(listener => listener(event));
@@ -62,7 +70,7 @@ function harness() {
   document.createElement = tag => new Element(tag);
   document.createTextNode = value => ({ textContent: value });
   document.querySelectorAll = selector => selector === 'dialog' ? all.filter(item => item.tagName === 'DIALOG') : selector === '[data-key]' ? all.filter(item => item.dataset.key) : [];
-  for (const id of ['game', 'objective', 'hudpower', 'progress', 'targets', 'effects', 'queue', 'unlock-message', 'apply', 'active-rules', 'generated-name', 'generated-desc', 'rule-status', 'use-ai', 'local-ai', 'hint-content', 'hint-button', 'reset', 'again', 'close-win', 'lab-focus', 'lab-panel', 'help-button', 'close-help', 'start-button']) new Element(id === 'game' ? 'canvas' : id === 'use-ai' ? 'input' : 'div', id);
+  for (const id of ['game', 'objective', 'hudpower', 'progress', 'targets', 'effects', 'queue', 'unlock-message', 'apply', 'active-rules', 'generated-name', 'generated-desc', 'rule-status', 'use-ai', 'local-ai', 'hint-content', 'hint-button', 'reset', 'again', 'close-win', 'lab-focus', 'lab-panel', 'help-button', 'close-help', 'start-button', 'start-intro', 'start-rule-hint', 'stage-select', 'stage-description', 'stage-record', 'stage-number', 'stage-name', 'shard-count', 'effect-summary', 'win-title', 'win-result', 'save-status', 'next-stage', 'change-stage']) new Element(id === 'game' ? 'canvas' : id === 'use-ai' ? 'input' : id === 'stage-select' ? 'select' : 'div', id);
   for (const id of ['start-dialog', 'help-dialog', 'win-dialog']) new Element('dialog', id);
   for (let index = 0; index < 4; index += 1) elements.get('progress').append(new Element('li'));
   const buttons = {};
@@ -75,9 +83,14 @@ function harness() {
   elements.get('game').getContext = () => context;
   const window = new Element(); window.devicePixelRatio = 1; window.matchMedia = () => ({ matches: false });
   window.WorldDefinition = { ...engine,
-    createGame() { activeGame = engine.createGame(); return activeGame; },
+    createGame(index) { activeGame = engine.createGame(index); return activeGame; },
     update(game, keys, dt) { updates.push([...keys].sort()); engine.update(game, keys, dt); }
   };
+  const storage = options.storage ?? memoryStorage(options.saved ?? null);
+  if (options.storageGetterThrows) Object.defineProperty(window, 'localStorage', { get() { throw new Error('Storage denied'); } });
+  else window.localStorage = storage;
+  window.WorldDefinitionProgress = progress;
+  window.WorldDefinitionRenderer = { createRenderer: () => ({ draw() {} }) };
   const sandbox = { window, document, HTMLElement: Element, location: { hostname: 'localhost' },
     performance: { now: () => 0 }, requestAnimationFrame(callback) { frameCallback = callback; },
     setTimeout() { return 1; }, clearTimeout() {}, AbortController,
@@ -85,11 +98,22 @@ function harness() {
   };
   vm.runInNewContext(source, sandbox, { filename: 'app.js' });
   const frame = () => { const count = updates.length; timestamp += 16; frameCallback(timestamp); return updates.length > count ? updates.at(-1) : null; };
-  return { document, window, buttons, requests, frame, get game() { return activeGame; },
+  return { document, window, buttons, requests, frame, storage, get game() { return activeGame; },
     get: id => elements.get(id),
     begin() { elements.get('start-button').emit('click'); },
     key(name, key, target = elements.get('game')) { return window.emit(name, { key, target }); },
-    chooseEffect(effect) { elements.get('effects').querySelector('[data-effect="' + effect + '"]').emit('click'); }
+    chooseEffect(effect) { elements.get('effects').querySelector('[data-effect="' + effect + '"]').emit('click'); },
+    chooseTarget(target) { elements.get('targets').querySelector('[data-target="' + target + '"]').emit('click'); },
+    saved() { return JSON.parse(storage.getItem(STORAGE_KEY)); },
+    // Simulate the engine's completed-state boundary; route solving is tested in engine.test.js.
+    complete(record = {}) {
+      activeGame.complete = true;
+      activeGame.ruleCount = record.rules ?? 3;
+      activeGame.elapsed = record.time ?? 30;
+      activeGame.collectedShards = activeGame.level.shards.map((_, index) => index < (record.shards ?? 1));
+      frame();
+    }
+
   };
 }
 
@@ -204,6 +228,123 @@ async function test(name, run) {
     app.chooseEffect('solidify'); app.get('apply').emit('click');
     assert.equal(engine.has(app.game, 'water', 'solidify'), true);
     assert.equal(app.get('apply').disabled, false);
+  });
+  await test('clearing records progress and advances to a fresh next stage', () => {
+    const app = harness(); app.begin();
+    app.complete({ rules: 4, shards: 2, time: 42 });
+    assert.equal(app.get('win-dialog').open, true);
+    assert.equal(app.saved().unlocked, 1);
+    assert.deepEqual(app.saved().best[0], { rules: 4, shards: 2, time: 42 });
+    assert.equal(app.get('next-stage').hidden, false);
+    assert.equal(app.get('stage-select').children[1].disabled, false);
+    app.get('next-stage').emit('click');
+    assert.equal(app.game.stageIndex, 1);
+    assert.equal(app.game.complete, false);
+    assert.equal(app.game.rules.stone, null);
+    assert.equal(app.get('win-dialog').open, false);
+    assert.equal(app.saved().lastStage, 1);
+    assert.deepEqual(app.frame(), []);
+  });
+  await test('the final clear hides the next button and keeps the final stage', () => {
+    const index = engine.LEVELS.length - 1;
+    const app = harness({ saved: { unlocked: index, lastStage: index, best: {} } }); app.begin();
+    app.complete();
+    assert.equal(app.get('next-stage').hidden, true);
+    assert.equal(app.get('win-title').textContent, '全ステージクリア！');
+    app.get('next-stage').emit('click');
+    assert.equal(app.game.stageIndex, index);
+    assert.equal(app.game.complete, true);
+    assert.equal(app.saved().unlocked, index);
+  });
+  await test('locked and tampered stage selections cannot bypass progress', () => {
+    const app = harness(); app.begin(); const previous = app.game;
+    assert.equal(app.get('stage-select').children.length, engine.LEVELS.length);
+    assert.equal(app.get('stage-select').children[0].disabled, false);
+    assert.equal(app.get('stage-select').children[1].disabled, true);
+    for (const value of ['1', '-1', '900', '1.5', 'NaN']) {
+      app.get('stage-select').value = value; app.get('change-stage').emit('click');
+      assert.equal(app.game, previous, value);
+      assert.equal(app.get('reset-dialog').open, false, value);
+    }
+  });
+  await test('changing stage confirms, can cancel and then resets the selected stage', () => {
+    const app = harness({ saved: { unlocked: 2, lastStage: 1, best: {} } }); app.begin();
+    app.chooseTarget('water'); app.chooseEffect('glow'); app.get('apply').emit('click');
+    const previous = app.game;
+    app.get('stage-select').value = '2'; app.get('change-stage').emit('click');
+    assert.equal(app.get('reset-dialog').open, true);
+    assert.equal(app.frame(), null);
+    app.get('reset-dialog').children.find(child => child.textContent === '続ける').emit('click');
+    assert.equal(app.game, previous);
+    assert.equal(engine.has(app.game, 'water', 'glow'), true);
+    app.get('change-stage').emit('click'); app.get('confirm-reset').emit('click');
+    assert.equal(app.game.stageIndex, 2);
+    assert.match(app.get('start-intro').textContent, /光を運ぶ庭/);
+    assert.doesNotMatch(app.get('start-rule-hint').textContent, /固体化/);
+    assert.equal(app.game.rules.water, null);
+    assert.equal(app.game.elapsed, 0);
+    assert.equal(app.saved().lastStage, 2);
+  });
+  await test('restarting keeps the current stage and its saved best record', () => {
+    const best = { rules: 3, shards: 2, time: 44 };
+    const app = harness({ saved: { unlocked: 2, lastStage: 2, best: { 2: best } } }); app.begin();
+    app.chooseTarget('water'); app.chooseEffect('glow'); app.get('apply').emit('click');
+    app.key('keydown', 'r'); app.get('confirm-reset').emit('click');
+    assert.equal(app.game.stageIndex, 2);
+    assert.match(app.get('start-intro').textContent, /光を運ぶ庭/);
+    assert.doesNotMatch(app.get('start-rule-hint').textContent, /固体化/);
+    assert.equal(app.game.rules.water, null);
+    assert.deepEqual(app.saved().best[2], best);
+    assert.match(app.get('stage-record').textContent, /定義 3 回/);
+  });
+  await test('stage changes discard pending AI responses from the previous world', async () => {
+    const app = harness({ saved: { unlocked: 1, lastStage: 0, best: {} } }); app.begin();
+    app.get('use-ai').checked = true; app.chooseEffect('freeze');
+    const pending = app.get('apply').emit('click').results[0];
+    app.get('stage-select').value = '1'; app.get('change-stage').emit('click');
+    app.get('confirm-reset').emit('click');
+    assert.equal(app.requests[0].options.signal.aborted, true);
+    app.requests[0].resolve({ ok: true, json: async () => ({ target: 'water', effects: ['freeze'], name: 'OLD WORLD', description: 'STALE DESCRIPTION' }) });
+    await pending;
+    assert.equal(app.game.stageIndex, 1);
+    assert.equal(app.game.rules.water, null);
+    assert.equal(app.get('generated-name').textContent, 'まだルールを作っていません');
+    assert.equal(app.get('apply').disabled, true);
+  });
+  await test('the stage-specific sealed effects stay disabled while other water effects work', () => {
+    const app = harness({ saved: { unlocked: 1, lastStage: 1, best: {} } }); app.begin();
+    app.chooseTarget('water');
+    const freeze = app.get('effects').querySelector('[data-effect="freeze"]');
+    assert.equal(freeze.disabled, true);
+    assert.match(freeze.children[1].textContent, /封印中/);
+    freeze.emit('click'); assert.equal(app.get('apply').disabled, true);
+    app.chooseEffect('glow'); app.get('apply').emit('click');
+    assert.equal(engine.has(app.game, 'water', 'glow'), true);
+    assert.match(app.get('effect-summary').children[0].textContent, /光/);
+  });
+  await test('saved selection and best records survive loading a new app', () => {
+    const storage = memoryStorage({ unlocked: 2, lastStage: 2, best: { 1: { rules: 4, shards: 2, time: 31 } } });
+    const app = harness({ storage }); app.begin();
+    assert.equal(app.game.stageIndex, 2);
+    app.complete({ rules: 6, shards: 1, time: 55 });
+    const resumed = harness({ storage });
+    assert.equal(resumed.game.stageIndex, 2);
+    assert.equal(resumed.get('stage-select').children[3].disabled, false);
+    assert.match(resumed.get('stage-record').textContent, /定義 6 回/);
+    assert.match(resumed.get('stage-record').textContent, /欠片 1 個/);
+  });
+  await test('corrupt or unavailable storage leaves play and in-memory progression usable', () => {
+    const denied = { getItem() { throw new Error('Denied'); }, setItem() { throw new Error('Denied'); } };
+    for (const options of [{ saved: '{broken', canSave: true }, { storage: denied }, { storageGetterThrows: true }]) {
+      const app = harness(options); app.begin();
+      assert.equal(app.game.stageIndex, 0);
+      app.complete();
+      assert.equal(app.get('win-dialog').open, true);
+      assert.match(app.get('save-status').textContent, options.canSave ? /保存しました/ : /保存できません/);
+      app.get('next-stage').emit('click');
+      assert.equal(app.game.stageIndex, 1);
+      assert.deepEqual(app.frame(), []);
+    }
   });
   console.log(checks + ' app input checks passed.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

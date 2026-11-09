@@ -19,7 +19,7 @@ EFFECTS = {"float", "move", "grow", "glow", "freeze", "solidify", "pulse", "heat
 MAX_REQUEST_BYTES = 4096
 MAX_AI_BYTES = 65536
 STATIC_FILES = {
-    "/index.html", "/style.css", "/app.js", "/engine.js", "/guide.html", "/favicon.svg"
+    "/index.html", "/style.css", "/app.js", "/engine.js", "/renderer.js", "/progress.js", "/guide.html", "/favicon.svg"
 }
 ASSET_EXTENSIONS = {".png", ".svg", ".jpg", ".jpeg", ".webp", ".ico", ".woff2"}
 
