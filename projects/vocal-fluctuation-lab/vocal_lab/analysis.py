@@ -10,6 +10,7 @@ from scipy import signal
 
 
 METHOD_ID = "rms-welch-v1"
+QUALITY_METHOD_ID = "four-block-welch-v1"
 SCHEMA_VERSION = "vocal-fluctuation-result-v1"
 
 
@@ -49,6 +50,18 @@ def _config(config):
     if not isinstance(config, AnalysisConfig):
         raise ValueError("config には AnalysisConfig を指定してください。")
     return config
+
+
+def analysis_signature(config, low_hz, high_hz):
+    """解析と品質確認の方法を識別し、DB作成時にも同じ条件を使います。"""
+    config = _config(config)
+    low_hz = _positive_number(low_hz, "解析帯域の下限")
+    high_hz = _positive_number(high_hz, "解析帯域の上限")
+    conditions = {"method_id": METHOD_ID, "quality_method_id": QUALITY_METHOD_ID,
+                  "config": asdict(config), "band_low_hz": round(low_hz, 8),
+                  "band_high_hz": round(high_hz, 8)}
+    encoded = json.dumps(conditions, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()[:24]
 
 
 def _vector(values, name):
@@ -133,15 +146,19 @@ def _analyse(envelope, envelope_rate, duration, config, offset=0.0):
         if len(bin_f) >= 3:
             slope, intercept, r_squared = _fit(bin_f, bin_p)
             distance = abs(slope + 1)
-        # 区間ごとの傾きは、選ぶ時間による変動です。信頼区間ではありません。
-        # Welch の重複窓を独立な標本として数えず、ここでは重ならない窓を使います。
-        for start in range(0, len(envelope) - segment_length + 1, segment_length):
-            block_f, block_p = signal.periodogram(
-                envelope[start:start + segment_length], fs=envelope_rate,
-                window="hann", detrend="constant", scaling="density",
+        # 全体を常に4等分し、長い曲ほど最大値−最小値が増える偏りを避けます。
+        # 各区間内でもWelch法を使います。4区間の重なりはありませんが、
+        # 統計的な独立性を仮定した検定や信頼区間ではありません。
+        for block in np.array_split(envelope, 4):
+            if len(block) < 8 or np.std(block) <= mean * 1e-5:
+                continue
+            block_length = min(segment_length, len(block))
+            block_f, block_p = signal.welch(
+                block, fs=envelope_rate, window="hann", nperseg=block_length,
+                noverlap=block_length // 2, detrend="constant", scaling="density", average="mean",
             )
             bf, bp = _log_bins(block_f, block_p, low, high)
-            if len(bf) >= 12 and np.std(envelope[start:start + segment_length]) > mean * 1e-5:
+            if len(bf) >= 12:
                 block_slopes.append(_fit(bf, bp)[0])
 
     log_span = math.log10(high / low) if high > low else 0.0
@@ -176,14 +193,14 @@ def _analyse(envelope, envelope_rate, duration, config, offset=0.0):
             low_fraction = _band_power(frequency, power, low, middle) / total_power
         band_values = power[selected]
         flatness = float(np.exp(np.mean(np.log(band_values))) / np.mean(band_values))
-    signature_data = {"method_id": METHOD_ID, "config": asdict(config), "band_low_hz": round(low, 8), "band_high_hz": round(high, 8)}
-    signature = hashlib.sha256(json.dumps(signature_data, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:24]
+    signature = analysis_signature(config, low, high)
     return {
         "schema_version": SCHEMA_VERSION, "method_id": METHOD_ID,
         "analysis_signature": signature, "status": status, "summary": summary,
         "duration_seconds": float(duration), "envelope_sample_rate_hz": float(envelope_rate),
         "config": asdict(config),
         "quality": {
+            "method_id": QUALITY_METHOD_ID,
             "usable_for_comparison": bool(fundamental_ok and stable), "reasons": reasons,
             "duration_ok": duration >= 60, "variable_envelope": bool(variable),
             "near_zero_fraction": near_zero_fraction, "fit_bins": len(bin_f),

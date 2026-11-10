@@ -14,7 +14,7 @@ import numpy as np
 import soundfile as sf
 
 MIN_SECONDS = 10.0
-MAX_SECONDS = 180.0
+MAX_SECONDS = 600.0
 SAMPLE_RATE = 44100
 MODEL_NAME = "htdemucs"
 
@@ -24,23 +24,31 @@ class AudioInputError(ValueError):
 
 
 def validate_interval(start_seconds, end_seconds, duration_seconds=None):
-    """秒数を確認します。指定区間を黙って短くすることはありません。"""
-    values = (start_seconds, end_seconds)
+    """秒数を確認します。終了秒がNoneなら音源の末尾までを選びます。"""
+    values = (start_seconds,) if end_seconds is None else (start_seconds, end_seconds)
     if any(isinstance(value, bool) for value in values):
         raise AudioInputError("開始秒と終了秒には数値を入力してください。")
     try:
-        start, end = map(float, values)
+        converted = tuple(map(float, values))
     except (TypeError, ValueError) as error:
         raise AudioInputError("開始秒と終了秒には数値を入力してください。") from error
-    if not all(math.isfinite(value) for value in (start, end)):
+    if not all(math.isfinite(value) for value in converted):
         raise AudioInputError("開始秒と終了秒には有限の数値を入力してください。")
+    start = converted[0]
+    if start < 0:
+        raise AudioInputError("開始秒は0秒以上にしてください。")
+    if duration_seconds is not None:
+        if isinstance(duration_seconds, bool) or not isinstance(duration_seconds, (int, float)) or not math.isfinite(duration_seconds) or duration_seconds <= 0:
+            raise AudioInputError("音源の長さを確認できません。有限の長さの音声ファイルを使ってください。")
+    if end_seconds is None and duration_seconds is None:
+        # YouTubeの長さはメタデータ取得後、ローカル音源はffprobe後に確定します。
+        return start, None
+    end = float(duration_seconds) if end_seconds is None else converted[1]
     if start < 0 or end <= start:
         raise AudioInputError("0秒以上の開始秒と、それより後の終了秒を指定してください。")
     if not MIN_SECONDS <= end - start <= MAX_SECONDS:
         raise AudioInputError(f"解析区間は{MIN_SECONDS:g}〜{MAX_SECONDS:g}秒にしてください。判定には60秒以上を勧めます。")
     if duration_seconds is not None:
-        if not math.isfinite(duration_seconds) or duration_seconds <= 0:
-            raise AudioInputError("音源の長さを確認できません。有限の長さの音声ファイルを使ってください。")
         if end > duration_seconds + 0.001:
             raise AudioInputError(f"終了秒が音源の長さ（{duration_seconds:.2f}秒）を超えています。")
     return start, end
@@ -159,7 +167,7 @@ def download_youtube_section(url, start_seconds, end_seconds, directory, padding
         duration = info.get("duration")
         if not isinstance(duration, (int, float)) or isinstance(duration, bool):
             raise AudioInputError("動画の長さを確認できません。音声ファイルをアップロードしてください。")
-        validate_interval(start, end, float(duration))
+        start, end = validate_interval(start, end, float(duration))
         context_start = max(0.0, start - padding_seconds)
         context_end = min(float(duration), end + padding_seconds)
         options = dict(base_options, outtmpl=str(directory / "download.%(ext)s"),
@@ -174,7 +182,7 @@ def download_youtube_section(url, start_seconds, end_seconds, directory, padding
             raise AudioInputError("取得した音声ファイルを確認できません。アップロードで試してください。")
         return {"path": path, "context_start_seconds": context_start,
                 "context_end_seconds": context_end, "source_duration_seconds": float(duration),
-                "source_url": canonical}
+                "start_seconds": start, "end_seconds": end, "source_url": canonical}
     except AudioInputError:
         raise
     except Exception as error:

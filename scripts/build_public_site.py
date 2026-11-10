@@ -37,18 +37,19 @@ def main():
                     '--output', str(vocal_destination / 'data')], check=True)
     vocal_downloads = vocal_destination / 'downloads'
     vocal_downloads.mkdir(exist_ok=True)
-    vocal_archive = vocal_downloads / 'VOCAL_FLUCTUATION_LAB_v1.0.0.zip'
+    vocal_version = 'v1.1.0'
+    vocal_archive = vocal_downloads / f'VOCAL_FLUCTUATION_LAB_{vocal_version}.zip'
     text_extensions = {'.py', '.md', '.toml', '.txt', '.json', '.html', '.css', '.js', '.ipynb'}
     with ZipFile(vocal_archive, 'w', ZIP_DEFLATED) as bundle:
-        bundle.write(vocal_project / '.gitignore', Path('v1.0.0/.gitignore'))
+        bundle.write(vocal_project / '.gitignore', Path(vocal_version) / '.gitignore')
         for path in sorted(vocal_project.rglob('*')):
             relative = path.relative_to(vocal_project)
             if (not path.is_file() or path.suffix not in text_extensions
                     or any(part.startswith('.') or part in {'__pycache__', 'outputs', 'uploads', 'separated', 'downloads', 'vocal_lab_runs', 'vocal_lab_downloads', 'vocal_reference_build'} for part in relative.parts)):
                 continue
-            bundle.write(path, Path('v1.0.0') / relative)
+            bundle.write(path, Path(vocal_version) / relative)
         for path in sorted((vocal_destination / 'data').glob('demo-*.json')):
-            bundle.write(path, Path('v1.0.0/web/data') / path.name)
+            bundle.write(path, Path(vocal_version) / 'web/data' / path.name)
     print(f'Built vocal-fluctuation-lab with {vocal_archive.stat().st_size:,}-byte distribution ZIP')
     print(f'Built {OUTPUT.relative_to(ROOT)} with {archive.stat().st_size:,}-byte distribution ZIP')
 

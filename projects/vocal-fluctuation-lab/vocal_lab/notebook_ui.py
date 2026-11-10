@@ -51,8 +51,8 @@ def validate_interval(start: float, end: float) -> tuple[float, float]:
         raise ValueError("開始と終了は秒数で入力してください。") from None
     if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end <= start:
         raise ValueError("0以上の開始秒と、それより後の終了秒を入力してください。")
-    if not 10 <= end - start <= 180:
-        raise ValueError("解析する区間は10〜180秒にしてください。判定には60秒以上を使います。")
+    if not 10 <= end - start <= 600:
+        raise ValueError("解析する区間は10秒〜600秒（10分）にしてください。判定には無音調整後の60秒以上を使います。")
     return start, end
 
 
@@ -65,34 +65,51 @@ def _number(value: Any, digits: int = 3) -> str:
 
 def plot_analysis(analysis: dict):
     """保存用と表示用で同じ図を使い、実測PSDと当てはめを区別します。"""
+    from .plot_fonts import configure_plot_fonts
+    configure_plot_fonts()
     import matplotlib.pyplot as plt
     import numpy as np
 
     series, spectrum, fit = (analysis.get(name, {}) for name in ("series", "spectrum", "fit"))
     fig, axes = plt.subplots(2, 1, figsize=(10, 7), constrained_layout=True)
     axes[0].plot(series.get("time_seconds", []), series.get("envelope", []), color="#27696b", linewidth=0.8)
-    axes[0].set(xlabel="Time [s]", ylabel="RMS amplitude", title="Vocal amplitude envelope")
+    shortened = analysis.get("metadata", {}).get("preprocessing", {}).get("timeline_modified", False)
+    time_label = "時間短縮後の経過時間 [秒]" if shortened else "解析開始からの経過時間 [秒]"
+    axes[0].set(xlabel=time_label, ylabel="音の大きさ（RMS振幅）", title="歌声の音量の時間変化")
     frequencies = np.asarray(spectrum.get("frequency_hz", []), dtype=float)
     power = np.asarray(spectrum.get("power", []), dtype=float)
     valid = (frequencies > 0) & (power > 0) & np.isfinite(frequencies) & np.isfinite(power)
-    axes[1].loglog(frequencies[valid], power[valid], color="#a8c1bd", linewidth=0.7, label="Welch PSD")
+    axes[1].loglog(frequencies[valid], power[valid], color="#a8c1bd", linewidth=0.7, label="実測PSD（Welch法）")
     bin_f = np.asarray(spectrum.get("bin_frequency_hz", []), dtype=float)
     bin_p = np.asarray(spectrum.get("bin_power", []), dtype=float)
     if len(bin_f):
-        axes[1].loglog(bin_f, bin_p, "o", markersize=4, color="#27696b", label="Log-binned PSD")
+        axes[1].loglog(bin_f, bin_p, "o", markersize=4, color="#27696b", label="対数間隔でまとめた点")
     if fit.get("slope") is not None and len(bin_f):
         fitted = 10 ** (float(fit["intercept"]) + float(fit["slope"]) * np.log10(bin_f))
-        axes[1].loglog(bin_f, fitted, color="#c9783c", linewidth=2, label=f"Fit: slope {_number(fit['slope'], 2)}")
+        axes[1].loglog(bin_f, fitted, color="#c9783c", linewidth=2, label=f"直線の当てはめ（傾き {_number(fit['slope'], 2)}）")
         middle = len(bin_f) // 2
-        axes[1].loglog(bin_f, fitted[middle] * bin_f[middle] / bin_f, "--", color="#806795", label="1/f reference")
+        axes[1].loglog(bin_f, fitted[middle] * bin_f[middle] / bin_f, "--", color="#806795", label="1/fの基準線")
     low, high = fit.get("band_low_hz"), fit.get("band_high_hz")
     if low is not None and high is not None:
         axes[1].axvspan(float(low), float(high), color="#dce6cc", alpha=0.3)
-    axes[1].set(xlabel="Fluctuation frequency [Hz]", ylabel="Power spectral density", title="Temporal fluctuations, not the audio carrier spectrum")
+    axes[1].set(xlabel="音量が変わる速さ・変動周波数 [Hz]", ylabel="パワースペクトル密度（PSD）", title="歌声の音量ゆらぎのスペクトル")
     axes[1].legend(loc="best")
     for axis in axes:
         axis.grid(True, alpha=0.25)
     return fig
+
+
+def preprocessing_html(analysis: dict) -> str:
+    """音源を短くした量と、グラフの時間軸の意味を表示します。"""
+    report = analysis.get("metadata", {}).get("preprocessing", {})
+    if not report:
+        return ""
+    message = "<h3>無音の調整</h3><p>調整前 " + _number(report.get("input_duration_seconds"), 2) + " 秒 → 調整後 " + _number(report.get("output_duration_seconds"), 2) + " 秒</p><p>先頭から除いた時間：" + _number(report.get("leading_removed_seconds"), 2) + " 秒 ／ 末尾：" + _number(report.get("trailing_removed_seconds"), 2) + " 秒 ／ 途中：" + _number(report.get("internal_removed_seconds"), 2) + " 秒</p>"
+    if report.get("timeline_modified"):
+        message += "<p><strong>途中の無音を除き、時間を短縮しています。</strong>グラフの横軸は時間短縮後の経過時間です。元の曲の時間変動とは条件が変わるため、同じ無音調整の設定で作った比較DBを使ってください。</p>"
+    else:
+        message += "<p>歌唱の途中の間（ま）は残しています。グラフの横軸は、解析に使った歌声の先頭からの経過時間です。</p>"
+    return message
 
 
 def export_results(analysis: dict, directory: Path) -> Path:
@@ -176,8 +193,23 @@ class VocalNotebookUI:
         self.url.layout.display = "none"
         self.start = widgets.FloatText(value=0, description="開始（秒）", style={"description_width": "initial"})
         self.end = widgets.FloatText(value=90, description="終了（秒）", style={"description_width": "initial"})
+        self.whole_track = widgets.Checkbox(value=False, description="曲全体を解析", indent=False, layout=widgets.Layout(width="auto"))
+        self.reset_times_button = widgets.Button(description="秒数をリセット（0〜90秒）", layout=widgets.Layout(width="auto"))
+        self.time_controls = widgets.VBox([
+            widgets.HBox([self.start, self.end], layout=widgets.Layout(flex_flow="row wrap")),
+            widgets.HTML("<p>秒数は元の音源の先頭から数えます。例：40秒から130秒なら、開始40・終了130です。10秒〜600秒（10分）を指定できます。</p>"),
+        ])
         self.device = widgets.Dropdown(options=[("自動（GPUを優先）", "auto"), ("CPU", "cpu"), ("GPU（CUDA）", "cuda")], value="auto", description="処理装置", style={"description_width": "initial"})
         self.vocals_only = widgets.Checkbox(value=False, description="歌声だけの音源です（分離を省略）", indent=False, layout=widgets.Layout(width="auto"))
+        self.trim_edges = widgets.Checkbox(value=True, description="前後の無音を自動で除く", indent=False, layout=widgets.Layout(width="auto"))
+        self.remove_internal = widgets.Checkbox(value=False, description="途中の無音も除く（時間を短縮）", indent=False, layout=widgets.Layout(width="auto"))
+        self.threshold_db = widgets.FloatSlider(value=-40, min=-80, max=-10, step=1, description="無音のしきい値 [dB]", readout_format=".0f", style={"description_width": "initial"}, layout=widgets.Layout(width="95%"))
+        self.min_silence_seconds = widgets.FloatSlider(value=0.5, min=0.1, max=5, step=0.1, description="除く無音の長さ [秒]", readout_format=".1f", style={"description_width": "initial"}, layout=widgets.Layout(width="95%"))
+        self.silence_options = widgets.Accordion(children=[widgets.VBox([
+            self.trim_edges, self.remove_internal, self.threshold_db, self.min_silence_seconds,
+            widgets.HTML("<p>歌声の最大RMS振幅との差で、無音に近い部分を探します。−40 dBは最大RMS振幅の約1%です。小さい声まで除かれる場合は、しきい値を下げてください。途中の無音を除くと、時間をつなぎ替えた音源の解析になります。</p>"),
+        ])], selected_index=None)
+        self.silence_options.set_title(0, "無音の調整")
         self.analyse_button = widgets.Button(description="解析を始める", button_style="primary", icon="play")
         self.result_download = widgets.Button(description="結果ZIPを保存", disabled=True, icon="download")
         self.vocals_download = widgets.Button(description="歌声WAVを保存", disabled=True, icon="download")
@@ -191,6 +223,8 @@ class VocalNotebookUI:
         self.db_status = widgets.HTML("<p>実測済みの比較DBは、まだ読み込まれていません。複数曲を同じ条件で登録すると比較できます。</p>")
         self.comparison_output = widgets.HTML()
         self.mode.observe(self._switch_mode, names="value")
+        self.whole_track.observe(self._switch_whole_track, names="value")
+        self.reset_times_button.on_click(self._reset_times)
         self.analyse_button.on_click(self._analyse)
         self.result_download.on_click(lambda button: download_file(self.results_zip) if self.results_zip else None)
         self.vocals_download.on_click(lambda button: download_file(Path(self.bundle["vocals_path"])) if self.bundle else None)
@@ -200,9 +234,9 @@ class VocalNotebookUI:
         self.panel = widgets.VBox([
             widgets.HTML("<h2>1 音源と区間を選ぶ</h2><p>利用できる音源を使ってください。YouTubeから取得できない場合は、MP3やWAVをアップロードできます。音源はこの実行環境で処理し、公開DBへ自動送信しません。</p>"),
             self.mode, self.audio_upload, self.url,
-            widgets.HBox([self.start, self.end], layout=widgets.Layout(flex_flow="row wrap")),
-            widgets.HTML("<p>秒数は元の音源の先頭から数えます。例：40秒から130秒なら、開始40・終了130です。10〜180秒を指定できます。60秒未満は数値を表示しても判定を保留します。</p>"),
-            self.device, self.vocals_only, self.analyse_button, self.status,
+            self.whole_track, self.time_controls, self.reset_times_button,
+            widgets.HTML("<p>曲全体を選ぶと、先頭から末尾まで解析します（最大10分）。初期設定では前後の無音を歌声抽出後に自動で除きます。無音調整後の長さが60秒未満のときは判定を保留します。</p>"),
+            self.device, self.vocals_only, self.silence_options, self.analyse_button, self.status,
             self.result_output, widgets.HBox([self.result_download, self.vocals_download]),
             widgets.HTML("<h2>2 登録アーティストと比べる</h2><p>この比較は声の本人判定ではありません。音量変動の特徴を同じ方法で測った登録曲と比べます。比較DBは保存して、次回読み込めます。</p>"),
             self.db_upload, self.db_status, self.artist, self.track,
@@ -213,6 +247,17 @@ class VocalNotebookUI:
         self.audio_upload.layout.display = "" if change["new"] == "file" else "none"
         self.url.layout.display = "" if change["new"] == "youtube" else "none"
 
+    def _switch_whole_track(self, change):
+        self.time_controls.layout.display = "none" if change["new"] else ""
+
+    def _reset_times(self, button=None):
+        self.start.value, self.end.value = 0, 90
+        self.whole_track.value = False
+
+    def _silence_config(self):
+        from .silence import SilenceConfig
+        return SilenceConfig(trim_edges=self.trim_edges.value, remove_internal=self.remove_internal.value, threshold_db=self.threshold_db.value, min_silence_seconds=self.min_silence_seconds.value, padding_seconds=0.05)
+
     def _set_status(self, text: str) -> None:
         self.status.value = "<p>" + html.escape(str(text)) + "</p>"
 
@@ -222,7 +267,7 @@ class VocalNotebookUI:
         self.result_output.clear_output(wait=False)
         self.comparison_output.value = ""
         try:
-            start, end = validate_interval(self.start.value, self.end.value)
+            start, end = (0.0, None) if self.whole_track.value else validate_interval(self.start.value, self.end.value)
             run_dir = Path(tempfile.mkdtemp(prefix="analysis_", dir=self.workspace))
             if self.mode.value == "file":
                 source = str(save_audio_upload(self.audio_upload.value, run_dir / "input"))
@@ -232,7 +277,7 @@ class VocalNotebookUI:
                     raise ValueError("YouTubeの動画URLを入力してください。")
             self.analyse_button.disabled = True
             self._set_status("処理を始めます。初回は歌声抽出モデルの取得に時間がかかります。")
-            self.bundle = self.run_pipeline(source, start, end, run_dir / "output", source_kind=self.mode.value, already_vocals=self.vocals_only.value, progress=self._set_status, device=self.device.value)
+            self.bundle = self.run_pipeline(source, start, end, run_dir / "output", source_kind=self.mode.value, already_vocals=self.vocals_only.value, progress=self._set_status, device=self.device.value, silence_config=self._silence_config())
             self.results_zip = export_results(self.bundle["analysis"], run_dir / "exports")
             self._show_result()
             self.result_download.disabled = self.vocals_download.disabled = False
@@ -253,6 +298,9 @@ class VocalNotebookUI:
         with self.result_output:
             summary = html.escape(str(analysis.get("summary", "解析結果")))
             self.display(self.HTML("<h2>解析結果</h2><p><strong>" + summary + "</strong></p><p>傾き β = " + _number(fit.get("slope")) + " ／ 当てはめ R² = " + _number(fit.get("r_squared")) + " ／ 使用帯域 = " + _number(fit.get("band_low_hz"), 2) + "〜" + _number(fit.get("band_high_hz"), 2) + " Hz</p><p>指定した帯域・区間での参考評価です。歌の上手さ、心地よさ、声質を判定する結果ではありません。</p>"))
+            processing_details = preprocessing_html(analysis)
+            if processing_details:
+                self.display(self.HTML(processing_details))
             warnings = quality.get("reasons", quality.get("warnings", analysis.get("warnings", [])))
             if isinstance(warnings, str):
                 warnings = [warnings]
@@ -260,7 +308,10 @@ class VocalNotebookUI:
                 self.display(self.HTML("<p>確認：" + html.escape(str(warning)) + "</p>"))
             self.display(self.HTML("<h3>元の区間</h3>"))
             self.display(self.Audio(filename=self.bundle["clip_path"]))
-            self.display(self.HTML("<h3>抽出した歌声</h3>"))
+            if self.bundle.get("extracted_vocals_path"):
+                self.display(self.HTML("<h3>抽出した歌声（無音調整前）</h3>"))
+                self.display(self.Audio(filename=self.bundle["extracted_vocals_path"]))
+            self.display(self.HTML("<h3>解析に使った歌声（無音調整後）</h3>"))
             self.display(self.Audio(filename=self.bundle["vocals_path"]))
             figure = plot_analysis(analysis)
             self.display(figure)

@@ -5,14 +5,14 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="description" content="歌声を取り出し、音量の時間変化から1/fゆらぎを調べる音の実験室。Colabで区間を指定して解析し、同じ方法で測った音源と比較します。">
   <title>Vocal Fluctuation Lab — 歌声のゆらぎを調べる</title>
-  <link rel="stylesheet" href="style.css?v=1.0.0">
-  <script src="app.js?v=1.0.0" defer></script>
+  <link rel="stylesheet" href="style.css?v=1.1.0">
+  <script src="app.js?v=1.1.0" defer></script>
 </head>
 <body>
   <a class="skip" href="#main">本文へ移動</a>
   <header class="site-header">
     <a class="brand" href="./" aria-label="Vocal Fluctuation Lab トップ"><span class="brand-mark" aria-hidden="true">∿</span><span>VOCAL<br>FLUCTUATION LAB</span></a>
-    <nav aria-label="ページ内の案内"><a href="#try">グラフを試す</a><a href="#guide">使い方</a><a href="#reference">音源を比較</a><span class="version">v1.0.0</span></nav>
+    <nav aria-label="ページ内の案内"><a href="#try">グラフを試す</a><a href="#guide">使い方</a><a href="#reference">音源を比較</a><span class="version">v1.1.0</span></nav>
   </header>
   <main id="main">
     <section class="hero" aria-labelledby="hero-title">
@@ -31,7 +31,7 @@
       </div>
     </section>
     <section class="workflow" aria-label="解析の流れ">
-      <div><span>01</span><h2>音源と区間を選ぶ</h2><p>ファイルかYouTube URL。<br>開始と終了を秒で指定します。</p></div>
+      <div><span>01</span><h2>音源と区間を選ぶ</h2><p>ファイルかYouTube URL。<br>秒数を指定するか、<br>曲全体を選べます。</p></div>
       <div><span>02</span><h2>歌声を取り出す</h2><p>AIで伴奏と分け、<br>抽出結果を耳でも確認します。</p></div>
       <div><span>03</span><h2>揺れを調べる</h2><p>音量の時間変化を解析。<br>傾きと区間ごとの違いを見ます。</p></div>
     </section>
@@ -45,7 +45,8 @@
       <div class="result-view" id="result-view" hidden>
         <div class="result-top"><div><p class="eyebrow" id="result-source">合成データ</p><h3 id="result-title">解析結果</h3></div><span class="result-badge" id="result-status"></span></div>
         <div class="metrics"><div><span>傾き β</span><strong id="metric-slope">—</strong><small>1/f の目安は −1</small></div><div><span>直線への当てはまり R²</span><strong id="metric-r2">—</strong><small>値だけで判定しません</small></div><div><span>調べたゆらぎの周波数</span><strong class="range" id="metric-band">—</strong><small>音の高さの周波数とは別です</small></div></div>
-        <div class="plots"><figure><figcaption><span>音量は時間とともにどう変わる？</span><small>RMS音量の包絡線</small></figcaption><svg id="envelope-chart" viewBox="0 0 650 260" role="img" aria-label="音量の時間変化"></svg></figure><figure><figcaption><span>遅い揺れと速い揺れを比べる</span><small>両対数のパワースペクトル密度</small></figcaption><svg id="spectrum-chart" viewBox="0 0 650 300" role="img" aria-label="ゆらぎの周波数とパワー"></svg><div class="legend"><span class="raw">PSD</span><span class="binned">まとめた値</span><span class="fit">当てはめた直線</span></div></figure></div>
+        <section class="preprocessing-report" id="preprocessing-report" aria-labelledby="preprocessing-title" hidden><h4 id="preprocessing-title">無音の調整</h4><p id="preprocessing-summary"></p><p id="trim-settings"></p><dl class="trim-metrics"><div><dt>前から除いた時間</dt><dd id="trim-leading"></dd></div><div><dt>後ろから除いた時間</dt><dd id="trim-trailing"></dd></div><div><dt>途中から除いた時間</dt><dd id="trim-internal"></dd></div></dl><p id="trim-timeline"></p><details><summary>残した区間と元の位置を確認</summary><p>「元の区間内」は、指定した開始位置を0秒とした時刻です。</p><ul id="trim-segments"></ul></details></section>
+        <div class="plots"><figure><figcaption><span>音量は時間とともにどう変わる？</span><small>音の大きさ（RMS振幅）の包絡線</small></figcaption><svg id="envelope-chart" viewBox="0 0 650 260" role="img" aria-label="音量の時間変化"></svg></figure><figure><figcaption><span>遅い揺れと速い揺れを比べる</span><small>両対数のパワースペクトル密度</small></figcaption><svg id="spectrum-chart" viewBox="0 0 650 300" role="img" aria-label="ゆらぎの周波数とパワー"></svg><div class="legend"><span class="raw">PSD</span><span class="binned">まとめた値</span><span class="fit">当てはめた直線</span></div></figure></div>
         <div class="result-note"><p id="result-summary"></p><ul id="result-reasons"></ul><p class="small muted">この表示は結果ファイルの内容を描画します。音源の再解析や、歌手の特定は行いません。</p></div>
       </div>
       <p class="small muted">デモは歌声や特定のアーティストの測定値ではありません。読み込んだJSONはこのブラウザ内で表示し、サーバーへ送信しません。</p>
@@ -53,12 +54,12 @@
     <section class="idea section" aria-labelledby="idea-title"><div><p class="eyebrow">WHAT ARE WE MEASURING?</p><h2 id="idea-title">「どんな音か」と、<br>「どう揺れるか」。</h2></div><div><p>音声をそのまま周波数分析すると、声の高さや音色、録音の特性などが現れます。この傾きだけで、時間的な1/fゆらぎがあるとは決められません。</p><p>この実験では、歌声の<strong>音量の時間変化</strong>をまず取り出します。その変化に、ゆっくりした揺れと細かな揺れがどれほど含まれるかを調べます。</p><p class="caution">結果は、指定した区間と解析条件での評価です。「癒やされる声」「歌が上手い」といった評価には使いません。</p></div></section>
     <section class="section guide-section" id="guide" aria-labelledby="guide-title">
       <div class="section-title"><div><p class="eyebrow">YOUR FIRST SESSION</p><h2 id="guide-title">初めてでも、ここから。</h2></div><a class="text-link" href="https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/vocal-fluctuation-lab/docs/user-guide.md" target="_blank" rel="noopener">詳しい操作マニュアル ↗</a></div>
-      <ol class="guide-steps"><li><h3>Colabを開いて準備する</h3><p>「Colabで解析を始める」から開き、説明に沿って準備セルを実行します。歌声抽出にはGPUを使うと待ち時間を減らせます。GPUがない場合はCPUで処理します。</p></li><li><h3>音源と開始・終了を決める</h3><p>MP3などをアップロードするか、YouTubeの動画URLを入力します。例えば開始40秒・終了130秒なら、90秒間を解析します。まずは歌声のある60〜180秒の区間で試しましょう。</p></li><li><h3>解析して、抽出した歌声を聴く</h3><p>「解析を始める」を押します。分離後の音を聴き、伴奏が強く残っていないか確認します。歌声だけのファイルを持っている場合は、分離を省略できます。</p></li><li><h3>結果を読み、保存する</h3><p>傾き、当てはまり、区間による変動を一緒に見ます。短い区間や不安定な結果は「判定保留」になります。「結果ZIPを保存」で図・数値・設定をまとめて残せます。</p></li></ol>
-      <div class="guide-notes"><details><summary>YouTubeから取得できないときは？</summary><p>動画の公開状態や地域制限、YouTube側の取得制限などで失敗することがあります。その場合は、利用できる音源ファイルをアップロードしてください。URLの取得成功を保証する機能ではありません。</p></details><details><summary>どんな音源を使えますか？</summary><p>自分の録音や、利用の許可を確認した音源を使ってください。第三者の楽曲や抽出した歌声は、この公開サイトやリポジトリには収録していません。</p></details><details><summary>「1/fに近い」と出たら確定ですか？</summary><p>指定した区間・周波数範囲・このツールの基準で近かった、という意味です。長さや選んだ場所、分離の誤差でも結果は変わります。別の区間でも確かめ、数値と図を一緒に読みましょう。</p></details></div>
+      <ol class="guide-steps"><li><h3>Colabを開いて準備する</h3><p>「Colabで解析を始める」から開き、説明に沿って準備セルを実行します。歌声抽出にはGPUを使うと待ち時間を減らせます。GPUがない場合はCPUで処理します。</p></li><li><h3>音源と開始・終了を決める</h3><p>MP3などをアップロードするか、YouTubeの動画URLを入力します。開始40秒・終了130秒なら90秒間です。「曲全体を解析」で音源の最後まで選ぶこともできます。最大10分まで処理できます。</p></li><li><h3>解析して、抽出した歌声を聴く</h3><p>「解析を始める」を押します。分離後の音を聴き、伴奏が強く残っていないか確認します。前後の無音は標準で除き、除いた長さを表示します。歌声だけのファイルを持っている場合は、分離を省略できます。</p></li><li><h3>結果を読み、保存する</h3><p>傾き、当てはまり、区間による変動を一緒に見ます。無音調整後の歌声が短い場合や、不安定な結果は「判定保留」になります。「結果ZIPを保存」で図・数値・設定をまとめて残せます。</p></li></ol>
+      <div class="guide-notes"><details><summary>曲全体と短い区間、どちらを選ぶとよいですか？</summary><p>長い音源ではゆっくりした変動を調べやすくなります。一方、曲全体にはイントロやサビなどの構成の違いも入ります。全体が常に優れているわけではありません。曲全体と、同じ長さで切り出した複数の区間を比べると、結果の安定性を確かめられます。</p></details><details><summary>途中の無音も除けますか？</summary><p>Colabの「無音の調整」から選べます。標準は前後の無音だけを除き、途中は残します。途中の無音も除く場合は時間軸が短縮されるため、結果は加工した歌声の参考値です。元の曲のリズムや相関をそのまま評価したことにはなりません。</p></details><details><summary>YouTubeから取得できないときは？</summary><p>動画の公開状態や地域制限、YouTube側の取得制限などで失敗することがあります。その場合は、利用できる音源ファイルをアップロードしてください。URLの取得成功を保証する機能ではありません。</p></details><details><summary>どんな音源を使えますか？</summary><p>自分の録音や、利用の許可を確認した音源を使ってください。第三者の楽曲や抽出した歌声は、この公開サイトやリポジトリには収録していません。</p></details><details><summary>「1/fに近い」と出たら確定ですか？</summary><p>指定した区間・周波数範囲・このツールの基準で近かった、という意味です。長さや選んだ場所、分離の誤差でも結果は変わります。別の区間でも確かめ、数値と図を一緒に読みましょう。</p></details></div>
     </section>
-    <section class="reference section" id="reference" aria-labelledby="reference-title"><div><p class="eyebrow">COMPARE LIKE WITH LIKE</p><h2 id="reference-title">近いのは、<br>どの音源の揺れ？</h2><p>同じ方法で解析した比較用音源を登録すると、傾き・音量の変動・低周波の割合などが近いアーティストを並べられます。</p><p><strong>比較するのは音量の揺れの特徴です。</strong>声質や歌手の本人判定ではありません。</p></div><div class="reference-card"><span class="status-label">比較データベース</span><h3>測った結果を、少しずつ集める。</h3><p>初期状態では、同じ方法で測った実アーティストのデータは未登録です。比較元の音源をColabで解析し、「アーティスト名」と「曲名」を付けて登録します。保存したDBは次回読み込めます。</p><p>学生制作で得られた5曲の値は、元の解析を知る参考資料として残しています。新しい方法の比較DBには混ぜていません。</p><a class="text-link" href="https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/vocal-fluctuation-lab/data/README.md" target="_blank" rel="noopener">比較データの作り方 ↗</a></div></section>
-    <section class="closing"><p class="eyebrow">ONE CLIP. A NEW QUESTION.</p><h2>まずは、ひと区間から。</h2><p>区間を変えたら、結果はどのくらい変わるでしょう？</p><div class="hero-actions"><a class="button primary" href="https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/vocal-fluctuation-lab/notebooks/vocal_fluctuation_lab.ipynb" target="_blank" rel="noopener">Colabで解析を始める ↗</a><a class="button secondary" href="downloads/VOCAL_FLUCTUATION_LAB_v1.0.0.zip" download>コード一式をダウンロード</a></div></section>
+    <section class="reference section" id="reference" aria-labelledby="reference-title"><div><p class="eyebrow">COMPARE LIKE WITH LIKE</p><h2 id="reference-title">近いのは、<br>どの音源の揺れ？</h2><p>同じ解析方法と無音処理で測った比較用音源を登録すると、傾き・音量の変動・低周波の割合などが近いアーティストを並べられます。</p><p><strong>比較するのは音量の揺れの特徴です。</strong>声質や歌手の本人判定ではありません。</p></div><div class="reference-card"><span class="status-label">比較データベース</span><h3>測った結果を、少しずつ集める。</h3><p>初期状態では、同じ方法で測った実アーティストのデータは未登録です。比較元の音源をColabで解析し、「アーティスト名」と「曲名」を付けて登録します。保存したDBは次回読み込めます。</p><p>学生制作で得られた5曲の値は、元の解析を知る参考資料として残しています。新しい方法の比較DBには混ぜていません。</p><a class="text-link" href="https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/vocal-fluctuation-lab/data/README.md" target="_blank" rel="noopener">比較データの作り方 ↗</a></div></section>
+    <section class="closing"><p class="eyebrow">ONE CLIP. A NEW QUESTION.</p><h2>まずは、ひと区間から。</h2><p>区間を変えたら、結果はどのくらい変わるでしょう？</p><div class="hero-actions"><a class="button primary" href="https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/vocal-fluctuation-lab/notebooks/vocal_fluctuation_lab.ipynb" target="_blank" rel="noopener">Colabで解析を始める ↗</a><a class="button secondary" href="downloads/VOCAL_FLUCTUATION_LAB_v1.1.0.zip" download>コード一式をダウンロード</a></div></section>
   </main>
-  <footer><div class="footer-brand">VOCAL FLUCTUATION LAB <span>v1.0.0</span></div><p>日本大学「計算科学基礎」2026年度3Qの学生制作をもとにした公開版</p><div><a href="../">作品集へ</a><a href="https://github.com/shogo-ishikawa/2026_3Q_M4Th4/tree/main/projects/vocal-fluctuation-lab">ソースコード</a><a href="https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/vocal-fluctuation-lab/docs/method.md">解析方法と参考文献</a></div></footer>
+  <footer><div class="footer-brand">VOCAL FLUCTUATION LAB <span>v1.1.0</span></div><p>日本大学「計算科学基礎」2026年度3Qの学生制作をもとにした公開版</p><div><a href="../">作品集へ</a><a href="https://github.com/shogo-ishikawa/2026_3Q_M4Th4/tree/main/projects/vocal-fluctuation-lab">ソースコード</a><a href="https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/vocal-fluctuation-lab/docs/method.md">解析方法と参考文献</a></div></footer>
 </body>
 </html>
