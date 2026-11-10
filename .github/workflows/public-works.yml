@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - 'projects/world-definition/**'
+      - 'projects/vocal-fluctuation-lab/**'
       - 'scripts/build_public_site.py'
       - 'web/**'
       - '.github/workflows/public-works.yml'
   pull_request:
     paths:
       - 'projects/world-definition/**'
+      - 'projects/vocal-fluctuation-lab/**'
       - 'scripts/build_public_site.py'
       - 'web/**'
       - '.github/workflows/public-works.yml'
@@ -44,8 +46,17 @@ jobs:
           node projects/world-definition/tests/progress.test.js
           node projects/world-definition/tests/session.test.js
           python -m unittest discover -s projects/world-definition/tests -p 'test_*.py'
+      - name: Check vocal fluctuation analysis and notebook
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg
+          python -m pip install -r projects/vocal-fluctuation-lab/requirements.txt 'ipywidgets>=8.1,<9' 'nbformat>=5.10,<6' 'yt-dlp[default]>=2026.10.26'
+          python -m unittest discover -s projects/vocal-fluctuation-lab/tests -p 'test_*.py'
+          node --check projects/vocal-fluctuation-lab/web/app.js
       - name: Build selected public files and distribution ZIP
         run: python scripts/build_public_site.py
+      - name: Check generated result viewer data
+        run: node projects/vocal-fluctuation-lab/tests/web.test.js _site/vocal-fluctuation-lab/data
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

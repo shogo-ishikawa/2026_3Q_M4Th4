@@ -1,0 +1,16 @@
+{
+  "schema_version": "student-legacy-results-v1",
+  "method_id": "student-waveform-fft-100-8000-hz",
+  "source": "提出された解析画面に表示された値。配布版で再計算した値ではありません。",
+  "quantity": "歌声波形の100–8000 Hzにおける対数パワースペクトルの回帰傾き",
+  "is_temporal_fluctuation_measurement": false,
+  "comparable_with_current_method": false,
+  "note": "音の高さに対応する周波数成分の傾きです。音量が時間とともに揺れる周波数の解析とは異なるため、1/fゆらぎの判定や新しい比較データベースには使いません。",
+  "results": [
+    {"artist": "Vaundy", "track": "しわあわせ", "slope": -1.19},
+    {"artist": "RADWIMPS", "track": "前前前世", "slope": -1.32},
+    {"artist": "GADORO", "track": "自由空間", "slope": -1.61},
+    {"artist": "宇多田ヒカル", "track": "First Love", "slope": -1.68},
+    {"artist": "MISIA", "track": "アイノカタチ", "slope": -1.69}
+  ]
+}
