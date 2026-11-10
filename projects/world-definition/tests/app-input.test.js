@@ -9,8 +9,9 @@ const appPath = process.argv[2] ? path.resolve(process.argv[2]) : path.resolve(_
 const engine = require(process.argv[3] ? path.resolve(process.argv[3]) : path.join(path.dirname(appPath), 'engine.js'));
 const progress = require(process.argv[4] ? path.resolve(process.argv[4]) : path.join(path.dirname(appPath), 'progress.js'));
 const source = fs.readFileSync(appPath, 'utf8');
-const STORAGE_KEY = 'world-definition-progress-v1';
-const SESSION_KEY = 'world-definition-session-v1';
+const STORAGE_KEY = 'world-definition-progress-v2';
+const LEGACY_STORAGE_KEY = 'world-definition-progress-v1';
+const SESSION_KEY = 'world-definition-session-v2';
 const sessionPath = process.argv[5] ? path.resolve(process.argv[5]) : path.join(path.dirname(appPath), 'session.js');
 const session = fs.existsSync(sessionPath) ? require(sessionPath) : null;
 function memoryStorage(saved = null) {
@@ -74,7 +75,8 @@ function harness(options = {}) {
   document.createElement = tag => new Element(tag);
   document.createTextNode = value => ({ textContent: value });
   document.querySelectorAll = selector => selector === 'dialog' ? all.filter(item => item.tagName === 'DIALOG') : selector === '[data-key]' ? all.filter(item => item.dataset.key) : [];
-  for (const id of ['game', 'objective', 'hudpower', 'progress', 'targets', 'effects', 'queue', 'unlock-message', 'apply', 'active-rules', 'generated-name', 'generated-desc', 'rule-status', 'use-ai', 'local-ai', 'hint-content', 'hint-button', 'hint-panel', 'hint-prev', 'hint-next', 'hint-close', 'hint-step', 'hint-title', 'hint-marker', 'interaction-status', 'recover-stone', 'recover-tree', 'hint-recovery-status', 'reset', 'again', 'close-win', 'lab-focus', 'lab-panel', 'help-button', 'close-help', 'start-button', 'start-intro', 'start-rule-hint', 'stage-select', 'stage-description', 'stage-record', 'stage-number', 'stage-name', 'shard-count', 'effect-summary', 'win-title', 'win-result', 'save-status', 'next-stage', 'change-stage', 'undo', 'session-status', 'start-fresh', 'resume-note', 'ai-check', 'ai-model', 'ai-connection-status', 'ai-text', 'ai-interpret', 'ai-cancel', 'ai-status', 'ai-candidate', 'ai-candidate-text', 'ai-apply-candidate']) new Element(id === 'game' ? 'canvas' : ['use-ai', 'hint-marker'].includes(id) ? 'input' : id === 'ai-text' ? 'textarea' : ['stage-select', 'ai-model'].includes(id) ? 'select' : 'div', id);
+  for (const id of ['game', 'objective', 'hudpower', 'progress', 'targets', 'effects', 'queue', 'unlock-message', 'apply', 'active-rules', 'generated-name', 'generated-desc', 'rule-status', 'use-ai', 'local-ai', 'hint-content', 'hint-button', 'hint-panel', 'hint-prev', 'hint-next', 'hint-close', 'hint-step', 'hint-title', 'hint-marker', 'interaction-status', 'recover-stone', 'recover-tree', 'hint-recovery-status', 'reset', 'again', 'close-win', 'lab-focus', 'lab-panel', 'help-button', 'close-help', 'start-button', 'start-intro', 'start-rule-hint', 'stage-select', 'stage-description', 'stage-record', 'stage-number', 'stage-name', 'shard-count', 'effect-summary', 'win-title', 'win-result', 'save-status', 'next-stage', 'change-stage', 'undo', 'session-status', 'start-fresh', 'resume-note', 'ai-check', 'ai-model', 'ai-connection-status', 'ai-text', 'ai-interpret', 'ai-cancel', 'ai-status', 'ai-candidate', 'ai-candidate-text', 'ai-apply-candidate', 'rule-clear', 'map-toggle', 'notebook-toggle', 'notebook-panel', 'notebook-list', 'mechanism-status', 'world-feedback', 'mystery-start', 'exploration-mode']) new Element(id === 'game' ? 'canvas' : ['use-ai', 'hint-marker'].includes(id) ? 'input' : id === 'ai-text' ? 'textarea' : ['stage-select', 'ai-model'].includes(id) ? 'select' : 'div', id);
+  elements.get('notebook-panel').hidden = true;
   elements.get('hint-panel').hidden = true;
   elements.get('hint-content').hidden = true;
   elements.get('ai-candidate').hidden = true;
@@ -98,10 +100,14 @@ function harness(options = {}) {
   const storage = options.storage ?? memoryStorage(options.saved ?? null);
   if (options.storageGetterThrows) Object.defineProperty(window, 'localStorage', { get() { throw new Error('Storage denied'); } });
   else window.localStorage = storage;
-  window.WorldDefinitionProgress = progress;
+  // Existing input scenarios deliberately retain their original stage-0
+  // progression fixture. New-campaign cases below use the production options.
+  window.WorldDefinitionProgress = options.newCampaign ? progress : { ...progress,
+    createStore(storage, count, key, defaults) { return progress.createStore(storage, count, key, { ...defaults, initialUnlocked: 0, initialStage: 0, migrateKey: undefined }); }
+  };
   window.WorldDefinitionSession = session;
   window.WorldDefinitionRenderer = { createRenderer: () => ({
-    draw(game, target, marker) { draws.push({ stageIndex: game.stageIndex, target, marker: marker ? JSON.parse(JSON.stringify(marker)) : null }); }
+    draw(game, target, marker, view) { draws.push({ stageIndex: game.stageIndex, target, marker: marker ? JSON.parse(JSON.stringify(marker)) : null, overview: Boolean(view?.overview) }); }
   }) };
   const sandbox = { window, document, HTMLElement: Element, location: { hostname: 'localhost' },
     performance: { now: () => timestamp }, requestAnimationFrame(callback) { frameCallback = callback; },
@@ -116,6 +122,7 @@ function harness(options = {}) {
   const frame = () => { const count = updates.length; timestamp += 16; for (const [id, timer] of timers) { if (timer.due <= timestamp) { timers.delete(id); timer.callback(); } } frameCallback(timestamp); return updates.length > count ? updates.at(-1) : null; };
   return { document, window, buttons, requests, draws, frame, storage, get game() { return window.__readGameForInputTest(); },
     get: id => elements.get(id),
+    option: index => elements.get('stage-select').children.find(child => child.value === String(index)),
     begin() { elements.get('start-button').emit('click'); },
     key(name, key, target = elements.get('game')) { return window.emit(name, { key, target }); },
     chooseEffect(effect) { elements.get('effects').querySelector('[data-effect="' + effect + '"]').emit('click'); },
@@ -411,7 +418,7 @@ async function test(name, run) {
     assert.equal(app.saved().unlocked, 1);
     assert.deepEqual(app.saved().best[0], { rules: 4, shards: 2, time: 42 });
     assert.equal(app.get('next-stage').hidden, false);
-    assert.equal(app.get('stage-select').children[1].disabled, false);
+    assert.equal(app.option(1).disabled, false);
     app.get('next-stage').emit('click');
     assert.equal(app.game.stageIndex, 1);
     assert.equal(app.game.complete, false);
@@ -434,8 +441,8 @@ async function test(name, run) {
   await test('locked and tampered stage selections cannot bypass progress', () => {
     const app = harness(); app.begin(); const previous = app.game;
     assert.equal(app.get('stage-select').children.length, engine.LEVELS.length);
-    assert.equal(app.get('stage-select').children[0].disabled, false);
-    assert.equal(app.get('stage-select').children[1].disabled, true);
+    assert.equal(app.option(0).disabled, false);
+    assert.equal(app.option(1).disabled, true);
     for (const value of ['1', '-1', '900', '1.5', 'NaN']) {
       app.get('stage-select').value = value; app.get('change-stage').emit('click');
       assert.equal(app.game, previous, value);
@@ -504,7 +511,7 @@ async function test(name, run) {
     app.complete({ rules: 6, shards: 1, time: 55 });
     const resumed = harness({ storage });
     assert.equal(resumed.game.stageIndex, 2);
-    assert.equal(resumed.get('stage-select').children[3].disabled, false);
+    assert.equal(resumed.option(3).disabled, false);
     assert.match(resumed.get('stage-record').textContent, /定義 6 回/);
     assert.match(resumed.get('stage-record').textContent, /欠片 1 個/);
   });
@@ -531,7 +538,7 @@ async function test(name, run) {
     app.get('undo').emit('click');
     assert.equal(app.game.rules.water, null); assert.equal(app.game.ruleCount, 0);
     assert.equal(app.get('undo').disabled, true); assert.deepEqual(app.frame(), []);
-    const saved = session.createStore(app.storage, engine).load(0);
+    const saved = session.createStore(app.storage, engine, SESSION_KEY).load(0);
     assert.ok(saved); assert.equal(saved.rules.water, null);
   });
   await test('a continuous carry is one undo step and Z leaves editable fields alone', () => {
@@ -579,14 +586,14 @@ async function test(name, run) {
       const storage = memoryStorage();
       if (shouldResume) {
         const savedGame = engine.createGame(); engine.applyRule(savedGame, 'water', ['freeze']);
-        assert.ok(session.createStore(storage, engine).save(savedGame));
+        assert.ok(session.createStore(storage, engine, SESSION_KEY).save(savedGame));
       }
       const app = harness({ storage });
       const event = app.get('start-dialog').emit('cancel').event;
       assert.equal(event.defaultPrevented, true); assert.equal(app.get('start-dialog').open, false);
       if (!shouldResume) { app.chooseEffect('freeze'); app.get('apply').emit('click'); }
       app.key('keydown', 'w'); for (let i = 0; i < 80; i++) app.frame(); app.window.emit('blur');
-      const continued = session.createStore(storage, engine).load(0);
+      const continued = session.createStore(storage, engine, SESSION_KEY).load(0);
       assert.ok(continued); assert.deepEqual(continued.player, app.game.player); assert.equal(engine.has(continued, 'water', 'freeze'), true);
     }
   });
@@ -669,6 +676,86 @@ async function test(name, run) {
       assert.equal(app.get('ai-candidate').hidden, true); assert.equal(app.game.ruleCount, 0); assert.equal(app.game.rules.stone, null);
       assert.equal(app.get('ai-interpret').disabled, false); assert.ok(app.get('ai-status').textContent.length > 0);
     }
+  });
+
+  await test('the production campaign starts at the first mystery with practice available', () => {
+    const app = harness({ newCampaign: true });
+    assert.equal(app.game.stageIndex, 9);
+    assert.equal(app.get('stage-select').children.length, 13);
+    for (let index = 0; index <= 9; index++) assert.equal(app.option(index).disabled, false);
+    assert.equal(app.option(10).disabled, true);
+    app.begin(); app.complete();
+    assert.equal(app.saved().unlocked, 10);
+    app.get('next-stage').emit('click');
+    assert.equal(app.game.stageIndex, 10);
+  });
+  await test('old practice records migrate without falsely completing the mystery chapter', () => {
+    const storage = memoryStorage();
+    const old = JSON.stringify({ unlocked: 8, lastStage: 8, best: { 0: { rules: 4, shards: 2, time: 42 }, 8: { rules: 3, shards: 1, time: 65 } } });
+    storage.setItem(LEGACY_STORAGE_KEY, old);
+    const app = harness({ storage, newCampaign: true });
+    assert.equal(app.game.stageIndex, 9); assert.equal(app.saved().unlocked, 9);
+    assert.equal(app.saved().best[0].rules, 4); assert.equal(app.saved().best[8].shards, 1);
+    assert.equal(app.saved().best[9], undefined); assert.equal(storage.getItem(LEGACY_STORAGE_KEY), old);
+    app.begin(); app.get('stage-select').value = '10'; app.get('change-stage').emit('click');
+    assert.equal(app.game.stageIndex, 9); assert.equal(app.get('reset-dialog').open, false);
+  });
+  await test('rule clearing is explicit, undoable and refuses to remove the player support', () => {
+    const app = harness(); app.begin();
+    assert.equal(app.get('rule-clear').disabled, true);
+    app.chooseEffect('freeze'); app.get('apply').emit('click');
+    assert.equal(app.get('rule-clear').disabled, false);
+    app.get('rule-clear').emit('click');
+    assert.equal(app.game.rules.water, null); assert.equal(app.game.ruleCount, 2);
+    app.get('undo').emit('click');
+    assert.ok(engine.has(app.game, 'water', 'freeze')); assert.equal(app.game.ruleCount, 1);
+    app.key('keydown', 'w'); for (let i = 0; i < 50; i++) app.frame(); app.key('keyup', 'w');
+    assert.ok(app.game.player.y > 350 && app.game.player.y < 430);
+    const before = JSON.stringify(app.game);
+    app.get('rule-clear').emit('click');
+    assert.equal(JSON.stringify(app.game), before);
+    app.get('undo').emit('click');
+    assert.equal(app.game.rules.water, null); assert.equal(app.game.ruleCount, 0);
+  });
+  await test('clearing invalidates old AI names and pending proposals', async () => {
+    const app = harness(); app.begin(); app.get('use-ai').checked = true;
+    app.chooseEffect('freeze');
+    const pendingName = app.get('apply').emit('click').results[0], nameRequest = app.requests.at(-1);
+    app.get('rule-clear').emit('click');
+    assert.equal(nameRequest.options.signal.aborted, true);
+    nameRequest.resolve({ ok: true, json: async () => ({ target: 'water', effects: ['freeze'], name: 'STALE' }) }); await pendingName;
+    assert.equal(app.game.rules.water, null);
+    app.get('use-ai').checked = false; app.chooseEffect('freeze'); app.get('apply').emit('click');
+    app.get('ai-text').value = '石を浮かせる';
+    const pendingProposal = app.get('ai-interpret').emit('click').results[0], request = app.requests.at(-1);
+    app.get('rule-clear').emit('click'); assert.equal(request.options.signal.aborted, true);
+    request.resolve({ ok: true, json: async () => ({ target: 'stone', effects: ['float'] }) }); await pendingProposal;
+    assert.equal(app.get('ai-candidate').hidden, true); assert.equal(app.game.rules.stone, null);
+  });
+  await test('overview and notebook controls do not alter puzzle definitions or capture editable shortcuts', () => {
+    const app = harness({ newCampaign: true }); app.begin(); app.frame();
+    const initialRules = JSON.stringify(app.game.rules), stage = app.game.stageIndex;
+    assert.equal(app.draws.at(-1).overview, false);
+    app.key('keydown', 'm'); app.frame(); assert.equal(app.draws.at(-1).overview, true);
+    app.key('keyup', 'm'); app.key('keydown', 'm', app.get('ai-text')); app.frame(); assert.equal(app.draws.at(-1).overview, true);
+    app.get('map-toggle').emit('click'); app.frame(); assert.equal(app.draws.at(-1).overview, false);
+    app.get('notebook-toggle').emit('click'); assert.equal(app.get('notebook-panel').hidden, false);
+    app.get('notebook-toggle').emit('click'); assert.equal(app.get('notebook-panel').hidden, true);
+    assert.equal(JSON.stringify(app.game.rules), initialRules); assert.equal(app.game.stageIndex, stage);
+  });
+
+  await test('reading a clue opens its notebook entry and records only a real E action', () => {
+    const app = harness({ newCampaign: true }); app.begin();
+    app.key('keydown', 'w'); for (let i = 0; i < 30; i++) app.frame(); app.key('keyup', 'w');
+    assert.equal(engine.notebook(app.game).length, 0);
+    app.key('keydown', 'e'); app.frame(); app.key('keyup', 'e'); app.frame();
+    assert.equal(engine.notebook(app.game).length, 1);
+    assert.equal(app.get('notebook-panel').hidden, false);
+    assert.ok(app.get('notebook-list').children.some(entry => entry.children?.some(child => /水車守/.test(child.textContent))));
+    app.key('keydown', 'e'); for (let i = 0; i < 5; i++) app.frame(); app.key('keyup', 'e'); app.frame();
+    app.get('undo').emit('click');
+    assert.equal(engine.notebook(app.game).length, 0, 'Re-reading a known clue must not consume another undo entry');
+    assert.equal(app.get('undo').disabled, true);
   });
 
   console.log(checks + ' app input checks passed.');

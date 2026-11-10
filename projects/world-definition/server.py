@@ -45,7 +45,7 @@ AI_GENERATION = threading.BoundedSemaphore(1)
 MAX_REQUEST_BYTES = 4096
 MAX_AI_BYTES = 65536
 STATIC_FILES = {
-    "/index.html", "/style.css", "/app.js", "/engine.js", "/renderer.js", "/progress.js", "/session.js", "/guide.html", "/favicon.svg"
+    "/index.html", "/style.css", "/app.js", "/engine.js", "/renderer.js", "/progress.js", "/session.js", "/mystery.js", "/guide.html", "/favicon.svg"
 }
 ASSET_EXTENSIONS = {".png", ".svg", ".jpg", ".jpeg", ".webp", ".ico", ".woff2"}
 

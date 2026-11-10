@@ -6,7 +6,7 @@ Pythonの基礎を学んだ学生が、AIや教員の支援を受けながら制
 
 | 作品 | 内容 | 状態 |
 | --- | --- | --- |
-| [WORLD DEFINITION](projects/world-definition/) | 物体と動作を組み合わせて道を作るブラウザパズル | v1.2.1。AI不要で遊べる基本5面と応用4面、状況別の攻略ヒント、操作ガイド、元C++参照コード |
+| [WORLD DEFINITION](projects/world-definition/) | 物体と動作を組み合わせて道を作るブラウザパズル | v1.3.0。AI不要で遊べる基本5面と応用4面、状況別の攻略ヒント、操作ガイド、元C++参照コード |
 | [Guitar Chord Lab](projects/guitar-chord-lab/) | ギターの音源分離とコード認識、分離前後の比較実験 | 初版 v0.1.0。Colab用Notebookとコマンドあり（Colab上での動作は未確認） |
 | [Park Itinerary Lab](projects/park-itinerary-lab/) | 架空のテーマパークでの一日の予定を数理最適化で計算（PuLP入門、CP-SATによる日程最適化、短縮利用の配分の比較実験） | v0.1.0 初版。ローカルでテストとNotebookの実行を確認。Colab上での実行は未確認 |
 | [海辺の風は何時間先まで予測できるか](projects/coastal-wind-chaos/) | 風向きの機械学習予測とローレンツ系のカオスを、別々の実験として比べる予測可能性の教材 | 4つの実験（角度の罠、特徴量の比較、予測時間の比較、ローレンツ系）、合成データ、CLI、Colab用Notebook、テストを実装済み。Colab上での実行は未確認 |

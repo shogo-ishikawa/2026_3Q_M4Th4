@@ -1,23 +1,40 @@
 /* Clear records stay on this device; unavailable storage never blocks play. */
 'use strict';
 (function (root) {
-  function createStore(storage, levelCount, key = 'world-definition-progress-v1') {
+  function createStore(storage, levelCount, key = 'world-definition-progress-v1', options = {}) {
+    if (!options || typeof options !== 'object') options = {};
     let persistent = Boolean(storage);
-    const blank = () => ({ unlocked: 0, lastStage: 0, best: {} });
+    const lastIndex = Math.max(0, levelCount - 1);
+    const initialUnlocked = Number.isInteger(options.initialUnlocked) ? Math.max(0, Math.min(lastIndex, options.initialUnlocked)) : 0;
+    const initialStage = Number.isInteger(options.initialStage) ? Math.max(0, Math.min(initialUnlocked, options.initialStage)) : 0;
+    const blank = () => ({ unlocked: initialUnlocked, lastStage: initialStage, best: {} });
     let data = blank();
-    try {
-      const saved = JSON.parse(storage?.getItem(key) || 'null');
-      if (saved && typeof saved === 'object' && Number.isInteger(saved.unlocked)) {
-        data.unlocked = Math.max(0, Math.min(levelCount - 1, saved.unlocked));
-        data.lastStage = Number.isInteger(saved.lastStage) ? Math.max(0, Math.min(data.unlocked, saved.lastStage)) : 0;
-        for (let index = 0; index < levelCount; index++) {
-          const best = saved.best?.[index];
-          if (best && ['rules', 'shards', 'time'].every(name => Number.isFinite(best[name]) && best[name] >= 0)) {
-            data.best[index] = { rules: Math.floor(best.rules), shards: Math.min(2, Math.floor(best.shards)), time: best.time };
-          }
+    function readRecords(saved, count = levelCount) {
+      const best = {};
+      for (let index = 0; index < count; index++) {
+        const record = saved.best?.[index];
+        if (record && ['rules', 'shards', 'time'].every(name => Number.isFinite(record[name]) && record[name] >= 0)) {
+          best[index] = { rules: Math.floor(record.rules), shards: Math.min(2, Math.floor(record.shards)), time: record.time };
         }
+      }
+      return best;
+    }
+    try {
+      const raw = storage?.getItem(key);
+      const saved = JSON.parse(raw || 'null');
+      if (saved && typeof saved === 'object' && Number.isInteger(saved.unlocked)) {
+        data.unlocked = Math.max(initialUnlocked, Math.min(lastIndex, saved.unlocked));
+        data.lastStage = Number.isInteger(saved.lastStage) ? Math.max(0, Math.min(data.unlocked, saved.lastStage)) : initialStage;
+        data.best = readRecords(saved);
         // v1.1 ended at stage 5. A recorded final clear also opens the new chapter.
         if (levelCount > 5 && data.unlocked === 4 && data.best[4]) data.unlocked = 5;
+      } else if (!raw && typeof options.migrateKey === 'string' && options.migrateKey && options.migrateKey !== key) {
+        // The old nine maps remain practice. Their records do not complete a new mystery.
+        const previous = JSON.parse(storage?.getItem(options.migrateKey) || 'null');
+        if (previous && typeof previous === 'object' && Number.isInteger(previous.unlocked)) {
+          data.best = readRecords(previous, initialUnlocked);
+          storage?.setItem(key, JSON.stringify(data));
+        }
       }
     } catch (_) { persistent = false; }
     const snapshot = () => JSON.parse(JSON.stringify(data));

@@ -39,6 +39,7 @@ jobs:
           node --check projects/world-definition/app.js
           node --check projects/world-definition/renderer.js
           node projects/world-definition/tests/engine.test.js
+          node projects/world-definition/tests/mystery.test.js
           node projects/world-definition/tests/app-input.test.js
           node projects/world-definition/tests/progress.test.js
           node projects/world-definition/tests/session.test.js

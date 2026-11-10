@@ -18,16 +18,21 @@
     if (Array.isArray(example)) return Array.isArray(value) && value.length === example.length && value.every((item, index) => sameShape(item, example[index]));
     return keysMatch(value, Object.keys(example)) && Object.keys(example).every(key => sameShape(value[key], example[key]));
   }
-  function validPoint(point, player) {
-    return keysMatch(point, ['x', 'y']) && numberBetween(point.x, player ? 68 : 55, player ? 802 : 815) && numberBetween(point.y, player ? 128 : 115, player ? 647 : 660);
+  function validPoint(E, game, point, player) {
+    const bounds = E.worldBounds ? E.worldBounds(game) : { x: 55, y: 115, w: 760, h: 545 };
+    const margin = player ? 13 : 0;
+    return keysMatch(point, ['x', 'y']) && numberBetween(point.x, bounds.x + margin, bounds.x + bounds.w - margin) && numberBetween(point.y, bounds.y + margin, bounds.y + bounds.h - margin);
   }
-  function dryCheckpoint(game) {
+  function dryCheckpoint(E, game) {
     const point = game.checkpoint;
-    return !game.level.rivers.some(river => {
-      const nearestX = Math.max(river.x, Math.min(point.x, river.x + river.w));
-      const nearestY = Math.max(river.y, Math.min(point.y, river.y + river.h));
-      return Math.hypot(point.x - nearestX, point.y - nearestY) < 18;
-    });
+    const physical = E.physicalState ? E.physicalState(game) : { rivers: game.level.rivers, walls: game.gateOpen ? game.level.walls : [...game.level.walls, game.level.gate] };
+    function overlaps(rect, radius) {
+      const nearestX = Math.max(rect.x, Math.min(point.x, rect.x + rect.w));
+      const nearestY = Math.max(rect.y, Math.min(point.y, rect.y + rect.h));
+      return Math.hypot(point.x - nearestX, point.y - nearestY) < radius;
+    }
+    // Moved objects may occupy an old point; respawning searches nearby in that case.
+    return !physical.rivers.some(rect => overlaps(rect, 18)) && !physical.walls.some(rect => overlaps(rect, 13));
   }
   function validRules(E, game, rules) {
     const targets = E.TARGETS.map(target => target.id);
@@ -55,14 +60,17 @@
         if (!sameShape(state[key], game[key])) return null;
         game[key] = copy(state[key]);
       }
-      if (!validPoint(game.player, true) || !validPoint(game.checkpoint, true) || !validPoint(game.stone, false) || !validPoint(game.tree, false) || !dryCheckpoint(game)) return null;
+      if (!validPoint(E, game, game.player, true) || !validPoint(E, game, game.checkpoint, true) || !validPoint(E, game, game.stone, false) || !validPoint(E, game, game.tree, false)) return null;
       if (game.complete || !numberBetween(game.elapsed, 0, 100000000) || !numberBetween(game.damageUntil, 0, game.elapsed + 2.1) || !numberBetween(game.gateHeat, 0, 1)) return null;
-      if (!Number.isInteger(game.ruleCount) || !numberBetween(game.ruleCount, 0, 10000000) || (game.gateOpen && !game.core)) return null;
+      if (!Number.isInteger(game.ruleCount) || !numberBetween(game.ruleCount, 0, 10000000) || (!game.level.mystery && game.gateOpen && !game.core)) return null;
       if (!Object.values(game.floatOffsets).every(value => numberBetween(value, 0, 80)) || !Object.values(game.sensorCharge).every(value => numberBetween(value, 0, 1))) return null;
       if (![null, 'stone', 'tree'].includes(state.preferredCarryTarget) || !validRules(E, game, state.rules)) return null;
       game.rules = copy(state.rules); game.preferredCarryTarget = state.preferredCarryTarget;
+      if (!dryCheckpoint(E, game) || (E.validPuzzleState && !E.validPuzzleState(game))) return null;
       if (!E.walkable(game, game.player)) return null;
       if (E.objectPositionValid && !['stone', 'tree'].every(target => E.objectPositionValid(game, target))) return null;
+      // A resumed world must not inherit a held interaction key.
+      if (game.puzzle && Object.hasOwn(game.puzzle, 'eHeld')) game.puzzle.eHeld = false;
       return game;
     } catch (_) { return null; }
   }
@@ -71,6 +79,7 @@
       if (!game || !Number.isInteger(game.stageIndex) || !E.LEVELS[game.stageIndex] || game.level?.id !== E.LEVELS[game.stageIndex].id) return null;
       const example = E.createGame(game.stageIndex), state = {};
       for (const key of Object.keys(example)) if (!OMIT.has(key)) state[key] = copy(game[key]);
+      if (state.puzzle && Object.hasOwn(state.puzzle, 'eHeld')) state.puzzle.eHeld = false;
       const snapshot = { version: VERSION, stageId: example.level.id, state };
       return restore(E, snapshot) ? snapshot : null;
     } catch (_) { return null; }

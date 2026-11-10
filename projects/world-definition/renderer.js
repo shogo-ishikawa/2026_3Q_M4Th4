@@ -11,6 +11,20 @@
   const TARGET_LABELS = { water: '水', stone: '石', tree: '木', fire: '炎' };
   const EFFECT_LABELS = { float: '浮遊', move: '移動', grow: '成長', glow: '発光', freeze: '凍結', solidify: '固体化', pulse: '脈動', heat: '加熱', shrink: '縮小', rotate: '回転' };
 
+  // The camera is a view of world coordinates, independent of game state.
+  function cameraFor(bounds, player, overview = false) {
+    const width = 870, height = 570;
+    if (overview) {
+      const scale = Math.min((width - 44) / bounds.w, (height - 76) / bounds.h);
+      return { x: bounds.x, y: bounds.y, w: bounds.w, h: bounds.h, scale,
+        offsetX: (width - bounds.w * scale) / 2, offsetY: 48 + (height - 76 - bounds.h * scale) / 2 };
+    }
+    const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
+    return { x: bounds.w >= width ? clamp(player.x - width / 2, bounds.x, bounds.x + bounds.w - width) : bounds.x - (width - bounds.w) / 2,
+      y: bounds.h >= height ? clamp(player.y - height / 2, bounds.y, bounds.y + bounds.h - height) : bounds.y - (height - bounds.h) / 2,
+      w: width, h: height, scale: 1, offsetX: 0, offsetY: 0 };
+  }
+
   function createRenderer(canvas, E, options = {}) {
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Canvas 2D を利用できません。');
@@ -570,7 +584,264 @@
       pill('目印：' + point.label, x, E.clamp(y - 77 + bob, 118, 560), '#694f24ed', '#fff8d2', 13);
     }
 
-    function draw(game, selectedTarget, hintMarker = null) {
+    function mysteryLabel(value, x, y, options = {}) {
+      const size = options.size || 13;
+      ctx.font = `600 ${size}px system-ui, sans-serif`;
+      const width = ctx.measureText(value).width + 16;
+      const left = options.align === 'left' ? x : x - width / 2;
+      rect(left, y, width, size + 10, options.colour || '#173d39ed', 4);
+      word(value, left + width / 2, y + 4, size, options.ink || '#fff8d7', 'center');
+    }
+    function sameRectangle(a, b) {
+      return a.x === b.x && a.y === b.y && a.w === b.w && a.h === b.h;
+    }
+    function mysteryWaterState(game, river, physical) {
+      const present = physical.rivers.some(active => active.id && river.id ? active.id === river.id : sameRectangle(active, river));
+      if (!present) return 'dry';
+      if (E.has(game, 'water', 'freeze')) return 'ice';
+      if (E.has(game, 'water', 'solidify')) return 'solid';
+      return 'water';
+    }
+    function mysteryWater(game, physical, time) {
+      for (const river of game.level.rivers) {
+        const state = mysteryWaterState(game, river, physical);
+        rect(river.x - 4, river.y - 4, river.w + 8, river.h + 8, '#496d62', 5);
+        rect(river.x, river.y, river.w, river.h, state === 'dry' ? '#a59774' : state === 'ice' ? '#c3e8e8' : state === 'solid' ? '#a9b5a3' : '#397d98', 2);
+        if (state === 'dry') {
+          for (let x = river.x + 16; x < river.x + river.w; x += 47) {
+            for (let y = river.y + 15; y < river.y + river.h; y += 38) line(x - 6, y, x + 6, y + 3, '#776b51', 1.5);
+          }
+        } else if (state === 'solid') {
+          for (let x = river.x + 4; x < river.x + river.w - 2; x += 42) {
+            for (let y = river.y + 3; y < river.y + river.h - 2; y += 28) {
+              rect(x, y, Math.max(1, Math.min(38, river.x + river.w - x - 2)), Math.max(1, Math.min(24, river.y + river.h - y - 2)), '#d0d3b7', 2);
+            }
+          }
+        } else if (state === 'ice') {
+          for (let x = river.x + 22; x < river.x + river.w; x += 74) {
+            for (let y = river.y + 20; y < river.y + river.h; y += 62) snowflake(x, y, 9, '#6198a6');
+          }
+          line(river.x + 4, river.y + 5, river.x + river.w - 4, river.y + 5, '#effff7', 3);
+        } else {
+          const direction = river.flow || river.direction;
+          const horizontal = direction === 'left' || direction === 'right' || (!['up', 'down'].includes(direction) && river.w >= river.h);
+          const sign = ['left', 'up'].includes(direction) ? -1 : 1;
+          const length = horizontal ? river.w : river.h;
+          const phase = physical.flowing && !reducedMotion ? (time * 22) % 78 : 0;
+          for (let distance = 25 + phase; distance < length - 12; distance += 78) {
+            const at = sign > 0 ? distance : length - distance;
+            const x = horizontal ? river.x + at : river.x + river.w / 2;
+            const y = horizontal ? river.y + river.h / 2 : river.y + at;
+            if (physical.flowing) {
+              line(x - (horizontal ? 14 : 0), y - (horizontal ? 0 : 14), x + (horizontal ? 14 : 0), y + (horizontal ? 0 : 14), '#b0dce8', 2);
+              if (horizontal) { line(x + 14 * sign, y, x + 7 * sign, y - 5, '#b0dce8', 2); line(x + 14 * sign, y, x + 7 * sign, y + 5, '#b0dce8', 2); }
+              else { line(x, y + 14 * sign, x - 5, y + 7 * sign, '#b0dce8', 2); line(x, y + 14 * sign, x + 5, y + 7 * sign, '#b0dce8', 2); }
+            } else line(x - 13, y, x + 13, y, '#a7ccda88', 1.5);
+          }
+        }
+      }
+    }
+    function mysteryConnections(game, physical, time) {
+      for (const connection of game.level.connections || []) {
+        const from = connection.from, to = connection.to;
+        if (!from || !to) continue;
+        const points = connection.points || [from, { x: to.x, y: from.y }, to];
+        const active = physical.activeConnections?.[connection.id] ?? (connection.activeKey ? physical.activeMechanisms?.[connection.activeKey] : connection.route ? physical.flowing && physical.flowRoute === connection.route : connection.kind === 'water' ? physical.flowing : false);
+        for (let index = 1; index < points.length; index++) {
+          const a = points[index - 1], b = points[index];
+          line(a.x, a.y, b.x, b.y, connection.kind === 'water' ? '#244f55' : '#465c43', connection.kind === 'water' ? 12 : 6);
+          line(a.x, a.y, b.x, b.y, active ? connection.kind === 'water' ? '#80c6d5' : '#e5d78f' : '#879382', connection.kind === 'water' ? 5 : 2);
+          if (!active) continue;
+          const length = Math.hypot(b.x - a.x, b.y - a.y);
+          const phase = reducedMotion ? 20 : time * 28 % 66;
+          for (let at = phase; at < length; at += 66) circle(a.x + (b.x - a.x) * at / Math.max(1, length), a.y + (b.y - a.y) * at / Math.max(1, length), 2.5, '#f8f0b9');
+        }
+      }
+    }
+    function mysteryWalls(level, physical) {
+      for (const wall of level.walls) {
+        rect(wall.x, wall.y + 6, wall.w, wall.h, '#17393466', 3);
+        rect(wall.x, wall.y, wall.w, wall.h, '#819184', 3);
+        line(wall.x + 3, wall.y + 3, wall.x + wall.w - 3, wall.y + 3, '#c0c8a8', 2);
+      }
+      for (const door of level.doors || []) {
+        const open = physical.doorStates?.[door.id] ?? !physical.walls.some(wall => sameRectangle(wall, door));
+        rect(door.x, door.y, door.w, door.h, open ? '#90b68344' : '#8f704d', 3);
+        const horizontal = door.w > door.h;
+        if (open) {
+          const x = door.x + door.w / 2, y = door.y + door.h / 2;
+          if (horizontal) line(door.x, y, door.x + door.w, y, '#c6df9b', 2, true);
+          else line(x, door.y, x, door.y + door.h, '#c6df9b', 2, true);
+        } else if (horizontal) {
+          for (let x = door.x + 8; x < door.x + door.w; x += 19) line(x, door.y + 2, x, door.y + door.h - 2, '#dfc69a', 4);
+        } else {
+          for (let y = door.y + 8; y < door.y + door.h; y += 19) line(door.x + 2, y, door.x + door.w - 2, y, '#dfc69a', 4);
+        }
+      }
+    }
+    function mysteryObject(game, target, selectedTarget, time) {
+      const geometry = E.objectGeometry(game, target), object = game[target];
+      if (E.isBridge(game, target)) {
+        const deck = E.bridgeGeometry(game, target);
+        rect(deck.x, deck.y + 4, deck.w, deck.h, '#17393466', 5);
+        rect(deck.x, deck.y, deck.w, deck.h, target === 'tree' ? '#c6a16c' : '#b5bfa9', 5);
+        drawBridgeDirection(deck);
+      } else {
+        ctx.fillStyle = '#17393455'; ctx.beginPath(); ctx.ellipse(object.x, object.y + 7, geometry.radius * .9, 7 * geometry.scale, 0, 0, Math.PI * 2); ctx.fill();
+        if (E.has(game, target, 'glow')) halo(geometry.x, geometry.y, 93 * geometry.scale, '#e9e79880');
+        if (E.has(game, target, 'pulse')) ring(geometry.x, geometry.y, geometry.radius + 15 + (reducedMotion ? 0 : time * 15 % 35), '#fae8ad80', 2);
+        if (geometry.floatOffset) line(object.x, object.y, geometry.x, geometry.y, '#f0e8bb88', 1.5, true);
+        if (target === 'stone') {
+          circle(geometry.x, geometry.y, geometry.radius, '#aab7a4'); ring(geometry.x, geometry.y, geometry.radius, '#d7dfbf', 2);
+          line(geometry.x - geometry.radius * .6, geometry.y, geometry.x + geometry.radius * .3, geometry.y - geometry.radius * .5, '#dce4c5', 2);
+        } else {
+          rect(geometry.x - 7 * geometry.scale, geometry.y - 42 * geometry.scale, 14 * geometry.scale, 42 * geometry.scale, '#967143', 2);
+          circle(geometry.x, geometry.y - 58 * geometry.scale, 35 * geometry.scale, '#6a9658');
+          circle(geometry.x - 13 * geometry.scale, geometry.y - 72 * geometry.scale, 20 * geometry.scale, '#86ab68');
+        }
+        if (target === selectedTarget) ring(geometry.x, geometry.y, geometry.radius + 9, '#fff4b6', 1.8, true);
+      }
+      const effects = game.rules[target]?.effects || [];
+      mysteryLabel(TARGET_LABELS[target] + (effects.length ? ' · ' + effects.map(id => EFFECT_LABELS[id]).join(' / ') : ' · 定義なし'), object.x, object.y + 24, { size: 11 });
+    }
+    function mysteryMechanism(game, mechanism, state, time, scale) {
+      const active = Boolean(state?.active), x = mechanism.x, y = mechanism.y;
+      const type = mechanism.type || 'lever';
+      const colour = active ? '#d4e596' : '#9aab92';
+      circle(x, y, 27, '#264e49'); ring(x, y, 27, colour, 2);
+      if (/wheel|水車/.test(type)) {
+        const angle = active && !reducedMotion ? time * 1.2 : 0;
+        ring(x, y, 20, '#d7bc87', 4);
+        for (let spoke = 0; spoke < 8; spoke++) {
+          const a = angle + spoke * Math.PI / 4;
+          line(x, y, x + Math.cos(a) * 21, y + Math.sin(a) * 21, '#bda271', 4);
+        }
+        circle(x, y, 5, '#f5e6b3');
+        const charge = Math.max(0, Math.min(1, game.puzzle?.exitOpen ? 1 : game.puzzle?.powerCharge || 0));
+        if (charge > 0) { ctx.strokeStyle = '#f4e59b'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(x, y, 32, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * charge); ctx.stroke(); }
+      } else if (/plate|weight|重|床/.test(type)) {
+        rect(x - 44, y - 32 + (active ? 5 : 0), 88, 64, active ? '#c1d293' : '#b0aa87', 6);
+        ring(x, y, 48, active ? '#e4eea5' : '#b4bb93', 2);
+        line(x - 35, y + 38, x + 35, y + 38, '#e2e6b8', 2);
+      } else if (/rune|紋/.test(type)) {
+        diamond(x, y, 17, active ? '#f0dda2' : '#7c9a91', '#d7e0bd');
+        word(mechanism.symbol || mechanism.label?.slice(0, 1) || '◇', x, y - 10, 16, '#254d43', 'center');
+      } else if (type === 'dam') {
+        rect(x - 21, y - 20, 42, 40, active ? '#c4d1ac' : '#91a69b', 3);
+        line(x - 19, y, x + 19, y, '#5c796d', 2); line(x, y - 19, x, y + 19, '#5c796d', 2);
+        if (active) line(x - 29, y - 28, x + 29, y - 28, '#e9e2ac', 4);
+      } else if (/root|根/.test(type)) {
+        for (const side of [-1, 1]) { line(x, y + 12, x + side * 16, y - 15, '#b4c899', 3); line(x + side * 10, y - 3, x + side * 20, y - 8, '#b4c899', 2); }
+      } else {
+        rect(x - 14, y + 6, 28, 8, '#b5ad84', 3);
+        line(x, y + 5, x + (active ? 12 : -12), y - 14, '#e4c88d', 5);
+        circle(x + (active ? 12 : -12), y - 14, 5, active ? '#c7db93' : '#e4bc7d');
+      }
+      const near = E.distance(game.player, mechanism) < 76;
+      if (near) ring(x, y, 35, '#f5e7a2', 1.5, true);
+      mysteryLabel(mechanism.label || state?.label || type, x, y + 35, { size: 12 / scale, colour: active ? '#476644ee' : '#284a43ee' });
+      if (near && ['lever', 'rune'].includes(type)) mysteryLabel('E', x + 30, y - 40, { size: 11 });
+    }
+    function mysteryClueVisible(game, clue, physical) {
+      if (Array.isArray(physical.visibleClues)) return physical.visibleClues.includes(clue.id);
+      if (!clue.reveal) return true;
+      if (typeof clue.reveal === 'object') return E.has(game, clue.reveal.target || 'tree', clue.reveal.effect || 'glow');
+      if (clue.reveal === 'dark') return !E.has(game, 'tree', 'glow');
+      return E.has(game, 'tree', 'glow');
+    }
+    function mysteryMinimap(game, bounds, physical, camera, marker) {
+      const x = 676, y = 18, width = 174, height = 116;
+      const scale = Math.min((width - 12) / bounds.w, (height - 12) / bounds.h);
+      const ox = x + (width - bounds.w * scale) / 2 - bounds.x * scale;
+      const oy = y + (height - bounds.h * scale) / 2 - bounds.y * scale;
+      rect(x, y, width, height, '#102f31ed', 7);
+      rect(ox + bounds.x * scale, oy + bounds.y * scale, bounds.w * scale, bounds.h * scale, '#70876a');
+      for (const river of game.level.rivers) rect(ox + river.x * scale, oy + river.y * scale, Math.max(1, river.w * scale), Math.max(1, river.h * scale), mysteryWaterState(game, river, physical) === 'dry' ? '#b1a47a' : '#5798b0');
+      for (const wall of physical.walls) rect(ox + wall.x * scale, oy + wall.y * scale, Math.max(1, wall.w * scale), Math.max(1, wall.h * scale), '#cad1b1');
+      for (const item of game.level.mechanisms || []) circle(ox + item.x * scale, oy + item.y * scale, 2.5, '#ecdaa1');
+      const goal = game.level.goal; rect(ox + goal.x * scale, oy + goal.y * scale, Math.max(4, goal.w * scale), Math.max(4, goal.h * scale), '#d8e7a2');
+      if (!game.core && game.level.core) diamond(ox + game.level.core.x * scale, oy + game.level.core.y * scale, 3.5, '#a5e7ef');
+      if (marker) circle(ox + marker.x * scale, oy + marker.y * scale, 4, '#ffce6d');
+      circle(ox + game.player.x * scale, oy + game.player.y * scale, 4, '#f9f4cb');
+      ctx.strokeStyle = '#ffffdd'; ctx.lineWidth = 1;
+      ctx.strokeRect(ox + camera.x * scale, oy + camera.y * scale, camera.w * scale, camera.h * scale);
+      word('現在地 · Mで全体地図', x + width / 2, y + height + 5, 11, '#fff4cc', 'center');
+    }
+    function drawMystery(game, selectedTarget, hintMarker, viewOptions) {
+      const bounds = E.worldBounds(game), physical = E.physicalState(game);
+      const overview = Boolean(viewOptions?.overview), camera = cameraFor(bounds, game.player, overview);
+      const time = reducedMotion ? 0 : game.elapsed;
+      const theme = THEMES[game.level.theme] || THEMES.ruins;
+      const status = E.puzzleStatus(game);
+      const statuses = Array.isArray(status) ? status : status.mechanisms || [];
+      ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0); ctx.clearRect(0, 0, 870, 570);
+      rect(0, 0, 870, 570, '#173b3b');
+      ctx.save(); ctx.translate(camera.offsetX, camera.offsetY); ctx.scale(camera.scale, camera.scale); ctx.translate(-camera.x, -camera.y);
+      rect(bounds.x, bounds.y, bounds.w, bounds.h, theme.ground, 8);
+      for (const zone of game.level.zones || []) {
+        rect(zone.x, zone.y, zone.w, zone.h, theme.path + '55', 10);
+        word(zone.label, zone.x + 16, zone.y + 14, 15 / camera.scale, theme.ink);
+      }
+      for (let index = 0; index < 240; index++) {
+        const x = bounds.x + 12 + index * 137 % (bounds.w - 24), y = bounds.y + 12 + index * 193 % (bounds.h - 24);
+        rect(x, y, 5, 3, theme.grass + '50', 1);
+      }
+      mysteryWater(game, physical, time);
+      mysteryConnections(game, physical, time);
+      mysteryWalls(game.level, physical);
+      const goal = game.level.goal;
+      rect(goal.x, goal.y, goal.w, goal.h, game.gateOpen ? '#d3df9d' : '#9ca67f', 8);
+      ring(goal.x + goal.w / 2, goal.y + goal.h / 2, Math.min(goal.w, goal.h) / 3, '#fff3ba', 2);
+      word('GOAL', goal.x + goal.w / 2, goal.y + goal.h / 2 - 8, 15, '#355b43', 'center');
+      for (const door of game.level.doors || []) mysteryLabel(door.label, door.x + door.w / 2, door.y - 30, { size: 11 / camera.scale, colour: '#24463de8' });
+      for (const mechanism of game.level.mechanisms || []) {
+        const state = statuses.find(item => item.id === mechanism.id) || {};
+        mysteryMechanism(game, mechanism, { ...state, active: physical.activeMechanisms?.[mechanism.id] ?? state.active }, time, camera.scale);
+      }
+      for (const clue of game.level.clues || []) {
+        const visible = mysteryClueVisible(game, clue, physical);
+        if (visible && clue.reveal) halo(clue.x, clue.y, 38, '#e7df9f70');
+        rect(clue.x - 16, clue.y - 22, 32, 40, visible ? '#b6b89b' : '#8b9988', 4);
+        line(clue.x - 9, clue.y - 10, clue.x + 9, clue.y - 10, visible ? '#4f6955' : '#7d8c7b', 2);
+        line(clue.x - 9, clue.y - 2, clue.x + 9, clue.y - 2, visible ? '#4f6955' : '#7d8c7b', 2);
+        if (E.distance(game.player, clue) < 76) mysteryLabel('E · 調べる', clue.x, clue.y + 26, { size: 11 });
+      }
+      if (!game.core && game.level.core) {
+        const core = game.level.core;
+        halo(core.x, core.y, 32, '#a8edee60'); diamond(core.x, core.y, 14, '#9ddfeb', '#e4ffff');
+        mysteryLabel('青い結晶', core.x, core.y + 24, { size: 11 });
+      }
+      for (const target of ['stone', 'tree']) mysteryObject(game, target, selectedTarget, time);
+      if (game.level.fire && physical.fire !== false) {
+        const fire = E.fireGeometry(game);
+        if (fire.x >= bounds.x && fire.x <= bounds.x + bounds.w && fire.y >= bounds.y && fire.y <= bounds.y + bounds.h) {
+          halo(fire.x, fire.y, fire.radius + 30, fire.extinguished ? '#b9e5eb66' : '#f4bd6488');
+          circle(fire.x, fire.y, fire.radius, fire.extinguished ? '#79a8b2' : '#f0a34c');
+          if (fire.extinguished) snowflake(fire.x, fire.y, 12, '#e5f7ed');
+          else circle(fire.x, fire.y + 3, fire.radius * .5, '#ffe7a0');
+        }
+      }
+      for (let index = 0; index < game.level.shards.length; index++) {
+        if (!game.collectedShards[index]) { const point = game.level.shards[index]; diamond(point.x, point.y, 9, '#f4d588', '#fff4ba'); }
+      }
+      drawPlayer(game);
+      if (hintMarker && Number.isFinite(hintMarker.x) && Number.isFinite(hintMarker.y)) {
+        ring(hintMarker.x, hintMarker.y, 29, '#fff1a4', 3);
+        line(hintMarker.x - 8, hintMarker.y - 41, hintMarker.x, hintMarker.y - 31, '#fff1a4', 3);
+        line(hintMarker.x + 8, hintMarker.y - 41, hintMarker.x, hintMarker.y - 31, '#fff1a4', 3);
+        mysteryLabel(hintMarker.label, hintMarker.x, hintMarker.y - 69, { size: 13 / camera.scale, colour: '#72572bf0' });
+      }
+      ctx.restore();
+      mysteryLabel(overview ? '全体地図 · Mで探索へ' : game.level.name, 18, 15, { align: 'left', size: 15 });
+      if (!overview) mysteryMinimap(game, bounds, physical, camera, hintMarker);
+      else word('白い丸が現在地です。調べた手掛かりは手帳で確認できます。', 435, 546, 12, '#f3edc9', 'center');
+      if (!overview && hintMarker && (hintMarker.x < camera.x || hintMarker.x > camera.x + camera.w || hintMarker.y < camera.y || hintMarker.y > camera.y + camera.h)) {
+        mysteryLabel('目印は画面の外 · Mで全体地図', 435, 536, { size: 12, colour: '#6a542bea' });
+      }
+    }
+
+    function draw(game, selectedTarget, hintMarker = null, viewOptions = {}) {
+      if (game.level.mystery) { drawMystery(game, selectedTarget, hintMarker, viewOptions); return; }
       const theme = THEMES[game.level.theme] || THEMES.meadow;
       const time = reducedMotion ? 0 : game.elapsed;
       ctx.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
@@ -599,7 +870,7 @@
     return { draw };
   }
 
-  const api = { createRenderer };
+  const api = { createRenderer, cameraFor };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.WorldDefinitionRenderer = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
