@@ -2,8 +2,11 @@
 (function () {
   'use strict';
   const SCHEMA = 'vocal-fluctuation-result-v1';
-  const METHOD = 'rms-welch-v1';
+  // Both versions share these display fields. Keep the recorded method unchanged;
+  // accepting an old result for display does not make it comparable in the DB.
+  const METHODS = new Set(['rms-welch-v1', 'rms-welch-v2']);
   const MAX_RESULT_BYTES = 8 * 1024 * 1024;
+  const MAX_RESULT_POINTS = 600 * 200;
   const DEMOS = {
     white: { title: '白色のゆらぎ', text: '細かな変化にもパワーが分かれる合成データです。1/fの直線と傾きがどう違うか見てみましょう。' },
     pink: { title: 'ピンクのゆらぎ', text: '1/fのパワースペクトルを目標に作った合成データです。有限の長さなので、傾きは厳密に−1にはなりません。' },
@@ -12,7 +15,7 @@
   function isObject(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
   function isNumber(value) { return typeof value === 'number' && Number.isFinite(value); }
   function numericArray(values, name, minimum) {
-    if (!Array.isArray(values) || values.length > 100000 || !values.every(value => isNumber(value) && value >= minimum)) {
+    if (!Array.isArray(values) || values.length > MAX_RESULT_POINTS || !values.every(value => isNumber(value) && value >= minimum)) {
       throw new Error(name + 'の数値を読み取れません。Colabで保存したresult.jsonを選んでください。');
     }
     return values;
@@ -58,7 +61,7 @@
     return report;
   }
   function validateResult(result) {
-    if (!isObject(result) || result.schema_version !== SCHEMA || result.method_id !== METHOD) {
+    if (!isObject(result) || result.schema_version !== SCHEMA || !METHODS.has(result.method_id)) {
       throw new Error('対応する解析結果ではありません。このツールで保存したresult.jsonを選んでください。');
     }
     if (!['near', 'not_near', 'inconclusive'].includes(result.status) || !isNumber(result.duration_seconds) || result.duration_seconds < 0 || !isObject(result.fit) || !isObject(result.quality)) {
@@ -92,6 +95,10 @@
     }
     return points;
   }
+  function spectrumTickValues(low, high) {
+    return [0.01, 0.02, 0.05, 0.1, 0.2, 0.5, 1, 2, 5, 10, 20]
+      .filter(value => value >= low / 2 && value <= high * 1.4);
+  }
   // 図の数値を作る部分。波形の形と成分のパワーを別々に確かめられます。
   function makeToneWave(amplitude, frequency, durationMs = 12, count = 1201) {
     return Array.from({ length: count }, (_, index) => {
@@ -111,7 +118,7 @@
   function envelopeModel(time) {
     return 0.55 + 0.3 * Math.sin(2 * Math.PI * 0.5 * time);
   }
-  const API = { validateResult, compactPoints, preprocessingReport, MAX_RESULT_BYTES,
+  const API = { validateResult, compactPoints, preprocessingReport, spectrumTickValues, MAX_RESULT_BYTES,
     makeToneWave, componentPowers, makeCombinedWave, envelopeModel };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (typeof document === 'undefined') return;
@@ -272,7 +279,7 @@
   let requestNumber = 0;
   function drawDemoEnvelope(result) {
     const times = result.series.time_seconds, envelope = result.series.envelope;
-    const yMax = Math.max(3, Math.max(...envelope) * 1.05);
+    const yMax = Math.max(3, envelope.reduce((maximum, value) => Math.max(maximum, value), 0) * 1.05);
     const axes = frame($('envelope-chart'), { width: 650, height: 290, xMax: result.duration_seconds,
       yMin: 0, yMax, xTicks: [0, 30, 60, 90, 120].filter(value => value <= result.duration_seconds),
       yTicks: [0, 1, 2, 3].filter(value => value <= yMax), xLabel: '時間 [秒]', yLabel: '音量の変化（合成値）' });
@@ -300,8 +307,7 @@
       line(svg, left, y, right, y, 'grid');
       text(svg, left - 8, y + 4, '10^' + exponent.toFixed(1), 'tick', 'end');
     }
-    for (const value of [0.1, 0.2, 0.5, 1, 2, 5]) {
-      if (Math.log10(value) < xMin || Math.log10(value) > xMax) continue;
+    for (const value of spectrumTickValues(low, high)) {
       line(svg, xMap(value), top, xMap(value), bottom, 'grid');
       text(svg, xMap(value), bottom + 22, String(value));
     }
