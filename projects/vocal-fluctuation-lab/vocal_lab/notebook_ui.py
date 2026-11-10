@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import csv
+from contextlib import nullcontext
 import html
 import json
 import math
@@ -14,7 +15,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 
 
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac", ".aiff", ".aif", ".webm"}
-MAX_UPLOAD_BYTES = 200 * 1024 * 1024
+MAX_UPLOAD_BYTES = 512 * 1024 * 1024
 
 # FileUploadの標準ビューは説明に件数を付けます。ファイル入力の動作を保ち、
 # この音源ボタンだけを固定ラベルで表示します（widget自体がbuttonの版にも対応）。
@@ -49,12 +50,26 @@ def save_audio_upload(value: Any, directory: Path) -> Path:
         raise ValueError("MP3、WAV、M4A、FLACなどの音源ファイルを選んでください。")
     content = bytes(record.get("content", b""))
     if not content or len(content) > MAX_UPLOAD_BYTES:
-        raise ValueError("空のファイル、または200MBを超えるファイルは使えません。")
+        raise ValueError("空のファイル、または512 MiBを超えるファイルは使えません。")
     directory.mkdir(parents=True, exist_ok=True)
     # アップロード時の名前をパスとして使わず、作業用の名前にします。
     path = directory / ("upload_" + uuid4().hex + extension)
     path.write_bytes(content)
     return path
+
+
+def validate_audio_path(value: str | Path) -> Path:
+    """実行環境の既存音源を確認します。入力ファイルには書き込みません。"""
+    path = Path(value).expanduser()
+    if not path.is_absolute():
+        raise ValueError("/content/ などで始まる音源ファイルの絶対パスを入力してください。")
+    if path.suffix.lower() not in AUDIO_EXTENSIONS:
+        raise ValueError("MP3、WAV、M4A、FLACなどの音源ファイルを選んでください。")
+    if not path.is_file():
+        raise ValueError("指定した音源が見つかりません。ファイルのアップロード完了とパスを確認してください。")
+    if not 0 < path.stat().st_size <= MAX_UPLOAD_BYTES:
+        raise ValueError("空のファイル、または512 MiBを超えるファイルは使えません。")
+    return path.resolve()
 
 
 def validate_interval(start: float, end: float) -> tuple[float, float]:
@@ -288,8 +303,16 @@ class VocalNotebookUI:
             database = reference_db
         self.run_pipeline, self.db_api = pipeline, database
         self.display, self.HTML, self.Audio = display, HTML, Audio
-        self.workspace = Path(workspace or (Path.cwd() / "vocal_lab_runs"))
+        self.workspace = Path(workspace or (Path.cwd() / "vocal_lab_runs")).expanduser().resolve()
         self.workspace.mkdir(parents=True, exist_ok=True)
+        try:
+            from google.colab import files as colab_files
+        except ImportError:
+            colab_files = None
+        self._colab_files = colab_files if callable(getattr(colab_files, "upload", None)) else None
+        self._audio_input_path: Path | None = None
+        self._audio_input_route: str | None = None
+        self._audio_upload_busy = False
         self.database = self.db_api.empty_database()
         self.bundle = None
         self.results_zip = None
@@ -302,6 +325,21 @@ class VocalNotebookUI:
         self.audio_upload.add_class("vocal-audio-upload")
         self.audio_upload.layout.width = "150px"
         self.audio_upload.tooltip = "解析する音源を1つ選びます。選び直すと前の音源を置き換えます。"
+        self.audio_upload.layout.display = "none" if self._colab_files else ""
+        self.colab_upload_button = widgets.Button(description="音源を選ぶ", layout=widgets.Layout(width="150px"))
+        self.colab_upload_button.tooltip = "Colabの標準アップロードで音源を1つ選びます。転送が終わるまでお待ちください。"
+        self.colab_upload_button.layout.display = "" if self._colab_files else "none"
+        self.upload_output = widgets.Output()
+        self.runtime_file_path = widgets.Text(
+            description="音源のパス", placeholder="/content/vocals.wav", style={"description_width": "initial"},
+            layout=widgets.Layout(width="95%"),
+        )
+        self.use_runtime_file_button = widgets.Button(description="このファイルを使う", layout=widgets.Layout(width="auto"))
+        self.runtime_file_options = widgets.Accordion(children=[widgets.VBox([
+            widgets.HTML("<p>大きなWAVなどを選んでも反映されない場合は、Colab左側のフォルダ欄から音源をアップロードし、完了後にファイルの「パスをコピー」を使って下に貼り付けてください。接続済みのDriveにある音源の絶対パスも使えます。元の音源は変更しません。</p>"),
+            self.runtime_file_path, self.use_runtime_file_button,
+        ])], selected_index=None)
+        self.runtime_file_options.set_title(0, "Colab内のファイルを使う")
         self.upload_button_style = widgets.HTML(UPLOAD_BUTTON_CSS, layout=widgets.Layout(height="0px", margin="0"))
         self.selected_audio = widgets.HTML("<p>音源はまだ選ばれていません。新しく選ぶと置き換わります。前の音源は一緒に解析しません。</p>")
         self.url = widgets.Text(description="YouTube URL", placeholder="https://www.youtube.com/watch?v=…", layout=widgets.Layout(width="95%"), style={"description_width": "initial"})
@@ -345,6 +383,9 @@ class VocalNotebookUI:
         self.comparison_output = widgets.HTML()
         self.mode.observe(self._switch_mode, names="value")
         self.audio_upload.observe(self._audio_selected, names="value")
+        self.colab_upload_button.on_click(lambda button: self.upload_audio_from_colab())
+        self.use_runtime_file_button.on_click(self._use_runtime_file)
+        self.runtime_file_path.observe(self._runtime_file_edited, names="value")
         self.whole_track.observe(self._switch_whole_track, names="value")
         self.reset_times_button.on_click(self._reset_times)
         self.analyse_button.on_click(self._analyse)
@@ -357,7 +398,8 @@ class VocalNotebookUI:
         self.panel = widgets.VBox([
             self.version_banner, self.upload_button_style,
             widgets.HTML("<h2>1 音源と区間を選ぶ</h2><p>利用できる音源を使ってください。YouTubeから取得できない場合は、MP3やWAVをアップロードできます。音源はこの実行環境で処理し、公開DBへ自動送信しません。</p>"),
-            self.mode, self.audio_upload, self.selected_audio, self.url,
+            self.mode, self.audio_upload, self.colab_upload_button, self.upload_output,
+            self.runtime_file_options, self.selected_audio, self.url,
             self.whole_track, self.time_controls, self.reset_times_button,
             widgets.HTML("<p>曲全体を選ぶと、先頭から末尾まで解析します（最大10分）。初期設定では前後の無音を歌声抽出後に自動で除きます。無音調整後の長さが60秒未満のときは判定を保留します。</p>"),
             self.device, self.vocals_only,
@@ -372,25 +414,116 @@ class VocalNotebookUI:
         ])
 
     def _switch_mode(self, change):
-        self.audio_upload.layout.display = "" if change["new"] == "file" else "none"
+        file_mode = change["new"] == "file"
+        self.audio_upload.layout.display = "" if file_mode and self._colab_files is None else "none"
+        self.colab_upload_button.layout.display = "" if file_mode and self._colab_files is not None else "none"
+        self.upload_output.layout.display = "" if file_mode else "none"
+        self.runtime_file_options.layout.display = "" if file_mode else "none"
         self.selected_audio.layout.display = "" if change["new"] == "file" else "none"
         self.url.layout.display = "" if change["new"] == "youtube" else "none"
 
-    def _audio_selected(self, change):
-        """選択音源を明示し、選び直したときに前の解析結果を残しません。"""
-        records = uploaded_files(change["new"])
-        if len(records) == 1:
-            name = html.escape(str(records[0].get("name", "音源ファイル")))
-            self.selected_audio.value = "<p>今回の音源：<strong>" + name + "</strong><br>新しく選ぶと置き換わります。前の音源は一緒に解析しません。</p>"
-        elif not records:
-            self.selected_audio.value = "<p>音源はまだ選ばれていません。新しく選ぶと置き換わります。前の音源は一緒に解析しません。</p>"
-        else:
-            self.selected_audio.value = "<p>解析する音源を1つだけ選んでください。</p>"
+    def _reset_results(self):
         self.bundle, self.results_zip = None, None
         self.result_download.disabled = self.vocals_download.disabled = self.raw_vocals_download.disabled = self.add_reference_button.disabled = True
         self.result_output.clear_output(wait=False)
         self.comparison_output.value = ""
-        self._set_status("今回の音源と区間を確認して、「解析を始める」を押してください。")
+
+    def _clear_audio_selection(self):
+        self._audio_input_path = None
+        self._audio_input_route = None
+        self.selected_audio.value = "<p>音源はまだ選ばれていません。新しく選ぶと置き換わります。前の音源は一緒に解析しません。</p>"
+        self._reset_results()
+
+    def _show_selected_audio(self, name: str, size: int):
+        self.selected_audio.value = (
+            "<p>今回の音源：<strong>" + html.escape(name) + "</strong>（"
+            + html.escape(f"{size / (1024 * 1024):.1f} MiB")
+            + "）<br>新しく選ぶと置き換わります。前の音源は一緒に解析しません。</p>"
+        )
+        self._set_status("音源を認識しました。今回の音源と区間を確認して、「解析を始める」を押してください。")
+
+    def _audio_selected(self, change):
+        """選択音源を明示し、選び直したときに前の解析結果を残しません。"""
+        self._clear_audio_selection()
+        try:
+            records = uploaded_files(change["new"])
+            if len(records) != 1:
+                raise ValueError("解析する音源ファイルを1つ選んでください。")
+            record = records[0]
+            name = str(record.get("name", "音源ファイル"))
+            if Path(name).suffix.lower() not in AUDIO_EXTENSIONS:
+                raise ValueError("MP3、WAV、M4A、FLACなどの音源ファイルを選んでください。")
+            size = memoryview(record.get("content", b"")).nbytes
+            if not 0 < size <= MAX_UPLOAD_BYTES:
+                raise ValueError("空のファイル、または512 MiBを超えるファイルは使えません。")
+            self._audio_input_route = "widget"
+            self._show_selected_audio(name, size)
+        except Exception as error:
+            self._set_status("音源を認識できませんでした：" + str(error))
+
+    def upload_audio_from_colab(self, use_output: bool = True):
+        """Colab標準転送を使います。Falseなら通常のセルへ直接表示します。"""
+        if self._audio_upload_busy:
+            self._set_status("音源を転送しています。完了するまでお待ちください。")
+            return None
+        self._clear_audio_selection()
+        self.mode.value = "file"
+        self._audio_upload_busy = True
+        self.colab_upload_button.disabled = self.analyse_button.disabled = True
+        self.use_runtime_file_button.disabled = self.audio_upload.disabled = True
+        self.mode.disabled = True
+        try:
+            if self._colab_files is None:
+                raise ValueError("この環境ではColab標準アップロードを使えません。音源選択かファイルのパス指定を使ってください。")
+            self._set_status("音源を選び、転送が完了するまでお待ちください。ファイル名が表示されると解析できます。")
+            upload_dir = Path(tempfile.mkdtemp(prefix="audio_upload_", dir=self.workspace)).resolve()
+            if use_output:
+                self.upload_output.clear_output(wait=False)
+            with self.upload_output if use_output else nullcontext():
+                received = self._colab_files.upload(target_dir=str(upload_dir))
+            if not isinstance(received, dict) or len(received) != 1:
+                raise ValueError("アップロードは未完了です。解析する音源ファイルを1つだけ選んでください。")
+            # Colabが返すキーは、重複名の調整も済ませた実際の保存パスです。
+            path = validate_audio_path(next(iter(received)))
+            try:
+                path.relative_to(upload_dir)
+            except ValueError as error:
+                raise ValueError("アップロード先の音源を確認できません。もう一度選んでください。") from error
+            self._audio_input_path, self._audio_input_route = path, "colab"
+            self._show_selected_audio(path.name, path.stat().st_size)
+            return path
+        except Exception as error:
+            self._clear_audio_selection()
+            self._set_status("音源を認識できませんでした：" + str(error) + " 左のファイル欄からアップロードし、「Colab内のファイルを使う」で指定する方法も使えます。")
+            return None
+        finally:
+            self._audio_upload_busy = False
+            self.colab_upload_button.disabled = self.analyse_button.disabled = False
+            self.use_runtime_file_button.disabled = self.audio_upload.disabled = False
+            self.mode.disabled = False
+
+    def _runtime_file_edited(self, change):
+        if self._audio_input_route == "path":
+            self._clear_audio_selection()
+            self._set_status("パスを変更しました。「このファイルを使う」を押して音源を確認してください。")
+
+    def _use_runtime_file(self, button=None):
+        if self._audio_upload_busy:
+            self._set_status("音源を転送しています。完了するまでお待ちください。")
+            return None
+        self._clear_audio_selection()
+        self.mode.value = "file"
+        try:
+            value = self.runtime_file_path.value.strip()
+            if not value:
+                raise ValueError("アップロード済み音源の絶対パスを入力してください。")
+            path = validate_audio_path(value)
+            self._audio_input_path, self._audio_input_route = path, "path"
+            self._show_selected_audio(path.name, path.stat().st_size)
+            return path
+        except Exception as error:
+            self._set_status("音源を認識できませんでした：" + str(error))
+            return None
 
     def _switch_whole_track(self, change):
         self.time_controls.layout.display = "none" if change["new"] else ""
@@ -413,15 +546,20 @@ class VocalNotebookUI:
         self.status.value = "<p>" + html.escape(str(text)) + "</p>"
 
     def _analyse(self, button=None):
-        self.bundle, self.results_zip = None, None
-        self.result_download.disabled = self.vocals_download.disabled = self.raw_vocals_download.disabled = self.add_reference_button.disabled = True
-        self.result_output.clear_output(wait=False)
-        self.comparison_output.value = ""
+        if self._audio_upload_busy:
+            self._set_status("音源の転送が完了するまでお待ちください。")
+            return
+        self._reset_results()
         try:
             start, end = (0.0, None) if self.whole_track.value else validate_interval(self.start.value, self.end.value)
             run_dir = Path(tempfile.mkdtemp(prefix="analysis_", dir=self.workspace))
             if self.mode.value == "file":
-                source = str(save_audio_upload(self.audio_upload.value, run_dir / "input"))
+                if self._audio_input_route == "widget":
+                    source = str(save_audio_upload(self.audio_upload.value, run_dir / "input"))
+                elif self._audio_input_route in {"path", "colab"} and self._audio_input_path is not None:
+                    source = str(validate_audio_path(self._audio_input_path))
+                else:
+                    raise ValueError("音源ファイルをまだ認識できていません。ファイル名が表示されるまで待つか、「Colab内のファイルを使う」で指定してください。")
             else:
                 source = self.url.value.strip()
                 if not source:

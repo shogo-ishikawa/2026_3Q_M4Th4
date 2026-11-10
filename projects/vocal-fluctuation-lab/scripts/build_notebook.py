@@ -5,7 +5,7 @@ import textwrap
 
 
 PROJECT = Path(__file__).resolve().parents[1]
-NOTEBOOK_VERSION = "1.3.0"
+NOTEBOOK_VERSION = "1.3.1"
 
 
 def markdown(source):
@@ -78,7 +78,7 @@ def build_notebook():
             except (AttributeError, ValueError):
                 version = ()
             try:
-                features = (version >= (1, 3, 0) and audio.MAX_SECONDS >= 600
+                features = (version >= (1, 3, 1) and audio.MAX_SECONDS >= 600
                             and analysis.METHOD_ID == "rms-welch-v2"
                             and hasattr(analysis.AnalysisConfig(), "auto_band")
                             and analysis.AnalysisConfig().high_hz >= 20
@@ -86,6 +86,8 @@ def build_notebook():
                             and hasattr(notebook_ui.VocalNotebookUI, "_reset_times")
                             and hasattr(notebook_ui.VocalNotebookUI, "_silence_config")
                             and hasattr(notebook_ui.VocalNotebookUI, "_analysis_config")
+                            and hasattr(notebook_ui.VocalNotebookUI, "upload_audio_from_colab")
+                            and hasattr(notebook_ui.VocalNotebookUI, "_use_runtime_file")
                             and hasattr(notebook_ui.VocalNotebookUI, "_switch_whole_track")
                             and "silence_config" in inspect.signature(pipeline.run_analysis).parameters
                             and SilenceConfig().trim_edges and not SilenceConfig().remove_internal)
@@ -133,15 +135,17 @@ def build_notebook():
         markdown("""
         ## 2 解析画面を開く
 
-        1. 「ファイルをアップロード」から音源を1つ選ぶか、「YouTube URL」に動画URLを入れます。選び直すと今回の音源を置き換えます。表示されたファイル名を確認してください。
+        1. 「ファイルをアップロード」を選び、「音源を選ぶ」を押します。その後に出る選択欄から音源を1つ選び、転送が完了して「今回の音源」に名前と大きさが表示されるまで待ちます。YouTubeを使う場合は「YouTube URL」に動画URLを入れます。選び直すと今回の音源を置き換えます。
         2. 「曲全体を解析」を選ぶか、元の音源の先頭から数えた「開始（秒）」「終了（秒）」を入力します。例：40秒から130秒。
         3. 「解析モード」は最初は「自動（音源の長さに合わせる）」のままにして、「解析を始める」を押します。
         4. 元の区間と抽出した歌声を聴き比べ、結果とグラフを確かめます。
         5. 「結果ZIPを保存」で数値と図を保存します。「無音調整前の歌声WAVを保存」と「無音調整後の歌声WAVを保存」で、全長の音声も別に保存できます。
 
         画面の試聴は各音源の先頭30秒です。解析とWAV保存には指定した全区間を使います。
-        保存済みの歌声WAVを調べ直すときは、アップロードして「歌声だけの音源です（分離を省略）」を選びます。
-        既に無音を調整した音源をそのまま使う場合は、「無音の調整」で除去をオフにしてください。
+        保存済みの歌声WAVを調べ直すときは、**「歌声だけの音源です（分離を省略）」をオン**にします。
+        「曲全体を解析」と固定モードを選び、途中の無音除去はオフにします。
+        既に前後の無音を切った音源をそのまま使う場合は、必要に応じて前後の除去もオフにしてください。
+        過去に除いた音声部分を、保存済みWAVだけから復元することはできません。
 
         **最初は60〜90秒の、歌声が入っている区間を選んでください。**
         短すぎる区間、音量変化がほとんどない区間、当てはまりが弱い区間などは判定を保留します。
@@ -150,7 +154,7 @@ def build_notebook():
         GPUのメモリー不足で失敗した場合は「処理装置」をCPUへ変えてから試せます。
 
         「秒数をリセット（0〜90秒）」で、区間指定を最初の状態へ戻せます。
-        曲全体・区間指定ともに上限は10分です。長い曲は区間を選んでください。
+        曲全体・区間指定ともに上限は10分です。ファイルは1つ512 MiBまで取り込めます。長い曲は区間を選んでください。
         前後の無音は歌声の抽出後に自動で除きます。「無音の調整」では、しきい値や途中の無音の扱いも変えられます。
         途中の無音を除く場合は時間を短縮した音源になり、その条件が結果にも表示されます。
         """),
@@ -162,6 +166,28 @@ def build_notebook():
 
         lab = launch_notebook()
         """, "解析画面を開く"),
+        markdown("""
+        ### 音源の選択が反映されない場合
+
+        通常は上の解析画面にある「音源を選ぶ」を使います。
+        選んだ後も「今回の音源」に名前が表示されない場合は、下のチェックを入れてセルを実行してください。
+        **このセルの実行後に出る選択欄から**音源を1つ選び、転送が完了するまで待ちます。
+        「今回の音源」にファイル名と大きさが表示されたら、解析画面へ戻って「解析を始める」を押します。
+
+        Colabのファイル欄や接続済みのGoogle Driveに既に音源がある場合は、
+        解析画面のファイル指定欄へ実際のパスを入力し、「このファイルを使う」を押すこともできます。
+        選択を取り消した場合や取り込みに失敗した場合は、以前の音源と結果の選択を解除します。
+        """),
+        code("""
+        import_audio_now = False #@param {type:"boolean"}
+
+        if import_audio_now:
+            if not globals().get("vocal_lab_ready", False) or "lab" not in globals():
+                raise RuntimeError("最初に準備セルと「解析画面を開く」セルを実行してください。")
+            lab.upload_audio_from_colab(use_output=False)
+        else:
+            print("補助の取り込みは実行していません。選択が反映されない場合だけチェックを入れて実行してください。")
+        """, "音源を取り込む（選択が反映されない場合）"),
         markdown("""
         ## 3 結果を読む
 
@@ -286,6 +312,7 @@ def build_notebook():
 
         - **準備に失敗する**：エラーの最後の行を確認し、接続が切れていれば接続し直して準備セルから実行します。
         - **YouTubeから取得できない**：地域制限や配信側の制限などで取得できないことがあります。利用できるMP3やWAVのアップロードを使ってください。
+        - **選んだファイルが反映されない**：「音源を取り込む（選択が反映されない場合）」のチェックを入れてセルを実行するか、Colab内の音源の実パスを指定します。「今回の音源」に名前と大きさが表示されてから解析します。
         - **歌声がほとんど聞こえない**：歌唱区間の開始・終了を見直します。元音源でも歌声が入っているか確かめてください。
         - **判定保留になる**：理由を読み、より長い区間で試します。保留は失敗ではなく、条件が足りないことを示します。
         - **比較結果が出ない**：登録と問い合わせを同じ固定モード・無音設定・分離方法にそろえます。同じ音源との自己比較は表示しません。旧版DBは保存した音源から再解析します。
