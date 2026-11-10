@@ -6,7 +6,7 @@ Pythonの基礎を学んだ学生が、AIや教員の支援を受けながら制
 
 | 作品 | 内容 | 状態 |
 | --- | --- | --- |
-| [Vocal Fluctuation Lab](projects/vocal-fluctuation-lab/) | 曲全体または区間を指定し、歌声の音量変動を1/f評価。無音処理と参照音源比較にも対応 | v1.1.0。最大10分、前後の無音の自動除去、途中の無音を残す／除く設定、Colab用Notebookと結果ビューアを公開 |
+| [Vocal Fluctuation Lab](projects/vocal-fluctuation-lab/) | Webで音と波・スペクトル・1/fゆらぎを学び、Colabで歌声を解析する教材 | v1.2.0。波形とスペクトルの体験、最大10分のColab解析、秒数リセットと無音調整に対応 |
 | [WORLD DEFINITION](projects/world-definition/) | 物体と動作を組み合わせて道を作るブラウザパズル | v1.3.0。AI不要で遊べる基本5面と応用4面、状況別の攻略ヒント、操作ガイド、元C++参照コード |
 | [Guitar Chord Lab](projects/guitar-chord-lab/) | ギターの音源分離とコード認識、分離前後の比較実験 | 初版 v0.1.0。Colab用Notebookとコマンドあり（Colab上での動作は未確認） |
 | [Park Itinerary Lab](projects/park-itinerary-lab/) | 架空のテーマパークでの一日の予定を数理最適化で計算（PuLP入門、CP-SATによる日程最適化、短縮利用の配分の比較実験） | v0.1.0 初版。ローカルでテストとNotebookの実行を確認。Colab上での実行は未確認 |

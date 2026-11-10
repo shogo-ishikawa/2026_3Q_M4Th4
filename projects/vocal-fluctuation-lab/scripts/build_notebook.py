@@ -5,6 +5,7 @@ import textwrap
 
 
 PROJECT = Path(__file__).resolve().parents[1]
+NOTEBOOK_VERSION = "1.2.0"
 
 
 def markdown(source):
@@ -38,24 +39,70 @@ def build_notebook():
         このセルは公開リポジトリから、この作品に必要なコードを取得して準備します。
         音源ファイルやGoogle Driveの内容をリポジトリへ送る処理はありません。
         Colabから接続確認を求められた場合は、接続してから進めます。
+        前に使った画面が残る場合も、この準備セルから実行し直してください。保存した音源や比較DBのファイルは削除しません。
+        配布ZIPを手元のJupyterで使う場合は、下の選択を「手元のフォルダを使う」へ変更できます。
         """),
         code('''
+        source_mode = "公開版を更新" #@param ["公開版を更新", "手元のフォルダを使う"]
+
+        import importlib
+        import inspect
         import io
         import subprocess
         import sys
         import tempfile
         import urllib.request
+        import uuid
         import zipfile
         from pathlib import Path
 
-        # ZIPを解凍してローカルで使う場合は、手元の作品フォルダを優先します。
-        project_candidates = [Path.cwd(), Path.cwd().parent]
-        project_directory = next((path for path in project_candidates if (path / "vocal_lab").is_dir()), None)
-        if project_directory is None:
+        vocal_lab_ready = False
+
+        def activate_vocal_source(directory):
+            # Pythonは読み込み済みのモジュールを再利用するため、この作品だけを読み直します。
+            directory = Path(directory).resolve()
+            for name in list(sys.modules):
+                if name == "vocal_lab" or name.startswith("vocal_lab."):
+                    del sys.modules[name]
+            sys.path[:] = [path for path in sys.path if Path(path or Path.cwd()).resolve() != directory]
+            sys.path.insert(0, str(directory))
+            importlib.invalidate_caches()
+            import vocal_lab
+            from vocal_lab import audio, notebook_ui, pipeline
+            from vocal_lab.silence import SilenceConfig
+
+            if Path(vocal_lab.__file__).resolve().parent != directory / "vocal_lab":
+                raise RuntimeError("更新したコードを読み込めませんでした。準備セルをもう一度実行してください。")
+            try:
+                version = tuple(int(part) for part in vocal_lab.__version__.split("."))
+            except (AttributeError, ValueError):
+                version = ()
+            try:
+                features = (version >= (1, 2, 0) and audio.MAX_SECONDS >= 600
+                            and notebook_ui.validate_interval(0, 600) == (0, 600)
+                            and hasattr(notebook_ui.VocalNotebookUI, "_reset_times")
+                            and hasattr(notebook_ui.VocalNotebookUI, "_silence_config")
+                            and hasattr(notebook_ui.VocalNotebookUI, "_switch_whole_track")
+                            and "silence_config" in inspect.signature(pipeline.run_analysis).parameters
+                            and SilenceConfig().trim_edges and not SilenceConfig().remove_internal)
+            except (AttributeError, TypeError, ValueError):
+                features = False
+            if not features:
+                raise RuntimeError("コードの版か必要な機能が古いままです。準備セルで「公開版を更新」を選んで実行してください。")
+            return vocal_lab
+
+        if source_mode == "手元のフォルダを使う":
+            project_candidates = [Path.cwd(), Path.cwd().parent]
+            project_directory = next((path for path in project_candidates if (path / "vocal_lab").is_dir()), None)
+            if project_directory is None:
+                raise RuntimeError("作品フォルダが見つかりません。配布ZIPを展開したフォルダから開くか、「公開版を更新」を選んでください。")
+        else:
+            # 古い/content内のコピーを自動選択せず、毎回別のフォルダへ取得します。
             project_directory = Path(tempfile.mkdtemp(prefix="vocal-fluctuation-source-"))
-            repository_archive = "https://github.com/shogo-ishikawa/2026_3Q_M4Th4/archive/refs/heads/main.zip"
+            repository_archive = "https://github.com/shogo-ishikawa/2026_3Q_M4Th4/archive/refs/heads/main.zip?refresh=" + uuid.uuid4().hex
             print("作品のコードを取得しています。")
-            with urllib.request.urlopen(repository_archive, timeout=90) as response:
+            request = urllib.request.Request(repository_archive, headers={"Cache-Control": "no-cache"})
+            with urllib.request.urlopen(request, timeout=90) as response:
                 archive_bytes = response.read(40 * 1024 * 1024 + 1)
             if len(archive_bytes) > 40 * 1024 * 1024:
                 raise RuntimeError("コードの取得サイズが上限を超えました。配布ZIPをご利用ください。")
@@ -75,9 +122,9 @@ def build_notebook():
             raise RuntimeError("作品の準備ファイルが見つかりません。公開版のNotebookを開き直してください。")
         print("必要なライブラリを準備しています。")
         subprocess.run([sys.executable, "-m", "pip", "install", "-q", "-r", str(requirements_file)], check=True)
-        if str(project_directory) not in sys.path:
-            sys.path.insert(0, str(project_directory))
-        print("準備ができました。次のセルを実行してください。")
+        loaded_vocal_lab = activate_vocal_source(project_directory)
+        vocal_lab_ready = True
+        print("準備ができました（v" + loaded_vocal_lab.__version__ + " / 最大600秒）。次のセルを実行してください。")
         ''', "準備をする"),
         markdown("""
         ## 2 解析画面を開く
@@ -100,6 +147,9 @@ def build_notebook():
         途中の無音を除く場合は時間を短縮した音源になり、その条件が結果にも表示されます。
         """),
         code("""
+        if not globals().get("vocal_lab_ready", False):
+            raise RuntimeError("最初に準備セルを実行してください。")
+        activate_vocal_source(project_directory)
         from vocal_lab.notebook_ui import launch_notebook
 
         lab = launch_notebook()
@@ -230,10 +280,11 @@ def build_notebook():
 
 
 if __name__ == "__main__":
-    path = PROJECT / "notebooks" / "vocal_fluctuation_lab.ipynb"
-    path.parent.mkdir(parents=True, exist_ok=True)
     notebook = build_notebook()
     for index, cell in enumerate(notebook["cells"]):
         cell["id"] = f"vocal-lab-{index:02d}"
-    path.write_text(json.dumps(notebook, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
-    print(path)
+    for filename in ("vocal_fluctuation_lab.ipynb", f"vocal_fluctuation_lab_v{NOTEBOOK_VERSION}.ipynb"):
+        path = PROJECT / "notebooks" / filename
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps(notebook, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
+        print(path)

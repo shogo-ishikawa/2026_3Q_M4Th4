@@ -43,17 +43,10 @@ def save_audio_upload(value: Any, directory: Path) -> Path:
 
 
 def validate_interval(start: float, end: float) -> tuple[float, float]:
-    if isinstance(start, bool) or isinstance(end, bool):
-        raise ValueError("開始と終了は秒数で入力してください。")
-    try:
-        start, end = float(start), float(end)
-    except (TypeError, ValueError):
-        raise ValueError("開始と終了は秒数で入力してください。") from None
-    if not math.isfinite(start) or not math.isfinite(end) or start < 0 or end <= start:
-        raise ValueError("0以上の開始秒と、それより後の終了秒を入力してください。")
-    if not 10 <= end - start <= 600:
-        raise ValueError("解析する区間は10秒〜600秒（10分）にしてください。判定には無音調整後の60秒以上を使います。")
-    return start, end
+    from .audio import validate_interval as validate_audio_interval
+    if end is None:
+        raise ValueError("終了秒を入力するか、「曲全体を解析」を選んでください。")
+    return validate_audio_interval(start, end)
 
 
 def _number(value: Any, digits: int = 3) -> str:
@@ -173,6 +166,8 @@ class VocalNotebookUI:
     def __init__(self, workspace: str | Path | None = None, pipeline=None, database=None):
         import ipywidgets as widgets
         from IPython.display import display, HTML, Audio
+        from . import __version__
+        from .audio import MAX_SECONDS
 
         if pipeline is None:
             from .pipeline import run_analysis
@@ -187,6 +182,10 @@ class VocalNotebookUI:
         self.database = self.db_api.empty_database()
         self.bundle = None
         self.results_zip = None
+        self.version_banner = widgets.HTML(
+            f"<p><strong>Vocal Fluctuation Lab v{html.escape(__version__)}</strong>"
+            f" ／ 解析区間は最大{MAX_SECONDS / 60:g}分（{MAX_SECONDS:g}秒）</p>"
+        )
         self.mode = widgets.ToggleButtons(options=[("ファイルをアップロード", "file"), ("YouTube URL", "youtube")])
         self.audio_upload = widgets.FileUpload(accept=",".join(sorted(AUDIO_EXTENSIONS)), multiple=False, description="音源を選ぶ")
         self.url = widgets.Text(description="YouTube URL", placeholder="https://www.youtube.com/watch?v=…", layout=widgets.Layout(width="95%"), style={"description_width": "initial"})
@@ -232,6 +231,7 @@ class VocalNotebookUI:
         self.add_reference_button.on_click(self._add_reference)
         self.db_download.on_click(self._export_database)
         self.panel = widgets.VBox([
+            self.version_banner,
             widgets.HTML("<h2>1 音源と区間を選ぶ</h2><p>利用できる音源を使ってください。YouTubeから取得できない場合は、MP3やWAVをアップロードできます。音源はこの実行環境で処理し、公開DBへ自動送信しません。</p>"),
             self.mode, self.audio_upload, self.url,
             self.whole_track, self.time_controls, self.reset_times_button,

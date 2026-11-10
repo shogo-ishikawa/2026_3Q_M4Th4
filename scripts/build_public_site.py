@@ -37,7 +37,7 @@ def main():
                     '--output', str(vocal_destination / 'data')], check=True)
     vocal_downloads = vocal_destination / 'downloads'
     vocal_downloads.mkdir(exist_ok=True)
-    vocal_version = 'v1.1.0'
+    vocal_version = 'v1.2.0'
     vocal_archive = vocal_downloads / f'VOCAL_FLUCTUATION_LAB_{vocal_version}.zip'
     text_extensions = {'.py', '.md', '.toml', '.txt', '.json', '.html', '.css', '.js', '.ipynb'}
     with ZipFile(vocal_archive, 'w', ZIP_DEFLATED) as bundle:

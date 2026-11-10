@@ -127,6 +127,17 @@ class NotebookFlowTests(unittest.TestCase):
         self.controller.display = Mock()
         self.controller.result_output.clear_output = Mock()
 
+    def test_version_banner_and_interval_limit_match_the_loaded_backend(self):
+        from vocal_lab import __version__
+        from vocal_lab.audio import MAX_SECONDS
+        self.assertIn("v" + __version__, self.controller.version_banner.value)
+        self.assertIn(f"{MAX_SECONDS:g}秒", self.controller.version_banner.value)
+        self.assertEqual(ui.validate_interval(0, 300), (0, 300))
+        self.assertEqual(ui.validate_interval(0, MAX_SECONDS), (0, MAX_SECONDS))
+        with self.assertRaises(ValueError):
+            ui.validate_interval(0, MAX_SECONDS + 1)
+        self.assertIn(self.controller.version_banner, self.controller.panel.children)
+
     def test_missing_file_and_invalid_interval_do_not_start_processing(self):
         self.controller.mode.value = "file"
         self.controller._analyse()
