@@ -2,6 +2,8 @@
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 import shutil
+import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / '_site'
@@ -28,6 +30,26 @@ def main():
             if not path.is_file() or any(part.startswith('.') or part in {'__pycache__', 'downloads'} for part in relative.parts):
                 continue
             bundle.write(path, Path(VERSION) / relative)
+    vocal_project = ROOT / 'projects' / 'vocal-fluctuation-lab'
+    vocal_destination = OUTPUT / 'vocal-fluctuation-lab'
+    shutil.copytree(vocal_project / 'web', vocal_destination)
+    subprocess.run([sys.executable, str(vocal_project / 'scripts' / 'generate_demos.py'),
+                    '--output', str(vocal_destination / 'data')], check=True)
+    vocal_downloads = vocal_destination / 'downloads'
+    vocal_downloads.mkdir(exist_ok=True)
+    vocal_archive = vocal_downloads / 'VOCAL_FLUCTUATION_LAB_v1.0.0.zip'
+    text_extensions = {'.py', '.md', '.toml', '.txt', '.json', '.html', '.css', '.js', '.ipynb'}
+    with ZipFile(vocal_archive, 'w', ZIP_DEFLATED) as bundle:
+        bundle.write(vocal_project / '.gitignore', Path('v1.0.0/.gitignore'))
+        for path in sorted(vocal_project.rglob('*')):
+            relative = path.relative_to(vocal_project)
+            if (not path.is_file() or path.suffix not in text_extensions
+                    or any(part.startswith('.') or part in {'__pycache__', 'outputs', 'uploads', 'separated', 'downloads', 'vocal_lab_runs', 'vocal_lab_downloads', 'vocal_reference_build'} for part in relative.parts)):
+                continue
+            bundle.write(path, Path('v1.0.0') / relative)
+        for path in sorted((vocal_destination / 'data').glob('demo-*.json')):
+            bundle.write(path, Path('v1.0.0/web/data') / path.name)
+    print(f'Built vocal-fluctuation-lab with {vocal_archive.stat().st_size:,}-byte distribution ZIP')
     print(f'Built {OUTPUT.relative_to(ROOT)} with {archive.stat().st_size:,}-byte distribution ZIP')
 
 

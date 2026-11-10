@@ -1,0 +1,4 @@
+-r requirements.txt
+demucs==4.1.0
+yt-dlp[default]>=2026.10.26
+ipywidgets>=8.1,<9

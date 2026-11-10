@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vocal-fluctuation-lab"
+version = "1.0.0"
+description = "An educational tool for temporal amplitude fluctuations in vocals"
+requires-python = ">=3.11"
+dependencies = ["numpy>=1.26,<3", "scipy>=1.13,<2", "soundfile==0.13.1", "matplotlib>=3.8,<4"]
+
+[project.optional-dependencies]
+audio = ["demucs==4.1.0", "yt-dlp[default]>=2026.10.26"]
+notebook = ["ipywidgets>=8.1,<9"]
+
+[project.scripts]
+vocal-fluctuation = "vocal_lab.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["vocal_lab*"]

@@ -1,0 +1,15 @@
+{
+  "schema_version": "vocal-fluctuation-reference-catalogue-v1",
+  "description": "学生の調査に登場した音源の再解析候補です。新しい方法で測定したデータベースではありません。",
+  "status": "pending_analysis",
+  "audio_included": false,
+  "source": "提出された調査資料と解析画面の記録",
+  "source_titles_verified": false,
+  "candidates": [
+    {"artist": "宇多田ヒカル", "reported_track": "First Love", "url": "https://www.youtube.com/watch?v=o1sUaVJUeB0", "start_seconds": null, "end_seconds": null, "status": "pending_analysis"},
+    {"artist": "MISIA", "reported_track": "アイノカタチ", "url": "https://www.youtube.com/watch?v=IX87le_EokM", "start_seconds": null, "end_seconds": null, "status": "pending_analysis"},
+    {"artist": "RADWIMPS", "reported_track": "前前前世", "url": "https://www.youtube.com/watch?v=PDSkFeMVNFs", "start_seconds": null, "end_seconds": null, "status": "pending_analysis"},
+    {"artist": "Vaundy", "reported_track": "しわあわせ", "url": "https://www.youtube.com/watch?v=JwmGruvGt_I", "start_seconds": null, "end_seconds": null, "status": "pending_analysis"},
+    {"artist": "GADORO", "reported_track": "自由空間", "url": "https://www.youtube.com/watch?v=24k-rWZu9DY", "start_seconds": null, "end_seconds": null, "status": "pending_analysis"}
+  ]
+}
