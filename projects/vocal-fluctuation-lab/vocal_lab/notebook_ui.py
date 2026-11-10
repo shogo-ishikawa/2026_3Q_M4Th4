@@ -49,6 +49,25 @@ def validate_interval(start: float, end: float) -> tuple[float, float]:
     return validate_audio_interval(start, end)
 
 
+def create_audio_preview(source: str | Path, directory: Path) -> Path:
+    """全長WAVを埋め込まず、画面専用の短い圧縮音源を別に作ります。"""
+    from .audio import _run, require_tool
+
+    source = Path(source).resolve()
+    directory.mkdir(parents=True, exist_ok=True)
+    destination = directory / ("preview_" + uuid4().hex + ".mp3")
+    try:
+        _run([require_tool("ffmpeg"), "-hide_banner", "-loglevel", "error", "-nostdin", "-n",
+              "-i", str(source), "-t", "30", "-map", "0:a:0", "-vn", "-ac", "2", "-ar", "22050",
+              "-c:a", "libmp3lame", "-b:a", "96k", str(destination)], "試聴音源の準備", timeout=60)
+        if not destination.is_file() or not 0 < destination.stat().st_size <= 374_000:
+            raise ValueError("試聴音源の大きさを確認できません。")
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    return destination
+
+
 def _number(value: Any, digits: int = 3) -> str:
     try:
         return f"{float(value):.{digits}f}" if math.isfinite(float(value)) else "—"
@@ -306,13 +325,21 @@ class VocalNotebookUI:
                 warnings = [warnings]
             for warning in warnings:
                 self.display(self.HTML("<p>確認：" + html.escape(str(warning)) + "</p>"))
-            self.display(self.HTML("<h3>元の区間</h3>"))
-            self.display(self.Audio(filename=self.bundle["clip_path"]))
+            self.display(self.HTML("<p>画面の試聴は各音源の先頭30秒までです。解析は指定した全区間を使い、歌声WAVは無音調整後の全長を保存できます。</p>"))
+            preview_directory = Path(self.bundle["vocals_path"]).resolve().parent / "previews"
+
+            def show_preview(title, source):
+                self.display(self.HTML("<h3>" + title + "</h3>"))
+                try:
+                    preview = create_audio_preview(source, preview_directory)
+                    self.display(self.Audio(filename=str(preview)))
+                except Exception:
+                    self.display(self.HTML("<p>試聴を用意できませんでした。解析結果と全長の歌声WAVは保存できます。</p>"))
+
+            show_preview("元の区間", self.bundle["clip_path"])
             if self.bundle.get("extracted_vocals_path"):
-                self.display(self.HTML("<h3>抽出した歌声（無音調整前）</h3>"))
-                self.display(self.Audio(filename=self.bundle["extracted_vocals_path"]))
-            self.display(self.HTML("<h3>解析に使った歌声（無音調整後）</h3>"))
-            self.display(self.Audio(filename=self.bundle["vocals_path"]))
+                show_preview("抽出した歌声（無音調整前）", self.bundle["extracted_vocals_path"])
+            show_preview("解析に使った歌声（無音調整後）", self.bundle["vocals_path"])
             figure = plot_analysis(analysis)
             self.display(figure)
             plt.close(figure)
