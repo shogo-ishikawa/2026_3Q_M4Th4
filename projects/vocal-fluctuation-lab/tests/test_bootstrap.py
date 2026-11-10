@@ -224,7 +224,7 @@ class BootstrapTests(unittest.TestCase):
 
     def test_versioned_notebook_is_identical_and_has_clean_forms(self):
         canonical = json.loads((PROJECT / "notebooks/vocal_fluctuation_lab.ipynb").read_text())
-        versioned = json.loads((PROJECT / "notebooks/vocal_fluctuation_lab_v1.2.0.ipynb").read_text())
+        versioned = json.loads((PROJECT / "notebooks/vocal_fluctuation_lab_v1.2.1.ipynb").read_text())
         self.assertEqual(versioned, canonical)
         for cell in versioned["cells"]:
             if cell["cell_type"] == "code":

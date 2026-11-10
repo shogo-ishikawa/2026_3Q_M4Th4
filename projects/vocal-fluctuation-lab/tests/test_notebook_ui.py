@@ -1,6 +1,9 @@
 """Notebookの入力、表示、保存を、分離モデルを取得せずに確認します。"""
+import hashlib
 import json
 from pathlib import Path
+import shutil
+import struct
 import tempfile
 import unittest
 from unittest.mock import Mock, patch
@@ -113,6 +116,51 @@ class ExportTests(unittest.TestCase):
         self.assertIn("1/fの基準線", figure.axes[1].get_legend_handles_labels()[1])
 
 
+@unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "FFmpegが必要です")
+class AudioPreviewTests(unittest.TestCase):
+    def test_long_sparse_wavs_have_small_30_second_previews_without_changing_sources(self):
+        from IPython.display import Audio
+        from vocal_lab.audio import probe_duration
+
+        def digest(path):
+            checksum = hashlib.sha256()
+            with path.open("rb") as handle:
+                for block in iter(lambda: handle.read(1024 * 1024), b""):
+                    checksum.update(block)
+            return checksum.hexdigest()
+
+        with tempfile.TemporaryDirectory() as folder:
+            directory = Path(folder)
+            for seconds in (360, 600):
+                with self.subTest(seconds=seconds):
+                    source = directory / f"full-{seconds}.wav"
+                    data_size = seconds * 44100 * 2 * 4
+                    # IEEE float stereo WAV: sparse data avoids allocating a full song in the test.
+                    header = struct.pack("<4sI4s4sIHHIIHH4sI", b"RIFF", 36 + data_size, b"WAVE",
+                                         b"fmt ", 16, 3, 2, 44100, 44100 * 8, 8, 32, b"data", data_size)
+                    with source.open("wb") as handle:
+                        handle.write(header)
+                        handle.seek(len(header) + data_size - 1)
+                        handle.write(b"\0")
+                    original = digest(source)
+                    preview_directory = directory / "previews"
+                    preview = ui.create_audio_preview(source, preview_directory)
+                    self.assertEqual(preview.parent, preview_directory)
+                    self.assertNotEqual(source, preview)
+                    self.assertLess(preview.stat().st_size, 375_000)
+                    self.assertAlmostEqual(probe_duration(preview), 30, delta=.1)
+                    self.assertAlmostEqual(probe_duration(source), seconds, delta=.001)
+                    player = Audio(filename=str(preview))
+                    rendered = player._repr_html_()
+                    self.assertEqual(player.mimetype, "audio/mpeg")
+                    self.assertIn("data:audio/mpeg;base64,", rendered)
+                    self.assertLess(3 * len(rendered.encode()), 1_500_000)
+                    self.assertEqual(digest(source), original)
+                    second = ui.create_audio_preview(source, preview_directory)
+                    self.assertNotEqual(preview, second)
+                    self.assertTrue(preview.is_file())
+
+
 class NotebookFlowTests(unittest.TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory()
@@ -215,7 +263,7 @@ class NotebookFlowTests(unittest.TestCase):
     def test_quality_reasons_are_displayed(self):
         self.controller.bundle = {"analysis": example_analysis(), "clip_path": "clip.wav", "vocals_path": "vocals.wav"}
         self.controller.Audio = Mock(return_value="audio")
-        with patch.object(ui, "plot_analysis"):
+        with patch.object(ui, "plot_analysis"), patch.object(ui, "create_audio_preview", side_effect=lambda source, directory: Path(source).with_suffix(".mp3")):
             self.controller._show_result()
         rendered = " ".join(str(call.args[0].data) for call in self.controller.display.call_args_list if hasattr(call.args[0], "data"))
         self.assertIn("60秒以上", rendered)
@@ -223,12 +271,31 @@ class NotebookFlowTests(unittest.TestCase):
     def test_raw_and_processed_vocals_are_distinguished_and_playable(self):
         self.controller.bundle = {"analysis": example_analysis(), "clip_path": "clip.wav", "extracted_vocals_path": "raw-vocals.wav", "vocals_path": "processed-vocals.wav"}
         self.controller.Audio = Mock(return_value="audio")
-        with patch.object(ui, "plot_analysis"):
+        with patch.object(ui, "plot_analysis"), patch.object(ui, "create_audio_preview", side_effect=lambda source, directory: Path(source).with_suffix(".mp3")) as previews:
             self.controller._show_result()
-        self.assertEqual([call.kwargs["filename"] for call in self.controller.Audio.call_args_list], ["clip.wav", "raw-vocals.wav", "processed-vocals.wav"])
+        self.assertEqual([call.args[0] for call in previews.call_args_list], ["clip.wav", "raw-vocals.wav", "processed-vocals.wav"])
+        self.assertEqual([call.kwargs["filename"] for call in self.controller.Audio.call_args_list], ["clip.mp3", "raw-vocals.mp3", "processed-vocals.mp3"])
         rendered = " ".join(str(call.args[0].data) for call in self.controller.display.call_args_list if hasattr(call.args[0], "data"))
         self.assertIn("抽出した歌声（無音調整前）", rendered)
         self.assertIn("解析に使った歌声（無音調整後）", rendered)
+        self.assertIn("先頭30秒", rendered)
+
+    def test_preview_failure_preserves_analysis_and_full_length_downloads(self):
+        bundle = {"analysis": example_analysis(), "clip_path": "clip.wav", "extracted_vocals_path": "raw-vocals.wav", "vocals_path": "full-vocals.wav"}
+        self.pipeline.return_value = bundle
+        self.controller.Audio = Mock()
+        with patch.object(ui, "export_results", return_value=Path(self.folder.name) / "results.zip"), \
+             patch.object(ui, "create_audio_preview", side_effect=RuntimeError("encoder unavailable")), \
+             patch.object(ui, "plot_analysis"):
+            self.controller._analyse()
+        self.assertIs(self.controller.bundle, bundle)
+        self.assertFalse(self.controller.result_download.disabled)
+        self.assertFalse(self.controller.vocals_download.disabled)
+        self.assertEqual(self.controller.bundle["vocals_path"], "full-vocals.wav")
+        self.controller.Audio.assert_not_called()
+        rendered = " ".join(str(call.args[0].data) for call in self.controller.display.call_args_list if hasattr(call.args[0], "data"))
+        self.assertIn("試聴を用意できません", rendered)
+        self.assertIn("解析が終わりました", self.controller.status.value)
 
     def test_reference_addition_replaces_database_with_returned_copy(self):
         self.controller.bundle = {"analysis": example_analysis()}
