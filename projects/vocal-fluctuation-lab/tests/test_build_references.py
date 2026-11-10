@@ -12,7 +12,8 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from vocal_lab import build_references as builder
-from vocal_lab.reference_db import load_database
+from vocal_lab import audio
+from vocal_lab.reference_db import add_reference, empty_database, load_database, save_database
 
 
 def catalogue(count=3):
@@ -26,7 +27,7 @@ def catalogue(count=3):
 def measured(url, start, end, output_dir, **kwargs):
     return {"analysis": {
         "schema_version": "vocal-fluctuation-result-v1", "method_id": "rms-welch-v1",
-        "analysis_signature": "test-default-analysis-conditions",
+        "analysis_signature": builder._requested_signature(kwargs.get("silence_config")),
         "quality": {"usable_for_comparison": True},
         "features": {"slope": -1, "envelope_cv": 0.5,
                      "low_band_fraction": 0.4, "spectral_flatness": 0.25},
@@ -37,6 +38,11 @@ def measured(url, start, end, output_dir, **kwargs):
 
 
 class BuildReferenceTests(unittest.TestCase):
+    def setUp(self):
+        patcher = patch.object(builder, "_model_version", return_value="4.1.0")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_explicit_build_measures_each_candidate_and_persists_only_features(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(builder, "_run_analysis", side_effect=measured) as run:
             result = builder.build_reference_catalogue(catalogue(), directory, progress=lambda message: None)
@@ -47,6 +53,7 @@ class BuildReferenceTests(unittest.TestCase):
                 self.assertEqual(call.args[1:3], (40, 130))
                 self.assertEqual(call.kwargs["source_kind"], "youtube")
                 self.assertFalse(call.kwargs["already_vocals"])
+                self.assertIn("silence_config", call.kwargs)
             encoded = Path(result["database_path"]).read_text()
             self.assertNotIn("vocals_path", encoded)
             self.assertNotIn("series", encoded)
@@ -92,12 +99,81 @@ class BuildReferenceTests(unittest.TestCase):
             for value in invalid_catalogues:
                 with self.subTest(value=value), self.assertRaises(ValueError):
                     builder.build_reference_catalogue(value, directory)
-            for start, end in [(False, 90), (0, 9), (0, 181), (-1, 90), (0, float("nan"))]:
+            for start, end in [(False, 90), (0, 9), (0, audio.MAX_SECONDS + 1), (-1, 90), (0, float("nan"))]:
                 with self.subTest(start=start, end=end), self.assertRaises(ValueError):
                     builder.build_reference_catalogue(catalogue(), directory, start, end)
             with self.assertRaises(ValueError):
                 builder.build_reference_catalogue(catalogue(), directory, device="unknown")
             run.assert_not_called()
+
+    def test_longer_intervals_use_the_same_limit_as_the_audio_backend(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(audio, "MAX_SECONDS", 600), \
+                patch.object(builder, "_run_analysis", side_effect=measured) as run:
+            result = builder.build_reference_catalogue(catalogue(1), directory, 0, 600)
+            self.assertEqual(result["report"][0]["status"], "added")
+            self.assertEqual(run.call_args.args[1:3], (0, 600))
+
+    def test_old_raw_references_are_preserved_but_do_not_skip_the_new_default(self):
+        candidates = catalogue(1)
+        row = candidates["candidates"][0]
+        old = measured(row["url"], 40, 130, "unused")["analysis"]
+        old["analysis_signature"] = "v1-raw-default-analysis-without-preprocessing"
+        with tempfile.TemporaryDirectory() as directory, patch.object(builder, "_run_analysis", side_effect=measured) as run:
+            saved = add_reference(empty_database(), old, row["artist"], row["reported_track"], source=row["url"])
+            save_database(saved, Path(directory) / "artist_references.json")
+            result = builder.build_reference_catalogue(candidates, directory)
+            run.assert_called_once()
+            self.assertEqual(result["report"][0]["status"], "added")
+            self.assertEqual(len(result["database"]["references"]), 2)
+            self.assertEqual(result["database"]["references"][0]["analysis_signature"], old["analysis_signature"])
+
+    def test_changed_silence_policy_is_remeasured_and_same_policy_then_resumes(self):
+        config = {"trim_edges": True, "remove_internal": False, "threshold_db": -25}
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(builder, "_run_analysis", side_effect=measured):
+                first = builder.build_reference_catalogue(catalogue(1), directory)
+            with patch.object(builder, "_run_analysis", side_effect=measured) as run:
+                changed = builder.build_reference_catalogue(catalogue(1), directory, silence_config=config)
+                run.assert_called_once()
+                self.assertEqual(run.call_args.kwargs["silence_config"], config)
+            self.assertEqual(len(first["database"]["references"]), 1)
+            self.assertEqual(len(changed["database"]["references"]), 2)
+            with patch.object(builder, "_run_analysis") as run:
+                repeated = builder.build_reference_catalogue(catalogue(1), directory, silence_config=config)
+                run.assert_not_called()
+                self.assertEqual(repeated["report"][0]["status"], "skipped")
+
+    def test_a_different_model_version_or_analysis_settings_is_not_skipped(self):
+        with tempfile.TemporaryDirectory() as directory:
+            with patch.object(builder, "_run_analysis", side_effect=measured):
+                builder.build_reference_catalogue(catalogue(1), directory)
+            with patch.object(builder, "_model_version", return_value="new-version"), \
+                    patch.object(builder, "_run_analysis", side_effect=ValueError("stop before download")) as run:
+                builder.build_reference_catalogue(catalogue(1), directory)
+                run.assert_called_once()
+            with patch.object(builder, "_model_version", return_value=None), \
+                    patch.object(builder, "_run_analysis", side_effect=ValueError("model unavailable")) as run:
+                builder.build_reference_catalogue(catalogue(1), directory)
+                run.assert_called_once()
+            # 同じ無音処理・同じモデルでも、主解析の設定が違えば測り直します。
+            from vocal_lab.silence import combined_analysis_signature
+            row = catalogue(1)["candidates"][0]
+            different = measured(row["url"], 40, 130, "unused")["analysis"]
+            different["analysis_signature"] = combined_analysis_signature("another-analysis-condition")
+            saved = add_reference(empty_database(), different, row["artist"], row["reported_track"], source=row["url"])
+            save_database(saved, Path(directory) / "artist_references.json")
+            with patch.object(builder, "_run_analysis", side_effect=ValueError("different settings")) as run:
+                builder.build_reference_catalogue(catalogue(1), directory)
+                run.assert_called_once()
+
+    def test_default_signature_matches_the_real_analysis_band_and_default_silence_policy(self):
+        import numpy as np
+        from vocal_lab.analysis import analyse_envelope
+        from vocal_lab.silence import combined_analysis_signature
+        times = np.arange(9000) / 100
+        result = analyse_envelope(1 + 0.1 * np.sin(times), 100)
+        self.assertEqual(builder._requested_signature(None),
+                         combined_analysis_signature(result["analysis_signature"]))
 
     def test_bad_existing_database_is_not_overwritten(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(builder, "_run_analysis") as run:
@@ -138,6 +214,17 @@ class BuildReferenceTests(unittest.TestCase):
                                      "--start", "10", "--end", "100", "--device", "cpu"])
             self.assertEqual(code, 0)
             self.assertEqual(run.call_args.args[1:3], (10, 100))
+
+    def test_cli_silence_options_are_passed_to_the_pipeline(self):
+        with tempfile.TemporaryDirectory() as directory, patch.object(builder, "_run_analysis", side_effect=measured) as run:
+            path = Path(directory) / "catalogue.json"
+            path.write_text(json.dumps(catalogue(1)))
+            with redirect_stdout(io.StringIO()):
+                code = builder.main(["--catalogue", str(path), "--output", str(Path(directory) / "out"),
+                                     "--no-trim-edges", "--remove-internal-silence", "--silence-threshold-db", "-25"])
+            self.assertEqual(code, 0)
+            self.assertEqual(run.call_args.kwargs["silence_config"],
+                             {"trim_edges": False, "remove_internal": True, "threshold_db": -25})
 
 
 if __name__ == "__main__":

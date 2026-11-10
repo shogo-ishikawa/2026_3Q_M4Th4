@@ -1,5 +1,7 @@
 """音色の傾きとの取り違えと、不十分なデータの断定を防ぐ確認です。"""
 from dataclasses import asdict
+from copy import deepcopy
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -8,7 +10,8 @@ import unittest
 import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from vocal_lab.analysis import AnalysisConfig, analyse_envelope, analyse_samples
+from vocal_lab.analysis import (AnalysisConfig, METHOD_ID, QUALITY_METHOD_ID,
+                                analysis_signature, analyse_envelope, analyse_samples)
 
 
 def coloured_envelope(beta, seconds=120, fs=100, seed=22):
@@ -162,9 +165,65 @@ class AnalysisTests(unittest.TestCase):
     def test_block_slope_range_is_not_presented_as_a_confidence_interval(self):
         result = analyse_envelope(coloured_envelope(1), 100)
         quality = result["quality"]
-        self.assertEqual(quality["independent_blocks"], 6)
+        self.assertEqual(quality["independent_blocks"], 4)
+        self.assertEqual(quality["method_id"], "four-block-welch-v1")
         self.assertEqual(quality["block_slope_spread"], max(quality["block_slopes"]) - min(quality["block_slopes"]))
         self.assertNotIn("confidence_interval", result["fit"])
+
+    def test_stationary_pink_remains_usable_when_whole_track_has_more_welch_windows(self):
+        for seconds in (90, 300, 600):
+            for seed in (0, 1, 2, 3):
+                with self.subTest(seconds=seconds, seed=seed):
+                    result = analyse_envelope(coloured_envelope(1, seconds=seconds, seed=seed), 100)
+                    self.assertEqual(result["quality"]["independent_blocks"], 4)
+                    self.assertEqual(result["status"], "near")
+                    self.assertTrue(result["quality"]["usable_for_comparison"])
+                    self.assertAlmostEqual(result["fit"]["slope"], -1, delta=0.2)
+
+    def test_global_psd_keeps_all_welch_windows_for_a_ten_minute_track(self):
+        from scipy import signal
+        envelope = coloured_envelope(1, seconds=600, seed=1)
+        result = analyse_envelope(envelope, 100)
+        expected_f, expected_p = signal.welch(
+            envelope, fs=100, window="hann", nperseg=2000,
+            noverlap=1000, detrend="constant", scaling="density", average="mean")
+        self.assertEqual(result["quality"]["welch_segments"], 59)
+        self.assertEqual(result["quality"]["independent_blocks"], 4)
+        np.testing.assert_array_equal(result["spectrum"]["frequency_hz"], expected_f[1:])
+        np.testing.assert_array_equal(result["spectrum"]["power"], expected_p[1:])
+
+    def test_piecewise_white_then_brown_is_still_held_for_nonstationarity(self):
+        envelope = np.concatenate((coloured_envelope(0, seconds=150, seed=0),
+                                   coloured_envelope(2, seconds=150, seed=1)))
+        result = analyse_envelope(envelope, 100)
+        self.assertEqual(result["quality"]["independent_blocks"], 4)
+        self.assertGreater(result["quality"]["block_slope_spread"], 0.8)
+        self.assertEqual(result["status"], "inconclusive")
+        self.assertFalse(result["quality"]["usable_for_comparison"])
+
+    def test_quality_algorithm_is_part_of_the_shared_signature(self):
+        config = AnalysisConfig()
+        result = analyse_envelope(coloured_envelope(1), 100, config)
+        self.assertEqual(result["analysis_signature"], analysis_signature(config, 0.2, 5.0))
+        self.assertEqual(result["quality"]["method_id"], QUALITY_METHOD_ID)
+        old_conditions = {"method_id": METHOD_ID, "config": asdict(config),
+                          "band_low_hz": 0.2, "band_high_hz": 5.0}
+        old_signature = hashlib.sha256(json.dumps(old_conditions, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:24]
+        self.assertNotEqual(result["analysis_signature"], old_signature)
+
+    def test_old_stability_algorithm_records_are_not_compared_as_new_results(self):
+        from vocal_lab.reference_db import add_reference, compare_reference, empty_database
+        result = analyse_envelope(coloured_envelope(1), 100)
+        result["metadata"] = {"source_sha256": "a" * 64, "start_seconds": 0,
+                              "end_seconds": 120, "separation_method": "already-vocals",
+                              "model_version": "", "source_hash_scope": "original-file"}
+        legacy = deepcopy(result)
+        old_conditions = {"method_id": METHOD_ID, "config": asdict(AnalysisConfig()),
+                          "band_low_hz": 0.2, "band_high_hz": 5.0}
+        legacy["analysis_signature"] = hashlib.sha256(json.dumps(old_conditions, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:24]
+        database = add_reference(empty_database(), legacy, artist="旧条件の登録例", track="比較用")
+        result["metadata"]["source_sha256"] = "b" * 64
+        self.assertEqual(compare_reference(result, database), [])
 
     def test_inputs_are_not_modified(self):
         audio = np.arange(1600, dtype=float) / 1600

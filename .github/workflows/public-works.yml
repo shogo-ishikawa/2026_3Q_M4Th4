@@ -48,8 +48,8 @@ jobs:
           python -m unittest discover -s projects/world-definition/tests -p 'test_*.py'
       - name: Check vocal fluctuation analysis and notebook
         run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y ffmpeg
           python -m pip install -r projects/vocal-fluctuation-lab/requirements.txt 'ipywidgets>=8.1,<9' 'nbformat>=5.10,<6' 'yt-dlp[default]>=2026.10.26'
           python -m unittest discover -s projects/vocal-fluctuation-lab/tests -p 'test_*.py'
           node --check projects/vocal-fluctuation-lab/web/app.js

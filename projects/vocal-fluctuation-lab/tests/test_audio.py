@@ -23,12 +23,20 @@ class IntervalTests(unittest.TestCase):
         self.assertEqual(audio.validate_interval(1.25, 61.75, 100), (1.25, 61.75))
 
     def test_invalid_intervals_are_never_truncated(self):
-        for start, end in [(0, 9), (0, 181), (-1, 60), (10, 10), (60, 10), (0, float("inf")),
+        for start, end in [(0, 9), (0, 601), (-1, 60), (10, 10), (60, 10), (0, float("inf")),
                            (float("nan"), 60), (False, 60), ("bad", 60)]:
             with self.subTest(start=start, end=end), self.assertRaises(audio.AudioInputError):
                 audio.validate_interval(start, end)
         with self.assertRaisesRegex(audio.AudioInputError, "超え"):
             audio.validate_interval(0, 90, 89.9)
+
+    def test_whole_track_resolves_end_from_duration_and_allows_longer_songs(self):
+        self.assertEqual(audio.validate_interval(0, None, 258), (0, 258))
+        self.assertEqual(audio.validate_interval(30, None, 258), (30, 258))
+        self.assertEqual(audio.validate_interval(0, 600, 600), (0, 600))
+        self.assertEqual(audio.validate_interval(0, None), (0, None))
+        with self.assertRaises(audio.AudioInputError):
+            audio.validate_interval(0, None, 601)
 
     def test_youtube_url_is_one_canonical_video(self):
         for url in ["https://youtu.be/ABCDEFGHIJK?t=20", "https://www.youtube.com/watch?v=ABCDEFGHIJK&list=RD123",
@@ -93,7 +101,7 @@ class FileAudioTests(unittest.TestCase):
         self.assertEqual(sr, 44100)
         self.assertEqual(samples.shape[1], 2)
         return {"schema_version": "vocal-fluctuation-result-v1", "status": "inconclusive", "summary": "test",
-                "duration_seconds": len(samples) / sr}
+                "analysis_signature": "test-analysis-signature", "duration_seconds": len(samples) / sr}
 
     def test_already_vocals_pipeline_writes_reproducible_metadata_and_unique_runs(self):
         fake = types.ModuleType("vocal_lab.analysis")
@@ -126,6 +134,47 @@ class FileAudioTests(unittest.TestCase):
         self.assertEqual(result["metadata"]["separation_method"], "demucs:htdemucs")
         self.assertEqual(result["metadata"]["model_version"], "4.1.0")
         self.assertAlmostEqual(audio.probe_duration(result["vocals_path"]), 12, places=3)
+
+    def test_whole_file_and_silence_trim_are_applied_after_vocal_extraction(self):
+        from vocal_lab.silence import SilenceConfig
+        # 全曲24秒のうち、分離結果では前後が無音になる場面を模擬します。
+        fake = types.ModuleType("vocal_lab.analysis")
+        fake.analyse_samples = self._analyse
+        def separate(context, out, device="auto", progress=None):
+            samples, sr = audio.load_audio(context)
+            samples[:sr] = 0
+            samples[-2 * sr:] = 0
+            path = self.folder / "estimated.wav"
+            sf.write(path, samples, sr, subtype="FLOAT")
+            return path, "4.1.0"
+        with patch.dict(sys.modules, {"vocal_lab.analysis": fake}), patch("vocal_lab.pipeline.separate_vocals", side_effect=separate):
+            result = run_analysis(self.source, 0, None, self.folder / "outputs")
+        self.assertEqual(result["metadata"]["end_seconds"], 24)
+        self.assertEqual(result["metadata"]["selection_mode"], "to-end")
+        prep = result["metadata"]["preprocessing"]
+        self.assertAlmostEqual(prep["leading_removed_seconds"], .95, places=3)
+        self.assertAlmostEqual(prep["trailing_removed_seconds"], 1.95, places=3)
+        self.assertAlmostEqual(audio.probe_duration(result["extracted_vocals_path"]), 24, places=3)
+        self.assertAlmostEqual(audio.probe_duration(result["vocals_path"]), 21.1, places=3)
+        self.assertEqual(json.loads(result["analysis"]["analysis_signature"])["preprocessing_signature"],
+                         result["metadata"]["preprocessing_signature"])
+
+    def test_processed_short_clip_is_analysed_and_all_silence_is_rejected(self):
+        fake = types.ModuleType("vocal_lab.analysis")
+        fake.analyse_samples = self._analyse
+        samples, sr = sf.read(self.source, always_2d=True)
+        samples[:5 * sr] = 0
+        samples[7 * sr:] = 0
+        short = self.folder / "short-vocal.wav"
+        sf.write(short, samples, sr, subtype="FLOAT")
+        with patch.dict(sys.modules, {"vocal_lab.analysis": fake}):
+            result = run_analysis(short, 0, None, self.folder / "outputs", already_vocals=True)
+        self.assertAlmostEqual(result["analysis"]["duration_seconds"], 2.1, places=3)
+        silent = self.folder / "silent.wav"
+        sf.write(silent, np.zeros((12 * sr, 2)), sr, subtype="FLOAT")
+        with patch.dict(sys.modules, {"vocal_lab.analysis": fake}):
+            with self.assertRaisesRegex(audio.AudioInputError, "すべて無音"):
+                run_analysis(silent, 0, None, self.folder / "outputs", already_vocals=True)
 
     def test_demucs_cli_uses_float_output_no_random_shifts_and_reports_tool_errors(self):
         out = self.folder / "separated"
@@ -190,6 +239,14 @@ class YouTubeTests(unittest.TestCase):
                 with self.assertRaises(audio.AudioInputError):
                     audio.download_youtube_section("https://youtu.be/ABCDEFGHIJK", 40, 130, self.folder)
             self.assertEqual(len(self.options), 1)
+
+    def test_youtube_whole_track_resolves_once_before_downloading(self):
+        with patch("yt_dlp.YoutubeDL", side_effect=self._fake_ydl), patch("vocal_lab.audio.require_tool", return_value="ffmpeg"):
+            result = audio.download_youtube_section("https://youtu.be/ABCDEFGHIJK", 0, None, self.folder)
+        self.assertEqual(result["start_seconds"], 0)
+        self.assertEqual(result["end_seconds"], 200)
+        self.assertEqual(list(self.options[1]["download_ranges"]({}, None)), [{"start_time": 0, "end_time": 200}])
+        self.assertEqual(len(self.options), 2)
 
     def test_remote_failure_recommends_upload_instead_of_bypassing(self):
         with patch("yt_dlp.YoutubeDL", side_effect=RuntimeError("HTTP 403")), patch("vocal_lab.audio.require_tool", return_value="ffmpeg"):
