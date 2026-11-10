@@ -16,6 +16,21 @@ from zipfile import ZipFile, ZIP_DEFLATED
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac", ".aiff", ".aif", ".webm"}
 MAX_UPLOAD_BYTES = 200 * 1024 * 1024
 
+# FileUploadの標準ビューは説明に件数を付けます。ファイル入力の動作を保ち、
+# この音源ボタンだけを固定ラベルで表示します（widget自体がbuttonの版にも対応）。
+UPLOAD_BUTTON_CSS = """<style>
+button.vocal-audio-upload, .vocal-audio-upload button {
+  font-size: 0 !important;
+}
+button.vocal-audio-upload::after, .vocal-audio-upload button::after {
+  content: "音源を選ぶ";
+  font-size: 14px;
+}
+button.vocal-audio-upload .fa, .vocal-audio-upload button .fa {
+  display: none !important;
+}
+</style>"""
+
 
 def uploaded_files(value: Any) -> list[dict]:
     """ipywidgets 7/8のアップロード値を、同じリストへ整理します。"""
@@ -75,6 +90,50 @@ def _number(value: Any, digits: int = 3) -> str:
         return "—"
 
 
+def _band_rows(analysis: dict) -> list[dict]:
+    rows = analysis.get("band_sensitivity", [])
+    if rows:
+        return rows
+    return [{"label": "主解析", "fit": analysis.get("fit", {}),
+             "quality": analysis.get("quality", {}), "status": analysis.get("status", ""),
+             "summary": analysis.get("summary", "")}]
+
+
+def band_selection_html(analysis: dict) -> str:
+    """長さから決めた帯域と、その時間スケールを表示します。"""
+    selection = analysis.get("band_selection", {})
+    if not selection:
+        return ""
+    mode = "自動" if selection.get("mode") == "auto" else "固定"
+    details = (
+        "<h3>今回の解析帯域</h3><p>" + mode + "："
+        + _number(selection.get("actual_low_hz")) + "〜" + _number(selection.get("actual_high_hz"))
+        + " Hz ／ 対応する変動の周期：約" + _number(selection.get("period_min_seconds"), 2)
+        + "〜" + _number(selection.get("period_max_seconds"), 2)
+        + "秒 ／ スペクトル計算の窓：" + _number(selection.get("welch_segment_seconds"), 2) + "秒</p>"
+    )
+    reason = selection.get("reason", "")
+    if reason:
+        details += "<p>" + html.escape(str(reason)) + "</p>"
+    return details
+
+
+def band_comparison_html(analysis: dict) -> str:
+    """帯域を広げた結果を、5 Hzまでの結果と同じ場所で確かめます。"""
+    rows = []
+    for row in _band_rows(analysis):
+        fit = row.get("fit", {})
+        cells = [html.escape(str(row.get("label", ""))),
+                 _number(fit.get("band_low_hz")) + "〜" + _number(fit.get("band_high_hz")),
+                 _number(fit.get("slope")), _number(fit.get("r_squared")),
+                 html.escape(str(row.get("summary", row.get("status", ""))))]
+        rows.append("<tr>" + "".join("<td>" + value + "</td>" for value in cells) + "</tr>")
+    return ("<h3>帯域による結果の違い</h3><p>同じ歌声を、広い帯域と5 Hzまでの帯域で比べます。"
+            "傾きが−1に近くなる方だけを採用せず、両方の結果を確認してください。</p>"
+            "<table><thead><tr><th>解析</th><th>使用帯域 [Hz]</th><th>傾き β</th><th>R²</th>"
+            "<th>この帯域での評価</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>")
+
+
 def plot_analysis(analysis: dict):
     """保存用と表示用で同じ図を使い、実測PSDと当てはめを区別します。"""
     from .plot_fonts import configure_plot_fonts
@@ -91,6 +150,10 @@ def plot_analysis(analysis: dict):
     frequencies = np.asarray(spectrum.get("frequency_hz", []), dtype=float)
     power = np.asarray(spectrum.get("power", []), dtype=float)
     valid = (frequencies > 0) & (power > 0) & np.isfinite(frequencies) & np.isfinite(power)
+    # 表示外の阻止域の微小なPSDで縦軸が広がりすぎることを防ぎます。
+    plot_low = max(float(fit.get("band_low_hz") or 0.02) / 2, 1e-6)
+    plot_high = max(20.0, float(fit.get("band_high_hz") or 20.0)) * 1.1
+    valid &= (frequencies >= plot_low) & (frequencies <= plot_high)
     axes[1].loglog(frequencies[valid], power[valid], color="#a8c1bd", linewidth=0.7, label="実測PSD（Welch法）")
     bin_f = np.asarray(spectrum.get("bin_frequency_hz", []), dtype=float)
     bin_p = np.asarray(spectrum.get("bin_power", []), dtype=float)
@@ -101,10 +164,28 @@ def plot_analysis(analysis: dict):
         axes[1].loglog(bin_f, fitted, color="#c9783c", linewidth=2, label=f"直線の当てはめ（傾き {_number(fit['slope'], 2)}）")
         middle = len(bin_f) // 2
         axes[1].loglog(bin_f, fitted[middle] * bin_f[middle] / bin_f, "--", color="#806795", label="1/fの基準線")
+    for row in analysis.get("band_sensitivity", []):
+        comparison = row.get("fit", {})
+        comparison_high = comparison.get("band_high_hz")
+        if (comparison.get("slope") is None or comparison.get("intercept") is None
+                or comparison_high is None or float(comparison_high) > 5.0
+                or comparison_high == fit.get("band_high_hz")):
+            continue
+        comparison_low = comparison.get("band_low_hz")
+        if comparison_low is None or comparison_high <= comparison_low:
+            continue
+        points = np.geomspace(float(comparison_low), float(comparison_high), 80)
+        prediction = 10 ** (float(comparison["intercept"]) + float(comparison["slope"]) * np.log10(points))
+        axes[1].loglog(points, prediction, "--", color="#8d9cba", linewidth=1.3,
+                       label="5 Hzまでの当てはめ（傾き " + _number(comparison["slope"], 2) + "）")
     low, high = fit.get("band_low_hz"), fit.get("band_high_hz")
     if low is not None and high is not None:
         axes[1].axvspan(float(low), float(high), color="#dce6cc", alpha=0.3)
-    axes[1].set(xlabel="音量が変わる速さ・変動周波数 [Hz]", ylabel="パワースペクトル密度（PSD）", title="歌声の音量ゆらぎのスペクトル")
+        axes[1].set_title("歌声の音量ゆらぎのスペクトル（使用帯域 " + _number(low) + "〜" + _number(high) + " Hz）")
+        axes[1].set_xlim(max(float(low) / 2, 1e-6), max(20.0, float(high)) * 1.1)
+    else:
+        axes[1].set_title("歌声の音量ゆらぎのスペクトル")
+    axes[1].set(xlabel="音量が変わる速さ・変動周波数 [Hz]", ylabel="パワースペクトル密度（PSD）")
     axes[1].legend(loc="best")
     for axis in axes:
         axis.grid(True, alpha=0.25)
@@ -140,10 +221,17 @@ def export_results(analysis: dict, directory: Path) -> Path:
             writer = csv.writer(handle)
             writer.writerow([first, second])
             writer.writerows(zip(values.get(first, []), values.get(second, [])))
+    with (directory / "band_comparison.csv").open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.writer(handle)
+        writer.writerow(["label", "band_low_hz", "band_high_hz", "slope", "r_squared", "status", "summary"])
+        for row in _band_rows(analysis):
+            fit = row.get("fit", {})
+            writer.writerow([row.get("label", ""), fit.get("band_low_hz"), fit.get("band_high_hz"),
+                             fit.get("slope"), fit.get("r_squared"), row.get("status", ""), row.get("summary", "")])
     figure = plot_analysis(analysis)
     figure.savefig(directory / "analysis.png", dpi=160)
     plt.close(figure)
-    names = ["result.json", "envelope.csv", "spectrum.csv", "binned_spectrum.csv", "analysis.png"]
+    names = ["result.json", "envelope.csv", "spectrum.csv", "binned_spectrum.csv", "band_comparison.csv", "analysis.png"]
     archive_path = directory / "results.zip"
     with ZipFile(archive_path, "w", ZIP_DEFLATED) as archive:
         for name in names:
@@ -172,7 +260,11 @@ def download_file(path: Path) -> None:
 
 def comparison_html(rows: list[dict]) -> str:
     if not rows:
-        return "<p>同じ解析条件の比較データがありません。音源を解析して登録するか、比較DBを読み込んでください。</p>"
+        return ("<p>同じ解析条件の比較データがありません。比較DBを読み込むか、別の音源を同じ条件で登録してください。"
+                "解析帯域、無音処理、歌声の分離方法が異なるデータや、今回と同じ音源・同じ区間は比較から除外します。</p>"
+                "<p>自動モードは音源の長さによって帯域が変わります。曲どうしを比べる場合は、双方を"
+                "「固定（比較DB用：0.2〜20 Hz）」で再解析して登録すると条件をそろえられます。"
+                "旧版の比較DBも新しい方法で作り直してください。</p>")
     cells = []
     for index, row in enumerate(rows, 1):
         cells.append("<tr><td>" + str(index) + "</td><td>" + html.escape(str(row.get("artist", ""))) + "</td><td>" + _number(row.get("distance")) + "</td><td>" + html.escape(str(row.get("tracks_count", row.get("count", "—")))) + "</td><td>" + html.escape(str(row.get("track", ""))) + "</td><td>" + html.escape(str(row.get("coverage_label", ""))) + "</td></tr>")
@@ -207,6 +299,11 @@ class VocalNotebookUI:
         )
         self.mode = widgets.ToggleButtons(options=[("ファイルをアップロード", "file"), ("YouTube URL", "youtube")])
         self.audio_upload = widgets.FileUpload(accept=",".join(sorted(AUDIO_EXTENSIONS)), multiple=False, description="音源を選ぶ")
+        self.audio_upload.add_class("vocal-audio-upload")
+        self.audio_upload.layout.width = "150px"
+        self.audio_upload.tooltip = "解析する音源を1つ選びます。選び直すと前の音源を置き換えます。"
+        self.upload_button_style = widgets.HTML(UPLOAD_BUTTON_CSS, layout=widgets.Layout(height="0px", margin="0"))
+        self.selected_audio = widgets.HTML("<p>音源はまだ選ばれていません。新しく選ぶと置き換わります。前の音源は一緒に解析しません。</p>")
         self.url = widgets.Text(description="YouTube URL", placeholder="https://www.youtube.com/watch?v=…", layout=widgets.Layout(width="95%"), style={"description_width": "initial"})
         self.url.layout.display = "none"
         self.start = widgets.FloatText(value=0, description="開始（秒）", style={"description_width": "initial"})
@@ -219,6 +316,11 @@ class VocalNotebookUI:
         ])
         self.device = widgets.Dropdown(options=[("自動（GPUを優先）", "auto"), ("CPU", "cpu"), ("GPU（CUDA）", "cuda")], value="auto", description="処理装置", style={"description_width": "initial"})
         self.vocals_only = widgets.Checkbox(value=False, description="歌声だけの音源です（分離を省略）", indent=False, layout=widgets.Layout(width="auto"))
+        self.analysis_mode = widgets.Dropdown(
+            options=[("自動（音源の長さに合わせる）", "auto"), ("固定（比較DB用：0.2〜20 Hz）", "fixed")],
+            value="auto", description="解析モード", style={"description_width": "initial"},
+            layout=widgets.Layout(width="auto", max_width="100%"),
+        )
         self.trim_edges = widgets.Checkbox(value=True, description="前後の無音を自動で除く", indent=False, layout=widgets.Layout(width="auto"))
         self.remove_internal = widgets.Checkbox(value=False, description="途中の無音も除く（時間を短縮）", indent=False, layout=widgets.Layout(width="auto"))
         self.threshold_db = widgets.FloatSlider(value=-40, min=-80, max=-10, step=1, description="無音のしきい値 [dB]", readout_format=".0f", style={"description_width": "initial"}, layout=widgets.Layout(width="95%"))
@@ -230,7 +332,8 @@ class VocalNotebookUI:
         self.silence_options.set_title(0, "無音の調整")
         self.analyse_button = widgets.Button(description="解析を始める", button_style="primary", icon="play")
         self.result_download = widgets.Button(description="結果ZIPを保存", disabled=True, icon="download")
-        self.vocals_download = widgets.Button(description="歌声WAVを保存", disabled=True, icon="download")
+        self.vocals_download = widgets.Button(description="無音調整後の歌声WAVを保存", disabled=True, icon="download", layout=widgets.Layout(width="auto"))
+        self.raw_vocals_download = widgets.Button(description="無音調整前の歌声WAVを保存", disabled=True, icon="download", layout=widgets.Layout(width="auto"))
         self.status = widgets.HTML("<p>音源と区間を選んでください。最初は60〜90秒の歌唱区間がおすすめです。</p>")
         self.result_output = widgets.Output()
         self.db_upload = widgets.FileUpload(accept=".json", multiple=False, description="比較DBを読み込む")
@@ -241,22 +344,28 @@ class VocalNotebookUI:
         self.db_status = widgets.HTML("<p>実測済みの比較DBは、まだ読み込まれていません。複数曲を同じ条件で登録すると比較できます。</p>")
         self.comparison_output = widgets.HTML()
         self.mode.observe(self._switch_mode, names="value")
+        self.audio_upload.observe(self._audio_selected, names="value")
         self.whole_track.observe(self._switch_whole_track, names="value")
         self.reset_times_button.on_click(self._reset_times)
         self.analyse_button.on_click(self._analyse)
         self.result_download.on_click(lambda button: download_file(self.results_zip) if self.results_zip else None)
         self.vocals_download.on_click(lambda button: download_file(Path(self.bundle["vocals_path"])) if self.bundle else None)
+        self.raw_vocals_download.on_click(lambda button: download_file(Path(self.bundle["extracted_vocals_path"])) if self.bundle and self.bundle.get("extracted_vocals_path") else None)
         self.db_upload.observe(self._import_database, names="value")
         self.add_reference_button.on_click(self._add_reference)
         self.db_download.on_click(self._export_database)
         self.panel = widgets.VBox([
-            self.version_banner,
+            self.version_banner, self.upload_button_style,
             widgets.HTML("<h2>1 音源と区間を選ぶ</h2><p>利用できる音源を使ってください。YouTubeから取得できない場合は、MP3やWAVをアップロードできます。音源はこの実行環境で処理し、公開DBへ自動送信しません。</p>"),
-            self.mode, self.audio_upload, self.url,
+            self.mode, self.audio_upload, self.selected_audio, self.url,
             self.whole_track, self.time_controls, self.reset_times_button,
             widgets.HTML("<p>曲全体を選ぶと、先頭から末尾まで解析します（最大10分）。初期設定では前後の無音を歌声抽出後に自動で除きます。無音調整後の長さが60秒未満のときは判定を保留します。</p>"),
-            self.device, self.vocals_only, self.silence_options, self.analyse_button, self.status,
-            self.result_output, widgets.HBox([self.result_download, self.vocals_download]),
+            self.device, self.vocals_only,
+            widgets.HTML("<p>保存済みの歌声WAVもアップロードして再解析できます。その場合は上の「歌声だけの音源です（分離を省略）」を選びます。再解析の自由度を残すには、無音調整前の全長WAVも保存してください。</p>"),
+            self.analysis_mode,
+            widgets.HTML("<p>自動モードは、無音調整後の音声の長さから低周波側とスペクトル計算の窓を決めます。高周波側は最大20 Hzを調べ、5 Hzまでの結果も併記します。固定モードは曲どうしの比較に使います。実際に使えた帯域は結果で確認できます。</p>"),
+            self.silence_options, self.analyse_button, self.status,
+            self.result_output, widgets.HBox([self.result_download, self.raw_vocals_download, self.vocals_download], layout=widgets.Layout(flex_flow="row wrap")),
             widgets.HTML("<h2>2 登録アーティストと比べる</h2><p>この比較は声の本人判定ではありません。音量変動の特徴を同じ方法で測った登録曲と比べます。比較DBは保存して、次回読み込めます。</p>"),
             self.db_upload, self.db_status, self.artist, self.track,
             widgets.HBox([self.add_reference_button, self.db_download], layout=widgets.Layout(flex_flow="row wrap")), self.comparison_output,
@@ -264,7 +373,24 @@ class VocalNotebookUI:
 
     def _switch_mode(self, change):
         self.audio_upload.layout.display = "" if change["new"] == "file" else "none"
+        self.selected_audio.layout.display = "" if change["new"] == "file" else "none"
         self.url.layout.display = "" if change["new"] == "youtube" else "none"
+
+    def _audio_selected(self, change):
+        """選択音源を明示し、選び直したときに前の解析結果を残しません。"""
+        records = uploaded_files(change["new"])
+        if len(records) == 1:
+            name = html.escape(str(records[0].get("name", "音源ファイル")))
+            self.selected_audio.value = "<p>今回の音源：<strong>" + name + "</strong><br>新しく選ぶと置き換わります。前の音源は一緒に解析しません。</p>"
+        elif not records:
+            self.selected_audio.value = "<p>音源はまだ選ばれていません。新しく選ぶと置き換わります。前の音源は一緒に解析しません。</p>"
+        else:
+            self.selected_audio.value = "<p>解析する音源を1つだけ選んでください。</p>"
+        self.bundle, self.results_zip = None, None
+        self.result_download.disabled = self.vocals_download.disabled = self.raw_vocals_download.disabled = self.add_reference_button.disabled = True
+        self.result_output.clear_output(wait=False)
+        self.comparison_output.value = ""
+        self._set_status("今回の音源と区間を確認して、「解析を始める」を押してください。")
 
     def _switch_whole_track(self, change):
         self.time_controls.layout.display = "none" if change["new"] else ""
@@ -277,12 +403,18 @@ class VocalNotebookUI:
         from .silence import SilenceConfig
         return SilenceConfig(trim_edges=self.trim_edges.value, remove_internal=self.remove_internal.value, threshold_db=self.threshold_db.value, min_silence_seconds=self.min_silence_seconds.value, padding_seconds=0.05)
 
+    def _analysis_config(self):
+        from .analysis import AnalysisConfig
+        automatic = self.analysis_mode.value == "auto"
+        return AnalysisConfig(auto_band=automatic, low_hz=0.02 if automatic else 0.2,
+                              high_hz=20.0, segment_seconds=120.0 if automatic else 20.0)
+
     def _set_status(self, text: str) -> None:
         self.status.value = "<p>" + html.escape(str(text)) + "</p>"
 
     def _analyse(self, button=None):
         self.bundle, self.results_zip = None, None
-        self.result_download.disabled = self.vocals_download.disabled = self.add_reference_button.disabled = True
+        self.result_download.disabled = self.vocals_download.disabled = self.raw_vocals_download.disabled = self.add_reference_button.disabled = True
         self.result_output.clear_output(wait=False)
         self.comparison_output.value = ""
         try:
@@ -296,16 +428,17 @@ class VocalNotebookUI:
                     raise ValueError("YouTubeの動画URLを入力してください。")
             self.analyse_button.disabled = True
             self._set_status("処理を始めます。初回は歌声抽出モデルの取得に時間がかかります。")
-            self.bundle = self.run_pipeline(source, start, end, run_dir / "output", source_kind=self.mode.value, already_vocals=self.vocals_only.value, progress=self._set_status, device=self.device.value, silence_config=self._silence_config())
+            self.bundle = self.run_pipeline(source, start, end, run_dir / "output", source_kind=self.mode.value, already_vocals=self.vocals_only.value, progress=self._set_status, device=self.device.value, silence_config=self._silence_config(), config=self._analysis_config())
             self.results_zip = export_results(self.bundle["analysis"], run_dir / "exports")
             self._show_result()
             self.result_download.disabled = self.vocals_download.disabled = False
+            self.raw_vocals_download.disabled = not bool(self.bundle.get("extracted_vocals_path"))
             self.add_reference_button.disabled = not self.bundle["analysis"].get("quality", {}).get("usable_for_comparison", False)
             self._show_comparison()
             self._set_status("解析が終わりました。抽出音を聴き、音楽や雑音が残っていないか確かめてから結果を読んでください。")
         except Exception as error:
             self.bundle, self.results_zip = None, None
-            self.result_download.disabled = self.vocals_download.disabled = self.add_reference_button.disabled = True
+            self.result_download.disabled = self.vocals_download.disabled = self.raw_vocals_download.disabled = self.add_reference_button.disabled = True
             self._set_status("解析を完了できませんでした：" + str(error))
         finally:
             self.analyse_button.disabled = False
@@ -317,6 +450,9 @@ class VocalNotebookUI:
         with self.result_output:
             summary = html.escape(str(analysis.get("summary", "解析結果")))
             self.display(self.HTML("<h2>解析結果</h2><p><strong>" + summary + "</strong></p><p>傾き β = " + _number(fit.get("slope")) + " ／ 当てはめ R² = " + _number(fit.get("r_squared")) + " ／ 使用帯域 = " + _number(fit.get("band_low_hz"), 2) + "〜" + _number(fit.get("band_high_hz"), 2) + " Hz</p><p>指定した帯域・区間での参考評価です。歌の上手さ、心地よさ、声質を判定する結果ではありません。</p>"))
+            self.display(self.HTML(band_selection_html(analysis)))
+            self.display(self.HTML(band_comparison_html(analysis)))
+            self.display(self.HTML("<p><strong>解析しているのは、抽出音に含まれるボーカル全体の音量変動です。</strong>主旋律とコーラス、多重録音は分離していません。重ね録りやリバーブも結果に影響するため、歌い手本人に固有の性質とは断定できません。</p>"))
             processing_details = preprocessing_html(analysis)
             if processing_details:
                 self.display(self.HTML(processing_details))

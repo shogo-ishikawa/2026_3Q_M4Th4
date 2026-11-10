@@ -106,6 +106,7 @@ class FileAudioTests(unittest.TestCase):
     def test_already_vocals_pipeline_writes_reproducible_metadata_and_unique_runs(self):
         fake = types.ModuleType("vocal_lab.analysis")
         fake.analyse_samples = self._analyse
+        fake.analysis_request_signature = lambda config=None: "test-request-policy"
         source_hash = hashlib.sha256(self.source.read_bytes()).hexdigest()
         with patch.dict(sys.modules, {"vocal_lab.analysis": fake}), patch("vocal_lab.pipeline.separate_vocals") as separator:
             first = run_analysis(self.source, 8, 20, self.folder / "outputs", already_vocals=True)
@@ -126,6 +127,7 @@ class FileAudioTests(unittest.TestCase):
     def test_demucs_receives_padded_context_but_analysis_and_playback_use_exact_interval(self):
         fake = types.ModuleType("vocal_lab.analysis")
         fake.analyse_samples = self._analyse
+        fake.analysis_request_signature = lambda config=None: "test-request-policy"
         def separate(context, out, device="auto", progress=None):
             self.assertAlmostEqual(audio.probe_duration(context), 16, places=3)
             return Path(context), "4.1.0"
@@ -140,6 +142,7 @@ class FileAudioTests(unittest.TestCase):
         # 全曲24秒のうち、分離結果では前後が無音になる場面を模擬します。
         fake = types.ModuleType("vocal_lab.analysis")
         fake.analyse_samples = self._analyse
+        fake.analysis_request_signature = lambda config=None: "test-request-policy"
         def separate(context, out, device="auto", progress=None):
             samples, sr = audio.load_audio(context)
             samples[:sr] = 0
@@ -162,6 +165,7 @@ class FileAudioTests(unittest.TestCase):
     def test_processed_short_clip_is_analysed_and_all_silence_is_rejected(self):
         fake = types.ModuleType("vocal_lab.analysis")
         fake.analyse_samples = self._analyse
+        fake.analysis_request_signature = lambda config=None: "test-request-policy"
         samples, sr = sf.read(self.source, always_2d=True)
         samples[:5 * sr] = 0
         samples[7 * sr:] = 0

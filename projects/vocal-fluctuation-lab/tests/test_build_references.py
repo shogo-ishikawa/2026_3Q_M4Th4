@@ -26,14 +26,15 @@ def catalogue(count=3):
 
 def measured(url, start, end, output_dir, **kwargs):
     return {"analysis": {
-        "schema_version": "vocal-fluctuation-result-v1", "method_id": "rms-welch-v1",
-        "analysis_signature": builder._requested_signature(kwargs.get("silence_config")),
+        "schema_version": "vocal-fluctuation-result-v1", "method_id": "rms-welch-v2",
+        "analysis_signature": builder._requested_signature(kwargs.get("silence_config"), kwargs.get("config")),
         "quality": {"usable_for_comparison": True},
         "features": {"slope": -1, "envelope_cv": 0.5,
                      "low_band_fraction": 0.4, "spectral_flatness": 0.25},
         "metadata": {"source_sha256": hashlib.sha256(url.encode()).hexdigest(),
                      "source_hash_scope": "selected-clip", "start_seconds": start, "end_seconds": end,
-                     "separation_method": "demucs:htdemucs", "model_version": "4.1.0"},
+                     "separation_method": "demucs:htdemucs", "model_version": "4.1.0",
+                     "analysis_request_signature": builder._requested_signature(kwargs.get("silence_config"), kwargs.get("config"))},
     }}
 
 
@@ -118,6 +119,7 @@ class BuildReferenceTests(unittest.TestCase):
         row = candidates["candidates"][0]
         old = measured(row["url"], 40, 130, "unused")["analysis"]
         old["analysis_signature"] = "v1-raw-default-analysis-without-preprocessing"
+        old["metadata"].pop("analysis_request_signature", None)
         with tempfile.TemporaryDirectory() as directory, patch.object(builder, "_run_analysis", side_effect=measured) as run:
             saved = add_reference(empty_database(), old, row["artist"], row["reported_track"], source=row["url"])
             save_database(saved, Path(directory) / "artist_references.json")
@@ -160,20 +162,19 @@ class BuildReferenceTests(unittest.TestCase):
             row = catalogue(1)["candidates"][0]
             different = measured(row["url"], 40, 130, "unused")["analysis"]
             different["analysis_signature"] = combined_analysis_signature("another-analysis-condition")
+            different["metadata"]["analysis_request_signature"] = combined_analysis_signature("another-request-condition")
             saved = add_reference(empty_database(), different, row["artist"], row["reported_track"], source=row["url"])
             save_database(saved, Path(directory) / "artist_references.json")
             with patch.object(builder, "_run_analysis", side_effect=ValueError("different settings")) as run:
                 builder.build_reference_catalogue(catalogue(1), directory)
                 run.assert_called_once()
 
-    def test_default_signature_matches_the_real_analysis_band_and_default_silence_policy(self):
-        import numpy as np
-        from vocal_lab.analysis import analyse_envelope
+    def test_default_batch_policy_matches_fixed_mode_and_default_silence_policy(self):
+        from vocal_lab.analysis import AnalysisConfig, analysis_request_signature
         from vocal_lab.silence import combined_analysis_signature
-        times = np.arange(9000) / 100
-        result = analyse_envelope(1 + 0.1 * np.sin(times), 100)
+        config = AnalysisConfig(low_hz=.2, high_hz=20, segment_seconds=20, auto_band=False)
         self.assertEqual(builder._requested_signature(None),
-                         combined_analysis_signature(result["analysis_signature"]))
+                         combined_analysis_signature(analysis_request_signature(config)))
 
     def test_bad_existing_database_is_not_overwritten(self):
         with tempfile.TemporaryDirectory() as directory, patch.object(builder, "_run_analysis") as run:
