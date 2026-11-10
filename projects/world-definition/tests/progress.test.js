@@ -125,4 +125,47 @@ test('a previous five-stage final clear opens the first new challenge', () => {
   storage.setItem('world-definition-progress-v1', JSON.stringify({ unlocked: 4, lastStage: 4, best: {} }));
   assert.equal(createStore(storage, 9).snapshot().unlocked, 4);
 });
+const NEW_KEY = 'world-definition-progress-v2';
+const mysteryOptions = { initialUnlocked: 9, initialStage: 9, migrateKey: KEY };
+test('the mystery campaign opens directly without requiring the practice maps', () => {
+  const storage = memoryStorage(), store = createStore(storage, 13, NEW_KEY, mysteryOptions);
+  assert.deepEqual(store.snapshot(), { unlocked: 9, lastStage: 9, best: {} });
+  for (let index = 0; index <= 9; index++) assert.equal(store.select(index), true);
+  assert.equal(store.select(10), false);
+  store.recordClear(8, record()); assert.equal(store.snapshot().unlocked, 9, 'Practice cannot skip the mystery sequence');
+  for (let index = 9; index < 13; index++) {
+    assert.equal(store.recordClear(index, record()), true);
+    assert.equal(store.snapshot().unlocked, Math.min(index + 1, 12));
+  }
+});
+test('old practice records migrate without carrying over a mystery completion', () => {
+  const previous = { unlocked: 8, lastStage: 7, best: { 0: record(), 8: record(3, 2, 25), 9: record(1, 2, 1) } };
+  const storage = memoryStorage(previous), oldRaw = storage.getItem(KEY);
+  const store = createStore(storage, 13, NEW_KEY, mysteryOptions);
+  assert.deepEqual(store.snapshot(), { unlocked: 9, lastStage: 9, best: { 0: record(), 8: record(3, 2, 25) } });
+  assert.equal(storage.getItem(KEY), oldRaw, 'The previous progress key remains intact');
+  assert.deepEqual(JSON.parse(storage.getItem(NEW_KEY)), store.snapshot());
+  store.select(2); store.recordClear(9, record(5, 1, 90));
+  const reloaded = createStore(storage, 13, NEW_KEY, mysteryOptions);
+  assert.equal(reloaded.snapshot().lastStage, 2); assert.equal(reloaded.snapshot().unlocked, 10);
+  assert.deepEqual(reloaded.snapshot().best[9], record(5, 1, 90));
+});
+test('new campaign saves take precedence and malformed legacy records stay isolated', () => {
+  const storage = memoryStorage({ unlocked: 8, best: { 0: record(), 8: record() } });
+  storage.setItem(NEW_KEY, JSON.stringify({ unlocked: 11, lastStage: 10, best: { 10: record(7, 2, 100) } }));
+  assert.deepEqual(createStore(storage, 13, NEW_KEY, mysteryOptions).snapshot(), { unlocked: 11, lastStage: 10, best: { 10: record(7, 2, 100) } });
+  const malformed = memoryStorage('{broken');
+  assert.deepEqual(createStore(malformed, 13, NEW_KEY, mysteryOptions).snapshot(), { unlocked: 9, lastStage: 9, best: {} });
+  assert.equal(malformed.getItem(KEY), '{broken');
+});
+test('campaign defaults are bounded and migration failure still keeps usable memory', () => {
+  assert.deepEqual(createStore(null, 13, NEW_KEY, mysteryOptions).snapshot(), { unlocked: 9, lastStage: 9, best: {} });
+  const source = memoryStorage({ unlocked: 8, best: { 3: record(3, 2, 30) } });
+  const denied = { getItem: key => source.getItem(key), setItem() { throw new Error('Quota'); } };
+  const store = createStore(denied, 13, NEW_KEY, mysteryOptions);
+  assert.equal(store.persistent, false); assert.deepEqual(store.snapshot().best[3], record(3, 2, 30));
+  assert.equal(store.recordClear(9, record()), true); assert.equal(store.snapshot().unlocked, 10);
+  assert.deepEqual(createStore(null, 3, 'small', { initialUnlocked: 99, initialStage: 99 }).snapshot(), { unlocked: 2, lastStage: 2, best: {} });
+  assert.deepEqual(createStore(null, 3, 'small', null).snapshot(), { unlocked: 0, lastStage: 0, best: {} });
+});
 console.log(checks + ' progress checks passed.');

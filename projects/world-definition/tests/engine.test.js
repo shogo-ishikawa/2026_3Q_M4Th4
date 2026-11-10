@@ -79,6 +79,37 @@ for (const route of ['freeze', 'solidify', 'stone', 'tree']) {
   });
 }
 
+test('clearing a rule removes only its target and counts as one reversible action', () => {
+  const game = createGame();
+  apply(game, 'water', ['freeze']); apply(game, 'stone', ['float', 'glow']);
+  const beforeStone = JSON.stringify(game.rules.stone), beforeCount = game.ruleCount;
+  assert.equal(gameEngine.clearRule(game, 'water').ok, true);
+  assert.equal(game.rules.water, null); assert.equal(has(game, 'water', 'freeze'), false);
+  assert.equal(JSON.stringify(game.rules.stone), beforeStone); assert.equal(game.ruleCount, beforeCount + 1);
+  const state = JSON.stringify(game);
+  assert.equal(gameEngine.clearRule(game, 'water').ok, false);
+  assert.equal(gameEngine.clearRule(game, 'unknown').ok, false);
+  assert.equal(JSON.stringify(game), state, 'An empty or unsupported clear cannot consume an action');
+});
+test('clearing the water under the player is rejected without changing state', () => {
+  const game = createGame(); apply(game, 'water', ['freeze']); walkTo(game, 425, 390);
+  const state = JSON.stringify(game);
+  assert.equal(gameEngine.clearRule(game, 'water').ok, false);
+  assert.equal(JSON.stringify(game), state);
+  walkTo(game, 425, 316);
+  assert.equal(gameEngine.clearRule(game, 'water').ok, true);
+});
+test('clearing an occupied floating bridge is rejected but is safe after reaching a bank', () => {
+  for (const target of ['stone', 'tree']) {
+    const game = makeBridge(target), state = JSON.stringify(game);
+    assert.equal(gameEngine.clearRule(game, target).ok, false);
+    assert.equal(JSON.stringify(game), state);
+    walkTo(game, game.player.x, 316);
+    assert.equal(gameEngine.clearRule(game, target).ok, true);
+    assert.equal(game.rules[target], null); assert.ok(walkable(game, game.player));
+  }
+});
+
 test('river cannot be crossed without a supporting rule', () => {
   const game = createGame();
   frames(game, ['w'], 200);
@@ -313,10 +344,10 @@ test('a completed stage stops accepting movement and elapsed time', () => {
 });
 
 
-test('nine stages have separate state, distinct layouts and two optional shards', () => {
-  assert.equal(gameEngine.LEVELS.length, 9);
+test('the nine practice stages retain separate state and optional shards', () => {
+  assert.equal(gameEngine.LEVELS.length, 13);
   const names = new Set();
-  for (let index = 0; index < gameEngine.LEVELS.length; index++) {
+  for (let index = 0; index < 9; index++) {
     const game = createGame(index), fresh = createGame(index);
     names.add(game.level.name);
     assert.equal(game.stageIndex, index);
@@ -1097,5 +1128,31 @@ test('the five introductory stages provide actionable hints from crossing throug
     frames(game, [], 600); assert.ok(game.sensorLit[sensor.id]);
   });
 })();
+
+test('a valve cannot close the hatch on a floating object and consumes a rejected E press', () => {
+  for (const target of ['stone', 'tree']) {
+    const game = createGame(12);
+    apply(game, 'water', ['solidify']); apply(game, target, ['float']);
+    game.puzzle.northValve = false; game.puzzle.southValve = true;
+    game[target] = { x: 1350, y: 660 }; game.player = { x: 1400, y: 625 };
+    assert.ok(walkable(game, game.player));
+    assert.ok(['stone', 'tree'].every(item => gameEngine.objectPositionValid(game, item)));
+    assert.equal(gameEngine.nearbyInteraction(game).id, 'south-valve');
+    frames(game, ['e'], 1);
+    assert.equal(game.puzzle.southValve, true, 'A rejected valve change must restore the previous route');
+    assert.equal(gameEngine.physicalState(game).doorStates.hatch, true);
+    assert.ok(gameEngine.objectPositionValid(game, target));
+    assert.equal(game.puzzle.eHeld, true);
+    assert.match(game.notice, /操作できません/);
+    game[target] = { x: 1350, y: 800 };
+    frames(game, ['e'], 1);
+    assert.equal(game.puzzle.southValve, true, 'Holding E after rejection cannot trigger the valve again');
+    frames(game, [], 1); frames(game, ['e'], 1);
+    assert.equal(game.puzzle.southValve, false, 'A fresh press closes the empty hatch normally');
+    assert.equal(gameEngine.physicalState(game).doorStates.hatch, false);
+    assert.ok(walkable(game, game.player));
+    assert.ok(['stone', 'tree'].every(item => gameEngine.objectPositionValid(game, item)));
+  }
+});
 
 console.log(checks + ' engine checks passed.');

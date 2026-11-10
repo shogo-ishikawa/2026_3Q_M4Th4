@@ -4,14 +4,15 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#183e35">
-  <meta name="description" content="水を固め、石を浮かせ、世界のルールを変えて進む小さなパズルゲーム。インストール不要で遊べます。">
+  <meta name="description" content="水の流れ、光と影、重さを使い分けて遺跡の謎を解く探索パズル。インストール不要で遊べます。">
   <title>WORLD DEFINITION — 世界のルールを変えるパズル</title>
-  <link rel="stylesheet" href="style.css?v=1.2.1">
-  <script src="engine.js?v=1.2.1" defer></script>
-  <script src="progress.js?v=1.2.1" defer></script>
-  <script src="session.js?v=1.2.1" defer></script>
-  <script src="renderer.js?v=1.2.1" defer></script>
-  <script src="app.js?v=1.2.1" defer></script>
+  <link rel="stylesheet" href="style.css?v=1.3.0">
+  <script src="mystery.js?v=1.3.0" defer></script>
+  <script src="engine.js?v=1.3.0" defer></script>
+  <script src="progress.js?v=1.3.0" defer></script>
+  <script src="session.js?v=1.3.0" defer></script>
+  <script src="renderer.js?v=1.3.0" defer></script>
+  <script src="app.js?v=1.3.0" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#game">ゲームへ移動</a>
@@ -22,7 +23,7 @@
         <span><strong>WORLD DEFINITION</strong><small>世界のルールを変えて進むパズル</small></span>
       </a>
       <div class="header-actions">
-        <span class="version">v1.2.1</span>
+        <span class="version">v1.3.0</span>
         <a href="guide.html" class="text-link">遊び方</a>
         <button id="help-button" class="button quiet" type="button">操作ガイド <kbd>H</kbd></button>
         <button id="undo" class="button quiet" type="button" disabled>1手戻す <kbd>Z</kbd></button>
@@ -32,11 +33,11 @@
 
     <main>
       <div class="chapter-heading">
-        <div><p class="eyebrow">A SMALL EXPERIMENT IN A DIFFERENT WORLD</p><h1>道がなければ、ルールを変えよう。</h1></div>
+        <div><p class="eyebrow">EXPLORE · OBSERVE · REDEFINE</p><h1>世界のしくみを解き明かそう。</h1></div>
         <p class="availability"><span aria-hidden="true"></span>インストール不要・AI不要で遊べます</p>
       </div>
       <section class="stage-toolbar" aria-label="ステージ選択と記録">
-        <div class="stage-picker"><label for="stage-select">ステージ</label><select id="stage-select" aria-describedby="stage-description"></select><button id="change-stage" class="button quiet" type="button">このステージを遊ぶ</button></div>
+        <div class="stage-picker"><button id="mystery-start" class="button primary" type="button">謎解き編へ</button><label for="stage-select">ステージ</label><select id="stage-select" aria-describedby="stage-description"></select><button id="change-stage" class="button quiet" type="button">このステージを遊ぶ</button></div>
         <p id="stage-description"></p><p id="stage-record" class="stage-record"></p><p id="session-status" class="session-status" role="status">途中の状態は、このブラウザに自動保存します。</p>
       </section>
       <ol id="progress" class="progress" aria-label="ステージの進み具合">
@@ -49,10 +50,12 @@
       <div class="play-layout">
         <section class="world-column" aria-label="ゲーム">
           <div class="world-frame">
+            <div class="exploration-toolbar"><p id="exploration-mode">謎解き編では、近くの看板や装置をEで調べます。</p><div><button id="map-toggle" class="button quiet" type="button" aria-pressed="false">全体地図 <kbd>M</kbd></button><button id="notebook-toggle" class="button quiet" type="button" aria-expanded="false" aria-controls="notebook-panel">手掛かり手帳</button></div></div>
             <div class="world-caption"><span><span class="status-dot" aria-hidden="true"></span><span id="stage-number">STAGE 01 / 09</span></span><strong id="stage-name">封印されたゴール</strong><span id="shard-count" class="map-label">欠片 0 / 2</span></div>
             <canvas id="game" width="870" height="570" tabindex="0" aria-label="WORLD DEFINITION のゲーム画面。WASD または矢印キーで移動、E キーで操作できます。">このゲームには Canvas に対応したブラウザが必要です。</canvas>
+            <div id="mechanism-status" class="mechanism-status" aria-label="仕掛けの状態"></div><section id="notebook-panel" class="notebook-panel" hidden aria-label="読んだ手掛かり"><h3>手掛かり手帳</h3><p>看板や石碑の近くでEを押すと、読んだ内容がここに残ります。</p><div id="notebook-list"></div></section>
             <div class="world-status"><p id="objective" aria-live="polite">目標：川を渡り、結晶を回収しよう</p><p id="hudpower">適用中のルール：なし</p></div>
-            <div class="hint-toolbar"><p id="interaction-status">移動しながら、石や木の近くで操作を試しましょう。</p><button id="hint-button" class="button primary" type="button" aria-expanded="false" aria-controls="hint-panel">攻略ヒント <kbd>J</kbd></button></div>
+            <p id="world-feedback" class="world-feedback" role="status" hidden>看板や装置を調べ、世界の変化を観察しましょう。</p><div class="hint-toolbar"><p id="interaction-status">移動しながら、石や木の近くで操作を試しましょう。</p><button id="hint-button" class="button primary" type="button" aria-expanded="false" aria-controls="hint-panel">攻略ヒント <kbd>J</kbd></button></div>
             <section id="hint-panel" class="hint-panel" hidden aria-labelledby="hint-title">
               <div class="hint-heading"><div><p id="hint-step">ヒント 1</p><h3 id="hint-title">いまの進め方</h3></div><button id="hint-close" class="button quiet" type="button">閉じる</button></div>
               <p id="hint-content" class="hint-content" tabindex="-1" aria-live="polite" hidden></p>
@@ -63,7 +66,7 @@
             </section>
           </div>
           <div class="under-map">
-            <div class="key-guide"><p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <span>または矢印で移動</span></p><p><kbd>E</kbd> <span>長押しで物体・ゲートを操作</span></p></div>
+            <div class="key-guide"><p><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> <span>または矢印で移動</span></p><p><kbd>E</kbd> <span>調べる・装置を操作</span></p></div>
             <button id="lab-focus" class="button quiet lab-jump" type="button">ルールを組み合わせる <span aria-hidden="true">↗</span> <kbd>L</kbd></button>
           </div>
           <div class="field-tools">
@@ -71,7 +74,7 @@
               <div class="direction-pad"><button class="pad up" data-key="w" type="button" aria-label="上へ移動">↑</button><button class="pad left" data-key="a" type="button" aria-label="左へ移動">←</button><span class="pad-centre" aria-hidden="true">✦</span><button class="pad right" data-key="d" type="button" aria-label="右へ移動">→</button><button class="pad down" data-key="s" type="button" aria-label="下へ移動">↓</button></div>
               <div class="action-control"><button class="pad action-pad" data-key="e" type="button" aria-label="E 操作を長押し">E<span>操作</span></button><small>物体を運ぶときは<br>Eと方向を同時に長押し</small></div>
             </div>
-            <p class="carry-note">運ぶ物体は研究室で選べます。近づいて<strong>E＋方向キー</strong>、川の中央でEを離すと橋になります。</p>
+            <p class="carry-note">看板・装置は近づいて<strong>E</strong>。浮遊物体は<strong>E＋方向キー</strong>で運びます。定義の解除も試してみましょう。</p>
           </div>
         </section>
 
@@ -79,7 +82,7 @@
           <div class="lab-header"><p class="eyebrow">RULE WORKSHOP</p><h2 id="lab-title">ルール研究室</h2><p>物体と動作を組み合わせて、<br>世界の性質を変えてみよう。</p></div>
           <div class="lab-section"><h3><span>1</span> 物体を選ぶ</h3><div id="targets" class="target-grid cardgrid" role="group" aria-label="対象の物体"></div></div>
           <div class="lab-section"><h3><span>2</span> 動作を選ぶ <small>最大3つ</small></h3><div id="effects" class="effect-grid effectgrid" role="group" aria-label="組み合わせる動作"></div><p id="unlock-message" class="unlock-message">結晶を拾うと「加熱」が使えます。</p></div>
-          <div class="lab-section selection-section"><h3><span>3</span> 世界に適用する</h3><div id="queue" class="queue" aria-label="選んだ組み合わせ"></div><button id="apply" class="button primary apply-button" type="button">ルールを適用 <span aria-hidden="true">↗</span></button><p id="rule-status" class="rule-status" role="status">まずは物体と動作を選んでください。</p>
+          <div class="lab-section selection-section"><h3><span>3</span> 世界に適用する</h3><div id="queue" class="queue" aria-label="選んだ組み合わせ"></div><button id="apply" class="button primary apply-button" type="button">ルールを適用 <span aria-hidden="true">↗</span></button><button id="rule-clear" class="button quiet clear-rule" type="button" disabled>この物体の定義を解除</button><p id="rule-status" class="rule-status">まずは物体と動作を選んでください。</p>
             <section id="local-ai" class="local-ai" hidden aria-label="ローカルAIの設定と文章入力">
               <p class="eyebrow">LOCAL AI · OPTIONAL</p><h4>文章からルールを作る</h4>
               <div class="ai-connection"><button id="ai-check" class="button quiet" type="button">接続確認</button><label for="ai-model">モデル</label><select id="ai-model"><option value="">自動選択</option></select></div>
@@ -103,13 +106,13 @@
 
   <dialog id="start-dialog" aria-labelledby="start-title">
     <div class="welcome-illustration" aria-hidden="true"><span>✦</span><div class="mini-river"></div><span>◈</span></div>
-    <p class="eyebrow">WELCOME TO WORLD DEFINITION</p><h2 id="start-title">この世界のルールは、<br>あなたが決める。</h2><p id="start-intro" class="dialog-intro">川を渡り、光を運び、脈動を響かせる基本5面と応用4面の全9ステージ。物体の性質を変えて、扉の向こうを目指しましょう。</p>
-    <ol class="welcome-steps"><li><span>1</span><p><strong>まずは川まで歩こう</strong>WASD・矢印キー、または画面の方向ボタンで移動。</p></li><li><span>2</span><p><strong>研究室でルールを作ろう</strong><span id="start-rule-hint">迷ったら「水」＋「固体化」を選んで適用。</span></p></li><li><span>3</span><p><strong>結晶で新しい動作を解放</strong>基本の5面は加熱、応用の4面は装置の条件でゲートを開きます。</p></li></ol>
+    <p class="eyebrow">WELCOME TO WORLD DEFINITION</p><h2 id="start-title">この世界のルールは、<br>あなたが決める。</h2><p id="start-intro" class="dialog-intro">川を渡り、光を運び、脈動を響かせる広い遺跡を調べ、水の流れや光、重さを使い分ける謎解き編です。以前の9面は練習ステージから遊べます。</p>
+    <ol class="welcome-steps"><li><span>1</span><p><strong>看板や装置を調べよう</strong>WASD・矢印キーで移動。看板や装置の近くでEを押します。</p></li><li><span>2</span><p><strong>研究室でルールを作ろう</strong><span id="start-rule-hint">迷ったら「水」＋「固体化」を選んで適用。</span></p></li><li><span>3</span><p><strong>付けるだけでなく、解除も使おう</strong>世界の変化を観察し、必要なときに元の性質へ戻します。</p></li></ol>
     <p id="resume-note" class="resume-note" hidden></p><button id="start-fresh" class="button quiet" type="button" hidden>このステージを最初から</button>
-    <button id="start-button" autofocus class="button primary start-button" type="button">遊び始める <span aria-hidden="true">↗</span></button><p class="dialog-footnote">AIやアカウントの準備は不要です。クリアすると次のステージが開きます。</p>
+    <button id="start-button" autofocus class="button primary start-button" type="button">遊び始める <span aria-hidden="true">↗</span></button><p class="dialog-footnote">AIやアカウントの準備は不要です。謎解き編は最初の面から遊べます。</p>
   </dialog>
 
-  <dialog id="help-dialog" aria-labelledby="help-title"><div class="dialog-head"><div><p class="eyebrow">HOW TO PLAY</p><h2 id="help-title">操作ガイド</h2></div><button id="close-help" class="button quiet" type="button">閉じる</button></div><p class="dialog-intro">ルールは研究室で選んで適用します。別の物体のルールも組み合わせて使えます。</p><table class="controls-table"><thead><tr><th>キー</th><th>できること</th></tr></thead><tbody><tr><td>WASD / 矢印</td><td>プレイヤーを移動</td></tr><tr><td>E ＋ 移動</td><td>近くの浮遊した石・木を運ぶ</td></tr><tr><td>E 長押し</td><td>「炎＋加熱」を適用後、近くのゲートを加熱</td></tr><tr><td>L</td><td>ルール研究室へ移動</td></tr><tr><td>H</td><td>操作ガイドを開く</td></tr><tr><td>J</td><td>状況に合った攻略ヒントを開く・閉じる</td></tr><tr><td>Z</td><td>直前の定義・運搬・配置復旧を1手戻す</td></tr><tr><td>R</td><td>確認してからステージをやり直す</td></tr><tr><td>Escape</td><td>ガイドなどの画面を閉じる</td></tr></tbody></table><p class="help-note">物体を運ぶときは、研究室でその石・木を選んでから近づきます。方向ボタンとEボタンでも同じ操作ができます。キーボードで動かないときは、一度ゲーム画面をクリックしてください。</p><a class="guide-link" href="guide.html">詳しい遊び方・ルールの説明を読む <span aria-hidden="true">↗</span></a></dialog>
+  <dialog id="help-dialog" aria-labelledby="help-title"><div class="dialog-head"><div><p class="eyebrow">HOW TO PLAY</p><h2 id="help-title">操作ガイド</h2></div><button id="close-help" class="button quiet" type="button">閉じる</button></div><p class="dialog-intro">ルールは研究室で選んで適用します。別の物体のルールも組み合わせて使えます。</p><table class="controls-table"><thead><tr><th>キー</th><th>できること</th></tr></thead><tbody><tr><td>WASD / 矢印</td><td>プレイヤーを移動</td></tr><tr><td>E ＋ 移動</td><td>近くの浮遊した石・木を運ぶ</td></tr><tr><td>E</td><td>近くの看板を読む・レバーや紋章を操作</td></tr><tr><td>M</td><td>追従表示と全体地図を切り替える</td></tr><tr><td>定義を解除</td><td>選択した物体を元の性質へ戻す</td></tr><tr><td>E 長押し</td><td>「炎＋加熱」を適用後、近くのゲートを加熱</td></tr><tr><td>L</td><td>ルール研究室へ移動</td></tr><tr><td>H</td><td>操作ガイドを開く</td></tr><tr><td>J</td><td>状況に合った攻略ヒントを開く・閉じる</td></tr><tr><td>Z</td><td>直前の定義・運搬・配置復旧を1手戻す</td></tr><tr><td>R</td><td>確認してからステージをやり直す</td></tr><tr><td>Escape</td><td>ガイドなどの画面を閉じる</td></tr></tbody></table><p class="help-note">物体を運ぶときは、研究室でその石・木を選んでから近づきます。方向ボタンとEボタンでも同じ操作ができます。キーボードで動かないときは、一度ゲーム画面をクリックしてください。</p><a class="guide-link" href="guide.html">詳しい遊び方・ルールの説明を読む <span aria-hidden="true">↗</span></a></dialog>
 
   <dialog id="win-dialog" aria-labelledby="win-title"><div class="win-symbol" aria-hidden="true">✦</div><p class="eyebrow">WORLD REDEFINED</p><h2 id="win-title">ステージクリア！</h2><p class="dialog-intro">世界に新しいルールを与えて、ゴールへの道を作りました。</p><p id="win-result" class="win-note"></p><p id="save-status" class="win-note"></p><div class="win-actions"><button id="next-stage" class="button primary" type="button">次のステージへ</button><button id="again" class="button primary" type="button">このステージを再挑戦</button><button id="close-win" class="button quiet" type="button">世界を眺める</button></div></dialog>
   <noscript><p class="noscript">ゲームを遊ぶには、ブラウザで JavaScript を有効にしてください。</p></noscript>

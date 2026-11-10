@@ -6,16 +6,21 @@
   const canvas = el('game');
   let storage;
   try { storage = window.localStorage; } catch (_) { storage = null; }
-  const progressStore = window.WorldDefinitionProgress.createStore(storage, E.LEVELS.length);
+  const progressStore = window.WorldDefinitionProgress.createStore(storage, E.LEVELS.length, 'world-definition-progress-v2', { initialUnlocked: 9, initialStage: 9, migrateKey: 'world-definition-progress-v1' });
   const sessions = window.WorldDefinitionSession;
-  const sessionStore = sessions.createStore(storage, E);
+  const sessionStore = sessions.createStore(storage, E, 'world-definition-session-v2');
   const history = sessions.createHistory(E, { limit: 40 });
   const savedSession = sessionStore.load(progressStore.snapshot().unlocked);
   let game = savedSession || E.createGame(progressStore.snapshot().lastStage);
   let started = false;
   let lastSaveTime = 0;
   let carrying = false;
-  let selectedTarget = game.stageIndex === 2 ? 'tree' : game.stageIndex > 0 ? 'stone' : 'water';
+  let interactionHeld = false;
+  let overview = false;
+  let explorationSignature = '';
+  let noteCount = 0;
+  const initialTarget = value => value.level.defaultTarget || value.preferredCarryTarget || (value.stageIndex === 2 ? 'tree' : value.stageIndex > 0 ? 'stone' : 'water');
+  let selectedTarget = initialTarget(game);
   let selectedEffects = [...(game.rules[selectedTarget]?.effects || [])];
   let requestGeneration = 0;
   let pendingRequest = null;
@@ -45,10 +50,10 @@
     document.querySelectorAll('[data-key]').forEach(button => button.classList.toggle('held', pressed.has(button.dataset.key)));
   }
   function clearKeys() {
-    pressed.clear(); keyboardKeys.clear(); pointerKeys.clear(); heldButtons.clear();
+    pressed.clear(); keyboardKeys.clear(); pointerKeys.clear(); heldButtons.clear(); interactionHeld = false;
     document.querySelectorAll('[data-key]').forEach(button => button.classList.remove('held'));
   }
-  function status(message) { text('rule-status', message); }
+  function status(message) { text('rule-status', message); text('world-feedback', message); }
   function saveSession() {
     if (!started || game.complete) return;
     sessionStore.save(game);
@@ -65,11 +70,48 @@
     const value = Math.max(0, Math.round(seconds));
     return Math.floor(value / 60) + '分' + String(value % 60).padStart(2, '0') + '秒';
   }
+  function renderExplorationInfo() {
+    const mechanisms = E.puzzleStatus(game), notes = E.notebook(game);
+    const signature = JSON.stringify([game.stageIndex, mechanisms, notes]);
+    el('world-feedback').hidden = !game.level.mystery;
+    text('notebook-toggle', '手掛かり手帳' + (notes.length ? ' (' + notes.length + ')' : ''));
+    if (started && game.level.mystery && notes.length > noteCount) { el('notebook-panel').hidden = false; el('notebook-toggle').setAttribute('aria-expanded', 'true'); }
+    noteCount = notes.length;
+    text('map-toggle', overview ? '追従表示に戻る M' : '全体地図 M');
+    el('map-toggle').setAttribute('aria-pressed', String(overview));
+    if (signature === explorationSignature) return;
+    explorationSignature = signature;
+    el('mechanism-status').replaceChildren(); el('notebook-list').replaceChildren();
+    for (const mechanism of mechanisms) {
+      const chip = document.createElement('span'); chip.className = 'mechanism-chip' + (mechanism.active ? ' active' : '');
+      chip.textContent = mechanism.label + '：' + mechanism.value; el('mechanism-status').append(chip);
+    }
+    for (const note of notes) {
+      const entry = document.createElement('div'); entry.className = 'notebook-entry';
+      const title = document.createElement('strong'); title.textContent = note.title;
+      const content = document.createElement('p'); content.textContent = note.text;
+      entry.append(title, content); el('notebook-list').append(entry);
+    }
+    if (!notes.length) { const empty = document.createElement('p'); empty.textContent = 'まだ手掛かりを読んでいません。看板や石碑を調べてみましょう。'; el('notebook-list').append(empty); }
+  }
+  function toggleMap() {
+    if (!game.level.mystery || paused()) return;
+    clearKeys(); overview = !overview; renderExplorationInfo(); canvas.focus({ preventScroll: true });
+  }
+  el('map-toggle').addEventListener('click', toggleMap);
+  el('notebook-toggle').addEventListener('click', () => {
+    if (!game.level.mystery || paused()) return;
+    clearKeys(); el('notebook-panel').hidden = !el('notebook-panel').hidden;
+    el('notebook-toggle').setAttribute('aria-expanded', String(!el('notebook-panel').hidden));
+    renderExplorationInfo();
+  });
   function updateHud() {
     text('objective', E.objective(game));
     const rule = game.rules[selectedTarget];
     text('hudpower', '定義 ' + game.ruleCount + ' 回');
     el('undo').disabled = !history.canUndo || game.complete || paused();
+    el('rule-clear').disabled = !game.rules[selectedTarget] || game.complete;
+    renderExplorationInfo();
     text('interaction-status', E.interactionStatus(game));
     text('shard-count', '欠片 ' + game.collectedShards.filter(Boolean).length + ' / ' + game.level.shards.length);
     E.progressSteps(game).forEach((step, index) => {
@@ -87,20 +129,24 @@
   function renderStage() {
     const saved = progressStore.snapshot();
     el('stage-select').replaceChildren();
-    E.LEVELS.forEach((level, index) => {
+    const ordered = E.LEVELS.map((level, index) => ({ level, index })).sort((a, b) => Number(Boolean(b.level.mystery)) - Number(Boolean(a.level.mystery)));
+    ordered.forEach(({ level, index }) => {
       const option = document.createElement('option');
       option.value = String(index); option.disabled = index > saved.unlocked;
-      option.textContent = (index < 5 ? '基本 ' : '応用 ') + (index + 1) + '. ' + level.name + (option.disabled ? '（未解放）' : saved.best[index] ? ' ✓' : '');
+      option.textContent = (level.mystery ? '謎解き ' : '練習 ') + (level.mystery ? index - 8 : index + 1) + '. ' + level.name + (option.disabled ? '（未解放）' : saved.best[index] ? ' ✓' : '');
       el('stage-select').append(option);
     });
     el('stage-select').value = String(game.stageIndex);
-    text('stage-number', 'STAGE ' + String(game.stageIndex + 1).padStart(2, '0') + ' / ' + String(E.LEVELS.length).padStart(2, '0'));
+    text('stage-number', (game.level.mystery ? '謎解き ' : '練習 ') + String(game.level.mystery ? game.stageIndex - 8 : game.stageIndex + 1).padStart(2, '0') + ' / ' + (game.level.mystery ? '04' : '09'));
+    el('map-toggle').disabled = !game.level.mystery; el('notebook-toggle').hidden = !game.level.mystery;
+    text('exploration-mode', game.level.mystery ? '看板や装置の近くでE。Mで全体地図を確認できます。' : '練習ステージです。新しい謎解き編は「謎解き編へ」から遊べます。');
     text('stage-name', game.level.name);
     text('stage-description', game.level.subtitle);
-    text('start-intro', 'ステージ ' + (game.stageIndex + 1) + ' / ' + E.LEVELS.length + '：' + game.level.name + '。' + game.level.subtitle);
+    text('start-intro', (game.level.mystery ? '謎解き編 ' + (game.stageIndex - 8) + ' / 4' : '練習 ' + (game.stageIndex + 1) + ' / 9') + '：' + game.level.name + '。' + game.level.subtitle);
     text('start-rule-hint', game.stageIndex === 0 ? '迷ったら「水」＋「固体化」を選んで適用。' : game.level.subtitle);
     const best = saved.best[game.stageIndex];
-    text('stage-record', (best ? 'ベスト：定義 ' + best.rules + ' 回 / 欠片 ' + best.shards + ' 個 / ' + formatTime(best.time) : '金の欠片は寄り道の目標です。集めなくてもクリアできます。') + (game.level.parRules ? ' 挑戦目標：定義 ' + game.level.parRules + ' 回以内（任意）' : ''));
+    text('stage-record', (best ? 'ベスト：定義 ' + best.rules + ' 回 / 欠片 ' + best.shards + ' 個 / ' + formatTime(best.time) : game.level.mystery ? '看板を読み、仕掛けの変化を観察しましょう。時間制限はありません。' : '金の欠片は寄り道の目標です。集めなくてもクリアできます。') + (game.level.parRules ? ' 挑戦目標：定義 ' + game.level.parRules + ' 回以内（任意）' : ''));
+    explorationSignature = ''; noteCount = E.notebook(game).length;
     el('progress').replaceChildren();
     E.progressSteps(game).forEach((step, index) => {
       const item = document.createElement('li');
@@ -123,7 +169,7 @@
   function renderEffectSummary() {
     el('effect-summary').replaceChildren();
     const active = game.rules[selectedTarget]?.effects || [];
-    for (const message of active.length ? active.map(id => visualDescriptions[selectedTarget][id]) : ['まだ適用されていません。選んだ動作は「ルールを適用」で世界に反映されます。']) {
+    for (const message of active.length ? active.map(id => game.level.mystery && selectedTarget === 'water' && id === 'freeze' ? '氷の通路になりますが、水の流れと水車は止まります。' : game.level.mystery && selectedTarget === 'water' && id === 'solidify' ? (game.level.id === 'mystery-source-maze' ? '導水口が堰になり、下流が干上がって川底を歩けます。' : '水が硬い通路になり、流れは止まります。') : visualDescriptions[selectedTarget][id]) : ['まだ適用されていません。選んだ動作は「ルールを適用」で世界に反映されます。']) {
       const item = document.createElement('li'); item.textContent = message; el('effect-summary').append(item);
     }
   }
@@ -133,10 +179,11 @@
     for (const target of E.TARGETS) {
       const button = document.createElement('button');
       button.type = 'button'; button.className = 'choice' + (selectedTarget === target.id ? ' selected' : '');
-      button.dataset.target = target.id;
+      const unavailable = E.supportedEffects(game, target.id).length === 0;
+      button.disabled = unavailable; button.dataset.target = target.id;
       button.setAttribute('aria-pressed', String(selectedTarget === target.id));
       const title = document.createElement('span'); title.textContent = target.symbol + ' ' + target.jp;
-      const detail = document.createElement('small'); detail.textContent = game.rules[target.id] ? '適用中' : '';
+      const detail = document.createElement('small'); detail.textContent = unavailable ? 'この面では対象外' : game.rules[target.id] ? '適用中' : '';
       button.append(title, detail);
       button.addEventListener('click', () => {
         selectedTarget = target.id;
@@ -158,10 +205,10 @@
       button.dataset.effect = effect.id;
       button.disabled = !supported || locked;
       button.setAttribute('aria-pressed', String(selected));
-      button.title = sealed ? 'このステージでは水の変化が封印されています。浮遊した石や木で道を作りましょう。' : supported ? effect.detail : label(selectedTarget) + 'では使えません。';
+      button.title = sealed ? (game.level.mystery ? 'この場所ではこの動作を使えません。看板や装置の仕組みを調べてみましょう。' : 'このステージでは水の変化が封印されています。浮遊した石や木で道を作りましょう。') : supported ? effect.detail : label(selectedTarget) + 'では使えません。';
       const title = document.createElement('span'); title.textContent = (locked ? '🔒 ' : '') + effect.jp;
       const detail = document.createElement('small');
-      detail.textContent = sealed ? '封印中' : !supported ? '対象外' : locked ? '結晶で解放' : selected ? '選択中' : '選択する';
+      detail.textContent = sealed ? (game.level.mystery ? 'この面では不可' : '封印中') : !supported ? '対象外' : locked ? '結晶で解放' : selected ? '選択中' : '選択する';
       button.append(title, detail);
       button.addEventListener('click', () => {
         if (selectedEffects.includes(effect.id)) selectedEffects = selectedEffects.filter(id => id !== effect.id);
@@ -178,7 +225,7 @@
       const chip = document.createElement('span'); chip.className = 'chip'; chip.textContent = name;
       el('queue').append(chip);
     }
-    text('unlock-message', game.level.gateMode === 'sensors' ? 'この応用面は盤と結晶で自動開門します。炎の加熱は必要ありません。' : game.core ? '結晶を回収済み。「炎」の「加熱」が使えます。' : '青い結晶を取ると、炎の「加熱」が使えます。');
+    text('unlock-message', game.level.mystery ? '定義を外すと元の性質に戻ります。流れ、光、重さの変化を観察しましょう。' : game.level.gateMode === 'sensors' ? 'この応用面は盤と結晶で自動開門します。炎の加熱は必要ありません。' : game.core ? '結晶を回収済み。「炎」の「加熱」が使えます。' : '青い結晶を取ると、炎の「加熱」が使えます。');
     el('apply').disabled = selectedEffects.length === 0 || game.complete;
     el('apply').textContent = 'ルールを適用';
     el('active-rules').replaceChildren();
@@ -227,6 +274,14 @@
     }
   }
   el('apply').addEventListener('click', applySelectedRule);
+  el('rule-clear').addEventListener('click', () => {
+    if (game.complete || paused()) return;
+    clearKeys(); const before = sessions.capture(E, game);
+    const result = E.clearRule(game, selectedTarget); status(result.message);
+    if (!result.ok) return;
+    history.recordSnapshot(before); cancelAI(); selectedEffects = [];
+    renderLab(); saveSession(); canvas.focus({ preventScroll: true });
+  });
   if (localAI) el('local-ai').hidden = false;
   else el('use-ai').checked = false;
   el('ai-check').addEventListener('click', async () => {
@@ -293,9 +348,10 @@
   el('use-ai').addEventListener('change', () => { if (!el('use-ai').checked) cancelNaming(); });
   el('ai-cancel').addEventListener('click', () => { cancelAI(); text('ai-status', '生成を中止しました。手動の定義はそのまま使えます。'); });
   function reset(stageIndex = game.stageIndex) {
-    cancelAI(); history.clear(); carrying = false;
-    clearKeys(); progressStore.select(stageIndex); game = E.createGame(stageIndex); selectedTarget = game.stageIndex === 2 ? 'tree' : game.stageIndex > 0 ? 'stone' : 'water'; selectedEffects = [];
+    cancelAI(); history.clear(); carrying = false; interactionHeld = false; overview = false;
+    clearKeys(); progressStore.select(stageIndex); game = E.createGame(stageIndex); selectedTarget = initialTarget(game); selectedEffects = [];
     started = true; hadCore = false; hadComplete = false; hintIndex = 0; currentHintKey = '';
+    el('notebook-panel').hidden = true; el('notebook-toggle').setAttribute('aria-expanded', 'false');
     el('hint-content').hidden = true; el('hint-panel').hidden = true; el('hint-marker').checked = false; text('hint-recovery-status', ''); el('hint-button').setAttribute('aria-expanded', 'false');
     dialogs.forEach(dialog => { if (dialog.open) dialog.close(); });
     status('新しく始めました。対象と動作を選んでみましょう。');
@@ -304,10 +360,10 @@
   function undo() {
     if (paused() || game.complete || !history.canUndo) return;
     const restored = history.undo(); if (!restored) return;
-    cancelAI(); clearKeys(); carrying = false; game = restored;
+    cancelAI(); clearKeys(); carrying = false; interactionHeld = false; game = restored;
     hadCore = game.core; hadComplete = false; hintIndex = 0; currentHintKey = '';
     selectedEffects = [...(game.rules[selectedTarget]?.effects || [])];
-    text('hint-recovery-status', ''); status('直前の定義・運搬・配置復旧を1手戻しました。');
+    text('hint-recovery-status', ''); status('直前の定義・解除・運搬・装置の操作を1手戻しました。');
     renderStage(); renderLab(); saveSession(); canvas.focus({ preventScroll: true });
   }
   el('undo').addEventListener('click', undo);
@@ -325,12 +381,14 @@
   el('reset').addEventListener('click', askReset);
   el('again').addEventListener('click', () => reset());
   el('next-stage').addEventListener('click', () => { if (game.complete && game.stageIndex + 1 < E.LEVELS.length) reset(game.stageIndex + 1); });
-  el('change-stage').addEventListener('click', () => {
-    const index = Number(el('stage-select').value), saved = progressStore.snapshot();
+  function requestStage(index) {
+    const saved = progressStore.snapshot();
     if (!Number.isInteger(index) || index < 0 || index > saved.unlocked || paused()) return;
     if (game.complete || (game.ruleCount === 0 && game.elapsed < 1)) { reset(index); return; }
     clearKeys(); pendingStage = index; heading.textContent = '選んだステージへ移動しますか？'; resetDialog.showModal();
-  });
+  }
+  el('change-stage').addEventListener('click', () => requestStage(Number(el('stage-select').value)));
+  el('mystery-start').addEventListener('click', () => requestStage(9));
   el('close-win').addEventListener('click', () => el('win-dialog').close());
   el('lab-focus').addEventListener('click', () => { clearKeys(); el('lab-panel').focus(); });
   function showHelp() { clearKeys(); if (!paused()) el('help-dialog').showModal(); }
@@ -381,6 +439,7 @@
     if (paused() || editingField(event.target) || event.ctrlKey || event.metaKey || event.altKey) return;
     if (!event.repeat && (key === 'j' || key === '?')) { event.preventDefault(); showHints(); return; }
     if (!event.repeat && key === 'h') { event.preventDefault(); showHelp(); return; }
+    if (!event.repeat && key === 'm') { event.preventDefault(); toggleMap(); return; }
     if (!event.repeat && key === 'z') { event.preventDefault(); undo(); return; }
     if (!event.repeat && key === 'r') { event.preventDefault(); askReset(); return; }
     if (!event.repeat && key === 'l') { event.preventDefault(); clearKeys(); el('lab-panel').focus(); return; }
@@ -427,7 +486,13 @@
       const isCarrying = pressed.has('e') && ['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].some(key => pressed.has(key)) && ['stone', 'tree'].some(target => E.has(game, target, 'float') && E.distance(game.player, game[target]) < 115);
       if (isCarrying && !carrying) { history.record(game); cancelInterpretation(); }
       if (!isCarrying && carrying) saveSession();
+      const isInteracting = game.level.mystery && pressed.has('e') && !['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright'].some(key => pressed.has(key));
+      const interactionBefore = isInteracting && !interactionHeld && E.nearbyInteraction(game) ? sessions.capture(E, game) : null;
+      const actionState = value => { if (!value) return ''; const { eHeld, powerCharge, exitOpen, ...actions } = value; return JSON.stringify(actions); };
+      const previousAction = interactionBefore ? actionState(game.puzzle) : '';
+      interactionHeld = pressed.has('e');
       carrying = isCarrying; E.update(game, pressed, dt);
+      if (interactionBefore && previousAction !== actionState(game.puzzle)) { history.recordSnapshot(interactionBefore); cancelInterpretation(); saveSession(); }
       if (timestamp - lastSaveTime >= 1000) { lastSaveTime = timestamp; saveSession(); }
     }
     if (game.core !== hadCore) { hadCore = game.core; renderLab(); }
@@ -436,12 +501,12 @@
     updateHud();
     if (!el('hint-panel').hidden) renderHints();
     const marker = !el('hint-panel').hidden && el('hint-marker').checked ? E.hintTarget(game) : null;
-    renderer.draw(game, selectedTarget, marker); requestAnimationFrame(frame);
+    renderer.draw(game, selectedTarget, marker, { overview }); requestAnimationFrame(frame);
   }
   renderStage(); renderLab();
   if (savedSession) {
     text('start-button', '続きから'); el('start-fresh').hidden = false; el('resume-note').hidden = false;
-    text('resume-note', '保存した途中の状態があります。ステージ ' + (game.stageIndex + 1) + '：' + game.level.name + '／定義 ' + game.ruleCount + ' 回から再開できます。');
+    text('resume-note', '保存した途中の状態があります。' + (game.level.mystery ? '謎解き ' + (game.stageIndex - 8) : '練習 ' + (game.stageIndex + 1)) + '：' + game.level.name + '／定義 ' + game.ruleCount + ' 回から再開できます。');
   }
   requestAnimationFrame(frame); el('start-dialog').showModal();
 })();

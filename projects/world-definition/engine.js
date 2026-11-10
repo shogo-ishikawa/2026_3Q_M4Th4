@@ -1,6 +1,7 @@
 /* WORLD DEFINITION: data, rules and movement, independent of browser drawing. */
 'use strict';
 (function (root) {
+  const Mystery = typeof module !== 'undefined' && module.exports ? require('./mystery.js') : root.WorldDefinitionMystery;
   const TARGETS = [
     { id: 'water', jp: '水', symbol: '◈' }, { id: 'stone', jp: '石', symbol: '⬡' },
     { id: 'tree', jp: '木', symbol: '♧' }, { id: 'fire', jp: '炎', symbol: '♨' }
@@ -48,7 +49,7 @@
     stage({ id: 'turning-bridge', name: '向きを変える橋', subtitle: '縦の水路には横の橋。足場の向きを変えよう。', theme: 'night', advanced: true, gateMode: 'sensors', rivers: [{ x: 395, y: 242, w: 80, h: 418 }], spawn: { x: 190, y: 550 }, stone: { x: 650, y: 560 }, tree: { x: 240, y: 550 }, gate: { x: 625, y: 220, w: 120, h: 22 }, goal: { x: 630, y: 135, w: 110, h: 68 }, fire: { x: 520, y: 170 }, core: { x: 700, y: 300 }, allowed: sealedWater, sensors: [{ id: 'turned-light', target: 'tree', x: 650, y: 330, radius: 65, requires: ['rotate', 'glow'], label: '横向きの木の光盤' }], shards: [{ x: 125, y: 315 }, { x: 745, y: 595 }], parRules: 1 }),
     stage({ id: 'two-lights', name: '二つの灯を同時に', subtitle: '二つの盤は置いている間だけ点灯。同時に光を届けよう。', theme: 'resonance', advanced: true, gateMode: 'sensors', rivers: [{ x: 55, y: 450, w: 100, h: 60 }], spawn: { x: 425, y: 600 }, stone: { x: 650, y: 550 }, tree: { x: 240, y: 550 }, gate: { x: 355, y: 220, w: 140, h: 22 }, goal: { x: 370, y: 135, w: 110, h: 68 }, fire: { x: 700, y: 170 }, core: { x: 425, y: 310 }, allowed: sealedWater, sensors: [{ id: 'held-stone', target: 'stone', x: 280, y: 340, radius: 60, requires: ['grow', 'glow'], label: '石の維持盤', mode: 'hold' }, { id: 'held-tree', target: 'tree', x: 580, y: 340, radius: 60, requires: ['glow', 'pulse'], label: '木の維持盤', mode: 'hold' }], shards: [{ x: 180, y: 590 }, { x: 745, y: 320 }], parRules: 2 }),
     stage({ id: 'material-rhythm', name: '材質とリズム', subtitle: '氷と石畳を使い分け、最後は脈動で充電しよう。', theme: 'ruins', advanced: true, gateMode: 'sensors', rivers: [{ x: 55, y: 410, w: 760, h: 80 }], spawn: { x: 425, y: 600 }, stone: { x: 650, y: 550 }, tree: { x: 240, y: 550 }, gate: { x: 355, y: 220, w: 140, h: 22 }, goal: { x: 370, y: 135, w: 110, h: 68 }, fire: { x: 700, y: 170 }, core: { x: 160, y: 320 }, sensors: [{ id: 'ice-record', target: 'water', x: 230, y: 450, radius: 60, requires: ['freeze'], label: '氷の記録盤' }, { id: 'solid-record', target: 'water', x: 650, y: 450, radius: 60, requires: ['solidify'], label: '石畳の記録盤' }, { id: 'rhythm', target: 'stone', x: 290, y: 320, radius: 65, requires: ['glow', 'pulse'], label: 'リズムの共鳴盤', pulsed: true }], shards: [{ x: 125, y: 595 }, { x: 745, y: 320 }], parRules: 4 })
-  ];
+  ].concat(Mystery.LEVELS);
   const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
   const distance = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
   function circleRect(x, y, radius, rect) {
@@ -57,7 +58,7 @@
   function createGame(stageIndex = 0) {
     if (!Number.isInteger(stageIndex) || !LEVELS[stageIndex]) stageIndex = 0;
     const level = LEVELS[stageIndex];
-    return {
+    const game = {
       stageIndex, level, player: { ...level.spawn }, checkpoint: { ...level.spawn }, preferredCarryTarget: null, stone: { ...level.stone }, tree: { ...level.tree },
       rules: { water: null, stone: null, tree: null, fire: null }, core: false,
       gateHeat: 0, gateOpen: false, complete: false, elapsed: 0, damageUntil: 0,
@@ -66,7 +67,19 @@
       sensorLit: Object.fromEntries(level.sensors.map(sensor => [sensor.id, false])),
       collectedShards: level.shards.map(() => false), events: []
     };
+    if (level.mystery) game.puzzle = Mystery.createState(level);
+    return game;
   }
+  function worldBounds(game) { return game.level.bounds || { x: 55, y: 115, w: 760, h: 545 }; }
+  function physicalState(game) {
+    return game.level.mystery ? Mystery.physicalState(game) : {
+      walls: game.gateOpen ? game.level.walls : [...game.level.walls, game.level.gate], rivers: game.level.rivers
+    };
+  }
+  function puzzleStatus(game) { return game.level.mystery ? Mystery.status(game) : []; }
+  function notebook(game) { return game.level.mystery ? Mystery.notebook(game) : []; }
+  function validPuzzleState(game) { return !game.level.mystery || Mystery.validateState(game) && game.gateOpen === game.puzzle.exitOpen; }
+  function nearbyInteraction(game) { return game.level.mystery ? (Mystery.nearbyInteraction || Mystery.nearestInteraction)(game) : null; }
   function has(game, target, effect) { return Boolean(game.rules[target]?.effects.includes(effect)); }
   function supportedEffects(game, target) {
     if (!Object.hasOwn(SUPPORTED, target)) return [];
@@ -74,7 +87,7 @@
   }
   function bridgeRiver(game, target) {
     const object = game[target];
-    return has(game, target, 'float') && game.level.rivers.find(river => river.h > river.w
+    return has(game, target, 'float') && physicalState(game).rivers.find(river => river.h > river.w
       ? object.x >= river.x + 12 && object.x <= river.x + river.w - 12 && object.y >= river.y && object.y <= river.y + river.h
       : object.x >= river.x && object.x <= river.x + river.w && object.y >= river.y + 12 && object.y <= river.y + river.h - 12);
   }
@@ -96,9 +109,12 @@
     const geometry = objectGeometry(game, target);
     // Keep the whole lifted object on screen, including a grown tree canopy.
     const topExtent = target === 'stone' ? geometry.radius : 91 * geometry.scale;
-    return 115 + geometry.floatOffset + topExtent;
+    return worldBounds(game).y + geometry.floatOffset + topExtent;
   }
   function fireGeometry(game) {
+    const mysteryFire = game.level.mystery ? physicalState(game).fire : null;
+    if (mysteryFire === false) return { ...game.level.fire, radius: 0, extinguished: true };
+    if (mysteryFire) return mysteryFire;
     return {
       x: game.level.fire.x + (has(game, 'fire', 'move') ? 52 * Math.sin(game.elapsed * 2.4) : 0),
       y: game.level.fire.y - (has(game, 'fire', 'float') ? 40 + 6 * Math.sin(game.elapsed * 2.6) : 0),
@@ -107,8 +123,9 @@
   }
   function walkable(game, point) {
     const radius = 13;
-    if (point.x - radius < 55 || point.x + radius > 815 || point.y - radius < 115 || point.y + radius > 660) return false;
-    const walls = game.gateOpen ? game.level.walls : [...game.level.walls, game.level.gate];
+    const bounds = worldBounds(game);
+    if (point.x - radius < bounds.x || point.x + radius > bounds.x + bounds.w || point.y - radius < bounds.y || point.y + radius > bounds.y + bounds.h) return false;
+    const walls = physicalState(game).walls;
     if (walls.some(wall => circleRect(point.x, point.y, radius, wall))) return false;
     for (const target of ['stone', 'tree']) {
       if (isBridge(game, target)) continue;
@@ -121,7 +138,7 @@
         if (circleRect(point.x, point.y, radius, { x: geometry.x - 8 * geometry.scale, y: geometry.y - height, w: 16 * geometry.scale, h: height })) return false;
       }
     }
-    for (const river of game.level.rivers) {
+    for (const river of physicalState(game).rivers) {
       if (!circleRect(point.x, point.y, radius, river)) continue;
       if (has(game, 'water', 'freeze') || has(game, 'water', 'solidify')) continue;
       const left = Math.max(point.x - radius, river.x), right = Math.min(point.x + radius, river.x + river.w);
@@ -136,11 +153,12 @@
     return true;
   }
   function objectPositionValid(game, target) {
-    if (!game.level.advanced || (target !== 'stone' && target !== 'tree')) return true;
+    if ((!game.level.advanced && !game.level.mystery) || (target !== 'stone' && target !== 'tree')) return true;
     const point = game[target], geometry = objectGeometry(game, target);
     const radius = target === 'stone' ? geometry.radius : 34 * geometry.scale;
-    if (point.x - radius < 55 || point.x + radius > 815 || point.y - radius < 115 || point.y + radius > 660) return false;
-    const walls = game.gateOpen ? game.level.walls : [...game.level.walls, game.level.gate];
+    const bounds = worldBounds(game);
+    if (point.x - radius < bounds.x || point.x + radius > bounds.x + bounds.w || point.y - radius < bounds.y || point.y + radius > bounds.y + bounds.h) return false;
+    const walls = physicalState(game).walls;
     if (walls.some(wall => circleRect(point.x, point.y, radius, wall))) return false;
     if (isBridge(game, target)) {
       // Only the part of a deck over water is a physical support. Its bank
@@ -152,14 +170,14 @@
     return true;
   }
   function rulePosition(game, target) {
-    if (target === 'water') { const river = game.level.rivers[0]; return { x: river.x + river.w / 2, y: river.y + river.h / 2 }; }
+    if (target === 'water') { const river = game.level.rivers[0]; return river ? { x: river.x + river.w / 2, y: river.y + river.h / 2 } : { ...game.player }; }
     if (target === 'fire') return fireGeometry(game);
     return objectGeometry(game, target);
   }
   function event(game, type, point, label, target) {
     game.events.push({ type, target, x: point.x, y: point.y, time: game.elapsed, label });
   }
-  function describeRule(target, effects) {
+  function describeRule(target, effects, game) {
     const name = TARGETS.find(item => item.id === target).jp + 'の' + effects.map(id => EFFECTS.find(item => item.id === id).jp).join('・');
     const descriptions = {
       water: { freeze: '水面が氷になり、川を歩けます', solidify: '水面が硬い石畳の通路になります', glow: '川全体が光を放ちます', pulse: '川から光の輪が広がります' },
@@ -167,6 +185,15 @@
       tree: { float: '木が高く浮き、E＋移動で運べます', grow: '木と橋が大きくなります', shrink: '木と橋が小さくなります', rotate: '木の足場が横向きになります', glow: '木が光り、対応する紋章を照らします', pulse: '木から周期的に光の輪が広がります' },
       fire: { float: '炎が高く浮きます', move: '炎が左右へ往復します', grow: '炎の大きさと接触範囲が広がります', glow: '炎が強く光ります', freeze: '炎が消え、触れても安全です', pulse: '炎の光が明滅します', heat: '炎が赤くなり、条件を満たしたゲートを加熱できます' }
     };
+    if (game?.level.mystery) {
+      descriptions.water.freeze = '水面は渡れますが、流れは止まり水車も動きません';
+      descriptions.water.solidify = game.level.id === 'mystery-source-maze' ? '導水口が堰となり、下流の水位が下がって川床が現れます' : '水が固い通路になり、流れは止まります';
+      if (game.level.id === 'mystery-weight') {
+        descriptions.stone.float = '石を運べますが、浮遊中は重さの床を押せません';
+        descriptions.tree.grow = '根が伸び、つながる水門の格子を持ち上げます';
+      }
+      if (['mystery-shadow-library', 'mystery-source-maze'].includes(game.level.id)) descriptions.tree.glow = '近くの隠れた文字を照らしますが、光を嫌う扉は閉じます';
+    }
     return { target, effects: [...effects], name, description: effects.map(id => descriptions[target][id]).join('。') + '。' };
   }
   function applyRule(game, target, effects) {
@@ -180,19 +207,36 @@
     if (effects.includes('heat') && !game.core) return { ok: false, message: '結晶を取ると「加熱」が使えます。' };
     const previous = game.rules[target];
     const previousObject = target === 'stone' || target === 'tree' ? { ...game[target] } : null;
-    game.rules[target] = describeRule(target, effects);
+    game.rules[target] = describeRule(target, effects, game);
     if (previousObject) game[target].y = Math.max(game[target].y, targetFloor(game, target));
-    if (!walkable(game, game.player) || (previousObject && !objectPositionValid(game, target))) {
+    if (!walkable(game, game.player) || (game.level.mystery ? !['stone', 'tree'].every(item => objectPositionValid(game, item)) : previousObject && !objectPositionValid(game, target))) {
       game.rules[target] = previous;
       if (previousObject) Object.assign(game[target], previousObject);
       return { ok: false, message: '今いる足場がなくなるか、変更後の物体が壁に重なります。岸の空いた場所で変更してください。' };
     }
     game.ruleCount += 1;
+    if (game.level.mystery) refreshCheckpoint(game);
     event(game, 'rule', rulePosition(game, target), game.rules[target].name, target);
     return { ok: true, rule: game.rules[target], message: '「' + game.rules[target].name + '」を適用しました。' };
   }
+  function clearRule(game, target) {
+    if (!Object.hasOwn(SUPPORTED, target)) return { ok: false, message: '解除する物体を選んでください。' };
+    const previous = game.rules[target];
+    if (!previous) return { ok: false, message: 'この物体には定義がありません。' };
+    game.rules[target] = null;
+    if (!walkable(game, game.player) || !['stone', 'tree'].every(item => objectPositionValid(game, item))) {
+      game.rules[target] = previous;
+      return { ok: false, message: '定義を解除すると今いる足場がなくなるか、物体や扉が重なります。安全な岸や広場へ移動してから解除してください。' };
+    }
+    game.ruleCount += 1;
+    if (game.level.mystery) refreshCheckpoint(game);
+    const label = TARGETS.find(item => item.id === target).jp;
+    event(game, 'rule', rulePosition(game, target), label + 'の定義を解除', target);
+    const consequence = game.level.mystery && target === 'water' ? '水が液体へ戻り、開いた水路へ流れます。' : game.level.mystery && target === 'stone' ? '地面へ下り、もとの重さへ戻ります。' : 'もとの性質へ戻ります。';
+    return { ok: true, message: label + 'の定義を解除しました。' + consequence };
+  }
   function onDryLand(game, point) {
-    return !game.level.rivers.some(river => circleRect(point.x, point.y, 18, river));
+    return !physicalState(game).rivers.some(river => circleRect(point.x, point.y, 18, river));
   }
   function safeCheckpoint(game, point, fire) {
     return onDryLand(game, point) && walkable(game, point) && (fire.extinguished || distance(point, fire) >= fire.radius + 60);
@@ -230,6 +274,30 @@
     event(game, 'rule', rulePosition(game, target), label + 'を呼び戻す', target);
     return { ok: true, message };
   }
+  function refreshCheckpoint(game) {
+    const fire = fireGeometry(game);
+    if (safeCheckpoint(game, game.player, fire)) { game.checkpoint = { ...game.player }; return; }
+    if (!game.level.mystery || safeCheckpoint(game, game.checkpoint, fire)) return;
+    // A drained riverbed may flood again after a definition or valve changes.
+    // Keep the saved recovery point on a currently safe dry spot.
+    for (let radius = 24; radius <= 264; radius += 24) {
+      for (let direction = 0; direction < 16; direction++) {
+        const angle = direction * Math.PI / 8;
+        const point = { x: game.player.x + Math.cos(angle) * radius, y: game.player.y + Math.sin(angle) * radius };
+        if (safeCheckpoint(game, point, fire)) { game.checkpoint = point; return; }
+      }
+    }
+    if (safeCheckpoint(game, game.level.spawn, fire)) game.checkpoint = { ...game.level.spawn };
+  }
+  function updateSafety(game) {
+    const fire = fireGeometry(game);
+    refreshCheckpoint(game);
+    if (!fire.extinguished && game.elapsed >= game.damageUntil && distance(game.player, fire) < 13 + fire.radius) {
+      game.player = respawnPoint(game, fire); game.damageUntil = game.elapsed + 2;
+      game.notice = game.level.mystery ? '炎に触れました。直前の安全な場所へ戻ります。回収した手掛かりはそのままです。' : '炎に触れました。直前の安全な岸へ戻ります。結晶と仕掛けはそのままです。';
+      event(game, 'damage', fire, '安全な場所へ');
+    }
+  }
   function pulseHigh(game) { return Math.sin(game.elapsed * 3) > .45; }
   function sensorActive(game, sensor) {
     const point = sensor.target === 'water' ? game.player : game[sensor.target];
@@ -255,8 +323,9 @@
       nearby.sort((a, b) => Number(b === game.preferredCarryTarget) - Number(a === game.preferredCarryTarget) || distance(game.player, game[a]) - distance(game.player, game[b]));
       if (nearby.length) {
         const object = game[nearby[0]], previous = { ...object };
-        object.x = clamp(object.x + dx * 180 * dt, 95, 775);
-        object.y = clamp(object.y + dy * 180 * dt, targetFloor(game, nearby[0]), 630);
+        const bounds = worldBounds(game);
+        object.x = clamp(object.x + dx * 180 * dt, bounds.x + 40, bounds.x + bounds.w - 40);
+        object.y = clamp(object.y + dy * 180 * dt, targetFloor(game, nearby[0]), bounds.y + bounds.h - 30);
         if (!walkable(game, game.player) || !objectPositionValid(game, nearby[0])) Object.assign(object, previous);
       }
     } else if (!input.has('e')) {
@@ -274,40 +343,50 @@
     const nextY = { x: game.player.x, y: game.player.y + dy * 215 * dt };
     if (walkable(game, nextY)) game.player.y = nextY.y;
     if (!game.core && distance(game.player, game.level.core) < 33) {
-      game.core = true; game.notice = game.level.gateMode === 'sensors' ? '結晶を見つけた！ 必要な盤をそろえるとゲートが自動で開きます。' : '結晶を見つけた！ 炎の「加熱」が使えるようになりました。';
-      event(game, 'core', game.level.core, game.level.gateMode === 'sensors' ? '結晶を回収' : '加熱を解放');
+      game.core = true; game.notice = game.level.mystery ? '封印の鍵を見つけました。仕掛けを解き、出口への道を開きましょう。' : game.level.gateMode === 'sensors' ? '結晶を見つけた！ 必要な盤をそろえるとゲートが自動で開きます。' : '結晶を見つけた！ 炎の「加熱」が使えるようになりました。';
+      event(game, 'core', game.level.core, game.level.mystery ? '封印の鍵を回収' : game.level.gateMode === 'sensors' ? '結晶を回収' : '加熱を解放');
     }
     game.level.shards.forEach((shard, index) => {
       if (!game.collectedShards[index] && distance(game.player, shard) < 25) {
         game.collectedShards[index] = true; game.notice = '記憶の欠片を見つけました！'; event(game, 'shard', shard, '記憶の欠片');
       }
     });
-    for (const sensor of game.level.sensors) {
-      if (game.sensorLit[sensor.id] && sensor.mode !== 'hold') continue;
-      const active = sensorActive(game, sensor);
-      const wasLit = game.sensorLit[sensor.id];
-      if (!active) game.sensorCharge[sensor.id] = 0;
-      else if (!sensor.pulsed || pulseHigh(game)) game.sensorCharge[sensor.id] = clamp(game.sensorCharge[sensor.id] + dt, 0, 1);
-      game.sensorLit[sensor.id] = game.sensorCharge[sensor.id] >= 1;
-      if (!wasLit && game.sensorLit[sensor.id]) {
-        game.notice = sensor.label + 'が作動しました！'; event(game, 'sensor', sensor, sensor.label + ' 点灯', sensor.target);
+    if (game.level.mystery) {
+      // Device changes use the same collision checks as rule changes. A valve
+      // must not close a passage on a carried object or its supporting deck.
+      const previousPuzzle = { ...game.puzzle, seenClues: { ...game.puzzle.seenClues } };
+      Mystery.tick(game, input, dt);
+      if (!walkable(game, game.player) || !['stone', 'tree'].every(target => objectPositionValid(game, target))) {
+        game.puzzle = previousPuzzle;
+        // Consume the press even when rejected, so holding E cannot retry it.
+        game.puzzle.eHeld = input.has('e');
+        game.notice = '通路にプレイヤーや物体が残っているため操作できません。先に安全な場所へ移動してください。';
       }
-    }
-    const fire = fireGeometry(game);
-    if (safeCheckpoint(game, game.player, fire)) game.checkpoint = { ...game.player };
-    if (!fire.extinguished && game.elapsed >= game.damageUntil && distance(game.player, fire) < 13 + fire.radius) {
-      game.player = respawnPoint(game, fire); game.damageUntil = game.elapsed + 2;
-      game.notice = '炎に触れました。直前の安全な岸へ戻ります。結晶と仕掛けはそのままです。'; event(game, 'damage', fire, '安全な岸へ');
-    }
-    const gate = game.level.gate;
-    const gatePoint = { x: gate.x + gate.w / 2, y: gate.y + gate.h / 2 };
-    const sensorsReady = game.level.sensors.every(sensor => game.sensorLit[sensor.id]);
-    if (game.level.gateMode === 'sensors' && game.core && sensorsReady && !game.gateOpen) {
-      game.gateOpen = true; game.gateHeat = 1; game.notice = 'すべての仕掛けがそろい、ゲートが開きました！'; event(game, 'gate', gatePoint, 'ゲート開放');
-    }
-    if (game.level.gateMode !== 'sensors' && game.core && sensorsReady && !game.gateOpen && has(game, 'fire', 'heat') && distance(game.player, gatePoint) < 105 && input.has('e') && !length) {
-      game.heating = true; game.gateHeat = clamp(game.gateHeat + dt * 0.8, 0, 1);
-      if (game.gateHeat >= 1) { game.gateOpen = true; game.heating = false; game.notice = 'ゲートが開きました！ ゴールへ進みましょう。'; event(game, 'gate', gatePoint, 'ゲート開放'); }
+      game.gateOpen = Boolean(game.puzzle.exitOpen);
+      updateSafety(game);
+    } else {
+      for (const sensor of game.level.sensors) {
+        if (game.sensorLit[sensor.id] && sensor.mode !== 'hold') continue;
+        const active = sensorActive(game, sensor);
+        const wasLit = game.sensorLit[sensor.id];
+        if (!active) game.sensorCharge[sensor.id] = 0;
+        else if (!sensor.pulsed || pulseHigh(game)) game.sensorCharge[sensor.id] = clamp(game.sensorCharge[sensor.id] + dt, 0, 1);
+        game.sensorLit[sensor.id] = game.sensorCharge[sensor.id] >= 1;
+        if (!wasLit && game.sensorLit[sensor.id]) {
+          game.notice = sensor.label + 'が作動しました！'; event(game, 'sensor', sensor, sensor.label + ' 点灯', sensor.target);
+        }
+      }
+      updateSafety(game);
+      const gate = game.level.gate;
+      const gatePoint = { x: gate.x + gate.w / 2, y: gate.y + gate.h / 2 };
+      const sensorsReady = game.level.sensors.every(sensor => game.sensorLit[sensor.id]);
+      if (game.level.gateMode === 'sensors' && game.core && sensorsReady && !game.gateOpen) {
+        game.gateOpen = true; game.gateHeat = 1; game.notice = 'すべての仕掛けがそろい、ゲートが開きました！'; event(game, 'gate', gatePoint, 'ゲート開放');
+      }
+      if (game.level.gateMode !== 'sensors' && game.core && sensorsReady && !game.gateOpen && has(game, 'fire', 'heat') && distance(game.player, gatePoint) < 105 && input.has('e') && !length) {
+        game.heating = true; game.gateHeat = clamp(game.gateHeat + dt * 0.8, 0, 1);
+        if (game.gateHeat >= 1) { game.gateOpen = true; game.heating = false; game.notice = 'ゲートが開きました！ ゴールへ進みましょう。'; event(game, 'gate', gatePoint, 'ゲート開放'); }
+      }
     }
     if (game.gateOpen && circleRect(game.player.x, game.player.y, 13, game.level.goal)) game.complete = true;
   }
@@ -430,6 +509,7 @@
     return result('ready-gate', '仕掛けの完了を確認しよう', ['必要な盤と結晶をそろえると門が自動で開きます。', '点灯していない盤がないか確認してください。'], point(gate.x + gate.w / 2, gate.y + gate.h + 50, 'ゲート'));
   }
   function objective(game) {
+    if (game.level.mystery) return Mystery.hint(game).title;
     if (game.level.advanced) return advancedHint(game).title;
     if (game.complete) return 'ステージクリア！';
     if (!game.core) return '川を渡って、青い結晶を見つけよう';
@@ -438,6 +518,14 @@
     return game.gateOpen ? '開いたゲートを通って、北のゴールへ' : '炎に「加熱」を適用し、ゲートの近くでEを長押し';
   }
   function progressSteps(game) {
+    if (game.level.mystery) {
+      return [
+        { label: '手掛かりを探す', detail: '近づいてEで調べる', done: notebook(game).length > 0 },
+        { label: '仕組みをつなぐ', detail: '定義と解除で状態を変える', done: game.gateOpen },
+        { label: '出口を開く', detail: '機構の因果を確かめる', done: game.gateOpen },
+        { label: 'ゴールへ', detail: '開いた道を進む', done: game.complete }
+      ];
+    }
     if (game.level.advanced) return [
       { label: '新しい定義', detail: game.stageIndex === 5 ? '縮小と成長を使い分ける' : game.stageIndex === 6 ? '橋の向きを変える' : game.stageIndex === 7 ? '物体を役割で分ける' : '氷と石畳を使い分ける', done: game.gateOpen || (game.stageIndex === 5 ? game.stone.y <= 460 && has(game, 'stone', 'grow') : game.stageIndex === 6 ? bankOf(game) === 'east' || game.core : game.stageIndex === 7 ? Object.values(game.sensorLit).some(Boolean) : Boolean(game.sensorLit['ice-record'])) },
       { label: '盤と結晶', detail: game.stageIndex === 7 ? '二つの点灯を同時に保つ' : '必要な仕掛けを作動させる', done: game.gateOpen || game.core && game.level.sensors.every(sensor => game.sensorLit[sensor.id]) },
@@ -454,6 +542,7 @@
   }
   function bankOf(game, point = game.player) {
     const river = game.level.rivers[0];
+    if (!river) return 'land';
     if (river.h > river.w) {
       if (point.x + 13 <= river.x) return 'west';
       if (point.x - 13 >= river.x + river.w) return 'east';
@@ -476,6 +565,7 @@
   function pendingSensor(game) { return game.level.sensors.find(sensor => !game.sensorLit[sensor.id]); }
   function gatePoint(game) { const gate = game.level.gate; return { x: gate.x + gate.w / 2, y: gate.y + gate.h / 2 }; }
   function hintKey(game) {
+    if (game.level.mystery) return Mystery.hint(game).key;
     if (game.level.advanced) return advancedHint(game).key;
     if (game.complete) return 'complete';
     if (game.gateOpen) return 'goal';
@@ -504,6 +594,7 @@
     return distance(game.player, gatePoint(game)) < 105 ? 'heat-gate' : 'approach-gate';
   }
   function hintTarget(game) {
+    if (game.level.mystery) return Mystery.hint(game).target;
     if (game.level.advanced) return advancedHint(game).target;
     const key = hintKey(game), target = crossingTarget(game);
     if (key === 'complete') return null;
@@ -535,6 +626,7 @@
     return { ...point, label: TARGETS.find(item => item.id === target).jp };
   }
   function hints(game) {
+    if (game.level.mystery) return Mystery.hint(game).lines;
     if (game.level.advanced) return advancedHint(game).lines;
     const key = hintKey(game), target = crossingTarget(game), targetName = TARGETS.find(item => item.id === target).jp;
     const coreDirection = game.level.core.x < game.player.x ? '左' : '右';
@@ -616,6 +708,7 @@
     return ['ゲートを加熱できる位置です。', '方向キーを離し、Eだけを約2秒押し続けてください。', '加熱ゲージが満ちて扉が開いたら、中央をまっすぐ上へ進みましょう。', routeAdvice];
   }
   function interactionStatus(game) {
+    if (game.level.mystery) return Mystery.interactionStatus(game);
     if (game.complete) return 'ステージクリア';
     if (game.level.advanced && game.gateOpen) return 'ゲートは開いたままです。中央を通ってゴールへ進みましょう。';
     if (game.heating) return 'ゲートを加熱中です。Eを押したまま待ちましょう。';
@@ -636,7 +729,7 @@
     }
     return '移動はWASD・矢印キー。運ぶときは浮遊した物体の影へ近づきましょう。';
   }
-  const api = { TARGETS, EFFECTS, SUPPORTED, LEVELS, createGame, has, supportedEffects, isBridge, bridgeHalfWidth, bridgeGeometry, objectGeometry, fireGeometry, objectPositionValid, sensorActive, pulseHigh, walkable, applyRule, update, objective, progressSteps, hints, hintKey, hintTarget, interactionStatus, recoverObject, bankOf, distance, clamp };
+  const api = { TARGETS, EFFECTS, SUPPORTED, LEVELS, createGame, worldBounds, physicalState, mysteryState: physicalState, puzzleStatus, notebook, validPuzzleState, nearbyInteraction, has, supportedEffects, isBridge, bridgeHalfWidth, bridgeGeometry, objectGeometry, fireGeometry, objectPositionValid, sensorActive, pulseHigh, walkable, applyRule, clearRule, update, objective, progressSteps, hints, hintKey, hintTarget, interactionStatus, recoverObject, bankOf, distance, clamp };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.WorldDefinition = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);

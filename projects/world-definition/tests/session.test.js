@@ -187,4 +187,133 @@ if (E.LEVELS.some(level => level.id === 'material-rhythm') && E.EFFECTS.some(eff
   });
 }
 
+
+if (E.LEVELS.some(level => level.mystery)) {
+  const mysteryIndex = id => E.LEVELS.findIndex(level => level.id === id);
+  function walkTo(game, x, y) {
+    for (const [axis, destination] of [['x', x], ['y', y]]) {
+      let steps = 0;
+      while (Math.abs(game.player[axis] - destination) > 1) {
+        assert.ok(steps++ < 3000, 'Session route blocked: ' + JSON.stringify({ axis, destination, player: game.player }));
+        const key = axis === 'x' ? (game.player.x < destination ? 'd' : 'a') : (game.player.y < destination ? 's' : 'w');
+        E.update(game, new Set([key]), 1 / 120);
+        assert.ok(E.walkable(game, game.player));
+      }
+    }
+  }
+  function press(game) { frames(game, ['e'], 1); frames(game, [], 1); }
+  function restored(game) {
+    const snapshot = S.capture(E, game);
+    assert.ok(snapshot, 'A legitimate mystery state must be resumable');
+    const result = S.restore(E, snapshot);
+    assert.ok(result); return result;
+  }
+  test('all four mystery maps save at their real starting positions', () => {
+    for (let index = 0; index < E.LEVELS.length; index++) {
+      if (!E.LEVELS[index].mystery) continue;
+      const game = E.createGame(index), store = S.createStore(memoryStorage(), E, 'world-definition-session-v2');
+      assert.equal(store.save(game), true);
+      assert.equal(store.load(index - 1), null, 'Unsolved mysteries cannot be restored through a save');
+      assert.deepEqual(S.capture(E, store.load(index)), S.capture(E, game));
+      assert.ok(game.player.y > 660, 'Mystery maps extend beyond the old fixed board');
+    }
+  });
+  test('waterwheel flow, a remote checkpoint and partial battery charge continue after reloading', () => {
+    const game = E.createGame(mysteryIndex('mystery-waterwheel'));
+    walkTo(game, 250, 900); press(game);
+    assert.equal(E.notebook(game).length, 1);
+    walkTo(game, 250, 1020); apply(game, 'water', ['freeze']); walkTo(game, 1000, 350); walkTo(game, 850, 390); press(game);
+    assert.equal(game.core, true); assert.equal(game.puzzle.intakeOpen, true);
+    const beforeClear = S.capture(E, game), history = S.createHistory(E); history.recordSnapshot(beforeClear);
+    assert.equal(E.clearRule(game, 'water').ok, true); frames(game, [], 45);
+    assert.ok(game.puzzle.powerCharge > 0 && game.puzzle.powerCharge < 1);
+    const again = restored(game);
+    assert.deepEqual(again.player, game.player); assert.ok(again.player.x > 815);
+    assert.equal(E.physicalState(again).activeMechanisms.wheel, true);
+    assert.equal(again.puzzle.powerCharge, game.puzzle.powerCharge);
+    assert.equal(E.notebook(again)[0].id, 'wheel-sign');
+    frames(again, [], 200); assert.equal(again.gateOpen, true);
+    const undone = history.undo(); assert.equal(E.has(undone, 'water', 'freeze'), true);
+    assert.equal(E.physicalState(undone).activeMechanisms.wheel, false);
+    assert.equal(E.notebook(undone).length, 1);
+  });
+  test('library clues, a released light and partial rune order survive without a sticky E key', () => {
+    const game = E.createGame(mysteryIndex('mystery-shadow-library'));
+    apply(game, 'tree', ['glow']); walkTo(game, 350, 450); press(game);
+    assert.equal(game.puzzle.seenClues['hidden-poem'], true);
+    const history = S.createHistory(E); history.record(game);
+    assert.equal(E.clearRule(game, 'tree').ok, true);
+    walkTo(game, 800, 870); walkTo(game, 930, 870); walkTo(game, 1300, 900); press(game);
+    walkTo(game, 1050, 680); frames(game, ['e'], 1);
+    assert.equal(game.puzzle.codeProgress, 2); assert.equal(game.puzzle.eHeld, true);
+    const again = restored(game);
+    assert.equal(again.rules.tree, null); assert.equal(again.puzzle.codeProgress, 2);
+    assert.equal(again.puzzle.eHeld, false, 'A released browser input is never restored as held');
+    assert.deepEqual(E.notebook(again), E.notebook(game));
+    frames(again, ['e'], 1); assert.equal(again.puzzle.codeProgress, 0, 'A fresh E press is processed immediately after resuming');
+    const undone = history.undo(); assert.equal(E.has(undone, 'tree', 'glow'), true);
+    assert.equal(undone.puzzle.seenClues['hidden-poem'], true);
+  });
+  test('a grounded stone keeps a weight gate open while its release can be undone', () => {
+    const game = E.createGame(mysteryIndex('mystery-weight'));
+    apply(game, 'stone', ['float']); game.stone = { x: 520, y: 950 }; game.player = { x: 450, y: 950 };
+    assert.ok(E.walkable(game, game.player));
+    const history = S.createHistory(E); history.record(game);
+    assert.equal(E.clearRule(game, 'stone').ok, true);
+    apply(game, 'tree', ['grow']);
+    const again = restored(game), physical = E.physicalState(again);
+    assert.equal(again.rules.stone, null); assert.equal(physical.doorStates.weight, true); assert.equal(physical.doorStates.roots, true);
+    const undone = history.undo(); assert.equal(E.has(undone, 'stone', 'float'), true);
+    assert.equal(E.physicalState(undone).doorStates.weight, false);
+  });
+  test('a drained riverbed is resumable and unsafe refilling leaves the saved footing intact', () => {
+    const game = E.createGame(mysteryIndex('mystery-source-maze'));
+    apply(game, 'tree', ['glow']); walkTo(game, 450, 820); press(game);
+    assert.equal(game.puzzle.seenClues['flow-plan'], true);
+    apply(game, 'water', ['solidify']); walkTo(game, 700, 550); walkTo(game, 1100, 550);
+    assert.equal(game.core, true); assert.ok(game.checkpoint.x > 815);
+    assert.equal(E.physicalState(game).rivers.some(item => item.id === 'tail'), false);
+    const again = restored(game), before = S.capture(E, again);
+    assert.equal(E.clearRule(again, 'water').ok, false, 'The dry riverbed cannot be flooded under the player');
+    assert.deepEqual(S.capture(E, again), before);
+    assert.equal(E.notebook(again)[0].id, 'flow-plan');
+  });
+  test('refilling a riverbed repairs a wet checkpoint before saving from a floating platform', () => {
+    const game = E.createGame(mysteryIndex('mystery-source-maze'));
+    apply(game, 'water', ['solidify']);
+    game.player = { x: 1100, y: 550 }; game.checkpoint = { ...game.player }; game.stone = { x: 1135, y: 550 };
+    apply(game, 'stone', ['float', 'grow']);
+    assert.ok(S.capture(E, game));
+    assert.equal(E.clearRule(game, 'water').ok, true);
+    assert.equal(E.physicalState(game).rivers.some(item => item.id === 'tail'), true);
+    assert.ok(E.walkable(game, game.player), 'The floating platform supports the player after refilling');
+    assert.notDeepEqual(game.checkpoint, { x: 1100, y: 550 }, 'The now-wet checkpoint is repaired immediately');
+    const again = restored(game);
+    assert.deepEqual(again.checkpoint, game.checkpoint);
+    assert.ok(E.walkable(again, again.player));
+  });
+  test('mystery saves reject invalid codes, charge, clue shapes and out-of-world locations', () => {
+    const game = E.createGame(mysteryIndex('mystery-shadow-library')), snapshot = S.capture(E, game);
+    for (const alter of [x => { x.puzzle.codeProgress = 4; }, x => { x.puzzle.codeProgress = 1.5; }, x => { x.puzzle.powerCharge = -0.1; },
+      x => { x.puzzle.powerCharge = 1.1; }, x => { x.puzzle.seenClues.extra = true; }, x => { x.puzzle.eHeld = 'yes'; },
+      x => { x.puzzle.exitOpen = true; }, x => { x.gateOpen = true; }, x => { x.player.x = 1700; }, x => { x.checkpoint.y = 1200; }]) {
+      const bad = clone(snapshot); alter(bad.state); assert.equal(S.restore(E, bad), null);
+    }
+    const water = E.createGame(mysteryIndex('mystery-waterwheel')), wet = S.capture(E, water);
+    wet.state.checkpoint = { x: 1000, y: 650 };
+    assert.equal(S.restore(E, wet), null, 'A wet checkpoint cannot enter a restored world');
+    const inWall = clone(snapshot); inWall.state.checkpoint = { x: 862, y: 450 };
+    assert.equal(S.restore(E, inWall), null, 'A checkpoint inside a solid wall is invalid');
+    apply(game, 'tree', ['glow']);
+    const closedDoor = S.capture(E, game); closedDoor.state.checkpoint = { x: 862, y: 870 };
+    assert.equal(S.restore(E, closedDoor), null, 'Door state must be evaluated after restoring the light definition');
+    const open = clone(snapshot);
+    open.state.core = true; open.state.gateOpen = true; open.state.puzzle.exitOpen = true;
+    open.state.puzzle.powerCharge = 1; open.state.puzzle.codeProgress = 3;
+    assert.ok(S.restore(E, open), 'A consistent completed mechanism can be resumed before entering its exit');
+    open.state.gateOpen = false;
+    assert.equal(S.restore(E, open), null, 'The engine gate and mystery exit must agree in both directions');
+  });
+}
+
 console.log(checks + ' session checks passed.');
