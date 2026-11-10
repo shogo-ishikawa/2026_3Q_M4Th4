@@ -29,13 +29,12 @@ def _interval(start, end):
     return validate_interval(start, end)
 
 
-def _requested_signature(silence_config):
-    from .analysis import AnalysisConfig, analysis_signature
+def _requested_signature(silence_config, config=None):
+    from .analysis import AnalysisConfig, analysis_request_signature
     from .silence import combined_analysis_signature
-    config = AnalysisConfig()
-    # 比較可能な長さ（60秒以上）と既定設定では、解析帯域は0.2〜5 Hzです。
-    # configも含めた署名にして、別の解析条件で登録した値を省略対象にしません。
-    base = analysis_signature(config, config.low_hz, config.high_hz)
+    config = config or AnalysisConfig(low_hz=0.2, high_hz=20, segment_seconds=20, auto_band=False)
+    # 取得の省略と、異なる音源どうしのDB比較は別の識別子で管理します。
+    base = analysis_request_signature(config)
     return combined_analysis_signature(base, silence_config)
 
 
@@ -105,19 +104,20 @@ def _already_registered(database, row, requested_signature, model_version):
                 and metadata["end_seconds"] == row["end_seconds"]
                 and metadata["separation_method"] == "demucs:htdemucs"
                 and metadata["model_version"] == model_version
-                and saved["analysis_signature"] == requested_signature):
+                and metadata.get("analysis_request_signature") == requested_signature):
             return True
     return False
 
 
 def build_reference_catalogue(catalogue, output_dir, start_seconds=40, end_seconds=130,
-                              device="auto", progress=None, silence_config=None):
+                              device="auto", progress=None, silence_config=None, config=None):
     """候補を順に解析し、成功分を一曲ずつ保存して返します。
 
     候補一覧で秒数が空欄なら start_seconds / end_seconds を使います。
     同じ出力フォルダで再実行すると、同じ曲・出典・区間・解析設定・
     無音処理の方針・モデルの版がそろった登録済み項目は取得し直しません。
-    古い版や異なる無音設定の結果は残し、新しい条件でもう一度測ります。
+    同じ解析方式で無音設定などが異なる結果は残し、新しい条件でもう一度測ります。
+    v1.2以前のDBは別の保存先で、音源から作り直してください。
     取得失敗や品質不足は report に残り、既に保存した成功分は保持します。
     """
     start, end = _interval(start_seconds, end_seconds)
@@ -126,7 +126,9 @@ def build_reference_catalogue(catalogue, output_dir, start_seconds=40, end_secon
     if progress is not None and not callable(progress):
         raise ValueError("進み具合を表示するprogressには関数を指定してください。")
     rows = _load_catalogue(catalogue, start, end)
-    requested_signature = _requested_signature(silence_config)
+    from .analysis import AnalysisConfig
+    config = config or AnalysisConfig(low_hz=0.2, high_hz=20, segment_seconds=20, auto_band=False)
+    requested_signature = _requested_signature(silence_config, config)
     model_version = _model_version()
     output = Path(output_dir).expanduser().resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -154,7 +156,7 @@ def build_reference_catalogue(catalogue, output_dir, start_seconds=40, end_secon
                     row["url"], row["start_seconds"], row["end_seconds"],
                     output / "analyses" / f"candidate-{index:03d}",
                     source_kind="youtube", already_vocals=False, device=device, progress=progress,
-                    silence_config=silence_config)
+                    silence_config=silence_config, config=config)
             except (ValueError, OSError, RuntimeError, ImportError) as error:
                 item.update(status="failed", message=(
                     f"音源取得または解析に失敗しました。{str(error)[:1500]} "

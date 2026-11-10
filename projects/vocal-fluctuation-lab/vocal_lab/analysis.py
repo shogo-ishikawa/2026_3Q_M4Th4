@@ -1,5 +1,6 @@
 """RMS 振幅包絡の時間変動を調べます。音色の周波数傾斜とは異なる量です。"""
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
+from fractions import Fraction
 import hashlib
 import json
 import math
@@ -9,9 +10,13 @@ import numpy as np
 from scipy import signal
 
 
-METHOD_ID = "rms-welch-v1"
-QUALITY_METHOD_ID = "four-block-welch-v1"
+METHOD_ID = "rms-welch-v2"
+QUALITY_METHOD_ID = "four-block-welch-v2"
 SCHEMA_VERSION = "vocal-fluctuation-result-v1"
+ENVELOPE_RATE = 200.0
+ENVELOPE_PASS_HZ = 20.0
+ENVELOPE_STOP_HZ = 40.0
+ENVELOPE_METHOD = "power-polyphase-fir-sqrt-v1"
 
 
 def _positive_number(value, name):
@@ -25,21 +30,19 @@ def _positive_number(value, name):
 
 @dataclass(frozen=True)
 class AnalysisConfig:
-    low_hz: float = 0.2
-    high_hz: float = 5.0
-    window_seconds: float = 0.05
-    hop_seconds: float = 0.01
-    segment_seconds: float = 20.0
+    low_hz: float = 0.02
+    high_hz: float = 20.0
+    segment_seconds: float = 120.0
+    auto_band: bool = True
 
     def __post_init__(self):
-        for name, value in asdict(self).items():
+        if not isinstance(self.auto_band, bool):
+            raise ValueError("帯域の自動調整にはTrueまたはFalseを指定してください。")
+        for name in ("low_hz", "high_hz", "segment_seconds"):
+            value = getattr(self, name)
             object.__setattr__(self, name, _positive_number(value, name))
-        if not 1e-6 <= self.low_hz < self.high_hz <= 1e4:
-            raise ValueError("解析周波数は0.000001〜10000 Hz内で下限より上限を大きくしてください。")
-        if self.hop_seconds > self.window_seconds:
-            raise ValueError("RMS の計算間隔は窓の長さ以下にしてください。")
-        if not 1e-5 <= self.window_seconds <= 0.25 or not 1e-5 <= self.hop_seconds <= 0.1:
-            raise ValueError("RMS の窓は0.00001〜0.25秒、計算間隔は0.00001〜0.1秒にしてください。")
+        if not 1e-6 <= self.low_hz < self.high_hz <= ENVELOPE_PASS_HZ:
+            raise ValueError("解析周波数は0.000001〜20 Hz内で下限より上限を大きくしてください。")
         if not 2 <= self.segment_seconds <= 3600:
             raise ValueError("Welch の区間長は2〜3600秒にしてください。")
 
@@ -52,16 +55,25 @@ def _config(config):
     return config
 
 
-def analysis_signature(config, low_hz, high_hz):
+def analysis_signature(config, low_hz, high_hz, segment_seconds=None, envelope_rate=ENVELOPE_RATE):
     """解析と品質確認の方法を識別し、DB作成時にも同じ条件を使います。"""
     config = _config(config)
     low_hz = _positive_number(low_hz, "解析帯域の下限")
     high_hz = _positive_number(high_hz, "解析帯域の上限")
     conditions = {"method_id": METHOD_ID, "quality_method_id": QUALITY_METHOD_ID,
                   "config": asdict(config), "band_low_hz": round(low_hz, 8),
-                  "band_high_hz": round(high_hz, 8)}
+                  "band_high_hz": round(high_hz, 8),
+                  "welch_segment_seconds": round(config.segment_seconds if segment_seconds is None else segment_seconds, 8),
+                  "envelope_rate_hz": float(envelope_rate), "envelope_method": ENVELOPE_METHOD}
     encoded = json.dumps(conditions, sort_keys=True, separators=(",", ":")).encode()
     return hashlib.sha256(encoded).hexdigest()[:24]
+
+
+def analysis_request_signature(config=None):
+    """再取得の省略に使う設定識別子です。DB比較には実効帯域の署名を使います。"""
+    value = {"method_id": METHOD_ID, "quality_method_id": QUALITY_METHOD_ID,
+             "envelope_method": ENVELOPE_METHOD, "config": asdict(_config(config))}
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(",", ":")).encode()).hexdigest()[:24]
 
 
 def _vector(values, name):
@@ -110,16 +122,19 @@ def _band_power(frequency, power, left, right):
     return float(integrate(values, points))
 
 
-def _analyse(envelope, envelope_rate, duration, config, offset=0.0):
+def _analyse_one(envelope, envelope_rate, duration, config, offset=0.0):
     mean = float(np.mean(envelope))
     spread = float(np.std(envelope))
     cv = spread / mean if mean > 0 else 0.0
     near_zero_fraction = float(np.mean(envelope <= max(mean * 0.001, 1e-12)))
     variable = mean > 1e-10 and cv > 1e-4
-    segment_length = min(len(envelope), max(2, round(min(config.segment_seconds, duration / 4) * envelope_rate)))
+    # 長曲では四等分した各ブロックに平均用の窓を残します。
+    desired = max(round(20 * envelope_rate), len(envelope) // 8) if config.auto_band else round(config.segment_seconds * envelope_rate)
+    segment_length = max(2, min(len(envelope), max(2, len(envelope) // 4),
+                                round(config.segment_seconds * envelope_rate), desired))
     actual_segment = segment_length / envelope_rate
     low = max(config.low_hz, 3 / actual_segment, 10 / duration)
-    high = min(config.high_hz, envelope_rate / 5)
+    high = min(config.high_hz, ENVELOPE_PASS_HZ, envelope_rate / 5)
     reasons = []
     if duration < 60:
         reasons.append("60秒未満のため、1/fに近いかどうかの判定は保留します。")
@@ -177,10 +192,10 @@ def _analyse(envelope, envelope_rate, duration, config, offset=0.0):
     if fundamental_ok and stable and slope is not None:
         if distance <= 0.3 and r_squared >= 0.75:
             status = "near"
-            summary = "この区間と設定では、強弱のゆらぎが1/fに近い傾向です。"
+            summary = f"{low:.3g}〜{high:g} Hzの範囲では、強弱のゆらぎが1/fに近い傾向です。"
         elif distance > 0.3:
             status = "not_near"
-            summary = "この区間と設定では、1/fに近い傾きではありません。"
+            summary = f"{low:.3g}〜{high:g} Hzの範囲では、1/fに近い傾きではありません。"
         else:
             reasons.append("傾きは−1に近いものの、直線への近似が弱いため判定を保留します。")
 
@@ -193,7 +208,7 @@ def _analyse(envelope, envelope_rate, duration, config, offset=0.0):
             low_fraction = _band_power(frequency, power, low, middle) / total_power
         band_values = power[selected]
         flatness = float(np.exp(np.mean(np.log(band_values))) / np.mean(band_values))
-    signature = analysis_signature(config, low, high)
+    signature = analysis_signature(config, low, high, actual_segment, envelope_rate)
     return {
         "schema_version": SCHEMA_VERSION, "method_id": METHOD_ID,
         "analysis_signature": signature, "status": status, "summary": summary,
@@ -218,6 +233,27 @@ def _analyse(envelope, envelope_rate, duration, config, offset=0.0):
     }
 
 
+def _analyse(envelope, envelope_rate, duration, config, offset=0.0):
+    result = _analyse_one(envelope, envelope_rate, duration, config, offset)
+    fit = result["fit"]
+    low, high = fit["band_low_hz"], fit["band_high_hz"]
+    result["band_selection"] = {
+        "mode": "auto" if config.auto_band else "fixed",
+        "requested_low_hz": config.low_hz, "requested_high_hz": config.high_hz,
+        "actual_low_hz": low, "actual_high_hz": high,
+        "welch_segment_seconds": fit["segment_seconds"],
+        "period_min_seconds": 1 / high, "period_max_seconds": 1 / low,
+        "reason": "無音調整後の長さとWelch窓の分解能から下限を決めます。傾きが−1に近くなる帯域を探してはいません。" if config.auto_band else
+                  "共通の設定で比較します。短い入力では、分解能に応じて実際の帯域と窓を制限します。",
+    }
+    names = ("fit", "quality", "status", "summary", "features")
+    result["band_sensitivity"] = [dict({"label": "主解析"}, **{name: result[name] for name in names})]
+    if low < min(5.0, high) < high:
+        limited = _analyse_one(envelope, envelope_rate, duration, replace(config, high_hz=5.0), offset)
+        result["band_sensitivity"].append(dict({"label": "5 Hzまでの比較"}, **{name: limited[name] for name in names}))
+    return result
+
+
 def analyse_envelope(envelope, fs, config=None):
     """既に計算された非負の包絡を解析します。合成データの確認にも使えます。"""
     config = _config(config)
@@ -230,9 +266,8 @@ def analyse_envelope(envelope, fs, config=None):
     return _analyse(envelope, fs, len(envelope) / fs, config)
 
 
-def analyse_samples(samples, sr, config=None):
-    """音声の RMS 包絡を求めます。ステレオは各チャンネルの二乗を平均します。"""
-    config = _config(config)
+def extract_envelope(samples, sr):
+    """二乗波形を低域通過し、20 Hzまで扱うRMS包絡と処理条件を返します。"""
     sr = _positive_number(sr, "音声のサンプリング周波数")
     if not 100 <= sr <= 1e6:
         raise ValueError("音声のサンプリング周波数は100〜1000000 Hzにしてください。")
@@ -248,12 +283,32 @@ def analyse_samples(samples, sr, config=None):
         raise ValueError("音声に NaN、無限大、極端に大きな数は使えません。")
     audio = audio - np.mean(audio, axis=0)
     squared = np.mean(audio * audio, axis=1) if audio.ndim == 2 else audio * audio
-    window = max(1, round(config.window_seconds * sr))
-    hop = max(1, round(config.hop_seconds * sr))
-    if window > len(audio):
-        envelope = np.asarray([math.sqrt(float(np.mean(squared)))])
-    else:
-        starts = np.arange(0, len(audio) - window + 1, hop)
-        cumulative = np.concatenate(([0.0], np.cumsum(squared, dtype=np.float64)))
-        envelope = np.sqrt(np.maximum(0, (cumulative[starts + window] - cumulative[starts]) / window))
-    return _analyse(envelope, sr / hop, len(audio) / sr, config, min(window, len(audio)) / (2 * sr))
+    ratio = Fraction(ENVELOPE_RATE / sr).limit_denominator(1_000_000)
+    rate = sr * ratio.numerator / ratio.denominator
+    # 間引き前の低域通過で、声の速い振動の折り返しを防ぎます。
+    power = signal.resample_poly(squared, ratio.numerator, ratio.denominator,
+                                 window=("kaiser", 8.6), padtype="reflect")
+    count, beta = signal.kaiserord(60, (ENVELOPE_STOP_HZ - ENVELOPE_PASS_HZ) / (rate / 2))
+    count |= 1
+    taps = signal.firwin(count, (ENVELOPE_PASS_HZ + ENVELOPE_STOP_HZ) / 2,
+                         window=("kaiser", beta), fs=rate)
+    half = count // 2
+    power = np.convolve(np.pad(power, (half, half), mode="reflect"), taps, mode="valid")
+    negative_fraction = float(np.mean(power < 0))
+    envelope = np.sqrt(np.maximum(power, 0))
+    details = {"method_id": ENVELOPE_METHOD, "sample_rate_hz": rate,
+               "passband_high_hz": ENVELOPE_PASS_HZ, "stopband_low_hz": ENVELOPE_STOP_HZ,
+               "fir_taps": count, "fir_kaiser_beta": beta, "attenuation_design_db": 60,
+               "resample_kaiser_beta": 8.6, "edge_extension": "reflect",
+               "negative_power_handling": "clip-to-zero-before-square-root",
+               "negative_power_fraction": negative_fraction}
+    return envelope, rate, details
+
+
+def analyse_samples(samples, sr, config=None):
+    """チャンネルごとのエネルギーから包絡を求め、共通の帯域解析へ渡します。"""
+    config = _config(config)
+    envelope, rate, details = extract_envelope(samples, sr)
+    result = _analyse(envelope, rate, len(samples) / float(sr), config)
+    result["envelope_processing"] = details
+    return result

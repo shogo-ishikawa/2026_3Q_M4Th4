@@ -14,7 +14,7 @@ from vocal_lab import reference_db as db
 def analysis(number=1, slope=-1.0, start=10.0, end=100.0, **changes):
     value = {
         "schema_version": "vocal-fluctuation-result-v1",
-        "method_id": "rms-welch-v1",
+        "method_id": "rms-welch-v2",
         "analysis_signature": "test:0.2-5Hz;RMS50ms;hop10ms",
         "quality": {"usable_for_comparison": True},
         "features": {"slope": slope, "envelope_cv": 0.5,

@@ -13,7 +13,7 @@ import tempfile
 
 DATABASE_SCHEMA = "vocal-fluctuation-reference-db-v1"
 RESULT_SCHEMA = "vocal-fluctuation-result-v1"
-METHOD_ID = "rms-welch-v1"
+METHOD_ID = "rms-welch-v2"
 FEATURE_SCALES = {
     "slope": 0.5,
     "envelope_cv": 0.5,
@@ -85,7 +85,7 @@ def _metadata(value):
     hash_scope = value.get("source_hash_scope", "original-file")
     if hash_scope not in {"original-file", "selected-clip"}:
         raise ValueError("音源のハッシュが指す範囲を確認できません。")
-    return {
+    result = {
         "source_sha256": fingerprint.lower(),
         "start_seconds": start,
         "end_seconds": end,
@@ -93,13 +93,16 @@ def _metadata(value):
         "model_version": model_version,
         "source_hash_scope": hash_scope,
     }
+    if "analysis_request_signature" in value:
+        result["analysis_request_signature"] = _text(value["analysis_request_signature"], "解析の設定識別子", 2000, True)
+    return result
 
 
 def _analysis_values(analysis):
     if not isinstance(analysis, dict) or analysis.get("schema_version") != RESULT_SCHEMA:
         raise ValueError("このツールの解析結果JSONを使ってください。")
     if analysis.get("method_id") != METHOD_ID:
-        raise ValueError("異なる解析方法の結果は、このデータベースでは比較できません。")
+        raise ValueError("異なる解析方法の結果は比較できません。v1.2以前の比較DBは歌声WAVから再解析して、新しいDBへ登録してください。")
     quality = analysis.get("quality")
     if not isinstance(quality, dict) or quality.get("usable_for_comparison") is not True:
         raise ValueError("比較に必要な長さや品質が足りません。音源や解析区間を見直してください。")

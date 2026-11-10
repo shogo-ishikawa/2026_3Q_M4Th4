@@ -18,7 +18,7 @@ from .silence import (combined_analysis_signature, normalise_silence_config,
 def run_analysis(source, start_seconds=0.0, end_seconds=None, output_dir="outputs", source_kind="file",
                  already_vocals=False, config=None, progress=None, device="auto", silence_config=None):
     """入力を変更せず解析し、再現用の数値と歌声音源を一つの専用フォルダへ保存します。"""
-    from .analysis import analyse_samples
+    from .analysis import analyse_samples, analysis_request_signature
 
     if source_kind not in {"file", "youtube"}:
         raise AudioInputError("音源の種類はfileまたはyoutubeを指定してください。")
@@ -89,10 +89,12 @@ def run_analysis(source, start_seconds=0.0, end_seconds=None, output_dir="output
                 "separation_method": separation_method, "model_version": model_version,
                 "preprocessing": preprocessing,
                 "preprocessing_signature": preprocessing_signature(silence_config),
+                "analysis_request_signature": combined_analysis_signature(analysis_request_signature(config), silence_config),
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "sample_rate_hz": sample_rate,
                 "vocal_extraction_note": ("入力を歌声のみとして解析しました。歌声分離は実行していません。" if already_vocals else
-                                          "歌声の推定結果です。伴奏の残留や歌声の欠落は試聴して確認してください。")}
+                                          "歌声の推定結果です。伴奏の残留や歌声の欠落は試聴して確認してください。"),
+                "vocal_scope_note": "主旋律・コーラス・ハモリ・重ね録りを区別せず、入力に含まれるボーカル全体の音量変動を測ります。歌い手個人に固有の性質ではありません。"}
     if source_url:
         metadata["source_url"] = source_url
     analysis["metadata"] = metadata

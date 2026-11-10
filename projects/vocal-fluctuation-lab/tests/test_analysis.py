@@ -105,7 +105,7 @@ class AnalysisTests(unittest.TestCase):
         spectrum = result["spectrum"]
         peak = spectrum["frequency_hz"][int(np.argmax(spectrum["power"]))]
         self.assertAlmostEqual(peak, 1, delta=0.1)
-        self.assertLess(max(spectrum["frequency_hz"]), 100)
+        self.assertLessEqual(max(spectrum["frequency_hz"]), 100)
 
     def test_silence_is_not_deleted_or_concatenated(self):
         envelope = coloured_envelope(1)
@@ -153,7 +153,7 @@ class AnalysisTests(unittest.TestCase):
     def test_summary_and_feature_values_are_finite_and_json_safe(self):
         result = analyse_envelope(coloured_envelope(1), 100)
         self.assertEqual(result["schema_version"], "vocal-fluctuation-result-v1")
-        self.assertEqual(result["method_id"], "rms-welch-v1")
+        self.assertEqual(result["method_id"], "rms-welch-v2")
         self.assertEqual(len(result["analysis_signature"]), 24)
         self.assertTrue(result["summary"])
         self.assertGreaterEqual(result["features"]["low_band_fraction"], 0)
@@ -166,7 +166,7 @@ class AnalysisTests(unittest.TestCase):
         result = analyse_envelope(coloured_envelope(1), 100)
         quality = result["quality"]
         self.assertEqual(quality["independent_blocks"], 4)
-        self.assertEqual(quality["method_id"], "four-block-welch-v1")
+        self.assertEqual(quality["method_id"], "four-block-welch-v2")
         self.assertEqual(quality["block_slope_spread"], max(quality["block_slopes"]) - min(quality["block_slopes"]))
         self.assertNotIn("confidence_interval", result["fit"])
 
@@ -185,9 +185,9 @@ class AnalysisTests(unittest.TestCase):
         envelope = coloured_envelope(1, seconds=600, seed=1)
         result = analyse_envelope(envelope, 100)
         expected_f, expected_p = signal.welch(
-            envelope, fs=100, window="hann", nperseg=2000,
-            noverlap=1000, detrend="constant", scaling="density", average="mean")
-        self.assertEqual(result["quality"]["welch_segments"], 59)
+            envelope, fs=100, window="hann", nperseg=7500,
+            noverlap=3750, detrend="constant", scaling="density", average="mean")
+        self.assertEqual(result["quality"]["welch_segments"], 15)
         self.assertEqual(result["quality"]["independent_blocks"], 4)
         np.testing.assert_array_equal(result["spectrum"]["frequency_hz"], expected_f[1:])
         np.testing.assert_array_equal(result["spectrum"]["power"], expected_p[1:])
@@ -204,7 +204,7 @@ class AnalysisTests(unittest.TestCase):
     def test_quality_algorithm_is_part_of_the_shared_signature(self):
         config = AnalysisConfig()
         result = analyse_envelope(coloured_envelope(1), 100, config)
-        self.assertEqual(result["analysis_signature"], analysis_signature(config, 0.2, 5.0))
+        self.assertEqual(result["analysis_signature"], analysis_signature(config, 0.15, 20.0, 20.0, 100.0))
         self.assertEqual(result["quality"]["method_id"], QUALITY_METHOD_ID)
         old_conditions = {"method_id": METHOD_ID, "config": asdict(config),
                           "band_low_hz": 0.2, "band_high_hz": 5.0}
@@ -236,7 +236,7 @@ class AnalysisTests(unittest.TestCase):
             with self.subTest(value=value):
                 with self.assertRaises(ValueError):
                     AnalysisConfig(low_hz=value)
-        for fields in ({"low_hz": 4, "high_hz": 2}, {"hop_seconds": 0.2}, {"window_seconds": 2}, {"segment_seconds": 1}):
+        for fields in ({"low_hz": 4, "high_hz": 2}, {"high_hz": 21}, {"auto_band": 1}, {"segment_seconds": 1}):
             with self.subTest(fields=fields):
                 with self.assertRaises(ValueError):
                     AnalysisConfig(**fields)

@@ -1,5 +1,8 @@
 """Notebookの入力、表示、保存を、分離モデルを取得せずに確認します。"""
 import hashlib
+import csv
+import datetime
+import io
 import json
 from pathlib import Path
 import shutil
@@ -18,14 +21,24 @@ from vocal_lab import notebook_ui as ui
 
 def example_analysis():
     return {
-        "schema_version": "vocal-fluctuation-result-v1", "method_id": "rms-welch-v1",
+        "schema_version": "vocal-fluctuation-result-v1", "method_id": "rms-welch-v2",
         "status": "inconclusive", "summary": "長さが足りないため判定保留です。", "duration_seconds": 30,
-        "fit": {"slope": -1, "intercept": -2, "r_squared": 0.8, "band_low_hz": 0.2, "band_high_hz": 5},
+        "fit": {"slope": -1, "intercept": -2, "r_squared": 0.8, "band_low_hz": 0.2, "band_high_hz": 20},
         "series": {"time_seconds": [0, 1, 2], "envelope": [0.2, 0.3, 0.2]},
-        "spectrum": {"frequency_hz": [0, 0.2, 1, 5], "power": [0, 0.05, 0.01, 0.002], "bin_frequency_hz": [0.2, 1, 5], "bin_power": [0.05, 0.01, 0.002]},
+        "spectrum": {"frequency_hz": [0, 0.2, 1, 5, 20], "power": [0, 0.05, 0.01, 0.002, 0.0005], "bin_frequency_hz": [0.2, 1, 5, 20], "bin_power": [0.05, 0.01, 0.002, 0.0005]},
         "quality": {"usable_for_comparison": False, "reasons": ["60秒以上の区間を指定してください。"]},
         "features": {"slope": -1, "envelope_cv": 0.3, "low_band_fraction": 0.4, "spectral_flatness": 0.2},
         "analysis_signature": "test-only",
+        "band_selection": {"mode": "auto", "requested_low_hz": 0.02, "requested_high_hz": 20,
+                           "actual_low_hz": 0.2, "actual_high_hz": 20, "welch_segment_seconds": 15,
+                           "period_min_seconds": 0.05, "period_max_seconds": 5,
+                           "reason": "音源の長さから帯域を決めました。"},
+        "band_sensitivity": [
+            {"label": "広い帯域", "fit": {"slope": -1, "intercept": -2, "r_squared": 0.8, "band_low_hz": 0.2, "band_high_hz": 20},
+             "quality": {"usable_for_comparison": False}, "status": "inconclusive", "summary": "短い入力のため判定保留"},
+            {"label": "5 Hzまで", "fit": {"slope": -0.8, "intercept": -2, "r_squared": 0.9, "band_low_hz": 0.2, "band_high_hz": 5},
+             "quality": {"usable_for_comparison": False}, "status": "inconclusive", "summary": "短い入力のため判定保留"},
+        ],
     }
 
 
@@ -57,14 +70,28 @@ class UploadTests(unittest.TestCase):
 
 
 class ExportTests(unittest.TestCase):
+    def test_filter_stopband_outside_view_does_not_flatten_the_visible_chart(self):
+        analysis = example_analysis()
+        analysis["fit"]["band_high_hz"] = 20
+        analysis["spectrum"]["frequency_hz"] = [.1, .2, 1, 5, 20, 40, 100]
+        analysis["spectrum"]["power"] = [.1, .05, .01, .002, .0005, 1e-20, 1e-30]
+        figure = ui.plot_analysis(analysis)
+        self.addCleanup(__import__("matplotlib.pyplot", fromlist=["close"]).close, figure)
+        bottom, top = figure.axes[1].get_ylim()
+        self.assertLess(top / bottom, 1e6)
+
     def test_result_zip_contains_numbers_and_chart_without_audio(self):
         with tempfile.TemporaryDirectory() as folder:
             path = ui.export_results(example_analysis(), Path(folder))
             with ZipFile(path) as archive:
-                self.assertEqual(set(archive.namelist()), {"result.json", "envelope.csv", "spectrum.csv", "binned_spectrum.csv", "analysis.png"})
+                self.assertEqual(set(archive.namelist()), {"result.json", "envelope.csv", "spectrum.csv", "binned_spectrum.csv", "band_comparison.csv", "analysis.png"})
                 self.assertEqual(json.loads(archive.read("result.json"))["fit"]["slope"], -1)
                 self.assertIn(b"time_seconds,envelope", archive.read("envelope.csv"))
                 self.assertTrue(archive.read("analysis.png").startswith(b"\x89PNG"))
+                rows = list(csv.DictReader(io.StringIO(archive.read("band_comparison.csv").decode())))
+                self.assertEqual([float(row["band_high_hz"]) for row in rows], [20, 5])
+                self.assertEqual([row["status"] for row in rows], ["inconclusive", "inconclusive"])
+                self.assertEqual(json.loads(archive.read("result.json"))["band_selection"], example_analysis()["band_selection"])
 
     def test_comparison_escapes_names_and_does_not_invent_identity_percentages(self):
         rendered = ui.comparison_html([{"artist": "<script>x</script>", "distance": 0.25, "tracks_count": 3}])
@@ -114,6 +141,31 @@ class ExportTests(unittest.TestCase):
         self.assertIn("RMS振幅", figure.axes[0].get_ylabel())
         self.assertIn("変動周波数", figure.axes[1].get_xlabel())
         self.assertIn("1/fの基準線", figure.axes[1].get_legend_handles_labels()[1])
+        self.assertTrue(any("5 Hzまでの当てはめ" in text for text in figure.axes[1].get_legend_handles_labels()[1]))
+        self.assertGreaterEqual(figure.axes[1].get_xlim()[1], 20)
+        self.assertIn("使用帯域", figure.axes[1].get_title())
+
+    def test_band_selection_and_both_band_results_are_visible_and_escaped(self):
+        analysis = example_analysis()
+        analysis["band_selection"]["reason"] = "<script>bad</script>"
+        selected = ui.band_selection_html(analysis)
+        compared = ui.band_comparison_html(analysis)
+        self.assertIn("自動", selected)
+        self.assertIn("0.200〜20.000", selected)
+        self.assertIn("0.05〜5.00秒", selected)
+        self.assertIn("15.00秒", selected)
+        self.assertNotIn("<script>", selected)
+        self.assertIn("&lt;script&gt;", selected)
+        self.assertIn("広い帯域", compared)
+        self.assertIn("5 Hzまで", compared)
+        self.assertEqual(compared.count("短い入力のため判定保留"), 2)
+
+    def test_comparison_guidance_explains_fixed_mode_and_excluded_conditions(self):
+        rendered = ui.comparison_html([])
+        self.assertIn("固定（比較DB用：0.2〜20 Hz）", rendered)
+        self.assertIn("無音処理", rendered)
+        self.assertIn("同じ音源・同じ区間", rendered)
+        self.assertIn("旧版", rendered)
 
 
 @unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "FFmpegが必要です")
@@ -209,10 +261,59 @@ class NotebookFlowTests(unittest.TestCase):
         self.assertEqual(kwargs["source_kind"], "youtube")
         self.assertEqual(kwargs["device"], "cpu")
         self.assertFalse(kwargs["already_vocals"])
+        self.assertTrue(kwargs["config"].auto_band)
+        self.assertEqual(kwargs["config"].high_hz, 20)
         self.assertTrue(kwargs["silence_config"].trim_edges)
         self.assertFalse(kwargs["silence_config"].remove_internal)
         self.assertFalse(self.controller.result_download.disabled)
         self.assertTrue(self.controller.add_reference_button.disabled)
+
+    def test_fixed_analysis_mode_passes_a_common_band_to_the_pipeline(self):
+        self.controller.analysis_mode.value = "fixed"
+        self.pipeline.return_value = {"analysis": example_analysis(), "clip_path": "clip.wav", "vocals_path": "vocals.wav"}
+        with patch.object(ui, "export_results", return_value=Path(self.folder.name) / "results.zip"), patch.object(self.controller, "_show_result"):
+            self.controller.analyse_button.click()
+        config = self.pipeline.call_args.kwargs["config"]
+        self.assertFalse(config.auto_band)
+        self.assertEqual((config.low_hz, config.high_hz, config.segment_seconds), (0.2, 20, 20))
+
+    def test_selecting_another_audio_replaces_the_only_input_and_clears_old_results(self):
+        def record(name, content):
+            return {"name": name, "type": "audio/wav", "size": len(content), "content": memoryview(content),
+                    "last_modified": datetime.datetime.now(datetime.timezone.utc)}
+
+        self.controller.mode.value = "file"
+        self.controller.audio_upload.value = (record("first.wav", b"first"),)
+        self.controller.bundle = {"analysis": example_analysis()}
+        self.controller.results_zip = Path("old-results.zip")
+        self.controller.result_download.disabled = self.controller.vocals_download.disabled = self.controller.raw_vocals_download.disabled = False
+        self.controller.audio_upload.value = (record("<new>.wav", b"second"),)
+        self.assertEqual(len(self.controller.audio_upload.value), 1)
+        self.assertEqual(bytes(self.controller.audio_upload.value[0]["content"]), b"second")
+        self.assertIn("&lt;new&gt;.wav", self.controller.selected_audio.value)
+        self.assertNotIn("first.wav", self.controller.selected_audio.value)
+        self.assertIn("前の音源は一緒に解析しません", self.controller.selected_audio.value)
+        self.assertIsNone(self.controller.bundle)
+        self.assertIsNone(self.controller.results_zip)
+        self.assertTrue(self.controller.result_download.disabled)
+        self.assertTrue(self.controller.raw_vocals_download.disabled)
+        self.assertFalse(self.controller.audio_upload.multiple)
+        self.assertIn("vocal-audio-upload", self.controller.audio_upload._dom_classes)
+        self.assertIn('content: "音源を選ぶ"', self.controller.upload_button_style.value)
+
+    def test_raw_and_adjusted_wav_buttons_save_separate_full_length_sources(self):
+        bundle = {"analysis": example_analysis(), "clip_path": "clip.wav",
+                  "extracted_vocals_path": "full-before.wav", "vocals_path": "full-after.wav"}
+        self.pipeline.return_value = bundle
+        with patch.object(ui, "export_results", return_value=Path(self.folder.name) / "results.zip"), patch.object(self.controller, "_show_result"):
+            self.controller._analyse()
+        self.assertFalse(self.controller.raw_vocals_download.disabled)
+        self.assertIn("無音調整前", self.controller.raw_vocals_download.description)
+        self.assertIn("無音調整後", self.controller.vocals_download.description)
+        with patch.object(ui, "download_file") as download:
+            self.controller.raw_vocals_download.click()
+            self.controller.vocals_download.click()
+        self.assertEqual([call.args[0] for call in download.call_args_list], [Path("full-before.wav"), Path("full-after.wav")])
 
     def test_reset_restores_manual_seconds_and_exits_whole_track_mode(self):
         self.controller.start.value, self.controller.end.value = 40, 150
@@ -256,6 +357,7 @@ class NotebookFlowTests(unittest.TestCase):
         self.assertIsNone(self.controller.bundle)
         self.assertTrue(self.controller.result_download.disabled)
         self.assertTrue(self.controller.vocals_download.disabled)
+        self.assertTrue(self.controller.raw_vocals_download.disabled)
         self.assertTrue(self.controller.add_reference_button.disabled)
         self.assertFalse(self.controller.analyse_button.disabled)
         self.assertIn("アップロード", self.controller.status.value)
@@ -267,6 +369,9 @@ class NotebookFlowTests(unittest.TestCase):
             self.controller._show_result()
         rendered = " ".join(str(call.args[0].data) for call in self.controller.display.call_args_list if hasattr(call.args[0], "data"))
         self.assertIn("60秒以上", rendered)
+        self.assertIn("ボーカル全体", rendered)
+        self.assertIn("コーラス", rendered)
+        self.assertIn("今回の解析帯域", rendered)
 
     def test_raw_and_processed_vocals_are_distinguished_and_playable(self):
         self.controller.bundle = {"analysis": example_analysis(), "clip_path": "clip.wav", "extracted_vocals_path": "raw-vocals.wav", "vocals_path": "processed-vocals.wav"}
@@ -291,6 +396,7 @@ class NotebookFlowTests(unittest.TestCase):
         self.assertIs(self.controller.bundle, bundle)
         self.assertFalse(self.controller.result_download.disabled)
         self.assertFalse(self.controller.vocals_download.disabled)
+        self.assertFalse(self.controller.raw_vocals_download.disabled)
         self.assertEqual(self.controller.bundle["vocals_path"], "full-vocals.wav")
         self.controller.Audio.assert_not_called()
         rendered = " ".join(str(call.args[0].data) for call in self.controller.display.call_args_list if hasattr(call.args[0], "data"))
