@@ -4,6 +4,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 import shutil
 import subprocess
 import sys
+import tomllib
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / '_site'
@@ -37,7 +38,7 @@ def main():
                     '--output', str(vocal_destination / 'data')], check=True)
     vocal_downloads = vocal_destination / 'downloads'
     vocal_downloads.mkdir(exist_ok=True)
-    vocal_version = 'v1.2.0'
+    vocal_version = 'v' + tomllib.loads((vocal_project / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
     vocal_archive = vocal_downloads / f'VOCAL_FLUCTUATION_LAB_{vocal_version}.zip'
     text_extensions = {'.py', '.md', '.toml', '.txt', '.json', '.html', '.css', '.js', '.ipynb'}
     with ZipFile(vocal_archive, 'w', ZIP_DEFLATED) as bundle:
@@ -45,6 +46,7 @@ def main():
         for path in sorted(vocal_project.rglob('*')):
             relative = path.relative_to(vocal_project)
             if (not path.is_file() or path.suffix not in text_extensions
+                    or (relative.parent == Path('web/data') and path.match('demo-*.json'))
                     or any(part.startswith('.') or part in {'__pycache__', 'outputs', 'uploads', 'separated', 'downloads', 'vocal_lab_runs', 'vocal_lab_downloads', 'vocal_reference_build'} for part in relative.parts)):
                 continue
             bundle.write(path, Path(vocal_version) / relative)
