@@ -352,7 +352,16 @@
       }
     });
     if (game.level.mystery) {
+      // Device changes use the same collision checks as rule changes. A valve
+      // must not close a passage on a carried object or its supporting deck.
+      const previousPuzzle = { ...game.puzzle, seenClues: { ...game.puzzle.seenClues } };
       Mystery.tick(game, input, dt);
+      if (!walkable(game, game.player) || !['stone', 'tree'].every(target => objectPositionValid(game, target))) {
+        game.puzzle = previousPuzzle;
+        // Consume the press even when rejected, so holding E cannot retry it.
+        game.puzzle.eHeld = input.has('e');
+        game.notice = '通路にプレイヤーや物体が残っているため操作できません。先に安全な場所へ移動してください。';
+      }
       game.gateOpen = Boolean(game.puzzle.exitOpen);
       updateSafety(game);
     } else {

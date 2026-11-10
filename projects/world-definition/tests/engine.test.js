@@ -1129,4 +1129,30 @@ test('the five introductory stages provide actionable hints from crossing throug
   });
 })();
 
+test('a valve cannot close the hatch on a floating object and consumes a rejected E press', () => {
+  for (const target of ['stone', 'tree']) {
+    const game = createGame(12);
+    apply(game, 'water', ['solidify']); apply(game, target, ['float']);
+    game.puzzle.northValve = false; game.puzzle.southValve = true;
+    game[target] = { x: 1350, y: 660 }; game.player = { x: 1400, y: 625 };
+    assert.ok(walkable(game, game.player));
+    assert.ok(['stone', 'tree'].every(item => gameEngine.objectPositionValid(game, item)));
+    assert.equal(gameEngine.nearbyInteraction(game).id, 'south-valve');
+    frames(game, ['e'], 1);
+    assert.equal(game.puzzle.southValve, true, 'A rejected valve change must restore the previous route');
+    assert.equal(gameEngine.physicalState(game).doorStates.hatch, true);
+    assert.ok(gameEngine.objectPositionValid(game, target));
+    assert.equal(game.puzzle.eHeld, true);
+    assert.match(game.notice, /操作できません/);
+    game[target] = { x: 1350, y: 800 };
+    frames(game, ['e'], 1);
+    assert.equal(game.puzzle.southValve, true, 'Holding E after rejection cannot trigger the valve again');
+    frames(game, [], 1); frames(game, ['e'], 1);
+    assert.equal(game.puzzle.southValve, false, 'A fresh press closes the empty hatch normally');
+    assert.equal(gameEngine.physicalState(game).doorStates.hatch, false);
+    assert.ok(walkable(game, game.player));
+    assert.ok(['stone', 'tree'].every(item => gameEngine.objectPositionValid(game, item)));
+  }
+});
+
 console.log(checks + ' engine checks passed.');
