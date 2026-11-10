@@ -23,7 +23,7 @@ permissions:
 
 concurrency:
   group: public-works-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   check-and-build:
@@ -48,15 +48,23 @@ jobs:
           python -m unittest discover -s projects/world-definition/tests -p 'test_*.py'
       - name: Check vocal fluctuation analysis and notebook
         run: |
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
-          sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install -y ffmpeg
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then
+              sudo sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' /etc/apt/sources.list.d/ubuntu.sources
+            fi
+            sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 update
+            sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 install --no-install-recommends -y ffmpeg
+          fi
+          ffmpeg -version >/dev/null
           python -m pip install -r projects/vocal-fluctuation-lab/requirements.txt 'ipywidgets>=8.1,<9' 'nbformat>=5.10,<6' 'yt-dlp[default]>=2026.10.26'
           python -m unittest discover -s projects/vocal-fluctuation-lab/tests -p 'test_*.py'
           node --check projects/vocal-fluctuation-lab/web/app.js
       - name: Build selected public files and distribution ZIP
         run: python scripts/build_public_site.py
-      - name: Check generated result viewer data
-        run: node projects/vocal-fluctuation-lab/tests/web.test.js _site/vocal-fluctuation-lab/data
+      - name: Check educational examples and generated result data
+        run: |
+          node projects/vocal-fluctuation-lab/tests/web.test.js _site/vocal-fluctuation-lab/data
+          node projects/vocal-fluctuation-lab/tests/learning.test.js
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

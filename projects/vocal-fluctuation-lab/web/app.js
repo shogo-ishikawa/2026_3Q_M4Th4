@@ -1,4 +1,4 @@
-/* Result viewer only. Audio processing and scientific estimates live in Python. */
+/* Educational diagrams only. Music-file processing and scientific estimates live in Python. */
 (function () {
   'use strict';
   const SCHEMA = 'vocal-fluctuation-result-v1';
@@ -92,184 +92,265 @@
     }
     return points;
   }
-  const API = { validateResult, compactPoints, preprocessingReport, MAX_RESULT_BYTES };
+  // 図の数値を作る部分。波形の形と成分のパワーを別々に確かめられます。
+  function makeToneWave(amplitude, frequency, durationMs = 12, count = 1201) {
+    return Array.from({ length: count }, (_, index) => {
+      const timeMs = durationMs * index / (count - 1);
+      return [timeMs, amplitude * Math.sin(2 * Math.PI * frequency * timeMs / 1000)];
+    });
+  }
+  function componentPowers(ratio) {
+    const first = 0.6 * 0.6 / 2;
+    return [first, first * ratio * ratio];
+  }
+  function makeCombinedWave(ratio) {
+    const first = makeToneWave(0.6, 220);
+    const second = makeToneWave(0.6 * ratio, 440);
+    return first.map((point, index) => [point[0], point[1] + second[index][1]]);
+  }
+  function envelopeModel(time) {
+    return 0.55 + 0.3 * Math.sin(2 * Math.PI * 0.5 * time);
+  }
+  const API = { validateResult, compactPoints, preprocessingReport, MAX_RESULT_BYTES,
+    makeToneWave, componentPowers, makeCombinedWave, envelopeModel };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (typeof document === 'undefined') return;
 
   const $ = id => document.getElementById(id);
   const ns = 'http://www.w3.org/2000/svg';
-  let requestNumber = 0;
   function node(name, attributes, content) {
     const element = document.createElementNS(ns, name);
     for (const [key, value] of Object.entries(attributes || {})) element.setAttribute(key, String(value));
     if (content !== undefined) element.textContent = content;
     return element;
   }
-  function message(text, error) { $('viewer-message').textContent = text; $('viewer-message').classList.toggle('error', Boolean(error)); }
-  function format(value, digits) { return isNumber(value) ? (Math.abs(value) >= 10000 ? value.toExponential(2) : value.toFixed(digits)) : '—'; }
-  function text(svg, x, y, content, className, anchor) {
-    svg.append(node('text', { x, y, class: className || 'tick', 'text-anchor': anchor || 'middle' }, content));
+  function text(svg, x, y, content, className = 'tick', anchor = 'middle') {
+    svg.append(node('text', { x, y, class: className, 'text-anchor': anchor }, content));
+  }
+  function line(svg, x1, y1, x2, y2, className) {
+    svg.append(node('line', { x1, y1, x2, y2, class: className }));
   }
   function path(points, xMap, yMap) {
     return points.map((point, index) => (index ? 'L' : 'M') + xMap(point[0]).toFixed(2) + ',' + yMap(point[1]).toFixed(2)).join(' ');
   }
-  function emptyChart(svg, messageText) { svg.replaceChildren(); text(svg, 325, 130, messageText, 'empty-text'); }
-  function drawEnvelope(result) {
-    const svg = $('envelope-chart');
-    const times = result.series.time_seconds, envelope = result.series.envelope;
-    if (times.length < 2) return emptyChart(svg, '表示できる音量データがありません。');
-    svg.replaceChildren();
-    const left = 65, right = 628, top = 20, bottom = 214;
-    const xEnd = Math.max(times[times.length - 1], .001);
-    let yMax = envelope.reduce((maximum, value) => Math.max(maximum, value), 0);
-    if (yMax <= 0) yMax = 1;
-    yMax = Math.min(yMax, Number.MAX_VALUE / 1.08) * 1.08;
-    const xMap = x => left + x / xEnd * (right - left);
-    const yMap = y => bottom - y / yMax * (bottom - top);
-    for (let index = 0; index <= 4; index++) {
-      const x = left + index / 4 * (right - left);
-      const y = top + index / 4 * (bottom - top);
-      svg.append(node('line', { x1: left, y1: y, x2: right, y2: y, class: 'grid' }));
-      text(svg, x, bottom + 21, format(xEnd * index / 4, 0));
-    }
-    svg.append(node('path', { d: `M${left},${top}V${bottom}H${right}`, class: 'axis', fill: 'none' }));
-    const report = preprocessingReport(result);
-    text(svg, 346, 255, report && report.timeline_modified ? '時間短縮後の経過時間 [秒]' : '解析開始からの経過時間 [秒]', 'axis-title');
-    svg.append(node('text', { x: 17, y: 118, transform: 'rotate(-90 17 118)', class: 'axis-title', 'text-anchor': 'middle' }, '音の大きさ（RMS振幅）'));
-    svg.append(node('path', { d: path(compactPoints(times, envelope, 1600), xMap, yMap), class: 'envelope-line' }));
-    text(svg, left - 8, bottom + 4, '0', 'tick', 'end');
-    text(svg, left - 8, top + 5, yMax.toPrecision(2), 'tick', 'end');
+  function curve(svg, points, xMap, yMap, className) {
+    svg.append(node('path', { d: path(points, xMap, yMap), class: className }));
   }
-  function drawSpectrum(result) {
-    const svg = $('spectrum-chart');
-    const spec = result.spectrum;
-    const raw = spec.frequency_hz.map((f, index) => [f, spec.power[index]]).filter(point => point[0] > 0 && point[1] > 0);
-    const bins = spec.bin_frequency_hz.map((f, index) => [f, spec.bin_power[index]]).filter(point => point[1] > 0);
-    if (raw.length < 2 || bins.length < 2) return emptyChart(svg, 'スペクトルを推定できませんでした。');
+  function frame(svg, options) {
     svg.replaceChildren();
-    const left = 65, right = 628, top = 20, bottom = 247;
-    const lower = Math.max(raw[0][0], isNumber(result.fit.band_low_hz) ? result.fit.band_low_hz / 2 : bins[0][0] / 2);
-    const upper = Math.min(raw[raw.length - 1][0], isNumber(result.fit.band_high_hz) ? result.fit.band_high_hz * 1.4 : bins[bins.length - 1][0] * 1.4);
-    const visible = raw.filter(point => point[0] >= lower && point[0] <= upper);
-    if (visible.length < 2 || upper <= lower) return emptyChart(svg, '表示できる周波数範囲がありません。');
-    const xMin = Math.log10(lower), xMax = Math.log10(upper);
-    const powers = visible.map(point => Math.log10(point[1]));
-    let yMin = powers.reduce((minimum, value) => Math.min(minimum, value), Infinity);
-    let yMax = powers.reduce((maximum, value) => Math.max(maximum, value), -Infinity);
-    const padding = Math.max((yMax - yMin) * .08, .1);
-    yMin -= padding; yMax += padding;
-    const xMap = x => left + (Math.log10(x) - xMin) / (xMax - xMin) * (right - left);
-    const yMap = y => bottom - (Math.log10(y) - yMin) / (yMax - yMin) * (bottom - top);
+    const { width, height, xMax, yMin, yMax, xTicks, yTicks, xLabel, yLabel } = options;
+    const left = 62, right = width - 20, top = 29, bottom = height - 50;
+    const xMap = value => left + value / xMax * (right - left);
+    const yMap = value => bottom - (value - yMin) / (yMax - yMin) * (bottom - top);
+    for (const value of yTicks) {
+      line(svg, left, yMap(value), right, yMap(value), value === 0 ? 'zero' : 'grid');
+      text(svg, left - 8, yMap(value) + 4, String(value), 'tick', 'end');
+    }
+    for (const value of xTicks) {
+      line(svg, xMap(value), top, xMap(value), bottom, 'grid');
+      text(svg, xMap(value), bottom + 21, String(value));
+    }
+    line(svg, left, top, left, bottom, 'axis');
+    line(svg, left, bottom, right, bottom, 'axis');
+    text(svg, left, 13, yLabel, 'axis-title', 'start');
+    text(svg, (left + right) / 2, height - 6, xLabel, 'axis-title');
+    return { xMap, yMap, left, right, top, bottom };
+  }
+
+  function drawHero() {
+    const svg = $('hero-wave');
+    const axes = frame(svg, { width: 560, height: 280, xMax: 12, yMin: -1.1, yMax: 1.1,
+      xTicks: [0, 4, 8, 12], yTicks: [-1, 0, 1], xLabel: '時間 [ミリ秒]', yLabel: '圧力の変化（相対値）' });
+    curve(svg, makeCombinedWave(0.5), axes.xMap, axes.yMap, 'wave-line');
+  }
+  function drawSound() {
+    const amplitude = Number($('wave-amplitude').value);
+    const frequency = Number($('wave-frequency').value);
+    $('amplitude-value').textContent = amplitude.toFixed(2);
+    $('frequency-value').textContent = frequency + ' Hz';
+    const axes = frame($('sound-wave'), { width: 900, height: 285, xMax: 12, yMin: -1.1, yMax: 1.1,
+      xTicks: [0, 2, 4, 6, 8, 10, 12], yTicks: [-1, -0.5, 0, 0.5, 1], xLabel: '時間 [ミリ秒]　1ミリ秒 = 0.001秒', yLabel: '圧力の変化（相対値）' });
+    curve($('sound-wave'), makeToneWave(amplitude, frequency), axes.xMap, axes.yMap, 'wave-line');
+    $('wave-observation').textContent = amplitude === 0 ? '振れ幅が0なので、圧力は変化せず、合成音も無音になります。' : '1回の繰り返しは約' + (1000 / frequency).toFixed(2) + 'ミリ秒。この12ミリ秒の中に、約' + (frequency * 0.012).toFixed(2) + '回の波が入っています。';
+    updatePlayingTone(amplitude, frequency);
+  }
+  function drawComponents() {
+    const ratio = Number($('harmonic-ratio').value);
+    $('harmonic-value').textContent = '220 Hzの' + ratio.toFixed(2) + '倍';
+    const waveSvg = $('combined-wave');
+    const waveAxes = frame(waveSvg, { width: 620, height: 295, xMax: 12, yMin: -1.25, yMax: 1.25,
+      xTicks: [0, 4, 8, 12], yTicks: [-1, 0, 1], xLabel: '時間 [ミリ秒]', yLabel: '圧力の変化（相対値）' });
+    curve(waveSvg, makeToneWave(0.6, 220), waveAxes.xMap, waveAxes.yMap, 'base-line');
+    curve(waveSvg, makeToneWave(0.6 * ratio, 440), waveAxes.xMap, waveAxes.yMap, 'harmonic-line');
+    curve(waveSvg, makeCombinedWave(ratio), waveAxes.xMap, waveAxes.yMap, 'wave-line');
+    const spectrumSvg = $('tone-spectrum');
+    const axes = frame(spectrumSvg, { width: 620, height: 295, xMax: 660, yMin: 0, yMax: 0.22,
+      xTicks: [0, 220, 440, 660], yTicks: [0, 0.1, 0.2], xLabel: '音の周波数 [Hz]', yLabel: '成分のパワー（相対値）' });
+    componentPowers(ratio).forEach((power, index) => {
+      const x = axes.xMap((index + 1) * 220), y = axes.yMap(power);
+      spectrumSvg.append(node('rect', { x: x - 34, y, width: 68, height: axes.bottom - y, fill: index ? '#b58d60' : '#337f72', rx: 3 }));
+      text(spectrumSvg, x, y - 10, power.toFixed(3), 'tick');
+    });
+    $('spectrum-observation').textContent = '440 Hzの振幅は220 Hzの' + ratio.toFixed(2) + '倍、パワーは' + (ratio * ratio).toFixed(2) + '倍です。220 Hzの成分の棒は変わりません。';
+  }
+  function drawEnvelopeModel() {
+    const svg = $('envelope-example');
+    const axes = frame(svg, { width: 700, height: 270, xMax: 10, yMin: -1, yMax: 1,
+      xTicks: [0, 2, 4, 6, 8, 10], yTicks: [-1, 0, 1], xLabel: '時間 [秒]', yLabel: '振れ幅の外側（模式図）' });
+    const upper = Array.from({ length: 601 }, (_, index) => [index / 60, envelopeModel(index / 60)]);
+    const lower = upper.map(point => [point[0], -point[1]]);
+    const outline = upper.concat([...lower].reverse());
+    svg.append(node('path', { d: path(outline, axes.xMap, axes.yMap) + 'Z', fill: '#dae5d1', opacity: 0.8 }));
+    curve(svg, lower, axes.xMap, axes.yMap, 'outline-line');
+    curve(svg, upper, axes.xMap, axes.yMap, 'wave-line');
+    text(svg, axes.xMap(8), axes.yMap(0.6), '0.5 Hzで振れ幅が変化', 'model-label');
+  }
+
+  let audioContext = null, oscillator = null, gain = null, toneEnd = 0;
+  function finishTone(announce = true) {
+    oscillator = null;
+    if (gain) gain.disconnect();
+    gain = null;
+    $('play-tone').disabled = false;
+    $('stop-tone').disabled = true;
+    if (announce) $('tone-status').textContent = '再生を停止しました。図の値を変えて、もう一度比べられます。';
+  }
+  function stopTone() {
+    if (!oscillator || !audioContext) return;
+    try {
+      const now = audioContext.currentTime;
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setTargetAtTime(0, now, 0.005);
+      oscillator.stop(now + 0.03);
+    } catch (_) { finishTone(); }
+  }
+  function updatePlayingTone(amplitude, frequency) {
+    if (!oscillator || !audioContext) return;
+    const now = audioContext.currentTime;
+    oscillator.frequency.setTargetAtTime(frequency, now, 0.02);
+    if (now < toneEnd - 0.05) {
+      gain.gain.cancelScheduledValues(now);
+      gain.gain.setTargetAtTime(0.06 * amplitude, now, 0.01);
+      gain.gain.setValueAtTime(0.06 * amplitude, toneEnd - 0.025);
+      gain.gain.linearRampToValueAtTime(0, toneEnd);
+    }
+    $('tone-status').textContent = '再生中：' + frequency + ' Hz。波形と同じ設定の合成音です。3秒で自動停止します。';
+  }
+  async function playTone() {
+    const AudioContextType = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextType) {
+      $('tone-status').textContent = 'このブラウザでは合成音を再生できません。図を動かして違いを確かめられます。';
+      return;
+    }
+    $('play-tone').disabled = true;
+    try {
+      if (!audioContext) audioContext = new AudioContextType();
+      await audioContext.resume();
+      oscillator = audioContext.createOscillator();
+      gain = audioContext.createGain();
+      const now = audioContext.currentTime;
+      toneEnd = now + 3;
+      const amplitude = Number($('wave-amplitude').value), frequency = Number($('wave-frequency').value);
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(frequency, now);
+      gain.gain.setValueAtTime(0, now);
+      gain.gain.linearRampToValueAtTime(0.06 * amplitude, now + 0.025);
+      gain.gain.setValueAtTime(0.06 * amplitude, toneEnd - 0.025);
+      gain.gain.linearRampToValueAtTime(0, toneEnd);
+      oscillator.connect(gain); gain.connect(audioContext.destination);
+      oscillator.onended = () => { oscillator.disconnect(); finishTone(); };
+      oscillator.start(now); oscillator.stop(toneEnd);
+      $('stop-tone').disabled = false;
+      $('tone-status').textContent = '再生中：' + frequency + ' Hz。波形と同じ設定の合成音です。3秒で自動停止します。';
+    } catch (_) {
+      if (oscillator) { oscillator.onended = null; try { oscillator.stop(); oscillator.disconnect(); } catch (_) {} }
+      finishTone(false);
+      $('tone-status').textContent = '合成音を再生できませんでした。図の操作はそのまま使えます。';
+    }
+  }
+
+  let requestNumber = 0;
+  function drawDemoEnvelope(result) {
+    const times = result.series.time_seconds, envelope = result.series.envelope;
+    const yMax = Math.max(3, Math.max(...envelope) * 1.05);
+    const axes = frame($('envelope-chart'), { width: 650, height: 290, xMax: result.duration_seconds,
+      yMin: 0, yMax, xTicks: [0, 30, 60, 90, 120].filter(value => value <= result.duration_seconds),
+      yTicks: [0, 1, 2, 3].filter(value => value <= yMax), xLabel: '時間 [秒]', yLabel: '音量の変化（合成値）' });
+    curve($('envelope-chart'), compactPoints(times, envelope, 1600), axes.xMap, axes.yMap, 'envelope-line');
+  }
+  function drawDemoSpectrum(result) {
+    const svg = $('spectrum-chart');
+    svg.replaceChildren();
+    const spectrum = result.spectrum;
+    const low = result.fit.band_low_hz, high = result.fit.band_high_hz;
+    const raw = spectrum.frequency_hz.map((frequency, index) => [frequency, spectrum.power[index]])
+      .filter(point => point[0] >= low / 2 && point[0] <= high * 1.4 && point[1] > 0);
+    const bins = spectrum.bin_frequency_hz.map((frequency, index) => [frequency, spectrum.bin_power[index]]);
+    if (raw.length < 2 || bins.length < 2) return;
+    const left = 69, right = 630, top = 30, bottom = 260;
+    const xMin = Math.log10(low / 2), xMax = Math.log10(high * 1.4);
+    const powers = raw.map(point => Math.log10(point[1]));
+    let yMin = Math.min(...powers), yMax = Math.max(...powers);
+    const pad = Math.max((yMax - yMin) * 0.1, 0.15);
+    yMin -= pad; yMax += pad;
+    const xMap = value => left + (Math.log10(value) - xMin) / (xMax - xMin) * (right - left);
+    const yMap = value => bottom - (Math.log10(value) - yMin) / (yMax - yMin) * (bottom - top);
     for (let index = 0; index <= 4; index++) {
-      const y = top + index / 4 * (bottom - top);
-      const exponent = yMax - index / 4 * (yMax - yMin);
-      svg.append(node('line', { x1: left, y1: y, x2: right, y2: y, class: 'grid' }));
+      const exponent = yMin + index / 4 * (yMax - yMin), y = yMap(10 ** exponent);
+      line(svg, left, y, right, y, 'grid');
       text(svg, left - 8, y + 4, '10^' + exponent.toFixed(1), 'tick', 'end');
     }
-    for (const frequency of [.01, .02, .05, .1, .2, .5, 1, 2, 5, 10, 20, 50]) {
-      if (frequency < lower || frequency > upper) continue;
-      const x = xMap(frequency);
-      svg.append(node('line', { x1: x, y1: top, x2: x, y2: bottom, class: 'grid' }));
-      text(svg, x, bottom + 21, String(frequency));
+    for (const value of [0.1, 0.2, 0.5, 1, 2, 5]) {
+      if (Math.log10(value) < xMin || Math.log10(value) > xMax) continue;
+      line(svg, xMap(value), top, xMap(value), bottom, 'grid');
+      text(svg, xMap(value), bottom + 22, String(value));
     }
-    svg.append(node('path', { d: `M${left},${top}V${bottom}H${right}`, class: 'axis', fill: 'none' }));
-    text(svg, 346, 290, '変動周波数 [Hz]', 'axis-title');
-    text(svg, left, 11, 'パワースペクトル密度（RMS振幅² / Hz）', 'axis-title', 'start');
-    const defs = node('defs');
-    const clip = node('clipPath', { id: 'spectrum-clip' });
+    line(svg, left, top, left, bottom, 'axis'); line(svg, left, bottom, right, bottom, 'axis');
+    text(svg, left, 13, '変動のパワー密度（合成値² / Hz）', 'axis-title', 'start');
+    text(svg, (left + right) / 2, 309, '音量が変わる速さ・変動周波数 [Hz]', 'axis-title');
+    const clipId = 'demo-spectrum-clip';
+    const defs = node('defs'), clip = node('clipPath', { id: clipId });
     clip.append(node('rect', { x: left, y: top, width: right - left, height: bottom - top }));
     defs.append(clip); svg.append(defs);
-    const lines = node('g', { 'clip-path': 'url(#spectrum-clip)' });
-    svg.append(lines);
-    lines.append(node('path', { d: path(compactPoints(visible.map(point => point[0]), visible.map(point => point[1]), 1600), xMap, yMap), class: 'raw-line' }));
-    for (const point of bins) {
-      if (point[0] >= lower && point[0] <= upper) lines.append(node('circle', { cx: xMap(point[0]), cy: yMap(point[1]), r: 3.4, class: 'bin-dot' }));
-    }
-    const fit = result.fit;
-    if ([fit.slope, fit.intercept, fit.band_low_hz, fit.band_high_hz].every(isNumber)) {
-      const ends = [fit.band_low_hz, fit.band_high_hz].map(frequency => [frequency, 10 ** (fit.intercept + fit.slope * Math.log10(frequency))]);
-      if (ends.every(point => point[1] > 0 && Number.isFinite(point[1]))) lines.append(node('path', { d: path(ends, xMap, yMap), class: 'fit-line' }));
+    const plotted = node('g', { 'clip-path': 'url(#' + clipId + ')' }); svg.append(plotted);
+    curve(plotted, raw, xMap, yMap, 'raw-line');
+    bins.forEach(point => plotted.append(node('circle', { cx: xMap(point[0]), cy: yMap(point[1]), r: 3.4, class: 'bin-dot' })));
+    if (isNumber(result.fit.slope) && isNumber(result.fit.intercept)) {
+      const fitted = [low, high].map(frequency => [frequency, 10 ** (result.fit.intercept + result.fit.slope * Math.log10(frequency))]);
+      curve(plotted, fitted, xMap, yMap, 'fit-line');
     }
   }
-  function renderPreprocessing(result) {
-    const report = preprocessingReport(result);
-    const panel = $('preprocessing-report');
-    panel.hidden = !report;
-    if (!report) return;
-    $('preprocessing-summary').textContent = '歌声の長さは調整前' + format(report.input_duration_seconds, 2) + '秒、調整後' + format(report.output_duration_seconds, 2) + '秒です。調整後の歌声を解析に使っています。';
-    const settings = isObject(report.settings) ? report.settings : {};
-    const labels = [];
-    if (typeof settings.trim_edges === 'boolean') labels.push('前後の除去：' + (settings.trim_edges ? 'オン' : 'オフ'));
-    if (typeof settings.remove_internal === 'boolean') labels.push('途中の除去：' + (settings.remove_internal ? 'オン' : 'オフ'));
-    if (isNumber(settings.threshold_db)) labels.push('しきい値：' + format(settings.threshold_db, 0) + ' dB');
-    if (isNumber(settings.min_silence_seconds)) labels.push('途中の最短無音：' + format(settings.min_silence_seconds, 2) + ' 秒');
-    $('trim-settings').textContent = labels.join(' ／ ');
-    $('trim-leading').textContent = format(report.leading_removed_seconds, 2) + ' 秒';
-    $('trim-trailing').textContent = format(report.trailing_removed_seconds, 2) + ' 秒';
-    $('trim-internal').textContent = format(report.internal_removed_seconds, 2) + ' 秒';
-    $('trim-timeline').textContent = report.timeline_modified ? '途中の無音を除き、時間軸を短縮しています。加工後の歌声に対する参考値で、元の曲のリズムや時間的な相関をそのまま表す結果ではありません。' : '途中の時間をつなぎ直す処理はしていません。グラフは解析に使った歌声の開始からの経過時間です。';
-    $('trim-timeline').classList.toggle('timeline-warning', report.timeline_modified);
-    const segments = $('trim-segments');
-    segments.replaceChildren();
-    let elapsed = 0;
-    report.kept_segments_seconds.slice(0, 20).forEach(segment => {
-      const duration = segment[1] - segment[0];
-      const item = document.createElement('li');
-      item.textContent = '加工後 ' + format(elapsed, 2) + '〜' + format(elapsed + duration, 2) + '秒 ← 元の区間内 ' + format(segment[0], 2) + '〜' + format(segment[1], 2) + '秒';
-      segments.append(item); elapsed += duration;
-    });
-    if (report.kept_segments_seconds.length > 20) {
-      const item = document.createElement('li'); item.textContent = 'このほか' + (report.kept_segments_seconds.length - 20) + '区間。すべての対応は結果JSONに保存されています。'; segments.append(item);
-    }
-  }
-  function render(result, title, source) {
-    $('result-title').textContent = title;
-    $('result-source').textContent = source;
-    const badge = $('result-status');
-    badge.textContent = { near: '指定条件で1/fに近い', not_near: '1/fに近いとは言えない', inconclusive: '判定保留' }[result.status];
-    badge.classList.toggle('inconclusive', result.status === 'inconclusive');
-    $('metric-slope').textContent = format(result.fit.slope, 2);
-    $('metric-r2').textContent = format(result.fit.r_squared, 2);
-    $('metric-band').textContent = isNumber(result.fit.band_low_hz) && result.fit.band_high_hz > result.fit.band_low_hz ? format(result.fit.band_low_hz, 2) + ' – ' + format(result.fit.band_high_hz, 2) + ' Hz' : '推定範囲なし';
-    $('result-summary').textContent = result.summary;
-    $('result-reasons').replaceChildren();
-    for (const reason of result.quality.reasons) {
-      const li = document.createElement('li'); li.textContent = reason; $('result-reasons').append(li);
-    }
-    renderPreprocessing(result); drawEnvelope(result); drawSpectrum(result); $('result-view').hidden = false;
-  }
-  function selectDemoButtons(name) {
-    document.querySelectorAll('[data-demo]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.demo === name)));
-  }
-  async function loadDemo(name) {
-    if (!Object.hasOwn(DEMOS, name)) return;
+  async function loadDemo(kind) {
+    if (!Object.hasOwn(DEMOS, kind)) return;
     const currentRequest = ++requestNumber;
-    selectDemoButtons(name); message('計算済みの合成データを読み込んでいます。');
+    document.querySelectorAll('[data-demo]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.demo === kind)));
+    $('viewer-message').textContent = '合成データを読み込んでいます。';
+    $('viewer-message').classList.remove('error');
     try {
-      const response = await fetch('data/demo-' + name + '.json');
-      if (!response.ok) throw new Error('デモのデータを取得できませんでした。');
+      const response = await fetch('data/demo-' + kind + '.json');
+      if (!response.ok) throw new Error('data');
       const result = validateResult(await response.json());
       if (currentRequest !== requestNumber) return;
-      render(result, DEMOS[name].title, 'SYNTHETIC DATA · 合成データ');
-      message(DEMOS[name].text);
-    } catch (error) {
-      if (currentRequest === requestNumber) message('デモを読み込めませんでした。公開サイトで開くか、Colabで保存した結果JSONを選んでください。', true);
+      $('result-title').textContent = DEMOS[kind].title;
+      $('metric-slope').textContent = result.fit.slope.toFixed(2);
+      $('demo-duration').textContent = ' / ' + result.duration_seconds.toFixed(0) + '秒の合成例';
+      $('viewer-message').textContent = DEMOS[kind].text;
+      drawDemoEnvelope(result); drawDemoSpectrum(result); $('demo-result').hidden = false;
+    } catch (_) {
+      if (currentRequest !== requestNumber) return;
+      $('viewer-message').textContent = '合成例を読み込めませんでした。説明はそのまま読めます。公開ページで開き直すか、Colabで合成例を確かめてください。';
+      $('viewer-message').classList.add('error'); $('demo-result').hidden = true;
     }
   }
-  $('result-file').addEventListener('change', async event => {
-    const file = event.target.files[0];
-    if (!file) return;
-    const currentRequest = ++requestNumber;
-    if (file.size > MAX_RESULT_BYTES) { message('8MB以下の結果JSONを選んでください。音源ではなくresult.jsonを読み込みます。', true); return; }
-    try {
-      const result = validateResult(JSON.parse(await file.text()));
-      if (currentRequest !== requestNumber) return;
-      selectDemoButtons(''); render(result, '読み込んだ解析結果', 'YOUR RESULT · ' + file.name.slice(0, 120));
-      message('結果JSONを読み込みました。このページからファイルを送信することはありません。');
-    } catch (error) {
-      if (currentRequest === requestNumber) message(error instanceof SyntaxError ? 'JSONを読み取れません。Colabで保存したresult.jsonを選んでください。' : error.message, true);
-    }
-  });
+
+  drawHero(); drawSound(); drawComponents(); drawEnvelopeModel();
+  $('wave-amplitude').addEventListener('input', drawSound);
+  $('wave-frequency').addEventListener('input', drawSound);
+  $('harmonic-ratio').addEventListener('input', drawComponents);
+  $('play-tone').addEventListener('click', playTone);
+  $('stop-tone').addEventListener('click', stopTone);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) stopTone(); });
+  window.addEventListener('pagehide', stopTone);
   document.querySelectorAll('[data-demo]').forEach(button => button.addEventListener('click', () => loadDemo(button.dataset.demo)));
   loadDemo('pink');
 }());
