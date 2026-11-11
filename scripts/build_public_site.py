@@ -11,6 +11,29 @@ OUTPUT = ROOT / '_site'
 PROJECT = ROOT / 'projects' / 'world-definition'
 VERSION = 'v1.3.0'
 PUBLIC_FILES = ('index.html', 'guide.html', 'style.css', 'mystery.js', 'engine.js', 'progress.js', 'renderer.js', 'session.js', 'app.js')
+COASTAL_WEB_FILES = ('index.html', 'style.css', 'learning.js', 'results-core.js', 'results-viewer.js', 'demo-data.js')
+
+
+def build_coastal_site(output=OUTPUT):
+    """風のWeb教材は配信用ファイルだけをコピーする。解析入力や生成結果は公開しない。"""
+    project = ROOT / 'projects' / 'coastal-wind-chaos'
+    destination = Path(output) / 'coastal-wind-chaos'
+    destination.mkdir(parents=True, exist_ok=True)
+    for name in COASTAL_WEB_FILES:
+        shutil.copy2(project / 'web' / name, destination / name)
+    version = 'v' + tomllib.loads((project / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
+    downloads = destination / 'downloads'
+    downloads.mkdir(exist_ok=True)
+    archive = downloads / f'CoastalWindLab_{version}.zip'
+    # 管理対象だけを収録する。利用者のCSV・モデル・結果・ローカル環境は含めない。
+    tracked = subprocess.check_output(['git', 'ls-files', '-z', '--', str(project.relative_to(ROOT))], cwd=ROOT).decode().split('\0')
+    with ZipFile(archive, 'w', ZIP_DEFLATED) as bundle:
+        for name in sorted(filter(None, tracked)):
+            path = ROOT / name
+            if path.is_file():
+                bundle.write(path, Path(version) / path.relative_to(project))
+    print(f'Built coastal-wind-chaos with {archive.stat().st_size:,}-byte distribution ZIP')
+    return archive
 
 
 def main():
@@ -59,6 +82,7 @@ def main():
         bundle.write(vocal_destination / 'data' / catalogue_name, Path(vocal_version) / 'web/data' / catalogue_name)
         bundle.write(vocal_destination / 'data' / listening_name, Path(vocal_version) / 'web/data' / listening_name)
     print(f'Built vocal-fluctuation-lab with {vocal_archive.stat().st_size:,}-byte distribution ZIP')
+    build_coastal_site()
     print(f'Built {OUTPUT.relative_to(ROOT)} with {archive.stat().st_size:,}-byte distribution ZIP')
 
 

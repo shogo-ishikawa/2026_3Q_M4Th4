@@ -6,14 +6,18 @@ on:
     paths:
       - 'projects/world-definition/**'
       - 'projects/vocal-fluctuation-lab/**'
+      - 'projects/coastal-wind-chaos/**'
       - 'scripts/build_public_site.py'
+      - 'scripts/tests/test_coastal_public_build.py'
       - 'web/**'
       - '.github/workflows/public-works.yml'
   pull_request:
     paths:
       - 'projects/world-definition/**'
       - 'projects/vocal-fluctuation-lab/**'
+      - 'projects/coastal-wind-chaos/**'
       - 'scripts/build_public_site.py'
+      - 'scripts/tests/test_coastal_public_build.py'
       - 'web/**'
       - '.github/workflows/public-works.yml'
   workflow_dispatch:
@@ -62,6 +66,15 @@ jobs:
           node --check projects/vocal-fluctuation-lab/web/catalogue.js
       - name: Build selected public files and distribution ZIP
         run: python scripts/build_public_site.py
+      - name: Check coastal wind lessons and result reader
+        run: |
+          node --check projects/coastal-wind-chaos/web/learning.js
+          node --check projects/coastal-wind-chaos/web/results-core.js
+          node --check projects/coastal-wind-chaos/web/results-viewer.js
+          node --test projects/coastal-wind-chaos/tests/web-results.test.js
+          node --test projects/coastal-wind-chaos/tests/web-learning.test.js
+          python -m pip install "pytest>=8,<10"
+          python -m pytest -q scripts/tests/test_coastal_public_build.py
       - name: Check educational examples and generated result data
         run: |
           node projects/vocal-fluctuation-lab/tests/web.test.js _site/vocal-fluctuation-lab/data

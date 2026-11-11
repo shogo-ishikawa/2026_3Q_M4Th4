@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="風速と風向の基本から、気象予報と観測の比較、誤差の読み方へ。動かして学び、Colabで確かめる海岸の風の教材です。">
+  <meta name="theme-color" content="#2458ed">
+  <title>風は、どこまで読める？｜海岸の風速・風向予報ラボ</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="demo-data.js"></script>
+  <script defer src="results-core.js"></script>
+  <script defer src="results-viewer.js"></script>
+  <script defer src="learning.js"></script>
+</head>
+<body>
+<a class="skip-link" href="#main">本文へ移動</a>
+<header class="site-header">
+  <a class="wordmark" href="#"><span class="wind-symbol" aria-hidden="true">↗</span> COASTAL WIND LAB</a>
+  <a class="header-colab" href="https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/coastal-wind-chaos/notebooks/coastal_wind_forecast_lab.ipynb" target="_blank" rel="noopener">Colabを開く <span aria-hidden="true">↗</span></a>
+</header>
+<main id="main">
+  <section class="hero shell" aria-labelledby="hero-title">
+    <div class="hero-copy">
+      <p class="eyebrow">風を感じる、その先へ。 / WEB v1.1.0</p>
+      <h1 id="hero-title">風は、<br>どこまで<br><span>読める？</span></h1>
+      <p class="hero-description">明日の海岸で吹く風を、どこまで予測できるだろう。<br class="desktop-only">風の見方を知り、予報を比べ、データで確かめよう。</p>
+      <div class="hero-actions"><a class="button" href="#feel">風を動かしてみる <span aria-hidden="true">↓</span></a><a class="text-link" href="#results">解析結果を見たい方へ</a></div>
+      <p class="hero-caption">予備知識は不要。Webで理解し、Colabで実験できます。</p>
+    </div>
+    <div class="wind-window">
+      <canvas id="wind-field" width="640" height="580" aria-hidden="true"></canvas>
+      <div class="window-top"><span><i aria-hidden="true"></i> WIND PLAYGROUND</span><button id="motion-toggle" class="motion-button" type="button" aria-pressed="false">動きを止める</button></div>
+      <div class="wind-window-main"><span class="window-kicker">風のイメージ</span><p><strong id="hero-speed">5.0</strong><span>m/s</span></p><span id="hero-direction">南から北へ</span></div>
+      <div class="window-bottom"><span>観測値・実際の予報ではありません</span><span aria-hidden="true">N ↑</span></div>
+    </div>
+  </section>
+
+  <nav class="chapter-nav" aria-label="このページの内容"><div class="shell chapter-links"><a href="#feel"><span>01</span> 風を知る</a><a href="#forecast"><span>02</span> 予報の違い</a><a href="#verify"><span>03</span> 確かめ方</a><a href="#errors"><span>04</span> 誤差を読む</a><a href="#practice"><span>05</span> 実験する</a></div><div class="reading-track"><div id="reading-progress"></div></div></nav>
+
+  <section id="feel" class="section shell" aria-labelledby="feel-title">
+    <div class="section-intro"><p class="section-number">01 / FEEL THE WIND</p><h2 id="feel-title">風は「速さ」と「向き」で<br>できている。</h2><p>同じ5 m/sでも、向きが変われば風の流れは変わります。<br>スライダーを動かして、二つの量の関係を見てみましょう。</p></div>
+    <div class="wind-lab interactive-panel">
+      <div class="compass-wrap"><svg viewBox="0 0 300 300" class="compass" role="img" aria-labelledby="compass-title"><title id="compass-title">風が進む向きを示す方位図</title><circle cx="150" cy="150" r="112" class="compass-ring"/><circle cx="150" cy="150" r="72" class="compass-inner"/><path d="M150 32V268M32 150H268" class="compass-grid"/><text x="150" y="22">北</text><text x="282" y="155">東</text><text x="150" y="290">南</text><text x="18" y="155">西</text><g id="wind-arrow" transform="translate(150 150) rotate(360)"><path d="M0 65V-65M-13-47L0-65L13-47"/></g><circle cx="150" cy="150" r="8" class="compass-centre"/></svg><p class="diagram-caption">矢印は風が<span>進む向き</span>。北は上です。</p></div>
+      <div class="wind-controls">
+        <div class="control-heading"><label for="wind-speed">風速</label><output id="wind-speed-value" for="wind-speed">5.0 m/s</output></div><input id="wind-speed" type="range" min="0" max="15" step="0.5" value="5"><div class="range-ends"><span>0 m/s</span><span>15 m/s</span></div>
+        <div class="control-heading direction-control"><label for="wind-direction">風向 ― どこから吹く？</label><output id="wind-direction-value" for="wind-direction">南 / 180°</output></div><input id="wind-direction" type="range" min="0" max="360" step="22.5" value="180"><div class="range-ends"><span>北 0°</span><span>東 90°</span><span>南 180°</span><span>西 270°</span><span>北 360°</span></div>
+        <p id="wind-explanation" class="wind-explanation" aria-live="polite">南風は、南から北へ吹く風です。</p>
+        <div class="unit-conversion"><span>5 m/sなら、1秒で5 m進む速さ</span><strong id="speed-kmh">時速18.0 kmに相当</strong></div>
+      </div>
+    </div>
+    <div class="two-notes"><div><h3>風向は「来る側」の名前</h3><p>北風は北から南へ。方位の角度は、北0°から時計回りです。<strong>359°と1°の違いは2°</strong>。数字としての差358°ではありません。</p></div><div><h3>「今の風」にも時間の幅がある</h3><p>気象庁の時別データの風向・風速は、毎正時までの10分間の平均です。瞬間の突風や、1時間全体の平均とは区別して読みます。</p></div></div>
+  </section>
+
+  <section id="forecast" class="section section-tint" aria-labelledby="forecast-title"><div class="shell">
+    <div class="section-intro"><p class="section-number">02 / WHY FORECASTS DIFFER</p><h2 id="forecast-title">同じ海岸でも、<br>同じ風とは限らない。</h2><p>気象予報は広い大気を格子に分けて計算します。<br>足元の風には、海岸の向きや地形、建物も関わります。</p></div>
+    <div class="forecast-layout">
+      <div class="coast-illustration">
+        <div class="diagram-top"><span class="eyebrow">海と陸の、温まり方の違い</span><div class="segmented" role="group" aria-label="海陸風の模式図"><button type="button" id="breeze-day" aria-pressed="true">昼の例</button><button type="button" id="breeze-night" aria-pressed="false">夜の例</button></div></div>
+        <svg viewBox="0 0 520 300" role="img" aria-labelledby="coast-title"><title id="coast-title">海陸風の模式図。昼は海から陸へ、夜は陸から海への風を例示</title><defs><pattern id="coast-grid" width="52" height="50" patternUnits="userSpaceOnUse"><path d="M52 0H0V50" fill="none" stroke="#fff" stroke-opacity=".5"/></pattern><marker id="breeze-tip" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto"><path d="M0 0L6 3L0 6Z" fill="#2458ed"/></marker></defs><rect x="0" y="0" width="520" height="300" rx="12" fill="#e1f4fa"/><path d="M325 0Q270 70 307 140T280 300H520V0Z" fill="#dfe9e5"/><rect x="0" y="0" width="520" height="300" fill="url(#coast-grid)"/><text x="105" y="75" class="coast-label">海</text><text x="405" y="75" class="coast-label">陸</text><circle id="breeze-sky" cx="430" cy="128" r="23" fill="#f1b450"/><path id="breeze-arrow" d="M120 190H400" fill="none" stroke="#2458ed" stroke-width="8" marker-end="url(#breeze-tip)"/><text id="breeze-land-label" x="385" y="265">陸が温まりやすい</text></svg>
+        <p id="breeze-caption" aria-live="polite">穏やかに晴れた昼の一例。陸が海より温まり、海から陸へ吹く海風が生じることがあります。</p>
+        <p class="diagram-caption">模式図です。実際には広い範囲の風や地形の影響も受けます。</p>
+      </div>
+      <ol class="reason-list"><li><span>01</span><div><h3>測っている地点が違う</h3><p>近隣の観測所の風は、その海岸の実測そのものではありません。まず予報と観測の位置をそろえます。</p></div></li><li><span>02</span><div><h3>表現できる地形が違う</h3><p>格子間隔が細かくても、海岸の一点の風が必ず正確になるわけではありません。風速計の高さの違いも確認します。</p></div></li><li><span>03</span><div><h3>使うモデルや計算回が違う</h3><p>モデルの仕組みや入力、更新時刻が違えば結果も変わります。陸・海の格子選択の違いは、独立した別モデルではありません。</p></div></li></ol>
+    </div>
+  </div></section>
+
+  <section id="verify" class="section shell" aria-labelledby="verify-title">
+    <div class="section-intro"><p class="section-number">03 / TEST A FORECAST</p><h2 id="verify-title">当たったかどうかは、<br>未来を隠して確かめる。</h2><p>過去に戻り、その時点までの情報だけで予測します。<br>未来の答えを先に見てしまうと、本当の実力は測れません。</p></div>
+    <div class="timeline-panel"><div class="timeline-heading"><h3>時間順に分ける、三つの期間</h3><span>3年分の観測を使う例</span></div><div class="period-strip"><div class="period train"><span>1年目</span><strong>学習</strong><p>風の変化の関係を覚える</p></div><div class="period tune"><span>2年目</span><strong>調整</strong><p>モデルや入力を選ぶ</p></div><div class="period test"><span>3年目</span><strong>最終評価</strong><p>選び終えた設定で答え合わせ</p></div></div><p>設定を選んだ後、学習・調整期間で学習し直してから最終評価します。最後の年の結果を見て設定を選び直すと、評価の公平さが失われます。</p></div>
+    <div class="forecast-clock"><div><span class="mini-label">予測する時点</span><strong>10:00</strong><p>ここまでの観測を入力</p></div><div class="clock-lead"><span>3時間先</span><span aria-hidden="true">→</span></div><div><span class="mini-label">予測の対象</span><strong>13:00</strong><p>ここの実測は答え合わせだけ</p></div></div>
+    <div class="two-notes"><div><h3>まずは単純な予測と比べる</h3><p>「今と同じ風が続く」持続予報。「前日の同じ時刻の風」や「季節・時刻ごとの平均風」。機械学習が、こうした基準を超えられたかを調べます。</p></div><div><h3>「いつの予報？」をそろえる</h3><p>モデルの計算開始、一般に利用できる時刻、データを取得した時刻は異なります。<strong>初期時刻から3時間先</strong>と<strong>取得してから3時間先</strong>は別の評価です。</p></div></div>
+    <p class="callout">72時間先まで計算できることと、72時間先まで役立つ精度があることは別です。誤差が増えただけでは、カオスによる物理的な予測限界を見つけたとは言えません。</p>
+  </section>
+
+  <section id="errors" class="section section-navy" aria-labelledby="errors-title"><div class="shell">
+    <div class="section-intro"><p class="section-number">04 / READ THE ERROR</p><h2 id="errors-title">「平均のずれ」だけでは、<br>見えない失敗がある。</h2><p>いつも少し外す予測と、一度だけ大きく外す予測。<br>数字を動かすと、指標の役割が見えてきます。</p></div>
+    <div class="error-lab interactive-panel"><div class="error-demo-main"><div class="diagram-top"><span class="eyebrow">教材用の架空の8時点</span><div class="chart-key"><span class="observed-key">観測</span><span class="predicted-key">予測</span></div></div><svg id="error-chart" viewBox="0 0 640 280" role="img" aria-labelledby="error-chart-title"><title id="error-chart-title">架空の観測風速と予測風速を比べるグラフ</title></svg><div class="error-controls"><div><div class="control-heading"><label for="error-bias">予測全体を上下させる</label><output id="error-bias-value" for="error-bias">+0.00 m/s</output></div><input id="error-bias" type="range" min="-1" max="3" step="0.25" value="0"></div><label class="checkbox-control"><input type="checkbox" id="error-outlier">1点だけ、大きく外してみる</label></div><button id="error-reset" class="button secondary" type="button">元に戻す</button></div><div class="error-metrics" aria-live="polite"><div><span>MAE / ずれの大きさ</span><strong id="toy-mae">0.50</strong><small>m/s・小さいほどよい</small></div><div><span>RMSE / 大きな外れに敏感</span><strong id="toy-rmse">0.50</strong><small>m/s・小さいほどよい</small></div><div><span>偏り / 予測 − 観測</span><strong id="toy-bias">+0.00</strong><small>m/s・正なら強く予測する傾向</small></div></div></div>
+    <p id="error-explanation" class="error-conclusion" aria-live="polite">偏りが0でも、毎回当たっているとは限りません。プラスとマイナスのずれが打ち消し合うことがあります。</p>
+    <div class="metric-explanations"><article><span>01</span><h3>MAE</h3><p>誤差の絶対値の平均です。平均して何m/sずれたかを表し、元の風速と同じ単位で読めます。</p></article><article><span>02</span><h3>RMSE</h3><p>誤差を2乗して平均し、平方根を取ります。大きな外れの影響が強いため、MAEと並べて確認します。</p></article><article><span>03</span><h3>偏り</h3><p>符号を残した誤差の平均です。正なら強く、負なら弱く予測する傾向。0でも誤差が小さいとは限りません。</p></article></div>
+    <div class="read-more-grid"><details><summary>風向の誤差と静穏は、どう数える？</summary><p>風向は円周上の短い側で角度差を測ります。359°と1°なら2°です。このラボでは観測風速0.2m/s以下を静穏として方向の採点から外します。観測に風があるのに予測の向きが定まらない場合は90°として採点し、45°以内には数えません。風速の評価件数と風向の評価件数は異なることがあります。</p></details><details><summary>「改善度20%」「95%区間」は何を表す？</summary><p>同じ時刻の持続予報より、風速MAEが20%小さければ改善度20%です。正なら改善、負なら悪化を表します。95%区間は日ごとのまとまりで取り直したときの、改善度の推定のばらつきです。<strong>将来の風速が95%の確率で入る範囲ではありません。</strong>区間が0をまたぐ場合や、評価件数・日数が少ない場合は、改善を強く言い切らないようにします。</p></details></div>
+  </div></section>
+
+  <section id="practice" class="section shell" aria-labelledby="practice-title"><div class="section-intro"><p class="section-number">05 / YOUR EXPERIMENT</p><h2 id="practice-title">仕組みが見えたら、<br>自分で確かめよう。</h2><p>Webで理解した指標を、実際の解析へ。<br>Colabはデモから始められ、Driveへの接続も必須ではありません。</p></div>
+    <div class="practice-layout"><ol class="practice-steps"><li><span>1</span><div><h3>まずはデモを動かす</h3><p>Colabで「すべてのセルを実行」。操作パネルの「デモで過去検証」から解析します。仮想観測点の合成データなので、ファイルの準備は不要です。</p></div></li><li><span>2</span><div><h3>一つの条件を変えて比べる</h3><p>1・3・6・12・24時間先を比べる。入力する項目や学習期間を変える。基準予報と、同じ期間・時刻で比較します。</p></div></li><li><span>3</span><div><h3>結果を保存して、ここで読む</h3><p>「結果ZIPをダウンロード」で保存。下のビューアへ読み込むと、誤差表やモデルごとの違いを確認できます。次に実観測CSVで試すこともできます。</p></div></li></ol><aside class="colab-card"><span class="mini-label">GOOGLE COLAB</span><h3>風の予測を、<br>データで試す。</h3><p>既存予報の比較、観測からの学習、過去の精度検証、将来予測まで。</p><a class="button" href="https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/coastal-wind-chaos/notebooks/coastal_wind_forecast_lab.ipynb" target="_blank" rel="noopener">Colabで実験する <span aria-hidden="true">↗</span></a><a class="text-link" href="./downloads/CoastalWindLab_v1.1.0.zip" download>ソース・説明・Notebookをまとめて保存</a><p class="small-note">観測データの取得と学習はColabで行います。Webの図だけで、実際の地点の予測精度を判定することはできません。</p></aside></div>
+  </section>
+
+  <section id="results" class="section section-tint" aria-labelledby="results-title"><div class="shell"><div class="section-intro"><p class="section-number">RESULT VIEWER</p><h2 id="results-title">結果を、もう一度<br>じっくり読む。</h2><p>最初は合成データの解析例を表示します。<br>Colabの結果ZIP、または集計CSVと条件JSONを読み込めます。</p></div><p class="local-note"><span aria-hidden="true">◉</span> 読み込んだファイルはブラウザ内で処理します。サーバーへ送信しません。</p><div id="results-app"></div><noscript><p>結果ビューアと動かせる図を使うにはJavaScriptを有効にしてください。本文の解説はそのまま読めます。</p></noscript></div></section>
+
+  <section class="sources-section shell" aria-labelledby="sources-title"><div><p class="eyebrow">KEEP EXPLORING</p><h2 id="sources-title">数字の向こうの、風を見る。</h2><p>全体平均だけでなく、月・時刻・風向・風速帯も見てみましょう。<br>「どんな条件で外れたか」が、次の実験の入口になります。</p></div><div class="source-links"><h3>データと解説の出典</h3><a href="https://www.jma.go.jp/jma/kishou/know/faq/faq2.html" target="_blank" rel="noopener">気象庁：風の観測・予報に関するFAQ ↗</a><a href="https://www.data.jma.go.jp/risk/obsdl/" target="_blank" rel="noopener">気象庁：過去の気象データ ↗</a><a href="https://open-meteo.com/en/docs" target="_blank" rel="noopener">Open-Meteo：予報データの仕様 ↗</a><a href="https://scikit-learn.org/stable/modules/model_evaluation.html" target="_blank" rel="noopener">scikit-learn：評価指標の解説 ↗</a></div></section>
+</main>
+<footer class="site-footer shell"><a class="wordmark" href="#"><span class="wind-symbol" aria-hidden="true">↗</span> COASTAL WIND LAB</a><p>学生の発想を、だれでも試せる教材へ。<br>海岸の風速・風向予報ラボ v1.1.0</p><div><a href="../">作品集へ</a><a href="https://github.com/shogo-ishikawa/2026_3Q_M4Th4/tree/main/projects/coastal-wind-chaos" target="_blank" rel="noopener">ソースと詳しい使い方 ↗</a></div></footer>
+</body>
+</html>

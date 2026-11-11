@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coastal-wind-chaos"
-version = "0.1.0"
-description = "海辺の風の予測可能性を、風向きの機械学習予測とローレンツ系の実験から学ぶ教材"
+version = "1.1.0"
+description = "海岸の風速・風向の予報比較、機械学習、誤差解析を学ぶ教材"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -14,11 +14,13 @@ dependencies = [
     "scikit-learn>=1.4",
     "threadpoolctl>=3.1",
     "matplotlib>=3.8",
+    "requests>=2.31,<3",
 ]
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
 notebook = ["nbclient>=0.11", "nbformat>=5.11.1", "ipykernel>=6.17.1"]
+colab = ["ipywidgets>=8,<9", "nbformat>=5.11.1", "packaging>=23"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
