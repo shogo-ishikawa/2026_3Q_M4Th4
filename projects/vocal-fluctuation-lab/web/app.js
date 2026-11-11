@@ -214,6 +214,7 @@
   }
 
   let audioContext = null, oscillator = null, gain = null, toneEnd = 0;
+  let toneRequestNumber = 0, tonePending = false;
   function finishTone(announce = true) {
     oscillator = null;
     if (gain) gain.disconnect();
@@ -223,7 +224,15 @@
     if (announce) $('tone-status').textContent = '再生を停止しました。図の値を変えて、もう一度比べられます。';
   }
   function stopTone() {
-    if (!oscillator || !audioContext) return;
+    // resume() can still be waiting for browser permission when the page hides.
+    // Cancel that request too, so it cannot start an unseen sound later.
+    toneRequestNumber++;
+    const wasPending = tonePending;
+    tonePending = false;
+    if (!oscillator || !audioContext) {
+      if (wasPending) finishTone();
+      return;
+    }
     try {
       const now = audioContext.currentTime;
       gain.gain.cancelScheduledValues(now);
@@ -249,11 +258,17 @@
       $('tone-status').textContent = 'このブラウザでは合成音を再生できません。図を動かして違いを確かめられます。';
       return;
     }
+    const currentToneRequest = ++toneRequestNumber;
+    tonePending = true;
     $('play-tone').disabled = true;
     try {
       if (!audioContext) audioContext = new AudioContextType();
       await audioContext.resume();
+      if (currentToneRequest !== toneRequestNumber) return;
+      tonePending = false;
+      if (document.hidden) { finishTone(); return; }
       oscillator = audioContext.createOscillator();
+      const playingOscillator = oscillator;
       gain = audioContext.createGain();
       const now = audioContext.currentTime;
       toneEnd = now + 3;
@@ -265,11 +280,16 @@
       gain.gain.setValueAtTime(0.06 * amplitude, toneEnd - 0.025);
       gain.gain.linearRampToValueAtTime(0, toneEnd);
       oscillator.connect(gain); gain.connect(audioContext.destination);
-      oscillator.onended = () => { oscillator.disconnect(); finishTone(); };
+      oscillator.onended = () => {
+        playingOscillator.disconnect();
+        if (oscillator === playingOscillator) finishTone();
+      };
       oscillator.start(now); oscillator.stop(toneEnd);
       $('stop-tone').disabled = false;
       $('tone-status').textContent = '再生中：' + frequency + ' Hz。波形と同じ設定の合成音です。3秒で自動停止します。';
     } catch (_) {
+      if (currentToneRequest !== toneRequestNumber) return;
+      tonePending = false;
       if (oscillator) { oscillator.onended = null; try { oscillator.stop(); oscillator.disconnect(); } catch (_) {} }
       finishTone(false);
       $('tone-status').textContent = '合成音を再生できませんでした。図の操作はそのまま使えます。';
@@ -332,6 +352,8 @@
     document.querySelectorAll('[data-demo]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.demo === kind)));
     $('viewer-message').textContent = '合成データを読み込んでいます。';
     $('viewer-message').classList.remove('error');
+    $('demo-result').hidden = true;
+    $('demo-result').setAttribute('aria-busy', 'true');
     try {
       const response = await fetch('data/demo-' + kind + '.json');
       if (!response.ok) throw new Error('data');
@@ -339,13 +361,18 @@
       if (currentRequest !== requestNumber) return;
       $('result-title').textContent = DEMOS[kind].title;
       $('metric-slope').textContent = result.fit.slope.toFixed(2);
+      $('metric-r2').textContent = isNumber(result.fit.r_squared) ? result.fit.r_squared.toFixed(3) : '—';
+      $('demo-band').textContent = [result.fit.band_low_hz, result.fit.band_high_hz]
+        .map(value => isNumber(value) ? value.toFixed(3).replace(/\.?0+$/, '') : '—').join('〜');
       $('demo-duration').textContent = ' / ' + result.duration_seconds.toFixed(0) + '秒の合成例';
       $('viewer-message').textContent = DEMOS[kind].text;
       drawDemoEnvelope(result); drawDemoSpectrum(result); $('demo-result').hidden = false;
     } catch (_) {
       if (currentRequest !== requestNumber) return;
-      $('viewer-message').textContent = '合成例を読み込めませんでした。説明はそのまま読めます。公開ページで開き直すか、Colabで合成例を確かめてください。';
+      $('viewer-message').textContent = '合成例を読み込めませんでした。上の白色・ピンク・褐色のボタンを押すと再試行できます。説明とColabへのリンクはそのまま使えます。';
       $('viewer-message').classList.add('error'); $('demo-result').hidden = true;
+    } finally {
+      if (currentRequest === requestNumber) $('demo-result').setAttribute('aria-busy', 'false');
     }
   }
 
