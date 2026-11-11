@@ -287,32 +287,48 @@ def comparison_html(rows: list[dict]) -> str:
     return "<p>登録曲の音量変動の特徴が近い順です。距離が小さいほど近く、声質・本人・歌唱力を識別する結果ではありません。</p><table><thead><tr><th>順</th><th>登録アーティスト</th><th>特徴量の距離</th><th>比較曲数</th><th>近い登録曲</th><th>登録範囲</th></tr></thead><tbody>" + "".join(cells) + "</tbody></table>"
 
 
+def result_reading_html() -> str:
+    """判定結果に添える、傾きと当てはまりの読み方です。"""
+    return ("<h3>βとR²を一緒に読む</h3>"
+            "<p><strong>β（ベータ）は、変動の速さごとのパワーの偏りを表す傾きです。</strong>"
+            "横軸と縦軸を対数にしたグラフで、P(f) ∝ f<sup>β</sup>という形に当てはめます。"
+            "β=0は平ら、−1は1/f、−2はさらに急な右下がりです。負の傾きが急なほど、"
+            "速い変動に対してゆっくりした変動の割合が大きくなります。音の高さを示す値ではありません。"
+            "1/fへの近さは−1との差で読みます。−0.9と−1.1は同じだけ近く、負の値が大きいほど良いという点数ではありません。</p>"
+            "<p><strong>R²は、まとめたPSDの点が対数グラフ上の直線にどれくらい沿うかの目安です。</strong>"
+            "1に近いほどよく沿い、小さいと一本の直線で表しにくくなります。"
+            "R²=0.95は、1/fである確率が95%という意味ではありません。βが−1から離れていてもR²は高くなります。</p>"
+            "<p>βが0付近の平らな例では、小さなばらつきにR²が左右されます。録音の良し悪しの点数としては使いません。</p>"
+            "<details><summary>数値を組み合わせて読む（説明用の例）</summary>"
+            "<p>次の値は読み方を示す例で、登録曲の測定値ではありません。十分な長さと安定性がある場合を考えます。</p>"
+            "<table><thead><tr><th>β</th><th>R²</th><th>読み方</th></tr></thead><tbody>"
+            "<tr><td>−1.05</td><td>0.95</td><td>−1に近く、直線にもよく沿うため、この帯域で1/fに近い傾向を支持します。</td></tr>"
+            "<tr><td>−1.02</td><td>0.40</td><td>傾きは近くても、直線への当てはまりが弱いため判定を保留します。</td></tr>"
+            "<tr><td>−1.80</td><td>0.96</td><td>直線にはよく沿いますが、1/fより急な傾きです。</td></tr>"
+            "</tbody></table></details>"
+            "<p>この教材の参考基準は、<strong>−1からの差が0.3以内、かつR²が0.75以上</strong>です。"
+            "さらに無音調整後60秒以上の長さ、十分なデータ、時間を分けたときの安定性なども確認します。"
+            "境界付近では丸め前の値で判定するため、画面の判定理由も読んでください。"
+            "今回の区間・帯域についての参考評価で、1/fの証明や歌唱力の評価ではありません。</p>")
+
+
 def database_catalogue_html(database: dict) -> str:
-    """いま読み込んでいるDBを、曲と前処理ごとにまとめて表示します。"""
+    """いま読み込んでいる数値の解析結果を、曲ごとにまとめて表示します。"""
     grouped = {}
     for record in database.get("references", []):
-        metadata = record.get("metadata", {})
-        key = (str(record.get("artist", "")), str(record.get("track", "")),
-               str(metadata.get("separation_method", "")), str(metadata.get("model_version", "")))
+        key = (str(record.get("artist", "")), str(record.get("track", "")))
         grouped[key] = grouped.get(key, 0) + 1
     if not grouped:
         return "<p>現在の比較DBは空です。音源を解析して追加するか、保存した比較DBのJSONを読み込んでください。</p>"
     rows = []
-    for (artist, track, separation, version), count in sorted(grouped.items()):
-        if separation == "already-vocals":
-            processing = "歌声のみの入力（分離を省略）"
-        elif separation.startswith("demucs:"):
-            processing = "Demucs / " + separation.split(":", 1)[1]
-        else:
-            processing = separation or "方法の記録なし"
-        if version:
-            processing += "（" + version + "）"
-        cells = [artist, track, processing, str(count)]
+    for (artist, track), count in sorted(grouped.items()):
+        cells = [artist, track, str(count)]
         rows.append("<tr>" + "".join("<td>" + html.escape(value) + "</td>" for value in cells) + "</tr>")
-    return ("<p>この実行環境で読み込んでいるDBの一覧です。今回比較できる曲数は上の表示で確認します。"
-            "同じ曲でも、解析帯域・窓・無音設定や歌声の前処理が合う記録だけを比較します。</p>"
+    return ("<p>このDBに登録しているのは、曲名に対応する数値の解析結果です。音声ファイルや音楽データは含みません。"
+            "初期登録の参照結果は、すべてAIで抽出した歌声を解析したものです。"
+            "今回比較できる曲数は上の表示で確認します。解析・前処理の記録が合う結果だけを比較します。</p>"
             "<div style=\"overflow-x:auto\"><table><thead><tr><th>アーティスト</th><th>曲名</th>"
-            "<th>歌声の前処理</th><th>登録区間数</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>")
+            "<th>登録区間数</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>")
 
 
 class VocalNotebookUI:
@@ -409,8 +425,8 @@ class VocalNotebookUI:
             widgets.HTML("<p>伴奏を入れずに歌った自分の録音を、60〜90秒以上用意します。録音アプリのノイズ除去や自動音量調整は、可能ならオフにします。歌い方の違いを比べるときは、同じ曲・歌う箇所・部屋・マイクとの距離をそろえましょう。</p>"
                          "<p>目的を選ぶか、設定ボタンを押すと、ファイル入力・歌声のみ・曲全体・前後だけの無音除去に切り替わります。選択中の音源は保持するため、伴奏のない録音か「今回の音源」で確かめてください。以前の解析結果は解除します。</p>"),
             self.voice_goal, self.voice_preset_button,
-            widgets.HTML("<p>1/fゆらぎは、今回の録音・区間・帯域について確かめます。登録曲との比較は、声の強弱のゆらぎ方を見る実験です。声質が誰に似ているか、本人や歌の上手さを判定する結果ではありません。歌声のみの入力は、DBの「歌声のみの入力」と条件が合う記録だけが対象です。Demucsで分離した曲とは混ぜて比べません。</p>"
-                         "<p>初期DBの保存済み歌声には、過去の分離モデルが不明な参照音源があります。録音・ミックス・分離履歴の違いも含む参考比較として、結果を読んでください。</p>"),
+            widgets.HTML("<p>1/fゆらぎは、今回の録音・区間・帯域について確かめます。登録曲との比較は、声の強弱のゆらぎ方を見る実験です。声質が誰に似ているか、本人や歌の上手さを判定する結果ではありません。</p>"
+                         "<p>初期DBの参照結果は、すべてAIで抽出した歌声の解析値です。保存済み歌声を再解析する場合は、今回のAI分離を省略します。比較には解析・前処理の記録が合う結果を使い、録音・ミックス・分離履歴の違いも含む参考値として読みます。</p>"),
         ])], selected_index=None)
         self.voice_options.set_title(0, "自分の声を調べる")
         self.trim_edges = widgets.Checkbox(value=True, description="前後の無音を自動で除く", indent=False, layout=widgets.Layout(width="auto"))
@@ -437,7 +453,7 @@ class VocalNotebookUI:
         self.db_coverage = widgets.HTML()
         self.db_catalogue = widgets.HTML()
         self.db_catalogue_options = widgets.Accordion(children=[self.db_catalogue], selected_index=None)
-        self.db_catalogue_options.set_title(0, "現在の比較DBに入っている曲")
+        self.db_catalogue_options.set_title(0, "現在のDBに登録された解析結果")
         self.comparison_output = widgets.HTML()
         self._update_db_coverage()
         self.mode.observe(self._switch_mode, names="value")
@@ -669,6 +685,7 @@ class VocalNotebookUI:
         with self.result_output:
             summary = html.escape(str(analysis.get("summary", "解析結果")))
             self.display(self.HTML("<h2>解析結果</h2><p><strong>" + summary + "</strong></p><p>傾き β = " + _number(fit.get("slope")) + " ／ 当てはめ R² = " + _number(fit.get("r_squared")) + " ／ 使用帯域 = " + _number(fit.get("band_low_hz"), 2) + "〜" + _number(fit.get("band_high_hz"), 2) + " Hz</p><p>指定した帯域・区間での参考評価です。歌の上手さ、心地よさ、声質を判定する結果ではありません。</p>"))
+            self.display(self.HTML(result_reading_html()))
             self.display(self.HTML(band_selection_html(analysis)))
             self.display(self.HTML(band_comparison_html(analysis)))
             self.display(self.HTML("<p><strong>解析しているのは、抽出音に含まれるボーカル全体の音量変動です。</strong>主旋律とコーラス、多重録音は分離していません。重ね録りやリバーブも結果に影響するため、歌い手本人に固有の性質とは断定できません。</p>"))
@@ -702,7 +719,7 @@ class VocalNotebookUI:
     def _update_db_coverage(self):
         records = self.database.get("references", [])
         self.db_catalogue.value = database_catalogue_html(self.database)
-        guidance = "比較するときは「固定（比較DB用：0.2〜20 Hz）」を選びます。歌声分離を省略した音源と、Demucsで分離した音源は別の条件として扱います。"
+        guidance = "比較するときは「固定（比較DB用：0.2〜20 Hz）」を選びます。参照結果はすべてAI抽出した歌声の解析値ですが、再解析時の設定を含む解析・前処理の記録が合う結果だけを比較します。"
         fallback = "登録：" + str(len(records)) + "区間。"
         try:
             coverage_function = getattr(self.db_api, "comparison_coverage", None)

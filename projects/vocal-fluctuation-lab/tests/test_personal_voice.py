@@ -152,25 +152,29 @@ class PersonalVoiceTests(unittest.TestCase):
 
 
 class DatabaseCatalogueTests(unittest.TestCase):
-    def test_catalogue_groups_intervals_and_escapes_names_and_processing(self):
+    def test_catalogue_groups_intervals_across_processing_records_and_escapes_names(self):
         data = catalogue()
         data = db.add_reference(data, analysis(3), "声のみの歌手", "曲A")
+        data = db.add_reference(data, analysis(5, "demucs:htdemucs"), "声のみの歌手", "曲A")
         data = db.add_reference(data, analysis(4, "<unknown>"), "<script>x</script>", "A&B")
         rendered = ui.database_catalogue_html(data)
         self.assertEqual(rendered.count("声のみの歌手"), 1)
-        self.assertIn("<td>2</td>", rendered)
-        self.assertIn("歌声のみの入力（分離を省略）", rendered)
-        self.assertIn("Demucs / htdemucs（4.1.0）", rendered)
+        self.assertIn("<td>3</td>", rendered)
+        self.assertEqual(rendered.count("<th>"), 3)
+        self.assertNotIn("歌声の前処理</th>", rendered)
+        self.assertNotIn("Demucs / htdemucs", rendered)
         self.assertIn("&lt;script&gt;x&lt;/script&gt;", rendered)
         self.assertIn("A&amp;B", rendered)
-        self.assertIn("&lt;unknown&gt;", rendered)
+        self.assertNotIn("&lt;unknown&gt;", rendered)
+        self.assertIn("数値の解析結果", rendered)
+        self.assertIn("音声ファイルや音楽データは含みません", rendered)
         self.assertNotIn("<script>", rendered)
 
     def test_current_session_list_refreshes_after_import_add_and_failed_import(self):
         with tempfile.TemporaryDirectory() as folder:
             lab = ui.VocalNotebookUI(folder, pipeline=Mock(), database=db)
             self.assertIn("現在の比較DBは空", lab.db_catalogue.value)
-            self.assertEqual(lab.db_catalogue_options.get_title(0), "現在の比較DBに入っている曲")
+            self.assertEqual(lab.db_catalogue_options.get_title(0), "現在のDBに登録された解析結果")
             self.assertIsNone(lab.db_catalogue_options.selected_index)
             path = db.save_database(catalogue(), Path(folder) / "saved.json")
             lab._import_database({"new": ({"name": "saved.json", "content": path.read_bytes()},)})

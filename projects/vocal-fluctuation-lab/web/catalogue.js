@@ -1,7 +1,6 @@
 /* Display the bundled measurements; audio analysis stays in Colab. */
 (function () {
   'use strict';
-  const METHODS = ['already-vocals', 'demucs:htdemucs'];
   const isNumber = value => typeof value === 'number' && Number.isFinite(value);
   const isText = value => typeof value === 'string' && value.trim().length > 0 && value.length <= 250;
   function validateCatalogue(value) {
@@ -14,8 +13,6 @@
     }
     for (const row of value.references) {
       if (!row || !isText(row.artist) || !isText(row.track)
-          || !METHODS.includes(row.separation_method)
-          || typeof row.model_version !== 'string' || row.model_version.length > 100
           || !isNumber(row.slope) || !isNumber(row.r_squared)
           || row.r_squared < 0 || row.r_squared > 1
           || !isNumber(row.duration_seconds) || row.duration_seconds <= 0) {
@@ -27,10 +24,9 @@
   function searchText(value) {
     return String(value).normalize('NFKC').toLocaleLowerCase('ja').replace(/\s+/g, ' ').trim();
   }
-  function filterReferences(references, query = '', method = 'all') {
+  function filterReferences(references, query = '') {
     const terms = searchText(query).split(' ').filter(Boolean);
-    return references.filter(row => (method === 'all' || row.separation_method === method)
-      && terms.every(term => searchText(row.artist + ' ' + row.track).includes(term)));
+    return references.filter(row => terms.every(term => searchText(row.artist + ' ' + row.track).includes(term)));
   }
   if (typeof module !== 'undefined') module.exports = {validateCatalogue, filterReferences};
   if (typeof document === 'undefined') return;
@@ -45,45 +41,39 @@
     return element;
   }
   function renderCatalogue() {
-    const rows = filterReferences(catalogue.references, $('catalogue-search').value, $('catalogue-group').value);
+    const rows = filterReferences(catalogue.references, $('catalogue-search').value);
     const output = $('catalogue-rows');
     output.replaceChildren();
     for (const row of rows) {
       const tr = document.createElement('tr');
       const artist = textElement('th', row.artist);
       artist.scope = 'row';
-      const condition = document.createElement('td');
-      const vocals = row.separation_method === 'already-vocals';
-      condition.append(textElement('span', vocals ? '歌声のみ入力' : 'AIで歌声を抽出', 'input-badge' + (vocals ? ' vocals' : '')));
-      condition.append(textElement('small', vocals ? '今回の解析では分離を省略' : 'Demucs htdemucs / ' + row.model_version));
-      tr.append(artist, textElement('td', row.track), condition,
+      tr.append(artist, textElement('td', row.track),
         textElement('td', row.slope.toFixed(2)), textElement('td', row.r_squared.toFixed(3)));
       output.append(tr);
     }
     const records = catalogue.references;
     const artists = new Set(records.map(row => row.artist));
-    const extracted = records.filter(row => row.separation_method === 'demucs:htdemucs').length;
-    const vocals = records.length - extracted;
-    $('catalogue-status').textContent = '初期DB：' + records.length + '曲・' + artists.size
-      + 'アーティスト（AI抽出 ' + extracted + '曲／歌声のみ入力 ' + vocals + '曲）。表示 ' + rows.length + '曲。';
+    $('catalogue-status').textContent = '初期DB：' + records.length + '曲分・' + artists.size
+      + 'アーティストの解析結果（数値）。表示 ' + rows.length + '件。';
     $('catalogue-table-wrap').hidden = rows.length === 0;
     $('catalogue-empty').hidden = rows.length > 0;
   }
   async function loadCatalogue() {
     $('reference-catalogue').setAttribute('aria-busy', 'true');
-    $('catalogue-search').disabled = $('catalogue-group').disabled = true;
+    $('catalogue-search').disabled = true;
     $('catalogue-retry').hidden = true;
     $('catalogue-table-wrap').hidden = $('catalogue-empty').hidden = true;
     $('catalogue-status').classList.remove('error');
-    $('catalogue-status').textContent = '登録曲を読み込んでいます。';
+    $('catalogue-status').textContent = '解析結果の数値を読み込んでいます。';
     try {
       const response = await fetch('data/reference_catalogue_public.json');
       if (!response.ok) throw new Error('data');
       catalogue = validateCatalogue(await response.json());
       renderCatalogue();
-      $('catalogue-search').disabled = $('catalogue-group').disabled = false;
+      $('catalogue-search').disabled = false;
     } catch (_) {
-      $('catalogue-status').textContent = '登録曲の一覧を読み込めませんでした。「一覧を再読み込み」で再試行できます。Colabの「現在の比較DBに入っている曲」からも確認できます。';
+      $('catalogue-status').textContent = '解析結果の一覧を読み込めませんでした。「一覧を再読み込み」で再試行できます。Colabの「現在のDBに登録された解析結果」からも確認できます。';
       $('catalogue-status').classList.add('error');
       $('catalogue-retry').hidden = false;
     } finally {
@@ -91,7 +81,6 @@
     }
   }
   $('catalogue-search').addEventListener('input', renderCatalogue);
-  $('catalogue-group').addEventListener('change', renderCatalogue);
   $('catalogue-retry').addEventListener('click', loadCatalogue);
   loadCatalogue();
 }());
