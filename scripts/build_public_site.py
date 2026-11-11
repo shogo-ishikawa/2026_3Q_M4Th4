@@ -36,6 +36,8 @@ def main():
     shutil.copytree(vocal_project / 'web', vocal_destination)
     subprocess.run([sys.executable, str(vocal_project / 'scripts' / 'generate_demos.py'),
                     '--output', str(vocal_destination / 'data')], check=True)
+    catalogue_name = 'reference_catalogue_public.json'
+    shutil.copy2(vocal_project / 'data' / catalogue_name, vocal_destination / 'data' / catalogue_name)
     vocal_downloads = vocal_destination / 'downloads'
     vocal_downloads.mkdir(exist_ok=True)
     vocal_version = 'v' + tomllib.loads((vocal_project / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
@@ -52,6 +54,7 @@ def main():
             bundle.write(path, Path(vocal_version) / relative)
         for path in sorted((vocal_destination / 'data').glob('demo-*.json')):
             bundle.write(path, Path(vocal_version) / 'web/data' / path.name)
+        bundle.write(vocal_destination / 'data' / catalogue_name, Path(vocal_version) / 'web/data' / catalogue_name)
     print(f'Built vocal-fluctuation-lab with {vocal_archive.stat().st_size:,}-byte distribution ZIP')
     print(f'Built {OUTPUT.relative_to(ROOT)} with {archive.stat().st_size:,}-byte distribution ZIP')
 

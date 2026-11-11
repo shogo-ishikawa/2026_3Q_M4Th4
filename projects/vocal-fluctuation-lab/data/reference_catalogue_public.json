@@ -1,0 +1,142 @@
+{
+  "schema_version": "vocal-reference-catalogue-v1",
+  "config": {
+    "low_hz": 0.2,
+    "high_hz": 20.0,
+    "segment_seconds": 20.0,
+    "auto_band": false
+  },
+  "references": [
+    {
+      "artist": "The Beatles",
+      "track": "Hey Jude",
+      "separation_method": "demucs:htdemucs",
+      "model_version": "4.1.0",
+      "slope": -1.4161821890630453,
+      "r_squared": 0.9848714547074651,
+      "duration_seconds": 415.93,
+      "status": "not_near"
+    },
+    {
+      "artist": "Nirvana",
+      "track": "Smells Like Teen Spirit",
+      "separation_method": "already-vocals",
+      "model_version": "",
+      "slope": -1.0872186005606828,
+      "r_squared": 0.7992360059972496,
+      "duration_seconds": 242.02,
+      "status": "near"
+    },
+    {
+      "artist": "Tommy february6",
+      "track": "je t'aime ★ je t'aime",
+      "separation_method": "demucs:htdemucs",
+      "model_version": "4.1.0",
+      "slope": -1.128860086739948,
+      "r_squared": 0.9269489511261884,
+      "duration_seconds": 267.46,
+      "status": "near"
+    },
+    {
+      "artist": "Muse",
+      "track": "Invincible",
+      "separation_method": "demucs:htdemucs",
+      "model_version": "4.1.0",
+      "slope": -1.300138760166551,
+      "r_squared": 0.9803900899889905,
+      "duration_seconds": 261.8,
+      "status": "not_near"
+    },
+    {
+      "artist": "岩瀬敬吾",
+      "track": "レディオステレオ",
+      "separation_method": "demucs:htdemucs",
+      "model_version": "4.1.0",
+      "slope": -1.4638610752268315,
+      "r_squared": 0.9705736385152377,
+      "duration_seconds": 272.88,
+      "status": "not_near"
+    },
+    {
+      "artist": "斉藤和義",
+      "track": "歩いて帰ろう",
+      "separation_method": "already-vocals",
+      "model_version": "",
+      "slope": -1.5096653875475747,
+      "r_squared": 0.9671327876844238,
+      "duration_seconds": 195.78,
+      "status": "not_near"
+    },
+    {
+      "artist": "X JAPAN",
+      "track": "紅",
+      "separation_method": "demucs:htdemucs",
+      "model_version": "4.1.0",
+      "slope": -1.409332869156994,
+      "r_squared": 0.9763399062496391,
+      "duration_seconds": 379.8987755102041,
+      "status": "not_near"
+    },
+    {
+      "artist": "東京事変",
+      "track": "群青日和",
+      "separation_method": "demucs:htdemucs",
+      "model_version": "4.1.0",
+      "slope": -1.4527208566658623,
+      "r_squared": 0.9807071383531548,
+      "duration_seconds": 278.2772562358277,
+      "status": "not_near"
+    },
+    {
+      "artist": "T.M.Revolution",
+      "track": "WHITE BREATH",
+      "separation_method": "demucs:htdemucs",
+      "model_version": "4.1.0",
+      "slope": -1.1299509813747037,
+      "r_squared": 0.927678767244442,
+      "duration_seconds": 216.62,
+      "status": "near"
+    },
+    {
+      "artist": "cune",
+      "track": "星をみてれば",
+      "separation_method": "already-vocals",
+      "model_version": "",
+      "slope": -1.5771371145100477,
+      "r_squared": 0.9747614413218385,
+      "duration_seconds": 292.67,
+      "status": "not_near"
+    },
+    {
+      "artist": "スピッツ",
+      "track": "春の歌",
+      "separation_method": "demucs:htdemucs",
+      "model_version": "4.1.0",
+      "slope": -1.3784395296167844,
+      "r_squared": 0.9492890225689303,
+      "duration_seconds": 211.34,
+      "status": "not_near"
+    },
+    {
+      "artist": "L'Arc-en-Ciel",
+      "track": "DIVE TO BLUE",
+      "separation_method": "demucs:htdemucs",
+      "model_version": "4.1.0",
+      "slope": -1.191236071659821,
+      "r_squared": 0.9345120706041915,
+      "duration_seconds": 288.8,
+      "status": "near"
+    },
+    {
+      "artist": "hide",
+      "track": "HURRY GO ROUND",
+      "separation_method": "demucs:htdemucs",
+      "model_version": "4.1.0",
+      "slope": -1.268663855586555,
+      "r_squared": 0.9491900555639953,
+      "duration_seconds": 286.76,
+      "status": "near"
+    }
+  ],
+  "excluded": []
+}

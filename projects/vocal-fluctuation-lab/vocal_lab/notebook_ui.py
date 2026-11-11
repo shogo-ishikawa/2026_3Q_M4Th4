@@ -287,6 +287,34 @@ def comparison_html(rows: list[dict]) -> str:
     return "<p>登録曲の音量変動の特徴が近い順です。距離が小さいほど近く、声質・本人・歌唱力を識別する結果ではありません。</p><table><thead><tr><th>順</th><th>登録アーティスト</th><th>特徴量の距離</th><th>比較曲数</th><th>近い登録曲</th><th>登録範囲</th></tr></thead><tbody>" + "".join(cells) + "</tbody></table>"
 
 
+def database_catalogue_html(database: dict) -> str:
+    """いま読み込んでいるDBを、曲と前処理ごとにまとめて表示します。"""
+    grouped = {}
+    for record in database.get("references", []):
+        metadata = record.get("metadata", {})
+        key = (str(record.get("artist", "")), str(record.get("track", "")),
+               str(metadata.get("separation_method", "")), str(metadata.get("model_version", "")))
+        grouped[key] = grouped.get(key, 0) + 1
+    if not grouped:
+        return "<p>現在の比較DBは空です。音源を解析して追加するか、保存した比較DBのJSONを読み込んでください。</p>"
+    rows = []
+    for (artist, track, separation, version), count in sorted(grouped.items()):
+        if separation == "already-vocals":
+            processing = "歌声のみの入力（分離を省略）"
+        elif separation.startswith("demucs:"):
+            processing = "Demucs / " + separation.split(":", 1)[1]
+        else:
+            processing = separation or "方法の記録なし"
+        if version:
+            processing += "（" + version + "）"
+        cells = [artist, track, processing, str(count)]
+        rows.append("<tr>" + "".join("<td>" + html.escape(value) + "</td>" for value in cells) + "</tr>")
+    return ("<p>この実行環境で読み込んでいるDBの一覧です。今回比較できる曲数は上の表示で確認します。"
+            "同じ曲でも、解析帯域・窓・無音設定や歌声の前処理が合う記録だけを比較します。</p>"
+            "<div style=\"overflow-x:auto\"><table><thead><tr><th>アーティスト</th><th>曲名</th>"
+            "<th>歌声の前処理</th><th>登録区間数</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>")
+
+
 class VocalNotebookUI:
     """入力→分離→解析→比較の状態を持つ小さな画面です。"""
 
@@ -371,6 +399,20 @@ class VocalNotebookUI:
             value="auto", description="解析モード", style={"description_width": "initial"},
             layout=widgets.Layout(width="auto", max_width="100%"),
         )
+        self.voice_goal = widgets.Dropdown(
+            options=[("1/fゆらぎを調べる", "auto"), ("登録曲と比べる", "fixed")],
+            value="auto", description="試したいこと", style={"description_width": "initial"},
+            layout=widgets.Layout(width="auto", max_width="100%"),
+        )
+        self.voice_preset_button = widgets.Button(description="自分の声の設定を使う", layout=widgets.Layout(width="auto"))
+        self.voice_options = widgets.Accordion(children=[widgets.VBox([
+            widgets.HTML("<p>伴奏を入れずに歌った自分の録音を、60〜90秒以上用意します。録音アプリのノイズ除去や自動音量調整は、可能ならオフにします。歌い方の違いを比べるときは、同じ曲・歌う箇所・部屋・マイクとの距離をそろえましょう。</p>"
+                         "<p>目的を選ぶか、設定ボタンを押すと、ファイル入力・歌声のみ・曲全体・前後だけの無音除去に切り替わります。選択中の音源は保持するため、伴奏のない録音か「今回の音源」で確かめてください。以前の解析結果は解除します。</p>"),
+            self.voice_goal, self.voice_preset_button,
+            widgets.HTML("<p>1/fゆらぎは、今回の録音・区間・帯域について確かめます。登録曲との比較は、声の強弱のゆらぎ方を見る実験です。声質が誰に似ているか、本人や歌の上手さを判定する結果ではありません。歌声のみの入力は、DBの「歌声のみの入力」と条件が合う記録だけが対象です。Demucsで分離した曲とは混ぜて比べません。</p>"
+                         "<p>初期DBの保存済み歌声には、過去の分離モデルが不明な参照音源があります。録音・ミックス・分離履歴の違いも含む参考比較として、結果を読んでください。</p>"),
+        ])], selected_index=None)
+        self.voice_options.set_title(0, "自分の声を調べる")
         self.trim_edges = widgets.Checkbox(value=True, description="前後の無音を自動で除く", indent=False, layout=widgets.Layout(width="auto"))
         self.remove_internal = widgets.Checkbox(value=False, description="途中の無音も除く（時間を短縮）", indent=False, layout=widgets.Layout(width="auto"))
         self.threshold_db = widgets.FloatSlider(value=-40, min=-80, max=-10, step=1, description="無音のしきい値 [dB]", readout_format=".0f", style={"description_width": "initial"}, layout=widgets.Layout(width="95%"))
@@ -393,6 +435,9 @@ class VocalNotebookUI:
         self.db_download = widgets.Button(description="比較DBを保存", icon="download")
         self.db_status = widgets.HTML("<p>" + html.escape(database_notice) + "</p>")
         self.db_coverage = widgets.HTML()
+        self.db_catalogue = widgets.HTML()
+        self.db_catalogue_options = widgets.Accordion(children=[self.db_catalogue], selected_index=None)
+        self.db_catalogue_options.set_title(0, "現在の比較DBに入っている曲")
         self.comparison_output = widgets.HTML()
         self._update_db_coverage()
         self.mode.observe(self._switch_mode, names="value")
@@ -402,6 +447,8 @@ class VocalNotebookUI:
         self.runtime_file_path.observe(self._runtime_file_edited, names="value")
         self.whole_track.observe(self._switch_whole_track, names="value")
         self.reset_times_button.on_click(self._reset_times)
+        self.voice_goal.observe(lambda change: self._apply_voice_preset(), names="value")
+        self.voice_preset_button.on_click(self._apply_voice_preset)
         self.analyse_button.on_click(self._analyse)
         self.result_download.on_click(lambda button: download_file(self.results_zip) if self.results_zip else None)
         self.vocals_download.on_click(lambda button: download_file(Path(self.bundle["vocals_path"])) if self.bundle else None)
@@ -412,7 +459,7 @@ class VocalNotebookUI:
         self.panel = widgets.VBox([
             self.version_banner, self.upload_button_style,
             widgets.HTML("<h2>1 音源と区間を選ぶ</h2><p>利用できる音源を使ってください。YouTubeから取得できない場合は、MP3やWAVをアップロードできます。音源はこの実行環境で処理し、公開DBへ自動送信しません。</p>"),
-            self.mode, self.audio_upload, self.colab_upload_button, self.upload_output,
+            self.voice_options, self.mode, self.audio_upload, self.colab_upload_button, self.upload_output,
             self.runtime_file_options, self.selected_audio, self.url,
             self.whole_track, self.time_controls, self.reset_times_button,
             widgets.HTML("<p>曲全体を選ぶと、先頭から末尾まで解析します（最大10分）。初期設定では前後の無音を歌声抽出後に自動で除きます。無音調整後の長さが60秒未満のときは判定を保留します。</p>"),
@@ -423,7 +470,7 @@ class VocalNotebookUI:
             self.silence_options, self.analyse_button, self.status,
             self.result_output, widgets.HBox([self.result_download, self.raw_vocals_download, self.vocals_download], layout=widgets.Layout(flex_flow="row wrap")),
             widgets.HTML("<h2>2 登録アーティストと比べる</h2><p>この比較は声の本人判定ではありません。音量変動の特徴を同じ方法で測った登録曲と比べます。比較DBは保存して、次回読み込めます。</p>"),
-            self.db_upload, self.db_status, self.db_coverage, self.artist, self.track,
+            self.db_upload, self.db_status, self.db_coverage, self.db_catalogue_options, self.artist, self.track,
             widgets.HBox([self.add_reference_button, self.db_download], layout=widgets.Layout(flex_flow="row wrap")), self.comparison_output,
         ])
 
@@ -435,6 +482,20 @@ class VocalNotebookUI:
         self.runtime_file_options.layout.display = "" if file_mode else "none"
         self.selected_audio.layout.display = "" if change["new"] == "file" else "none"
         self.url.layout.display = "" if change["new"] == "youtube" else "none"
+
+    def _apply_voice_preset(self, button=None):
+        if self._audio_upload_busy or self.analyse_button.disabled:
+            self._set_status("音源の転送・解析が終わってから、自分の声の設定を選んでください。")
+            return
+        self._reset_results()
+        self.mode.value = "file"
+        self.vocals_only.value = True
+        self.whole_track.value = True
+        self.analysis_mode.value = self.voice_goal.value
+        self.trim_edges.value, self.remove_internal.value = True, False
+        self.threshold_db.value, self.min_silence_seconds.value = -40, 0.5
+        goal = "自動モードで1/fゆらぎを調べる" if self.voice_goal.value == "auto" else "固定モードで登録曲と比べる"
+        self._set_status(goal + "設定にしました。伴奏のない自分の録音を選び、「今回の音源」を確認してから解析してください。録音は60〜90秒以上を目安にします。")
 
     def _reset_results(self):
         self.bundle, self.results_zip = None, None
@@ -487,6 +548,7 @@ class VocalNotebookUI:
         self.colab_upload_button.disabled = self.analyse_button.disabled = True
         self.use_runtime_file_button.disabled = self.audio_upload.disabled = True
         self.mode.disabled = True
+        self.voice_goal.disabled = self.voice_preset_button.disabled = True
         try:
             if self._colab_files is None:
                 raise ValueError("この環境ではColab標準アップロードを使えません。音源選択かファイルのパス指定を使ってください。")
@@ -516,6 +578,7 @@ class VocalNotebookUI:
             self.colab_upload_button.disabled = self.analyse_button.disabled = False
             self.use_runtime_file_button.disabled = self.audio_upload.disabled = False
             self.mode.disabled = False
+            self.voice_goal.disabled = self.voice_preset_button.disabled = False
 
     def _runtime_file_edited(self, change):
         if self._audio_input_route == "path":
@@ -580,7 +643,9 @@ class VocalNotebookUI:
                 if not source:
                     raise ValueError("YouTubeの動画URLを入力してください。")
             self.analyse_button.disabled = True
-            self._set_status("処理を始めます。初回は歌声抽出モデルの取得に時間がかかります。")
+            self.voice_goal.disabled = self.voice_preset_button.disabled = True
+            self._set_status("歌声のみの音源を解析します。歌声抽出モデルは使いません。" if self.vocals_only.value
+                             else "処理を始めます。初回は歌声抽出モデルの取得に時間がかかります。")
             self.bundle = self.run_pipeline(source, start, end, run_dir / "output", source_kind=self.mode.value, already_vocals=self.vocals_only.value, progress=self._set_status, device=self.device.value, silence_config=self._silence_config(), config=self._analysis_config())
             self.results_zip = export_results(self.bundle["analysis"], run_dir / "exports")
             self._show_result()
@@ -595,6 +660,7 @@ class VocalNotebookUI:
             self._set_status("解析を完了できませんでした：" + str(error))
         finally:
             self.analyse_button.disabled = False
+            self.voice_goal.disabled = self.voice_preset_button.disabled = False
 
     def _show_result(self):
         import matplotlib.pyplot as plt
@@ -635,6 +701,7 @@ class VocalNotebookUI:
 
     def _update_db_coverage(self):
         records = self.database.get("references", [])
+        self.db_catalogue.value = database_catalogue_html(self.database)
         guidance = "比較するときは「固定（比較DB用：0.2〜20 Hz）」を選びます。歌声分離を省略した音源と、Demucsで分離した音源は別の条件として扱います。"
         fallback = "登録：" + str(len(records)) + "区間。"
         try:

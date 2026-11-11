@@ -1,6 +1,7 @@
 {
   "schema_version": "vocal-reference-holdout-v1",
-  "records": [
+  "records": [],
+  "historical_records": [
     {
       "artist": "Tommy february6",
       "track": "je t'aime ★ je t'aime",
@@ -101,7 +102,8 @@
         "peak_rms": 0.291215760444625,
         "threshold_rms": 0.00291215760444625
       },
-      "source_audio_sha256": "91dff4fb2ce5e8b81412ca1dc11ec2894629cd69be2222424460287e1a03cad0"
+      "source_audio_sha256": "91dff4fb2ce5e8b81412ca1dc11ec2894629cd69be2222424460287e1a03cad0",
+      "resolution": "2026年11月11日の新しいDemucs分離結果に置き換えました。今回の入力284.6067秒・前後の無音調整後267.46秒で、途中の無音は除去していません。以前の253.14秒入力の結果は通常比較に使用しません。"
     }
   ]
 }

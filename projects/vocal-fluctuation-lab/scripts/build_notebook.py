@@ -5,7 +5,7 @@ import textwrap
 
 
 PROJECT = Path(__file__).resolve().parents[1]
-NOTEBOOK_VERSION = "1.6.0"
+NOTEBOOK_VERSION = "1.7.0"
 
 
 def markdown(source):
@@ -14,6 +14,19 @@ def markdown(source):
 
 def code(source, title):
     return {"cell_type": "code", "metadata": {"cellView": "form"}, "execution_count": None, "outputs": [], "source": "#@title " + title + "\n" + textwrap.dedent(source).strip() + "\n"}
+
+
+def default_reference_markdown():
+    """配布する比較DBそのものから、初期登録曲の一覧を作ります。"""
+    records = json.loads((PROJECT / "data/reference_database.json").read_text(encoding="utf-8"))["references"]
+    rows = ["### 初期登録されている曲", "", "| アーティスト | 曲名 | 歌声の前処理 |", "| --- | --- | --- |"]
+    for record in records:
+        metadata = record["metadata"]
+        processing = "保存済み歌声（再分離なし）" if metadata["separation_method"] == "already-vocals" else "Demucs " + metadata["model_version"]
+        values = [record["artist"], record["track"], processing]
+        rows.append("| " + " | ".join(value.replace("|", "\\|").replace("\n", " ") for value in values) + " |")
+    rows.extend(["", "比較は、解析・無音処理・歌声の前処理が一致する曲だけで行います。各アーティストの登録は、その曲の録音に基づく参考値です。"])
+    return "\n".join(rows)
 
 
 def build_notebook():
@@ -78,7 +91,7 @@ def build_notebook():
             except (AttributeError, ValueError):
                 version = ()
             try:
-                features = (version >= (1, 5, 0) and audio.MAX_SECONDS >= 600
+                features = (version >= (1, 7, 0) and audio.MAX_SECONDS >= 600
                             and analysis.METHOD_ID == "rms-welch-v2"
                             and hasattr(analysis.AnalysisConfig(), "auto_band")
                             and analysis.AnalysisConfig().high_hz >= 20
@@ -89,6 +102,7 @@ def build_notebook():
                             and hasattr(notebook_ui.VocalNotebookUI, "upload_audio_from_colab")
                             and hasattr(notebook_ui.VocalNotebookUI, "_use_runtime_file")
                             and hasattr(notebook_ui.VocalNotebookUI, "_update_db_coverage")
+                            and hasattr(notebook_ui.VocalNotebookUI, "_apply_voice_preset")
                             and hasattr(notebook_ui.VocalNotebookUI, "_switch_whole_track")
                             and "silence_config" in inspect.signature(pipeline.run_analysis).parameters
                             and SilenceConfig().trim_edges and not SilenceConfig().remove_internal)
@@ -233,10 +247,9 @@ def build_notebook():
         markdown("""
         ## 4 比較DBを作って使う
 
-        起動時に、6曲・6アーティストの参考DBを読み込みます。比較するときは固定モードを選びます。
-        Nirvana、斉藤和義、X JAPAN、東京事変、cune、hideの測定値を登録しています。
+        起動時に、下の一覧にある曲の参考DBを読み込みます。比較するときは固定モードを選びます。
+        解析画面の「現在の比較DBに入っている曲」からも、読み込んでいるDBの一覧を確認できます。
         保存済み歌声WAVの入力とDemucsで分離した入力は別条件です。画面には総登録数と今回比較できる曲数を表示します。
-        Tommy february6は途中無音を除いた旧音源と長さが一致するため、通常比較へ混ぜず参考枠に保存しています。
         解析方法や区間が分からない数値を混ぜず、同じ方法で測った結果を蓄積します。
 
         1. 「解析モード」を「固定（比較DB用：0.2〜20 Hz）」にし、比較の基準にしたい音源を解析します。
@@ -244,6 +257,22 @@ def build_notebook():
         3. 同じアーティストの別の曲や、別のアーティストの曲も同じ条件で登録します。
         4. 「比較DBを保存」でJSONを保存します。次回は「比較DBを読み込む」から選びます。
         5. 別の音源を同じ固定モードと無音設定で解析すると、登録アーティストの中で特徴が近いものを表示します。
+
+        追加先は、この実行環境で使う自分用のDBです。GitHubの初期DBへ自動公開されることはありません。
+        次回に自分のDBを読み込むと、現在のDBをそのファイルの内容で置き換えます。追加した後は、必ず「比較DBを保存」を押してください。
+
+        ### 自分の声で試す
+
+        伴奏や他の人の声が入らない録音を用意し、音源ファイルとして取り込みます。
+        無音を除いた後に60秒以上残るよう、90秒程度以上のアカペラを録音すると始めやすくなります。
+        「自分の声を調べる」を開き、目的を選んで「自分の声の設定を使う」を押します。
+        「1/fゆらぎを調べる」は自動モード、「登録曲と比べる」は固定モードに設定されます。
+        結果では、傾きだけでなくR²、時間を分けたときの違い、判定理由も確認します。
+
+        アカペラは「保存済み歌声（再分離なし）」と同じ前処理の曲だけが比較対象です。
+        保存済み歌声の参照音源には過去の分離モデルが不明なものもあり、録音・ミックス・分離履歴の違いも結果に入ります。
+        比較で分かるのは、録音した声の強弱の変化がどの登録曲に近いかです。
+        別の曲や同じ曲の別の区間でも試し、録音条件や歌い方でどれくらい変わるか確かめてみてください。
 
         比較するのは音量変動の特徴です。本人かどうか、声質、歌唱力の判定ではありません。
         同じ音源・区間との自己比較や、条件が異なるデータは比較から除外します。
@@ -255,6 +284,7 @@ def build_notebook():
         音源やモデル、生成した結果はGitHubへ自動アップロードしません。
         Colabの実行環境が終了すると作業中のファイルは失われるため、必要なZIP・音源・DBは保存してください。
         """),
+        markdown(default_reference_markdown()),
         markdown("""
         ## 5 比較候補の5曲をまとめて準備する 任意
 

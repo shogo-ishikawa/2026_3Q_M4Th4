@@ -9,6 +9,34 @@
         "usable_for_comparison": true
       },
       "features": {
+        "slope": -1.4161821890630453,
+        "envelope_cv": 0.7315716002789229,
+        "low_band_fraction": 0.7077434054920855,
+        "spectral_flatness": 0.22999424752306874
+      },
+      "metadata": {
+        "source_sha256": "07004b5b0125010515b609b56402be75a5d68dc551ff6a47abba22ee755f4518",
+        "start_seconds": 0.0,
+        "end_seconds": 422.844063,
+        "separation_method": "demucs:htdemucs",
+        "model_version": "4.1.0",
+        "source_hash_scope": "selected-clip",
+        "analysis_request_signature": "{\"analysis_signature\":\"05bf47327d47717064cf9401\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}"
+      },
+      "artist": "The Beatles",
+      "track": "Hey Jude",
+      "source": "利用者提供の解析結果（2026-11-11）",
+      "notes": "利用者提供の数値結果を保存済み200 Hz包絡から固定帯域へ再計算。録音版と分離品質の音声照合は未実施。",
+      "id": "150188b35a27267004c3f108cba9b88b3ba6da945c0dce4cd7ac09b644697c55"
+    },
+    {
+      "schema_version": "vocal-fluctuation-result-v1",
+      "method_id": "rms-welch-v2",
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "quality": {
+        "usable_for_comparison": true
+      },
+      "features": {
         "slope": -1.0872186005606828,
         "envelope_cv": 0.8169980955789147,
         "low_band_fraction": 0.7119078531317364,
@@ -28,6 +56,90 @@
       "source": "利用者提供の解析結果（2026-11-11）",
       "notes": "利用者提供の数値結果を保存済み200 Hz包絡から固定帯域へ再計算。録音版と分離品質の音声照合は未実施。 保存済み歌声WAVの入力。元の分離モデルを推定して書き換えていません。",
       "id": "e92fd402c09485c75bafa94b3053b63bea940ecb6e67da258f31d92b598a775b"
+    },
+    {
+      "schema_version": "vocal-fluctuation-result-v1",
+      "method_id": "rms-welch-v2",
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "quality": {
+        "usable_for_comparison": true
+      },
+      "features": {
+        "slope": -1.128860086739948,
+        "envelope_cv": 0.6792596135901472,
+        "low_band_fraction": 0.5342480745920501,
+        "spectral_flatness": 0.3293282555145261
+      },
+      "metadata": {
+        "source_sha256": "f68b2e4275745cd81165dd8243f26281f02442668cfdbabc93105f8dd75baf8c",
+        "start_seconds": 0.0,
+        "end_seconds": 284.606667,
+        "separation_method": "demucs:htdemucs",
+        "model_version": "4.1.0",
+        "source_hash_scope": "selected-clip",
+        "analysis_request_signature": "{\"analysis_signature\":\"05bf47327d47717064cf9401\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}"
+      },
+      "artist": "Tommy february6",
+      "track": "je t'aime ★ je t'aime",
+      "source": "利用者提供の解析結果（2026-11-11）",
+      "notes": "利用者提供の数値結果を保存済み200 Hz包絡から固定帯域へ再計算。録音版と分離品質の音声照合は未実施。",
+      "id": "5ec77631c765109f310cdd4103be6499662bf2aa5f8db590ae3a017b20e89a3f"
+    },
+    {
+      "schema_version": "vocal-fluctuation-result-v1",
+      "method_id": "rms-welch-v2",
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "quality": {
+        "usable_for_comparison": true
+      },
+      "features": {
+        "slope": -1.300138760166551,
+        "envelope_cv": 0.804912436846784,
+        "low_band_fraction": 0.634501077771515,
+        "spectral_flatness": 0.3000138030948011
+      },
+      "metadata": {
+        "source_sha256": "dee389e33741504345aeb925e559dbcae2beeb40e4f879b0e9ee9c78b534cf7a",
+        "start_seconds": 0.0,
+        "end_seconds": 294.164898,
+        "separation_method": "demucs:htdemucs",
+        "model_version": "4.1.0",
+        "source_hash_scope": "selected-clip",
+        "analysis_request_signature": "{\"analysis_signature\":\"05bf47327d47717064cf9401\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}"
+      },
+      "artist": "Muse",
+      "track": "Invincible",
+      "source": "利用者提供の解析結果（2026-11-11）",
+      "notes": "利用者提供の数値結果を保存済み200 Hz包絡から固定帯域へ再計算。録音版と分離品質の音声照合は未実施。",
+      "id": "6c9612b0b325ab40c32a9bd904f5f558eecc5f56d8f5abe570f5e7bc3ef88ed9"
+    },
+    {
+      "schema_version": "vocal-fluctuation-result-v1",
+      "method_id": "rms-welch-v2",
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "quality": {
+        "usable_for_comparison": true
+      },
+      "features": {
+        "slope": -1.4638610752268315,
+        "envelope_cv": 0.6905015243417871,
+        "low_band_fraction": 0.668777769623268,
+        "spectral_flatness": 0.1957140852132994
+      },
+      "metadata": {
+        "source_sha256": "94780a3addd1daeba9a7d22409029e5490498d6baf99aa72083c7d33128b32ab",
+        "start_seconds": 0.0,
+        "end_seconds": 373.99425,
+        "separation_method": "demucs:htdemucs",
+        "model_version": "4.1.0",
+        "source_hash_scope": "selected-clip",
+        "analysis_request_signature": "{\"analysis_signature\":\"05bf47327d47717064cf9401\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}"
+      },
+      "artist": "岩瀬敬吾",
+      "track": "レディオステレオ",
+      "source": "利用者提供の解析結果（2026-11-11）",
+      "notes": "利用者提供の数値結果を保存済み200 Hz包絡から固定帯域へ再計算。録音版と分離品質の音声照合は未実施。",
+      "id": "a788473409ba37efe89c7a993139cc97317cfbcbf98c062c905a039364b78b4b"
     },
     {
       "schema_version": "vocal-fluctuation-result-v1",
@@ -121,6 +233,34 @@
         "usable_for_comparison": true
       },
       "features": {
+        "slope": -1.1299509813747037,
+        "envelope_cv": 0.9330173491383899,
+        "low_band_fraction": 0.497065956657676,
+        "spectral_flatness": 0.3124320493762891
+      },
+      "metadata": {
+        "source_sha256": "4c48404b92227a6c71aeee3545a08ab59ea55e20f0862099d01cfb91c678d1e2",
+        "start_seconds": 0.0,
+        "end_seconds": 247.092245,
+        "separation_method": "demucs:htdemucs",
+        "model_version": "4.1.0",
+        "source_hash_scope": "selected-clip",
+        "analysis_request_signature": "{\"analysis_signature\":\"05bf47327d47717064cf9401\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}"
+      },
+      "artist": "T.M.Revolution",
+      "track": "WHITE BREATH",
+      "source": "利用者提供の解析結果（2026-11-11）",
+      "notes": "利用者提供の数値結果を保存済み200 Hz包絡から固定帯域へ再計算。録音版と分離品質の音声照合は未実施。",
+      "id": "7488f8328a1b9bf52c46ed675193fa17ad4b2a417f7bdc7dc84a4125504e2df9"
+    },
+    {
+      "schema_version": "vocal-fluctuation-result-v1",
+      "method_id": "rms-welch-v2",
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "quality": {
+        "usable_for_comparison": true
+      },
+      "features": {
         "slope": -1.5771371145100477,
         "envelope_cv": 0.8505870137696188,
         "low_band_fraction": 0.7662798308857898,
@@ -140,6 +280,62 @@
       "source": "利用者提供の解析結果（2026-11-11）",
       "notes": "利用者提供の数値結果を保存済み200 Hz包絡から固定帯域へ再計算。録音版と分離品質の音声照合は未実施。 保存済み歌声WAVの入力。元の分離モデルを推定して書き換えていません。",
       "id": "1025e37f3c7e682b30b6b6ea168adaf30d65ef657c10988919d394290a9d0c33"
+    },
+    {
+      "schema_version": "vocal-fluctuation-result-v1",
+      "method_id": "rms-welch-v2",
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "quality": {
+        "usable_for_comparison": true
+      },
+      "features": {
+        "slope": -1.3784395296167844,
+        "envelope_cv": 0.676249498266314,
+        "low_band_fraction": 0.6064582749487506,
+        "spectral_flatness": 0.2141339171166911
+      },
+      "metadata": {
+        "source_sha256": "5c960ee864e28fa9464e246f92ca872230c563a1bdcf9c678f2dda24b27c5ad7",
+        "start_seconds": 0.0,
+        "end_seconds": 281.443265,
+        "separation_method": "demucs:htdemucs",
+        "model_version": "4.1.0",
+        "source_hash_scope": "selected-clip",
+        "analysis_request_signature": "{\"analysis_signature\":\"05bf47327d47717064cf9401\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}"
+      },
+      "artist": "スピッツ",
+      "track": "春の歌",
+      "source": "利用者提供の解析結果（2026-11-11）",
+      "notes": "利用者提供の数値結果を保存済み200 Hz包絡から固定帯域へ再計算。録音版と分離品質の音声照合は未実施。",
+      "id": "6747005832ba0650faaee0e39bfa8cdb1753c3c8532f9f253024e779c6e6470f"
+    },
+    {
+      "schema_version": "vocal-fluctuation-result-v1",
+      "method_id": "rms-welch-v2",
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "quality": {
+        "usable_for_comparison": true
+      },
+      "features": {
+        "slope": -1.191236071659821,
+        "envelope_cv": 0.7834216140793585,
+        "low_band_fraction": 0.6078197144229086,
+        "spectral_flatness": 0.29367731934394253
+      },
+      "metadata": {
+        "source_sha256": "6a7c8c04d33f79cf2008d27be6f2c3de0cc66d36b1972be099f08d8caa988e5b",
+        "start_seconds": 0.0,
+        "end_seconds": 333.461769,
+        "separation_method": "demucs:htdemucs",
+        "model_version": "4.1.0",
+        "source_hash_scope": "selected-clip",
+        "analysis_request_signature": "{\"analysis_signature\":\"05bf47327d47717064cf9401\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}"
+      },
+      "artist": "L'Arc-en-Ciel",
+      "track": "DIVE TO BLUE",
+      "source": "利用者提供の解析結果（2026-11-11）",
+      "notes": "利用者提供の数値結果を保存済み200 Hz包絡から固定帯域へ再計算。録音版と分離品質の音声照合は未実施。",
+      "id": "86c3ab72dbd189c9df12620689180f2b7f0089e9b88800cfa169fdedc93e6414"
     },
     {
       "schema_version": "vocal-fluctuation-result-v1",
