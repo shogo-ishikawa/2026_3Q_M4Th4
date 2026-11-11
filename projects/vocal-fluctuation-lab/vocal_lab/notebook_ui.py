@@ -7,6 +7,7 @@ import html
 import json
 import math
 from pathlib import Path
+import re
 import shutil
 import tempfile
 from typing import Any
@@ -17,6 +18,7 @@ from zipfile import ZipFile, ZIP_DEFLATED
 AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".mp4", ".flac", ".ogg", ".aac", ".aiff", ".aif", ".webm"}
 MAX_UPLOAD_BYTES = 512 * 1024 * 1024
 BUNDLED_DATABASE_PATH = Path(__file__).resolve().parents[1] / "data" / "reference_database.json"
+BUNDLED_LISTENING_LINKS_PATH = Path(__file__).resolve().parents[1] / "data" / "reference_listening_links.json"
 
 # FileUploadの標準ビューは説明に件数を付けます。ファイル入力の動作を保ち、
 # この音源ボタンだけを固定ラベルで表示します（widget自体がbuttonの版にも対応）。
@@ -312,6 +314,26 @@ def result_reading_html() -> str:
             "今回の区間・帯域についての参考評価で、1/fの証明や歌唱力の評価ではありません。</p>")
 
 
+def listening_references(path: str | Path | None = None) -> dict:
+    """測定元と分けて管理する、楽曲紹介用の公式動画リンクを読みます。"""
+    try:
+        data = json.loads(Path(path or BUNDLED_LISTENING_LINKS_PATH).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    if (not isinstance(data, dict) or data.get("schema_version") != "vocal-reference-listening-links-v1"
+            or data.get("purpose") != "song-identification" or data.get("measured_source") is not False
+            or not isinstance(data.get("references"), list)):
+        return {}
+    links = {}
+    for row in data["references"]:
+        if not isinstance(row, dict) or not all(isinstance(row.get(key), str) for key in ("artist", "track", "publisher")):
+            continue
+        url = row.get("url")
+        if isinstance(url, str) and re.fullmatch(r"https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}", url):
+            links[(row["artist"], row["track"])] = row
+    return links
+
+
 def database_catalogue_html(database: dict) -> str:
     """いま読み込んでいる数値の解析結果を、曲ごとにまとめて表示します。"""
     grouped = {}
@@ -321,12 +343,19 @@ def database_catalogue_html(database: dict) -> str:
     if not grouped:
         return "<p>現在の比較DBは空です。音源を解析して追加するか、保存した比較DBのJSONを読み込んでください。</p>"
     rows = []
+    links = listening_references()
     for (artist, track), count in sorted(grouped.items()):
-        cells = [artist, track, str(count)]
-        rows.append("<tr>" + "".join("<td>" + html.escape(value) + "</td>" for value in cells) + "</tr>")
+        title = html.escape(track)
+        link = links.get((artist, track))
+        if link:
+            label = "YOSHIKI公式で曲を聴く ↗" if link["publisher"] == "YOSHIKI" else "公式動画で曲を聴く ↗"
+            title += '<br><small><a href="' + html.escape(link["url"], quote=True) + '" target="_blank" rel="noopener noreferrer">' + label + '</a></small>'
+        rows.append("<tr><td>" + html.escape(artist) + "</td><td>" + title + "</td><td>" + str(count) + "</td></tr>")
     return ("<p>このDBに登録しているのは、曲名に対応する数値の解析結果です。音声ファイルや音楽データは含みません。"
             "初期登録の参照結果は、すべてAIで抽出した歌声を解析したものです。"
             "今回比較できる曲数は上の表示で確認します。解析・前処理の記録が合う結果だけを比較します。</p>"
+            "<p>付いているリンクは、楽曲紹介用の公式公開動画です。<strong>測定に使用した音源へのリンクではありません。</strong>"
+            "録音版・ライブ演奏・ミックスなどが測定対象と異なる場合があります。</p>"
             "<div style=\"overflow-x:auto\"><table><thead><tr><th>アーティスト</th><th>曲名</th>"
             "<th>登録区間数</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table></div>")
 

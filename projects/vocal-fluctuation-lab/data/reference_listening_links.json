@@ -1,0 +1,86 @@
+{
+  "schema_version": "vocal-reference-listening-links-v1",
+  "purpose": "song-identification",
+  "measured_source": false,
+  "description": "楽曲を紹介するための公式公開動画へのリンクです。測定に使用した音源へのリンクではありません。録音版・ライブ演奏・ミックスなどが測定対象と異なる場合があります。",
+  "references": [
+    {
+      "artist": "The Beatles",
+      "track": "Hey Jude",
+      "url": "https://www.youtube.com/watch?v=A_MjCqQoLLA",
+      "publisher": "TheBeatlesVEVO"
+    },
+    {
+      "artist": "Nirvana",
+      "track": "Smells Like Teen Spirit",
+      "url": "https://www.youtube.com/watch?v=hTWKbfoikeg",
+      "publisher": "NirvanaVEVO"
+    },
+    {
+      "artist": "Tommy february6",
+      "track": "je t'aime ★ je t'aime",
+      "url": "https://www.youtube.com/watch?v=I4JrXQrvidw",
+      "publisher": "Tommy february6 / Tommy heavenly6"
+    },
+    {
+      "artist": "Muse",
+      "track": "Invincible",
+      "url": "https://www.youtube.com/watch?v=D_5V8We3hgg",
+      "publisher": "Muse"
+    },
+    {
+      "artist": "岩瀬敬吾",
+      "track": "レディオステレオ",
+      "url": "https://www.youtube.com/watch?v=L9YxKiEPS2c",
+      "publisher": "岩瀬敬吾"
+    },
+    {
+      "artist": "斉藤和義",
+      "track": "歩いて帰ろう",
+      "url": "https://www.youtube.com/watch?v=g_VMBjjOjvY",
+      "publisher": "Kazuyoshi Saito - Topic"
+    },
+    {
+      "artist": "X JAPAN",
+      "track": "紅",
+      "url": "https://www.youtube.com/watch?v=8ArAnXLbFck",
+      "publisher": "YOSHIKI"
+    },
+    {
+      "artist": "東京事変",
+      "track": "群青日和",
+      "url": "https://www.youtube.com/watch?v=gD2mhJ3ByGQ",
+      "publisher": "TokyoIncidentsVEVO"
+    },
+    {
+      "artist": "T.M.Revolution",
+      "track": "WHITE BREATH",
+      "url": "https://www.youtube.com/watch?v=Xnws-1Oz4kM",
+      "publisher": "T.M.Revolution"
+    },
+    {
+      "artist": "cune",
+      "track": "星をみてれば",
+      "url": null,
+      "publisher": ""
+    },
+    {
+      "artist": "スピッツ",
+      "track": "春の歌",
+      "url": "https://www.youtube.com/watch?v=94uxNQqmknk",
+      "publisher": "spitzclips"
+    },
+    {
+      "artist": "L'Arc-en-Ciel",
+      "track": "DIVE TO BLUE",
+      "url": "https://www.youtube.com/watch?v=l7LM_lZ91nk",
+      "publisher": "L'Arc-en-Ciel"
+    },
+    {
+      "artist": "hide",
+      "track": "HURRY GO ROUND",
+      "url": "https://www.youtube.com/watch?v=JkKSPhq-u-I",
+      "publisher": "hideofficialVEVO"
+    }
+  ]
+}
