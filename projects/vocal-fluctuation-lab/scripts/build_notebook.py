@@ -5,7 +5,7 @@ import textwrap
 
 
 PROJECT = Path(__file__).resolve().parents[1]
-NOTEBOOK_VERSION = "1.3.2"
+NOTEBOOK_VERSION = "1.4.0"
 
 
 def markdown(source):

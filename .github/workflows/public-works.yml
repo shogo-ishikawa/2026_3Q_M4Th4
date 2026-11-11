@@ -65,6 +65,8 @@ jobs:
         run: |
           node projects/vocal-fluctuation-lab/tests/web.test.js _site/vocal-fluctuation-lab/data
           node projects/vocal-fluctuation-lab/tests/learning.test.js
+          node projects/vocal-fluctuation-lab/tests/interaction.test.js _site/vocal-fluctuation-lab/data
+          node projects/vocal-fluctuation-lab/tests/public-links.test.js _site
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
