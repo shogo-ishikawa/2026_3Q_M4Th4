@@ -1,0 +1,8 @@
+﻿artist,track,original_beta_auto,fixed_beta_0p2_20Hz,fixed_r_squared,duration_seconds,separation_method,included_in_comparison,holdout_reason
+Nirvana,Smells Like Teen Spirit,-0.9975959498459728,-1.0872186005606828,0.7992360059972496,242.02,already-vocals,True,
+Tommy february6,je t'aime ★ je t'aime,-0.9411700316963819,-1.1023539467321222,0.906922264675542,253.12,already-vocals,False,今回の入力253.14秒が、旧測定で途中無音を14.32秒除去した後の253.14秒と一致します。同じ加工済みWAVの可能性があるため、前歴が確認できるまで参考枠に保存します。
+斉藤和義,歩いて帰ろう,-1.4248277124495798,-1.5096653875475747,0.9671327876844238,195.78,already-vocals,True,
+X JAPAN,紅,-1.2605873848125517,-1.409332869156994,0.9763399062496391,379.8987755102041,demucs:htdemucs,True,
+東京事変,群青日和,-1.3175835489190502,-1.4527208566658623,0.9807071383531548,278.2772562358277,demucs:htdemucs,True,
+cune,星をみてれば,-1.3257064672826775,-1.5771371145100477,0.9747614413218385,292.67,already-vocals,True,
+hide,HURRY GO ROUND,-1.2443972177987632,-1.268663855586555,0.9491900555639953,286.76,demucs:htdemucs,True,

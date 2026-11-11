@@ -40,7 +40,7 @@ def main():
     vocal_downloads.mkdir(exist_ok=True)
     vocal_version = 'v' + tomllib.loads((vocal_project / 'pyproject.toml').read_text(encoding='utf-8'))['project']['version']
     vocal_archive = vocal_downloads / f'VOCAL_FLUCTUATION_LAB_{vocal_version}.zip'
-    text_extensions = {'.py', '.md', '.toml', '.txt', '.json', '.html', '.css', '.js', '.ipynb'}
+    text_extensions = {'.py', '.md', '.toml', '.txt', '.json', '.csv', '.html', '.css', '.js', '.ipynb'}
     with ZipFile(vocal_archive, 'w', ZIP_DEFLATED) as bundle:
         bundle.write(vocal_project / '.gitignore', Path(vocal_version) / '.gitignore')
         for path in sorted(vocal_project.rglob('*')):

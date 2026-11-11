@@ -1,0 +1,13 @@
+{
+  "schema_version": "vocal-reference-import-catalogue-v1",
+  "provided_at": "2026-11-11",
+  "entries": [
+    {"member": "DB/Nirvana_smells_like_teen_spirit/result.json", "artist": "Nirvana", "track": "Smells Like Teen Spirit", "include_in_comparison": true},
+    {"member": "DB/tommy_je_taime-je_taime/result.json", "artist": "Tommy february6", "track": "je t'aime ★ je t'aime", "include_in_comparison": false, "holdout_reason": "今回の入力253.14秒が、旧測定で途中無音を14.32秒除去した後の253.14秒と一致します。同じ加工済みWAVの可能性があるため、前歴が確認できるまで参考枠に保存します。"},
+    {"member": "DB/Saitou_Masayoshi_Aruite_kaerou/result.json", "artist": "斉藤和義", "track": "歩いて帰ろう", "include_in_comparison": true},
+    {"member": "DB/X-JAPAN_Kurenai/result.json", "artist": "X JAPAN", "track": "紅", "include_in_comparison": true},
+    {"member": "DB/Shiina-Ringo_Gunjo_biyori/result.json", "artist": "東京事変", "track": "群青日和", "include_in_comparison": true},
+    {"member": "DB/CUNE_hoshi-wo-mitereba/result.json", "artist": "cune", "track": "星をみてれば", "include_in_comparison": true},
+    {"member": "DB/hide_hurry-go-round/result.json", "artist": "hide", "track": "HURRY GO ROUND", "include_in_comparison": true}
+  ]
+}

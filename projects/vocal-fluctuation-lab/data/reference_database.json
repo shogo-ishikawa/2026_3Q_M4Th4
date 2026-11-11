@@ -1,4 +1,173 @@
 {
   "schema_version": "vocal-fluctuation-reference-db-v1",
-  "references": []
+  "references": [
+    {
+      "schema_version": "vocal-fluctuation-result-v1",
+      "method_id": "rms-welch-v2",
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "quality": {
+        "usable_for_comparison": true
+      },
+      "features": {
+        "slope": -1.0872186005606828,
+        "envelope_cv": 0.8169980955789147,
+        "low_band_fraction": 0.7119078531317364,
+        "spectral_flatness": 0.22536066257802106
+      },
+      "metadata": {
+        "source_sha256": "00fa7e8ec57432330aba1e9c058f5d6a3d4361ad51977989466d47df827a381f",
+        "start_seconds": 0.0,
+        "end_seconds": 242.02,
+        "separation_method": "already-vocals",
+        "model_version": "",
+        "source_hash_scope": "selected-clip",
+        "analysis_request_signature": "{\"analysis_signature\":\"05bf47327d47717064cf9401\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}"
+      },
+      "artist": "Nirvana",
+      "track": "Smells Like Teen Spirit",
+      "source": "利用者提供の解析結果（2026-11-11）",
+      "notes": "利用者提供の数値結果を保存済み200 Hz包絡から固定帯域へ再計算。録音版と分離品質の音声照合は未実施。 保存済み歌声WAVの入力。元の分離モデルを推定して書き換えていません。",
+      "id": "e92fd402c09485c75bafa94b3053b63bea940ecb6e67da258f31d92b598a775b"
+    },
+    {
+      "schema_version": "vocal-fluctuation-result-v1",
+      "method_id": "rms-welch-v2",
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "quality": {
+        "usable_for_comparison": true
+      },
+      "features": {
+        "slope": -1.5096653875475747,
+        "envelope_cv": 0.8562789940949282,
+        "low_band_fraction": 0.6942680877040269,
+        "spectral_flatness": 0.17780435490229085
+      },
+      "metadata": {
+        "source_sha256": "b60af1eae6b834479e22f260301a38f4aca1cdfc4288de9961717103090a5fa3",
+        "start_seconds": 0.0,
+        "end_seconds": 195.78,
+        "separation_method": "already-vocals",
+        "model_version": "",
+        "source_hash_scope": "selected-clip",
+        "analysis_request_signature": "{\"analysis_signature\":\"05bf47327d47717064cf9401\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}"
+      },
+      "artist": "斉藤和義",
+      "track": "歩いて帰ろう",
+      "source": "利用者提供の解析結果（2026-11-11）",
+      "notes": "利用者提供の数値結果を保存済み200 Hz包絡から固定帯域へ再計算。録音版と分離品質の音声照合は未実施。 保存済み歌声WAVの入力。元の分離モデルを推定して書き換えていません。",
+      "id": "ab888efb37418e16f031e1dc1aa7c354a3b1c7c26eaa508ccc45357f35a8397e"
+    },
+    {
+      "schema_version": "vocal-fluctuation-result-v1",
+      "method_id": "rms-welch-v2",
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "quality": {
+        "usable_for_comparison": true
+      },
+      "features": {
+        "slope": -1.409332869156994,
+        "envelope_cv": 1.4860953814717586,
+        "low_band_fraction": 0.6953201500129265,
+        "spectral_flatness": 0.21863874185356744
+      },
+      "metadata": {
+        "source_sha256": "bbd14e321c26d6c4d63119c6b976829506296eaa5e8fa6f8246e9a8303448f02",
+        "start_seconds": 0.0,
+        "end_seconds": 379.898776,
+        "separation_method": "demucs:htdemucs",
+        "model_version": "4.1.0",
+        "source_hash_scope": "selected-clip",
+        "analysis_request_signature": "{\"analysis_signature\":\"05bf47327d47717064cf9401\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}"
+      },
+      "artist": "X JAPAN",
+      "track": "紅",
+      "source": "利用者提供の解析結果（2026-11-11）",
+      "notes": "利用者提供の数値結果を保存済み200 Hz包絡から固定帯域へ再計算。録音版と分離品質の音声照合は未実施。",
+      "id": "bfc37df53500edf4c9f5636c7ee7e0a6eeee1dece5f56fa89ccc20ee0cf638f7"
+    },
+    {
+      "schema_version": "vocal-fluctuation-result-v1",
+      "method_id": "rms-welch-v2",
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "quality": {
+        "usable_for_comparison": true
+      },
+      "features": {
+        "slope": -1.4527208566658623,
+        "envelope_cv": 1.0785732602376743,
+        "low_band_fraction": 0.7381582862405216,
+        "spectral_flatness": 0.2168033721330052
+      },
+      "metadata": {
+        "source_sha256": "738d21b21f55e7f20c9e713721597a37c308e6bcd7c21d0fe52e1b594a46783e",
+        "start_seconds": 0.0,
+        "end_seconds": 278.439184,
+        "separation_method": "demucs:htdemucs",
+        "model_version": "4.1.0",
+        "source_hash_scope": "selected-clip",
+        "analysis_request_signature": "{\"analysis_signature\":\"05bf47327d47717064cf9401\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}"
+      },
+      "artist": "東京事変",
+      "track": "群青日和",
+      "source": "利用者提供の解析結果（2026-11-11）",
+      "notes": "利用者提供の数値結果を保存済み200 Hz包絡から固定帯域へ再計算。録音版と分離品質の音声照合は未実施。",
+      "id": "b49349db5d39137cf525d900090d49334615b0b28e55025ca276869fe851ed1e"
+    },
+    {
+      "schema_version": "vocal-fluctuation-result-v1",
+      "method_id": "rms-welch-v2",
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "quality": {
+        "usable_for_comparison": true
+      },
+      "features": {
+        "slope": -1.5771371145100477,
+        "envelope_cv": 0.8505870137696188,
+        "low_band_fraction": 0.7662798308857898,
+        "spectral_flatness": 0.15093950602180595
+      },
+      "metadata": {
+        "source_sha256": "f2fcc58ac75e579181b28f6dc1fbcaf9b973ab4ed360cea45330a74988e16b40",
+        "start_seconds": 0.0,
+        "end_seconds": 292.68,
+        "separation_method": "already-vocals",
+        "model_version": "",
+        "source_hash_scope": "selected-clip",
+        "analysis_request_signature": "{\"analysis_signature\":\"05bf47327d47717064cf9401\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}"
+      },
+      "artist": "cune",
+      "track": "星をみてれば",
+      "source": "利用者提供の解析結果（2026-11-11）",
+      "notes": "利用者提供の数値結果を保存済み200 Hz包絡から固定帯域へ再計算。録音版と分離品質の音声照合は未実施。 保存済み歌声WAVの入力。元の分離モデルを推定して書き換えていません。",
+      "id": "1025e37f3c7e682b30b6b6ea168adaf30d65ef657c10988919d394290a9d0c33"
+    },
+    {
+      "schema_version": "vocal-fluctuation-result-v1",
+      "method_id": "rms-welch-v2",
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "quality": {
+        "usable_for_comparison": true
+      },
+      "features": {
+        "slope": -1.268663855586555,
+        "envelope_cv": 0.9785850365708008,
+        "low_band_fraction": 0.5303606210101492,
+        "spectral_flatness": 0.2744935907126285
+      },
+      "metadata": {
+        "source_sha256": "5bee4cba6a94ba2d35a8b4d6f77fe121aea3c67a045252e9c8c3bcc52d07e2a7",
+        "start_seconds": 0.0,
+        "end_seconds": 349.416,
+        "separation_method": "demucs:htdemucs",
+        "model_version": "4.1.0",
+        "source_hash_scope": "selected-clip",
+        "analysis_request_signature": "{\"analysis_signature\":\"05bf47327d47717064cf9401\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}"
+      },
+      "artist": "hide",
+      "track": "HURRY GO ROUND",
+      "source": "利用者提供の解析結果（2026-11-11）",
+      "notes": "利用者提供の数値結果を保存済み200 Hz包絡から固定帯域へ再計算。録音版と分離品質の音声照合は未実施。",
+      "id": "0a87b5eed3d45641b027ba0fe0861f84b969445b10c66c60a46ba4dd6d15ba00"
+    }
+  ]
 }
