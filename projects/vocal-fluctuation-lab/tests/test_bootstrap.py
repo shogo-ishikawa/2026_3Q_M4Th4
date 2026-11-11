@@ -35,7 +35,7 @@ def archive_bytes(old_limit=False):
         for path in paths:
             content = path.read_text()
             if path.name == "__init__.py":
-                content = '__version__ = "1.6.0"\n'
+                content = '__version__ = "1.7.0"\n'
             if old_limit and path.name == "audio.py":
                 content = content.replace("MAX_SECONDS = 600.0", "MAX_SECONDS = 180.0")
             archive.writestr("class-main/projects/vocal-fluctuation-lab/" + path.relative_to(project).as_posix(), content)
@@ -75,7 +75,7 @@ def assert_current(namespace, expected_directory):
         exec(compile(open_screen, "screen-cell", "exec"), namespace)
     import vocal_lab
     from vocal_lab import audio, notebook_ui
-    assert vocal_lab.__version__ == "1.6.0"
+    assert vocal_lab.__version__ == "1.7.0"
     assert Path(vocal_lab.__file__).resolve().parent == expected_directory / "vocal_lab"
     assert Path(notebook_ui.__file__).resolve().parent == expected_directory / "vocal_lab"
     assert Path(sys.path[0]) == expected_directory
@@ -110,7 +110,7 @@ with tempfile.TemporaryDirectory() as folder:
     old_directory = workspace / "old-project"
     make_old_source(old_directory)
     if scenario == "same-version":
-        (old_directory / "vocal_lab/__init__.py").write_text('__version__ = "1.6.0"\n')
+        (old_directory / "vocal_lab/__init__.py").write_text('__version__ = "1.7.0"\n')
     os.chdir(old_directory)
     data_file = old_directory / "uploads/song.wav"
     database = old_directory / "reference_database.json"
@@ -224,7 +224,7 @@ class BootstrapTests(unittest.TestCase):
 
     def test_versioned_notebook_is_identical_and_has_clean_forms(self):
         canonical = json.loads((PROJECT / "notebooks/vocal_fluctuation_lab.ipynb").read_text())
-        versioned = json.loads((PROJECT / "notebooks/vocal_fluctuation_lab_v1.6.0.ipynb").read_text())
+        versioned = json.loads((PROJECT / "notebooks/vocal_fluctuation_lab_v1.7.0.ipynb").read_text())
         self.assertEqual(versioned, canonical)
         for cell in versioned["cells"]:
             if cell["cell_type"] == "code":

@@ -59,6 +59,7 @@ jobs:
           python -m pip install -r projects/vocal-fluctuation-lab/requirements.txt 'ipywidgets>=8.1,<9' 'nbformat>=5.10,<6' 'yt-dlp[default]>=2026.10.26'
           python -m unittest discover -s projects/vocal-fluctuation-lab/tests -p 'test_*.py'
           node --check projects/vocal-fluctuation-lab/web/app.js
+          node --check projects/vocal-fluctuation-lab/web/catalogue.js
       - name: Build selected public files and distribution ZIP
         run: python scripts/build_public_site.py
       - name: Check educational examples and generated result data
@@ -67,6 +68,7 @@ jobs:
           node projects/vocal-fluctuation-lab/tests/learning.test.js
           node projects/vocal-fluctuation-lab/tests/interaction.test.js _site/vocal-fluctuation-lab/data
           node projects/vocal-fluctuation-lab/tests/public-links.test.js _site
+          node projects/vocal-fluctuation-lab/tests/catalogue.test.js _site/vocal-fluctuation-lab/data/reference_catalogue_public.json
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

@@ -8,18 +8,58 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+import unicodedata
 from zipfile import ZipFile
+
+import numpy as np
 
 PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT))
 
 from vocal_lab import __version__
+from vocal_lab.analysis import AnalysisConfig
 from vocal_lab.reanalyse import reanalyse_result
 from vocal_lab.reference_db import add_reference, empty_database, save_database
 
 
 def write_json(path, value):
     path.write_text(json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False) + "\n", encoding="utf-8")
+
+
+def normalised_member(name):
+    """UTF-8フラグのないMac ZIPと、分解された日本語の表記をそろえます。"""
+    try:
+        name = name.encode("cp437").decode("utf-8")
+    except UnicodeError:
+        pass
+    return unicodedata.normalize("NFC", name)
+
+
+def verify_spectrum(original):
+    """保存された包絡から、元のPSD全点も再現できることを確認します。"""
+    reproduced = reanalyse_result(original, AnalysisConfig(**original["config"]))
+    for key in ("frequency_hz", "power", "bin_frequency_hz", "bin_power"):
+        saved = np.asarray(original["spectrum"][key], dtype=float)
+        calculated = np.asarray(reproduced["spectrum"][key], dtype=float)
+        if (saved.shape != calculated.shape or not np.isfinite(saved).all()
+                or not np.allclose(saved, calculated, rtol=1e-10, atol=1e-12)):
+            raise ValueError("保存されたPSDと包絡からの計算が一致しません。")
+
+
+def public_catalogue(rows):
+    """WebとColabで共有する、音源を含まない公開曲目一覧です。"""
+    return {
+        "schema_version": "vocal-reference-catalogue-v1",
+        "config": {"low_hz": 0.2, "high_hz": 20.0, "segment_seconds": 20.0, "auto_band": False},
+        "references": [{
+            "artist": row["artist"], "track": row["track"],
+            "separation_method": row["separation_method"], "model_version": row["model_version"],
+            "slope": row["fixed_fit"]["slope"], "r_squared": row["fixed_fit"]["r_squared"],
+            "duration_seconds": row["duration_seconds"], "status": row["fixed_status"],
+        } for row in rows if row["include_in_comparison"]],
+        "excluded": [{"artist": row["artist"], "track": row["track"], "reason": row["holdout_reason"]}
+                     for row in rows if not row["include_in_comparison"]],
+    }
 
 
 def import_archive(archive_path, catalogue_path, output):
@@ -32,16 +72,22 @@ def import_archive(archive_path, catalogue_path, output):
     database = empty_database()
     rows, held = [], []
     with ZipFile(archive_path) as archive:
-        names = archive.namelist()
+        members = {}
+        for info in archive.infolist():
+            members.setdefault(normalised_member(info.filename), []).append(info)
+        declared = [normalised_member(item["member"]) for item in catalogue["entries"]]
+        if len(declared) != len(set(declared)):
+            raise ValueError("登録用の曲目一覧に同じ解析結果が重複しています。")
         for item in catalogue["entries"]:
-            member = item["member"]
-            if names.count(member) != 1:
+            member = normalised_member(item["member"])
+            if len(members.get(member, [])) != 1:
                 raise ValueError("曲目一覧とZIPの解析結果が一致しません：" + member)
-            info = archive.getinfo(member)
+            info = members[member][0]
             if info.file_size > 20 * 1024 * 1024:
                 raise ValueError("解析結果JSONが大きすぎます：" + member)
-            raw = archive.read(member)
+            raw = archive.read(info)
             original = json.loads(raw)
+            verify_spectrum(original)
             fixed = reanalyse_result(original)
             if not fixed["quality"]["usable_for_comparison"]:
                 raise ValueError("固定帯域で比較品質を満たしません：" + member)
@@ -52,10 +98,11 @@ def import_archive(archive_path, catalogue_path, output):
                 "include_in_comparison": include,
                 "holdout_reason": item.get("holdout_reason", ""),
                 "original_result_sha256": hashlib.sha256(raw).hexdigest(),
+                "original_spectrum_verified": True,
                 "original_created_at": original["metadata"].get("created_at"),
                 "reanalysis": fixed["reanalysis"],
                 "original_config": original["config"], "original_fit": original["fit"],
-                "fixed_config": fixed["config"], "fixed_fit": fixed["fit"],
+                "fixed_config": fixed["config"], "fixed_fit": fixed["fit"], "fixed_status": fixed["status"],
                 "fixed_quality": fixed["quality"],
                 "duration_seconds": fixed["duration_seconds"],
                 "analysis_signature": fixed["analysis_signature"],
@@ -86,10 +133,14 @@ def import_archive(archive_path, catalogue_path, output):
         subset = {**database, "references": [r for r in database["references"] if r["metadata"]["separation_method"] == processing]}
         save_database(subset, output / name)
     write_json(output / "reference_measurements.json", manifest)
+    write_json(output / "reference_catalogue_public.json", public_catalogue(rows))
     # A different schema prevents this held-out record being mistaken for a normal comparison DB.
-    write_json(output / "reference_holdout.json", {"schema_version": "vocal-reference-holdout-v1", "records": held})
+    write_json(output / "reference_holdout.json", {
+        "schema_version": "vocal-reference-holdout-v1", "records": held,
+        "historical_records": catalogue.get("superseded_holdouts", []),
+    })
     with (output / "reference_summary.csv").open("w", encoding="utf-8-sig", newline="") as handle:
-        writer = csv.writer(handle)
+        writer = csv.writer(handle, lineterminator="\n")
         writer.writerow(["artist", "track", "original_beta_auto", "fixed_beta_0p2_20Hz", "fixed_r_squared",
                          "duration_seconds", "separation_method", "included_in_comparison", "holdout_reason"])
         for row in rows:

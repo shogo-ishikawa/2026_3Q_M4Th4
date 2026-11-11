@@ -2,12 +2,188 @@
   "schema_version": "vocal-reference-import-catalogue-v1",
   "provided_at": "2026-11-11",
   "entries": [
-    {"member": "DB/Nirvana_smells_like_teen_spirit/result.json", "artist": "Nirvana", "track": "Smells Like Teen Spirit", "include_in_comparison": true},
-    {"member": "DB/tommy_je_taime-je_taime/result.json", "artist": "Tommy february6", "track": "je t'aime ★ je t'aime", "include_in_comparison": false, "holdout_reason": "今回の入力253.14秒が、旧測定で途中無音を14.32秒除去した後の253.14秒と一致します。同じ加工済みWAVの可能性があるため、前歴が確認できるまで参考枠に保存します。"},
-    {"member": "DB/Saitou_Masayoshi_Aruite_kaerou/result.json", "artist": "斉藤和義", "track": "歩いて帰ろう", "include_in_comparison": true},
-    {"member": "DB/X-JAPAN_Kurenai/result.json", "artist": "X JAPAN", "track": "紅", "include_in_comparison": true},
-    {"member": "DB/Shiina-Ringo_Gunjo_biyori/result.json", "artist": "東京事変", "track": "群青日和", "include_in_comparison": true},
-    {"member": "DB/CUNE_hoshi-wo-mitereba/result.json", "artist": "cune", "track": "星をみてれば", "include_in_comparison": true},
-    {"member": "DB/hide_hurry-go-round/result.json", "artist": "hide", "track": "HURRY GO ROUND", "include_in_comparison": true}
+    {
+      "member": "DB/Beatles_Hey_Jude/result.json",
+      "artist": "The Beatles",
+      "track": "Hey Jude",
+      "include_in_comparison": true
+    },
+    {
+      "member": "DB/Nirvana_smells_like_teen_spirit/result.json",
+      "artist": "Nirvana",
+      "track": "Smells Like Teen Spirit",
+      "include_in_comparison": true
+    },
+    {
+      "member": "DB/tommy_je_taime-je_taime/result.json",
+      "artist": "Tommy february6",
+      "track": "je t'aime ★ je t'aime",
+      "include_in_comparison": true
+    },
+    {
+      "member": "DB/MUSE_Invincible/result.json",
+      "artist": "Muse",
+      "track": "Invincible",
+      "include_in_comparison": true
+    },
+    {
+      "member": "DB/岩瀬敬吾_レディオステレオ/result.json",
+      "artist": "岩瀬敬吾",
+      "track": "レディオステレオ",
+      "include_in_comparison": true
+    },
+    {
+      "member": "DB/Saitou_Masayoshi_Aruite_kaerou/result.json",
+      "artist": "斉藤和義",
+      "track": "歩いて帰ろう",
+      "include_in_comparison": true
+    },
+    {
+      "member": "DB/X-JAPAN_Kurenai/result.json",
+      "artist": "X JAPAN",
+      "track": "紅",
+      "include_in_comparison": true
+    },
+    {
+      "member": "DB/Shiina-Ringo_Gunjo_biyori/result.json",
+      "artist": "東京事変",
+      "track": "群青日和",
+      "include_in_comparison": true
+    },
+    {
+      "member": "DB/TM_Revolution_WHITE_BREATH/result.json",
+      "artist": "T.M.Revolution",
+      "track": "WHITE BREATH",
+      "include_in_comparison": true
+    },
+    {
+      "member": "DB/CUNE_hoshi-wo-mitereba/result.json",
+      "artist": "cune",
+      "track": "星をみてれば",
+      "include_in_comparison": true
+    },
+    {
+      "member": "DB/スピッツ_春の歌/result.json",
+      "artist": "スピッツ",
+      "track": "春の歌",
+      "include_in_comparison": true
+    },
+    {
+      "member": "DB/L'arc-en-Ciel_DIVE_TO_BLUE/result.json",
+      "artist": "L'Arc-en-Ciel",
+      "track": "DIVE TO BLUE",
+      "include_in_comparison": true
+    },
+    {
+      "member": "DB/hide_hurry-go-round/result.json",
+      "artist": "hide",
+      "track": "HURRY GO ROUND",
+      "include_in_comparison": true
+    }
+  ],
+  "superseded_holdouts": [
+    {
+      "artist": "Tommy february6",
+      "track": "je t'aime ★ je t'aime",
+      "include_in_comparison": false,
+      "holdout_reason": "今回の入力253.14秒が、旧測定で途中無音を14.32秒除去した後の253.14秒と一致します。同じ加工済みWAVの可能性があるため、前歴が確認できるまで参考枠に保存します。",
+      "original_result_sha256": "3e6cccd6820772fdfc7e47f171befc1e2d8136abccaa7759e27834063ad58ae0",
+      "original_created_at": "2026-11-10T15:16:31.367320+00:00",
+      "reanalysis": {
+        "method_id": "stored-envelope-reanalysis-v1",
+        "source_result_canonical_sha256": "9ee9a6c6a047b1d7736d868885dddeb4f6918d2fc925b55b60d52abfbef08574",
+        "source_config": {
+          "low_hz": 0.02,
+          "high_hz": 20.0,
+          "segment_seconds": 120.0,
+          "auto_band": true
+        },
+        "source_analysis_signature": "{\"analysis_signature\":\"6756a18a47427f107f9d0168\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+        "source_created_at": "2026-11-10T15:16:31.367320+00:00",
+        "created_at": "2026-11-11T01:07:27.983067+00:00"
+      },
+      "original_config": {
+        "low_hz": 0.02,
+        "high_hz": 20.0,
+        "segment_seconds": 120.0,
+        "auto_band": true
+      },
+      "original_fit": {
+        "slope": -0.9411700316963819,
+        "intercept": -3.67485052287559,
+        "r_squared": 0.8722974574073469,
+        "distance_to_pink": 0.058829968303618085,
+        "band_low_hz": 0.09481668773704172,
+        "band_high_hz": 20.0,
+        "segment_seconds": 31.64,
+        "bin_count": 24
+      },
+      "fixed_config": {
+        "low_hz": 0.2,
+        "high_hz": 20.0,
+        "segment_seconds": 20.0,
+        "auto_band": false
+      },
+      "fixed_fit": {
+        "slope": -1.1023539467321222,
+        "intercept": -3.578416714788117,
+        "r_squared": 0.906922264675542,
+        "distance_to_pink": 0.10235394673212217,
+        "band_low_hz": 0.2,
+        "band_high_hz": 20.0,
+        "segment_seconds": 20.0,
+        "bin_count": 24
+      },
+      "fixed_quality": {
+        "method_id": "four-block-welch-v2",
+        "usable_for_comparison": true,
+        "reasons": [],
+        "duration_ok": true,
+        "variable_envelope": true,
+        "near_zero_fraction": 0.023348609355246523,
+        "fit_bins": 24,
+        "log_span_decades": 2.0,
+        "welch_segments": 24,
+        "independent_blocks": 4,
+        "block_slopes": [
+          -1.1006502394703828,
+          -1.1947780185959183,
+          -1.1000543407517396,
+          -1.0562371912998285
+        ],
+        "block_slope_spread": 0.13854082729608974
+      },
+      "duration_seconds": 253.12,
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "separation_method": "already-vocals",
+      "model_version": "",
+      "preprocessing": {
+        "method_id": "rms-silence-v1",
+        "settings": {
+          "trim_edges": true,
+          "remove_internal": false,
+          "threshold_db": -40.0,
+          "min_silence_seconds": 0.5,
+          "padding_seconds": 0.05
+        },
+        "rms_frame_seconds": 0.02,
+        "input_duration_seconds": 253.14,
+        "output_duration_seconds": 253.12,
+        "leading_removed_seconds": 0.01,
+        "trailing_removed_seconds": 0.01,
+        "internal_removed_seconds": 0.0,
+        "kept_segments_seconds": [
+          [
+            0.01,
+            253.13
+          ]
+        ],
+        "timeline_modified": false,
+        "peak_rms": 0.291215760444625,
+        "threshold_rms": 0.00291215760444625
+      },
+      "source_audio_sha256": "91dff4fb2ce5e8b81412ca1dc11ec2894629cd69be2222424460287e1a03cad0",
+      "resolution": "2026年11月11日の新しいDemucs分離結果に置き換えました。今回の入力284.6067秒・前後の無音調整後267.46秒で、途中の無音は除去していません。以前の253.14秒入力の結果は通常比較に使用しません。"
+    }
   ]
 }

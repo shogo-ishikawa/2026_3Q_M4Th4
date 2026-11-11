@@ -24,9 +24,14 @@ for (const page of [path.join(site, 'index.html'), path.join(site, 'vocal-fluctu
   }
 }
 const html = fs.readFileSync(path.join(site, 'vocal-fluctuation-lab/index.html'), 'utf8');
-for (const filename of ['app.js', 'style.css']) {
+for (const filename of ['app.js', 'catalogue.js', 'style.css']) {
   assert(html.includes(`${filename}?v=${version}`), `Stale asset version: ${filename}`);
   assert(fs.statSync(path.join(site, 'vocal-fluctuation-lab', filename)).isFile());
   checks++;
 }
+const catalogue = path.join(site, 'vocal-fluctuation-lab/data/reference_catalogue_public.json');
+assert.deepEqual(JSON.parse(fs.readFileSync(catalogue, 'utf8')),
+  JSON.parse(fs.readFileSync(path.join(project, 'data/reference_catalogue_public.json'), 'utf8')),
+  'Published catalogue must match the bundled reference catalogue');
+checks++;
 console.log(`${checks} public link and asset checks passed.`);

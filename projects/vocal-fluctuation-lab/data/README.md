@@ -1,26 +1,36 @@
 # 比較データの作り方
 
-このフォルダには音源や全長の包絡を含めていません。利用者から提供された解析結果を固定0.2〜20 Hz・Welch窓20秒へ再計算した6曲の参考DBを同梱しています。元の自動モードの値は別に記録し、上書きしていません。
+このフォルダには音源や全長の包絡を含めていません。利用者から提供された解析結果を固定0.2〜20 Hz・Welch窓20秒へ再計算した13曲・13アーティストの参考DBを同梱しています。元の自動モードの値は別に記録し、上書きしていません。
 
 | アーティスト | 曲名 | 比較する入力の種類 |
 | --- | --- | --- |
+| The Beatles | Hey Jude | Demucs htdemucs / 4.1.0 |
 | Nirvana | Smells Like Teen Spirit | 保存済み歌声WAV・分離省略 |
+| Tommy february6 | je t'aime ★ je t'aime | Demucs htdemucs / 4.1.0 |
+| Muse | Invincible | Demucs htdemucs / 4.1.0 |
+| 岩瀬敬吾 | レディオステレオ | Demucs htdemucs / 4.1.0 |
 | 斉藤和義 | 歩いて帰ろう | 保存済み歌声WAV・分離省略 |
-| cune | 星をみてれば | 保存済み歌声WAV・分離省略 |
 | X JAPAN | 紅 | Demucs htdemucs / 4.1.0 |
 | 東京事変 | 群青日和 | Demucs htdemucs / 4.1.0 |
+| T.M.Revolution | WHITE BREATH | Demucs htdemucs / 4.1.0 |
+| cune | 星をみてれば | 保存済み歌声WAV・分離省略 |
+| スピッツ | 春の歌 | Demucs htdemucs / 4.1.0 |
+| L'Arc-en-Ciel | DIVE TO BLUE | Demucs htdemucs / 4.1.0 |
 | hide | HURRY GO ROUND | Demucs htdemucs / 4.1.0 |
 
 保存済みWAVの元の分離モデルは推定して書き換えていません。異なる入力の種類は比較順位に混ぜません。音源の録音版と分離品質を音声で照合したDBではなく、各歌手1曲の参考値です。名義と曲名は提出情報を整理したもので、今回の録音版を同定したという意味ではありません。
 
-Tommy february6「je t'aime ★ je t'aime」は参考枠です。今回の入力253.14秒が、旧測定で途中無音を14.32秒除いた後の長さと一致します。今回の処理で途中無音を除いていなくても、以前に削除した区間は復元できないため、通常DBからは分けました。無音調整前のWAVまたは元音源を確認できた場合に置き換えます。
+同じ固定モード・標準の無音設定でも、Demucsで分離した入力は10曲、保存済み歌声WAVの入力は3曲が対象です。同じ音源・区間は自分自身との比較から外れます。13曲が常に一度に比較されるわけではありません。
+
+Tommy february6「je t'aime ★ je t'aime」は、新しいDemucs分離結果へ置き換え、通常DBに登録しました。今回の入力は284.6067秒、前後の無音調整後は267.46秒で、途中の無音は残しています。以前の253.14秒の入力は、旧測定で途中無音を14.32秒除いた後の長さと一致したため参考枠としていました。その旧記録と置き換え理由は履歴として残し、比較には使いません。
 
 ## 同梱ファイル
 
-- `reference_database.json`：Colabが起動時に読み込む6曲の比較DBです。ファイルを手動で読み込むこともできます。
-- `reference_measurements.json`：提供された7曲の元の自動モードと固定モードの推定値、設定、品質、出典ハッシュ、登録・参考枠の区別です。
-- `reference_summary.csv`：7曲の結果を表で確認する一覧です。
-- `reference_holdout.json`：Tommyの参考記録です。通常DBと異なる形式なので、比較DBとしては読み込めません。
+- `reference_database.json`：Colabが起動時に読み込む13曲の比較DBです。ファイルを手動で読み込むこともできます。
+- `reference_measurements.json`：提供された13曲の元の自動モードと固定モードの推定値、設定、品質、出典ハッシュ、PSD再現確認の記録です。
+- `reference_catalogue_public.json`：WebとColab向けの曲目一覧です。曲名・分離条件・固定モードの傾きと当てはまりを含みます。登録用の比較DBとは別の形式です。
+- `reference_summary.csv`：13曲の結果を表で確認する一覧です。
+- `reference_holdout.json`：現在の参考枠は空です。Tommyの旧記録と置き換え理由を`historical_records`に残しています。通常DBと異なる形式なので、比較DBとしては読み込めません。
 - `reference_import_catalogue.json`：ZIP内の解析結果と、整理した名義・曲名、参考枠の理由の対応です。
 
 提供ZIPを持っている場合は、作品フォルダで次のコマンドから派生DBを再生成できます。音源の取得・分離・無音除去は行いません。
