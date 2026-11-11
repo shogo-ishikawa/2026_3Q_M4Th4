@@ -195,7 +195,7 @@
       xTicks: [0, 220, 440, 660], yTicks: [0, 0.1, 0.2], xLabel: '音の周波数 [Hz]', yLabel: '成分のパワー（相対値）' });
     componentPowers(ratio).forEach((power, index) => {
       const x = axes.xMap((index + 1) * 220), y = axes.yMap(power);
-      spectrumSvg.append(node('rect', { x: x - 34, y, width: 68, height: axes.bottom - y, fill: index ? '#b58d60' : '#337f72', rx: 3 }));
+      spectrumSvg.append(node('rect', { x: x - 34, y, width: 68, height: axes.bottom - y, class: 'component-bar ' + (index ? 'component-harmonic' : 'component-base'), rx: 6 }));
       text(spectrumSvg, x, y - 10, power.toFixed(3), 'tick');
     });
     $('spectrum-observation').textContent = '440 Hzの振幅は220 Hzの' + ratio.toFixed(2) + '倍、パワーは' + (ratio * ratio).toFixed(2) + '倍です。220 Hzの成分の棒は変わりません。';
@@ -207,7 +207,7 @@
     const upper = Array.from({ length: 601 }, (_, index) => [index / 60, envelopeModel(index / 60)]);
     const lower = upper.map(point => [point[0], -point[1]]);
     const outline = upper.concat([...lower].reverse());
-    svg.append(node('path', { d: path(outline, axes.xMap, axes.yMap) + 'Z', fill: '#dae5d1', opacity: 0.8 }));
+    svg.append(node('path', { d: path(outline, axes.xMap, axes.yMap) + 'Z', class: 'envelope-area', opacity: 0.8 }));
     curve(svg, lower, axes.xMap, axes.yMap, 'outline-line');
     curve(svg, upper, axes.xMap, axes.yMap, 'wave-line');
     text(svg, axes.xMap(8), axes.yMap(0.6), '0.5 Hzで振れ幅が変化', 'model-label');
