@@ -64,6 +64,13 @@ def add_errors(predictions, calm_threshold_ms=CALM_SPEED_MS):
             raise ValueError("予測起点と対象時刻に欠けた日時があります。時刻を確認してください。")
         result[name] = times
     result["station"] = result["station"].fillna("")
+    if "issue_basis" in result:
+        # 同じ「3時間先」でも、初期時刻基準と取得時刻基準は同じ実験ではない。
+        basis = result["issue_basis"].fillna("unspecified").astype(str)
+        counts = result.assign(issue_basis=basis).groupby(GROUP_COLUMNS, dropna=False)["issue_basis"].nunique()
+        if counts.gt(1).any():
+            raise ValueError("同じ地点・モデル・予測時間に異なる予測基準が混在しています。"
+                             "初期時刻基準と取得時刻基準を分けて解析してください。")
     for name in VECTOR_COLUMNS:
         result[name] = pd.to_numeric(result[name], errors="coerce").replace([np.inf, -np.inf], np.nan)
     result["excluded"] = result.get("excluded", pd.Series("", index=result.index)).fillna("").astype(str)
@@ -306,13 +313,17 @@ def plot_diagnostics(predictions, output_dir, *, language="ja"):
         evaluated = part.loc[part["speed_evaluated"]]
         start = evaluated["target_time"].min()
         end = start + pd.Timedelta(days=7)
-        shown = evaluated.loc[evaluated["target_time"].lt(end)]
+        # 欠測・除外行を落とすと、その前後が線でつながり、途中も予測できたように見える。
+        # 時刻の行を残し、予測できない値をNaNにして線を途切れさせる。
+        shown = part.loc[part["target_time"].ge(start) & part["target_time"].lt(end)].copy()
         figure, axes = plt.subplots(2, 1, figsize=(12, 6), sharex=True, gridspec_kw={"height_ratios": [2, 1]})
         observed = shown.drop_duplicates("target_time").sort_values("target_time")
         axes[0].plot(observed["target_time"], observed["observed_speed_ms"], color="black", label=text("観測", "Observed"), linewidth=1.8)
         winds = [(text("観測", "Observed"), observed, "observed")]
         for model, forecast in shown.groupby("model", sort=False):
-            forecast = forecast.sort_values("target_time")
+            forecast = forecast.sort_values("target_time").copy()
+            forecast.loc[~forecast["speed_evaluated"], "predicted_speed_ms"] = np.nan
+            forecast.loc[~forecast["vector_evaluated"], ["predicted_u_ms", "predicted_v_ms"]] = np.nan
             axes[0].plot(forecast["target_time"], forecast["predicted_speed_ms"], label=model_name(model), alpha=.8)
             winds.append((model_name(model), forecast, "predicted"))
         for row, (_, wind, prefix) in enumerate(winds):
@@ -374,7 +385,11 @@ def plot_diagnostics(predictions, output_dir, *, language="ja"):
         save(figure, f"error_by_{by}.png")
 
     # 風配図も最短hだけ。観測は手法の数だけ重複させず、同じ対象時刻を1度だけ数える。
-    stations = list(shortest["station"].unique())
+    direction_available = shortest["speed_evaluated"] & (
+        shortest["observed_direction_deg"].notna() | shortest["predicted_direction_deg"].notna())
+    stations = list(shortest.loc[direction_available, "station"].unique())
+    if not stations:
+        return paths
     figure, axes = plt.subplots(1, len(stations), figsize=(5 * len(stations), 5.2), subplot_kw={"projection": "polar"}, squeeze=False)
     edges = np.arange(-11.25, 360, 22.5)
     for ax, station in zip(axes.flat, stations):

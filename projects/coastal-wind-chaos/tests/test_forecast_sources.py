@@ -74,9 +74,9 @@ def test_missing_forecast_is_retained_and_not_fabricated():
     session = Session(lambda url, params: Response(data))
     frame = fs.fetch_single_run(35, 139, models=("jma_msm",), hours=3,
                                run_time_utc="2026-06-01T00:00Z", session=session)
-    assert frame["excluded"].tolist() == ["", "missing_forecast", "missing_forecast"]
+    assert frame["excluded"].tolist() == ["", "missing_forecast", ""]
     assert frame["predicted_u_ms"].isna().sum() == 2
-    assert frame.attrs["metadata"]["models"][0]["available_horizon_max_h"] == 1
+    assert frame.attrs["metadata"]["models"][0]["available_horizon_max_h"] == 3
 
 
 def test_model_suffix_response_and_unit_rejection():
@@ -127,10 +127,10 @@ def test_matching_is_exact_does_not_invent_truth_and_keeps_forecast_metadata():
     raw = pd.DataFrame({"wind_speed_ms": [3.0], "wind_direction": ["南"]},
                        index=pd.DatetimeIndex(["2026-06-01 10:00"]))
     weather = wp.prepare_weather(raw)
-    result = fs.match_observations(frame, weather, station="辻堂")
+    result = fs.match_observations(frame, weather, station="銚子")
     assert result["observed_speed_ms"].tolist()[0] == 3
     assert result["observed_speed_ms"].isna().sum() == 2
-    assert result["station"].eq("辻堂").all()
+    assert result["station"].eq("銚子").all()
     assert result.attrs["metadata"]["issue_basis"] == "retrieval_time"
     assert frame["observed_speed_ms"].isna().all()
     shifted = weather.copy()
@@ -155,7 +155,7 @@ def test_history_keeps_separate_snapshots_and_grid_choices():
 def amedas_session(*, missing_block=False):
     def handle(url, params):
         if url.endswith("amedastable.json"):
-            return Response({"46141": {"kjName": "辻堂", "lat": [35, 19.2], "lon": [139, 27], "alt": 5}})
+            return Response({"45148": {"kjName": "銚子", "lat": [35, 44.3], "lon": [140, 51.4], "alt": 5}})
         if url.endswith("latest_time.txt"):
             return Response(text="2026-06-01T12:10:00+09:00")
         if url.endswith("20260601_09.json"):
@@ -176,21 +176,21 @@ def amedas_session(*, missing_block=False):
 
 def test_recent_amedas_quality_calm_direction_index_and_grid():
     session = amedas_session()
-    weather = fs.fetch_recent_amedas("46141", hours=4, session=session)
+    weather = fs.fetch_recent_amedas("45148", hours=4, session=session)
     assert weather.index.tolist() == list(pd.date_range("2026-06-01 09:00", periods=4, freq="h"))
     assert weather.loc["2026-06-01 09:00", "wind_direction"] == "北"
     assert weather.loc["2026-06-01 12:00", "wind_direction"] == "東"
     assert np.isnan(weather.loc["2026-06-01 10:00", "wind_speed_ms"])
     assert weather.loc["2026-06-01 11:00", "wind_is_calm"]
     assert weather.loc["2026-06-01 11:00", "u_ms"] == 0
-    assert weather.attrs["station"] == "辻堂"
-    assert weather.attrs["metadata"]["latitude"] == pytest.approx(35.32)
+    assert weather.attrs["station"] == "銚子"
+    assert weather.attrs["metadata"]["latitude"] == pytest.approx(35.73833333333334)
     assert weather.attrs["metadata"]["n_observed_hours"] == 3
     assert weather.attrs["metadata"]["warnings"] == []
 
 
 def test_missing_amedas_block_preserves_missing_hours_and_warning():
-    weather = fs.fetch_recent_amedas("46141", hours=4, session=amedas_session(missing_block=True))
+    weather = fs.fetch_recent_amedas("45148", hours=4, session=amedas_session(missing_block=True))
     assert len(weather) == 4
     assert weather["wind_speed_ms"].isna().sum() == 3
     assert len(weather.attrs["metadata"]["warnings"]) == 1
@@ -203,41 +203,41 @@ def test_unknown_amedas_station_is_clear_error():
 
 def test_matching_rejects_known_different_forecast_and_observation_locations():
     session = Session(lambda url, params: Response(payload()))
-    frame = fs.fetch_forecasts(35.3062, 139.5488, models="jma_msm", hours=3,
+    frame = fs.fetch_forecasts(35.0, 140.0, models="jma_msm", hours=3,
                               fetched_at="2026-06-01T00:00Z", session=session)
-    weather = fs.fetch_recent_amedas("46141", hours=4, session=amedas_session())
+    weather = fs.fetch_recent_amedas("45148", hours=4, session=amedas_session())
     with pytest.raises(ValueError, match="地点と観測所が異なります"):
-        fs.match_observations(frame, weather, station="辻堂")
+        fs.match_observations(frame, weather, station="銚子")
 
 
 def test_history_row_coordinates_guard_survives_csv_roundtrip_and_merge():
     import io
     session = Session(lambda url, params: Response(payload()))
-    beach = fs.fetch_forecasts(35.3062, 139.5488, models="jma_msm", hours=3,
+    beach = fs.fetch_forecasts(35.0, 140.0, models="jma_msm", hours=3,
                               fetched_at="2026-06-01T00:00Z", session=session)
-    station = fs.fetch_forecasts(35.32, 139.45, models="jma_msm", hours=3,
+    station = fs.fetch_forecasts(35.73833333333334, 140.85666666666665, models="jma_msm", hours=3,
                                 fetched_at="2026-06-01T00:10Z", session=session)
     beach = pd.read_csv(io.StringIO(beach.to_csv(index=False)))  # attrs intentionally lost
     merged = fs.merge_forecast_history(station, beach)
-    weather = fs.fetch_recent_amedas("46141", hours=4, session=amedas_session())
+    weather = fs.fetch_recent_amedas("45148", hours=4, session=amedas_session())
     with pytest.raises(ValueError, match="地点と観測所が異なります"):
-        fs.match_observations(merged, weather, station="辻堂")
+        fs.match_observations(merged, weather, station="銚子")
 
 
 def test_history_names_cannot_be_overwritten_to_another_station():
     session = Session(lambda url, params: Response(payload()))
-    forecast = fs.fetch_forecasts(35.32, 139.45, models="jma_msm", hours=3,
+    forecast = fs.fetch_forecasts(35.73833333333334, 140.85666666666665, models="jma_msm", hours=3,
                                  fetched_at="2026-06-01T00:00Z", session=session)
-    weather = fs.fetch_recent_amedas("46141", hours=4, session=amedas_session())
-    forecast["station"] = "三浦"
+    weather = fs.fetch_recent_amedas("45148", hours=4, session=amedas_session())
+    forecast["station"] = "稚内"
     with pytest.raises(ValueError, match="地点名と照合する観測所"):
-        fs.match_observations(forecast, weather, station="辻堂")
-    forecast.loc[0, "station"] = "辻堂"
+        fs.match_observations(forecast, weather, station="銚子")
+    forecast.loc[0, "station"] = "銚子"
     with pytest.raises(ValueError, match="混在"):
-        fs.match_observations(forecast, weather, station="辻堂")
+        fs.match_observations(forecast, weather, station="銚子")
     forecast["station"] = "指定地点"
-    matched = fs.match_observations(forecast, weather, station="辻堂")
-    assert matched["station"].eq("辻堂").all()
+    matched = fs.match_observations(forecast, weather, station="銚子")
+    assert matched["station"].eq("銚子").all()
 
 
 def test_native_calm_forecast_speed_is_preserved():
@@ -245,7 +245,7 @@ def test_native_calm_forecast_speed_is_preserved():
     data["hourly"]["wind_speed_10m"] = [0.1] * 6
     data["hourly"]["wind_direction_10m"] = [None] * 6
     session = Session(lambda url, params: Response(data))
-    forecast = fs.fetch_forecasts(35.32, 139.45, models="jma_msm", hours=3,
+    forecast = fs.fetch_forecasts(35.73833333333334, 140.85666666666665, models="jma_msm", hours=3,
                                  fetched_at="2026-06-01T00:00Z", session=session)
     assert forecast["predicted_speed_ms"].tolist() == [0.1] * 3
     assert forecast["predicted_u_ms"].eq(0).all()
@@ -255,7 +255,7 @@ def test_native_calm_forecast_speed_is_preserved():
 
 def test_same_grid_different_requested_locations_are_not_deduplicated():
     session = Session(lambda url, params: Response(payload()))
-    a = fs.fetch_forecasts(35.32, 139.45, models="jma_msm", hours=3,
+    a = fs.fetch_forecasts(35.73833333333334, 140.85666666666665, models="jma_msm", hours=3,
                           fetched_at="2026-06-01T00:00Z", session=session)
     b = fs.fetch_forecasts(35.3, 139.5, models="jma_msm", hours=3,
                           fetched_at="2026-06-01T00:00Z", session=session)

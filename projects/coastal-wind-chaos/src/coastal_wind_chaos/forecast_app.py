@@ -54,7 +54,7 @@ def _coordinates(options, weather=None):
             elif weather is not None:
                 raise ValueError("この観測地点の緯度・経度を指定してください。別地点の座標は代用しません。")
             else:
-                latitude, longitude = 35.3062, 139.5488
+                latitude, longitude = 45.415, 141.67833333333334
     return float(latitude), float(longitude)
 
 
@@ -112,7 +112,12 @@ def _plot_pending(predictions, directory, language):
         plt.close(figure)
         return []
     axes[0].set_ylabel("予測風速（m/s）" if language == "ja" else "Predicted wind speed (m/s)")
-    axes[0].set_title("予報の比較（対象時刻の実測による採点前）" if language == "ja" else "Forecast comparison — not yet verified")
+    has_evaluation = bool(predictions.get("speed_evaluated", pd.Series(False, index=predictions.index)).any())
+    if has_evaluation:
+        title = "予報の比較（照合できた時刻は誤差表で評価）" if language == "ja" else "Forecast comparison — matched times evaluated in error tables"
+    else:
+        title = "予報の比較（対象時刻の実測による採点前）" if language == "ja" else "Forecast comparison — not yet verified"
+    axes[0].set_title(title)
     axes[0].legend(fontsize=8)
     axes[0].grid(alpha=0.2)
     axes[1].set_yticks(range(predictions["model"].nunique()),
@@ -121,7 +126,7 @@ def _plot_pending(predictions, directory, language):
     axes[1].set_xlabel("対象時刻（日本時間）／矢印は風が進む向き（北は上）" if language == "ja" else "Target time (JST) / arrows show wind movement (north is up)")
     axes[1].xaxis.set_major_formatter(mdates.DateFormatter("%m/%d %H:%M"))
     figure.autofmt_xdate()
-    path = Path(directory) / "unverified_forecasts.png"
+    path = Path(directory) / ("forecast_comparison.png" if has_evaluation else "unverified_forecasts.png")
     figure.savefig(path, dpi=150, bbox_inches="tight")
     plt.close(figure)
     return [path]
@@ -137,10 +142,11 @@ def run_analysis(mode="demo", observation_paths=None, options=None, output_dir="
     if mode not in MODES:
         raise ValueError(f"モードは {', '.join(MODES)} から選んでください。")
     options = dict(options or {})
-    paths = list(observation_paths or [])
+    # デモはファイルを使わない。以前のモードで選んだ壊れたCSVにも影響されない。
+    paths = [] if mode == "demo" else list(observation_paths or [])
     observation_inputs = _observation_inputs(paths)
     weather = load_observations(observation_inputs) if observation_inputs else None
-    station = options.get("station") or (weather.attrs.get("station") if weather is not None else "材木座")
+    station = options.get("station") or (weather.attrs.get("station") if weather is not None else "稚内")
     messages = []
     horizons = options.get("horizons", (1, 3, 6, 12, 24))
 
@@ -149,7 +155,7 @@ def run_analysis(mode="demo", observation_paths=None, options=None, output_dir="
         weather.attrs["station"] = "仮想海辺観測点（合成）"
         weather.attrs["source_kind"] = "synthetic"
         station = weather.attrs["station"]
-        messages.append("これは仮想地点の合成データです。材木座・辻堂・三浦の実測値ではありません。")
+        messages.append("これは仮想地点の合成データです。沿岸の例示地点・銚子・稚内の実測値ではありません。")
 
     if mode in ("demo", "csv_backtest"):
         if weather is None:
@@ -204,6 +210,7 @@ def run_analysis(mode="demo", observation_paths=None, options=None, output_dir="
         else:
             predictions = sources.fetch_forecasts(latitude, longitude, **arguments)
         source_metadata = dict(predictions.attrs.get("metadata", {}))
+        messages.extend(str(message) for message in source_metadata.get("warnings", []))
         predictions["station"] = station
         predictions["weather_model"] = predictions["model"]
         predictions["model"] = predictions["model"].astype(str) + ":" + predictions["cell_selection"].astype(str)
@@ -225,7 +232,11 @@ def run_analysis(mode="demo", observation_paths=None, options=None, output_dir="
         history = sources.merge_forecast_history(*history_frames, predictions)
         if weather is not None:
             history = sources.match_observations(history, weather, station=station)
-        result = {"predictions": history, "forecast_history": history.copy(),
+        basis = source_metadata.get("issue_basis")
+        selected = history.loc[history["issue_basis"].eq(basis)].copy() if basis and "issue_basis" in history else history.copy()
+        if len(selected) != len(history):
+            messages.append("履歴は保存しますが、取得時刻基準と初期時刻基準の予報は分けて評価します。今回のモードと同じ時刻基準だけを集計しました。")
+        result = {"predictions": selected, "forecast_history": history.copy(),
                   "metadata": {**source_metadata, "station": station,
                                "forecast_latitude": latitude, "forecast_longitude": longitude}}
         if weather is None or not np.isfinite(pd.to_numeric(history["observed_u_ms"], errors="coerce")).any():

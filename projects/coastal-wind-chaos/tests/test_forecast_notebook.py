@@ -66,9 +66,9 @@ def ui(monkeypatch, tmp_path):
 
     sources = types.ModuleType("coastal_wind_chaos.forecast_sources")
     sources.LOCATIONS = {
-        "tsujido": {"name": "辻堂", "latitude": 35.32, "longitude": 139.45, "station_id": "46141"},
-        "miura": {"name": "三浦", "latitude": 35.18, "longitude": 139.63, "station_id": "46211"},
-        "zaimokuza": {"name": "材木座海岸", "latitude": 35.3062, "longitude": 139.5488, "station_id": None},
+        "choshi": {"name": "銚子", "latitude": 35.73833333333334, "longitude": 140.85666666666665, "station_id": "45148"},
+        "wakkanai": {"name": "稚内", "latitude": 45.415, "longitude": 141.67833333333334, "station_id": "11016"},
+        "coastal_example": {"name": "沿岸の例示地点", "latitude": 35.0, "longitude": 140.0, "station_id": None},
     }
     monkeypatch.setitem(sys.modules, "coastal_wind_chaos.forecast_sources", sources)
     displayed = []
@@ -102,11 +102,11 @@ def ui(monkeypatch, tmp_path):
 def test_opening_panel_and_changing_settings_do_not_fetch_or_analyse(ui):
     assert ui["calls"] == []
     ui["mode"].value = "latest_forecast"
-    ui["location"].value = "miura"
+    ui["location"].value = "wakkanai"
     ui["forecast_hours"].value = 48
     assert ui["calls"] == []
-    assert ui["station"].value == "三浦"
-    assert ui["station_id"].value == "46211"
+    assert ui["station"].value == "稚内"
+    assert ui["station_id"].value == "11016"
     assert ui["download_button"].disabled
 
 

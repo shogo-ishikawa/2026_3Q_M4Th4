@@ -45,7 +45,7 @@ def test_observations_zip_and_standalone_csv_preserve_station_and_values(tmp_pat
 
 def test_recent_json_quality_survives_history_merge_and_zip_roundtrip(tmp_path):
     weather = sample_data.generate_weather(years=1, seed=6)
-    weather.attrs["station"] = "辻堂"
+    weather.attrs["station"] = "銚子"
     recent = weather.iloc[-5:].copy()
     recent = recent.drop(columns=[name for name in recent if name.endswith(("_quality", "_homogeneity"))])
     recent["wind_speed_ms"] = 7.8
@@ -63,15 +63,15 @@ def test_recent_json_quality_survives_history_merge_and_zip_roundtrip(tmp_path):
 def test_different_observation_stations_cannot_be_merged():
     first = sample_data.generate_weather(years=1)
     other = first.tail(3).copy()
-    first.attrs["station"], other.attrs["station"] = "辻堂", "三浦"
+    first.attrs["station"], other.attrs["station"] = "銚子", "稚内"
     with pytest.raises(ValueError, match="地点"):
         merge_observations(other, first)
 
 
 def test_coordinates_use_station_metadata_and_unknown_requires_input():
     weather = pd.DataFrame()
-    weather.attrs = {"station": "辻堂", "metadata": {"latitude": 35.32, "longitude": 139.45}}
-    assert app._coordinates({}, weather) == (35.32, 139.45)
+    weather.attrs = {"station": "銚子", "metadata": {"latitude": 35.73833333333334, "longitude": 140.85666666666665}}
+    assert app._coordinates({}, weather) == (35.73833333333334, 140.85666666666665)
     weather.attrs = {"station": "座標不明の地点"}
     with pytest.raises(ValueError, match="緯度"):
         app._coordinates({}, weather)
@@ -106,8 +106,8 @@ def test_forecast_zip_history_preserves_explicit_times(tmp_path):
 
 def test_latest_checkbox_fetches_observations_without_claiming_accuracy(tmp_path, monkeypatch):
     weather = sample_data.generate_weather(years=1, missing_rate=0)
-    weather.attrs["station"] = "辻堂"
-    weather.attrs["metadata"] = {"latitude": 35.32, "longitude": 139.45}
+    weather.attrs["station"] = "銚子"
+    weather.attrs["metadata"] = {"latitude": 35.73833333333334, "longitude": 140.85666666666665}
     predictions = result_for(weather)["predictions"]
     predictions["model"] = "jma_msm"
     predictions["cell_selection"] = "land"
@@ -117,8 +117,8 @@ def test_latest_checkbox_fetches_observations_without_claiming_accuracy(tmp_path
         called.append(station_id)
         return weather
     monkeypatch.setattr(sources, "fetch_recent_amedas", recent)
-    result = app.run_analysis("latest_forecast", options={"station": "辻堂", "station_id": "46141",
+    result = app.run_analysis("latest_forecast", options={"station": "銚子", "station_id": "45148",
                               "use_recent_observations": True}, output_dir=tmp_path)
-    assert called == ["46141"]
+    assert called == ["45148"]
     assert result["summary"]["n_speed"].sum() == 0
     assert "observations.csv" in zipfile.ZipFile(result["zip_path"]).namelist()

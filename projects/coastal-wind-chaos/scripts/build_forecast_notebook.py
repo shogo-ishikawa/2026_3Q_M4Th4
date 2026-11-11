@@ -7,7 +7,7 @@ from pathlib import Path
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = PROJECT_DIR / "notebooks" / "coastal_wind_forecast_lab.ipynb"
 SOURCE_REF = "feature/coastal-wind-colab-v1"
-LAB_VERSION = "1.0.0"
+LAB_VERSION = "1.0.1"
 REPOSITORY = "shogo-ishikawa/2026_3Q_M4Th4"
 NOTEBOOK_PATH = "projects/coastal-wind-chaos/notebooks/coastal_wind_forecast_lab.ipynb"
 
@@ -43,7 +43,7 @@ def build(output=DEFAULT_OUTPUT, source_ref=SOURCE_REF):
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)]({colab_url})
 
-学生が取り組んだ材木座海岸の予報比較を入口に、観測データと既存の気象予報を区別して検証するラボです。
+海岸の風に関する学生の予報比較を入口に、観測データと既存の気象予報を区別して検証するラボです。
 初めての人は **「ランタイム」→「すべてのセルを実行」** を選び、下に現れる操作パネルで
 **「デモで過去検証」→「解析を実行」** と進んでください。CPUで使えます。
 
@@ -51,11 +51,11 @@ def build(output=DEFAULT_OUTPUT, source_ref=SOURCE_REF):
 | --- | --- |
 | ファイルを用意せず、予測と誤差解析を体験する | デモで過去検証 |
 | 自分の地域の過去の観測から学習し、未使用期間で答え合わせする | CSVで過去検証 |
-| 材木座や指定地点の、既存の気象予報を比べる | 最新予報の比較 |
+| 沿岸の例示地点や指定地点の、既存の気象予報を比べる | 最新予報の比較 |
 | 過去のある計算回の気象予報を、観測値と比べる | 過去の気象予報の検証 |
 | 利用可能な観測までで学習し、それより先の風を予測する | 将来予測 |
 
-デモは**仮想観測点の合成データ**です。実際の材木座・辻堂・三浦の観測値や予測精度を表すものではありません。
+デモは**仮想観測点の合成データ**です。実際の沿岸の例示地点・銚子・稚内の観測値や予測精度を表すものではありません。
 Google Driveへの接続は任意です。全セル実行だけではファイル選択やデータ取得は始まりません。
 """)
 
@@ -64,7 +64,7 @@ Google Driveへの接続は任意です。全セル実行だけではファイ�
 
 - **風速**は風の速さで、単位は m/s です。例えば 5 m/s は1秒で5 m進む速さに相当します。
 - **風向**は風が**吹いてくる側**です。北風なら北から南へ吹きます。角度では北0°、東90°、南180°、西270°です。
-- 材木座には、このラボで使う現地の実測がありません。予報の比較地点は材木座、観測で答え合わせする地点は辻堂や三浦など、**観測値のある地点**として扱います。
+- 沿岸の例示地点には、このラボで使う現地の実測がありません。予報の比較地点は沿岸の例示地点、観測で答え合わせする地点は銚子や稚内など、**観測値のある地点**として扱います。
 - 「Open-Meteoの現在値」は気象モデルの値です。アメダスの実測と同じものではありません。
 - 同じJMAモデルで陸・海の参照格子を変えた予報は、独立した別モデルではありません。
 - 地点の位置、風速計の高さ、地形による違いも、予報と観測の差に含まれます。
@@ -75,6 +75,7 @@ Google Driveへの接続は任意です。全セル実行だけではファイ�
     code(r'''
 #@title 準備：必要なコードとライブラリを読み込む
 import importlib
+import importlib.metadata
 import importlib.util
 import os
 import subprocess
@@ -111,7 +112,7 @@ if IN_COLAB:
 else:
     PROJECT_DIR = find_local_project()
 
-required_sources = ("forecast_app", "forecast_lab", "forecast_sources", "forecast_diagnostics")
+required_sources = ("forecast_app", "forecast_lab", "forecast_sources", "forecast_diagnostics", "forecast_export")
 missing_sources = [name for name in required_sources
                    if not (PROJECT_DIR / "src/coastal_wind_chaos" / f"{name}.py").is_file()]
 if missing_sources:
@@ -122,15 +123,45 @@ if source_version != LAB_VERSION:
     raise RuntimeError(f"Notebook v{LAB_VERSION} と取得コード v{source_version} の版が一致しません。"
                        "最新の公開リンクからNotebookを開き直してください。")
 
-required_packages = ("numpy", "pandas", "sklearn", "matplotlib", "requests", "ipywidgets")
-missing_packages = [name for name in required_packages if importlib.util.find_spec(name) is None]
-if missing_packages:
+package_modules = {"numpy": "numpy", "pandas": "pandas", "scikit-learn": "sklearn",
+                   "threadpoolctl": "threadpoolctl", "matplotlib": "matplotlib",
+                   "requests": "requests", "ipywidgets": "ipywidgets", "nbformat": "nbformat"}
+project_settings = tomllib.loads((PROJECT_DIR / "pyproject.toml").read_text(encoding="utf-8"))["project"]
+requirements = project_settings["dependencies"] + project_settings["optional-dependencies"]["colab"]
+dependency_issues = []
+try:
+    from packaging.requirements import Requirement
+except ImportError:
+    dependency_issues.append("packaging")
+else:
+    for specification in requirements:
+        requirement = Requirement(specification)
+        module = package_modules.get(requirement.name, requirement.name.replace("-", "_"))
+        try:
+            installed = importlib.metadata.version(requirement.name)
+        except importlib.metadata.PackageNotFoundError:
+            installed = None
+        if (installed is None or not requirement.specifier.contains(installed)
+                or importlib.util.find_spec(module) is None):
+            dependency_issues.append(specification)
+if dependency_issues:
     if IN_COLAB:
         subprocess.run([sys.executable, "-m", "pip", "install", "--quiet", "-e",
-                        f"{PROJECT_DIR}[colab]"], check=True)
+                        f"{PROJECT_DIR}[colab]", "packaging>=23"], check=True)
+        # 数値ライブラリを既に読み込んでいた場合、ディスク上の更新だけでは切り替わらない。
+        from packaging.version import Version
+        for package, module in package_modules.items():
+            if package == "nbformat":  # 記録用の形式ライブラリは解析処理では読み込まない。
+                continue
+            imported = sys.modules.get(module)
+            imported_version = getattr(imported, "__version__", None)
+            if imported_version and Version(imported_version) != Version(importlib.metadata.version(package)):
+                raise RuntimeError("ライブラリを更新しました。「ランタイム」からセッションを再起動し、"
+                                   "もう一度すべてのセルを実行してください。")
     else:
-        raise ImportError("不足するライブラリがあります。作品フォルダで pip install -e '.[colab]' を実行してください。"
-                          f" 不足: {', '.join(missing_packages)}")
+        raise ImportError("ライブラリの不足または対応していない版があります。作品フォルダで "
+                          "pip install -e '.[colab]' を実行してください。"
+                          f" 対象: {', '.join(dependency_issues)}")
 
 for name in list(sys.modules):
     if name == "coastal_wind_chaos" or name.startswith("coastal_wind_chaos."):
@@ -154,9 +185,9 @@ print("下の操作パネルでモードを選び、「解析を実行」を押�
 学習・調整・最終評価を時間順に分けます。1・3・6・12・24時間先について、
 持続予報などの基準と、学習したモデルを比較します。
 
-実データに進むときはモードを変更し、**「CSV・保存データを選ぶ」**から読み込みます。
+実データに進むときはモードを変更し、 **「CSV・保存データを選ぶ」** から読み込みます。
 複数年に分かれたCSVは一度に選んでください。選び直すと前の選択を置き換えます。
-日時の空欄は自動設定です。手動で変えた日時は**「日時をリセット」**で空欄に戻せます。
+日時の空欄は自動設定です。手動で変えた日時は **「日時をリセット」** で空欄に戻せます。
 
 過去の気象予報の「初期時刻」はUTCです。それ以外の入力日時と図の日時はJSTです。
 JSTはUTCより9時間進んでいます。
@@ -182,7 +213,7 @@ try:
 except ImportError:
     pass
 
-STATE = {"paths": [], "result": None, "busy": False}
+STATE = {"paths": [], "result": None, "busy": False, "revision": 0}
 field_style = {"description_width": "150px"}
 
 
@@ -196,12 +227,12 @@ mode = field(widgets.Dropdown, description="やりたいこと", options=[
     ("将来予測", "future")], value="demo")
 mode_help = widgets.HTML()
 location = field(widgets.Dropdown, description="地点", options=[
-    ("辻堂（観測所）", "tsujido"), ("三浦（観測所）", "miura"),
-    ("材木座（予報比較地点）", "zaimokuza"), ("自分で指定する", "custom")], value="tsujido")
-station = field(widgets.Text, description="地点名", value="辻堂")
-latitude = field(widgets.BoundedFloatText, description="緯度", min=-90, max=90, value=35.3)
-longitude = field(widgets.BoundedFloatText, description="経度", min=-180, max=180, value=139.5)
-station_id = field(widgets.Text, description="アメダス地点番号", value="46141")
+    ("銚子（観測所）", "choshi"), ("稚内（観測所）", "wakkanai"),
+    ("沿岸の例示地点（予報比較地点）", "coastal_example"), ("自分で指定する", "custom")], value="wakkanai")
+station = field(widgets.Text, description="地点名", value="稚内")
+latitude = field(widgets.BoundedFloatText, description="緯度", min=-90, max=90, value=45.415)
+longitude = field(widgets.BoundedFloatText, description="経度", min=-180, max=180, value=141.67833333333334)
+station_id = field(widgets.Text, description="アメダス地点番号", value="11016")
 recent = field(widgets.Checkbox, description="直近のアメダスを使う", value=False, indent=False)
 upload_button = widgets.Button(description="CSV・保存データを選ぶ", icon="upload", layout=widgets.Layout(width="100%"))
 upload_status = widgets.HTML("ファイルはまだ選ばれていません。")
@@ -262,6 +293,7 @@ MODE_HELP = {
 
 
 def invalidate_result(*_):
+    STATE["revision"] += 1
     if STATE["busy"]:
         return
     STATE["result"] = None
@@ -300,7 +332,7 @@ def update_mode(change=None):
     recent.layout.display = "" if selected in ("future", "latest_forecast") else "none"
     run_time_utc.layout.display = "" if selected == "historical_forecast" else "none"
     cutoff.layout.display = "" if selected == "future" else "none"
-    upload_button.layout.display = "none" if selected == "latest_forecast" and recent.value else ""
+    upload_button.layout.display = ""
     invalidate_result()
 
 
@@ -365,7 +397,7 @@ def reset_dates(_=None):
 def reset_settings(_):
     reset_dates()
     mode.value = "demo"
-    location.value = "tsujido"
+    location.value = "wakkanai"
     horizons.value = (1, 3, 6, 12, 24)
     feature_set.value = "calendar+recent"
     include_optional.value = False
@@ -479,7 +511,8 @@ def render_result(result):
     display(Markdown("### 解析結果"))
     for message in metadata.get("messages", []):
         display(HTML(f"<p>{html.escape(str(message))}</p>"))
-    if mode.value == "demo":
+    if (metadata.get("source_kind") == "synthetic" or metadata.get("observation_source_kind") == "synthetic"
+            or metadata.get("mode", mode.value) == "demo"):
         display(HTML("<p><b>仮想観測点の合成データによる結果です。</b>実際の地点の精度ではありません。</p>"))
     show_table(result.get("summary"))
     summary = result.get("summary")
@@ -520,26 +553,49 @@ def render_result(result):
 def run_clicked(_=None):
     if STATE["busy"]:
         return
+    run_mode = mode.value
+    run_options = selected_options()
+    run_paths = [] if run_mode == "demo" else list(STATE["paths"])
+    revision = STATE["revision"]
     STATE["busy"] = True
     STATE["result"] = None
     run_button.disabled = True
     download_button.disabled = True
     status.value = "解析しています。完了するまでお待ちください。"
     stamp = datetime.now(ZoneInfo("Asia/Tokyo")).strftime("%Y%m%d-%H%M%S-%f")
-    output_dir = RESULTS_ROOT / f"{mode.value}-{stamp}"
+    output_dir = RESULTS_ROOT / f"{run_mode}-{stamp}"
+    controls = (mode, location, station, latitude, longitude, station_id, recent, local_upload,
+                train_start, validation_start, test_start, end, cutoff, run_time_utc, horizons,
+                feature_set, include_optional, candidates, future_method, learning_curve, learning_months,
+                models, forecast_hours, cell_selection, seed, upload_button, date_reset, reset_button, drive_button)
+    previous_disabled = [(control, control.disabled) for control in controls]
+    for control in controls:
+        control.disabled = True
     try:
         with results:
             clear_output(wait=True)
-            result = run_analysis(mode=mode.value, observation_paths=list(STATE["paths"]),
-                                  options=selected_options(), output_dir=output_dir)
+            result = run_analysis(mode=run_mode, observation_paths=run_paths,
+                                  options=run_options, output_dir=output_dir)
+            if STATE["revision"] != revision:
+                status.value = "条件が変更されたため、この結果は現在の設定には適用しません。もう一度実行してください。"
+                return
             render_result(result)
+        if STATE["revision"] != revision:
+            results.clear_output()
+            status.value = "条件が変更されました。もう一度実行してください。"
+            return
         STATE["result"] = result
         bundle = Path(result["zip_path"])
         download_button.disabled = not bundle.is_file()
-        if STATE.get("drive_dir") and bundle.is_file():
-            shutil.copy2(bundle, STATE["drive_dir"] / f"{stamp}-{bundle.name}")
         status.value = "完了しました。グラフを確認し、結果ZIPを保存してください。"
+        if STATE.get("drive_dir") and bundle.is_file():
+            try:
+                shutil.copy2(bundle, STATE["drive_dir"] / f"{stamp}-{bundle.name}")
+            except OSError:
+                status.value = "解析は完了しました。Driveへの追加保存ができなかったため、結果ZIPをダウンロードしてください。"
     except Exception as error:
+        STATE["result"] = None
+        download_button.disabled = True
         status.value = "解析が完了していません。入力と日時を確認して、もう一度実行してください。"
         with results:
             clear_output(wait=True)
@@ -548,7 +604,12 @@ def run_clicked(_=None):
                              " 通信に失敗した場合は、しばらくしてから再実行できます。"))
     finally:
         STATE["busy"] = False
+        for control, disabled in previous_disabled:
+            control.disabled = disabled
         run_button.disabled = False
+        if STATE["revision"] != revision:
+            update_location()
+            update_mode()
 
 
 def download_clicked(_):
@@ -661,7 +722,7 @@ CSVに新しい観測が入っていなければ、予測の基準も古い時�
     md("""
 ## 保存・再開と、次の実験
 
-解析が終わったら**「結果ZIPをダウンロード」**を押してください。予測・誤差の表、図、解析条件を
+解析が終わったら **「結果ZIPをダウンロード」** を押してください。予測・誤差の表、図、解析条件を
 まとめて保存します。保存データを読み直す際は「CSV・保存データを選ぶ」を使います。
 Driveを接続した場合は `MyDrive/CoastalWindLab` にも結果ZIPを保存します。
 Driveへの接続を途中でやめても、手元にZIPを保存して続けられます。

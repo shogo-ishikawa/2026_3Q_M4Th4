@@ -21,13 +21,13 @@ FORECAST_API = "https://api.open-meteo.com/v1/forecast"
 SINGLE_RUN_API = "https://single-runs-api.open-meteo.com/v1/forecast"
 AMEDAS_BASE = "https://www.jma.go.jp/bosai/amedas"
 LOCATIONS = {
-    "zaimokuza": {"name": "材木座海岸", "latitude": 35.3062, "longitude": 139.5488,
+    "coastal_example": {"name": "沿岸の例示地点", "latitude": 35.0, "longitude": 140.0,
                   "station_id": None, "kind": "forecast_location"},
     # 観測所の最新座標は amedastable.json を参照する。下記は表示・予報取得の初期値。
-    "tsujido": {"name": "辻堂", "latitude": 35.3200, "longitude": 139.4500,
-                "station_id": "46141", "kind": "observation_station"},
-    "miura": {"name": "三浦", "latitude": 35.1783, "longitude": 139.6300,
-              "station_id": "46211", "kind": "observation_station"},
+    "choshi": {"name": "銚子", "latitude": 35.73833333333334, "longitude": 140.85666666666665,
+                "station_id": "45148", "kind": "observation_station"},
+    "wakkanai": {"name": "稚内", "latitude": 45.415, "longitude": 141.67833333333334,
+              "station_id": "11016", "kind": "observation_station"},
 }
 PREDICTION_COLUMNS = [
     "issue_time", "target_time", "horizon_h", "station", "model",
@@ -120,6 +120,8 @@ def _forecast_frame(payload, *, model, anchor, retrieved_at, hours, cell_selecti
     if not all(isinstance(values, list) for values in (times, speeds, directions)) or not times or not len(times) == len(speeds) == len(directions):
         raise SourceError(f"{model}: 時刻・風速・風向の並びが一致しません。")
     units = payload.get("hourly_units", {})
+    if not isinstance(units, Mapping):
+        raise SourceError(f"{model}: 風速・風向の単位を確認できません。")
     if units.get(speed_key) != "m/s" or units.get(direction_key) not in {"°", "degree", "degrees"}:
         raise SourceError(f"{model}: 風速・風向の単位を確認できません。")
     try:
@@ -151,7 +153,8 @@ def _forecast_frame(payload, *, model, anchor, retrieved_at, hours, cell_selecti
             "observed_u_ms": np.nan, "observed_v_ms": np.nan,
             "predicted_u_ms": u, "predicted_v_ms": v, "observed_speed_ms": np.nan,
             "predicted_speed_ms": speed,
-            "excluded": "" if np.isfinite(u) and np.isfinite(v) else "missing_forecast",
+            # 風向だけが欠測でも、提供元の風速は速度の採点に利用できる。
+            "excluded": "" if np.isfinite(speed) else "missing_forecast",
             "cell_selection": cell_selection, "issue_basis": basis,
             "retrieved_at_utc": retrieved_at.isoformat(),
             "requested_latitude": latitude, "requested_longitude": longitude,
@@ -171,7 +174,7 @@ def _fetch(latitude, longitude, *, models, hours, cell_selection, fetched_at, ru
         raise ValueError("モデル初期時刻は UTC の毎正時で指定してください。")
     basis = "retrieval_time" if run_time_utc is None else "initialisation_time"
     endpoint = FORECAST_API if run_time_utc is None else SINGLE_RUN_API
-    frames, sources = [], []
+    frames, sources, warnings = [], [], []
     for model in models:
         params = {"latitude": latitude, "longitude": longitude, "models": model,
                   "cell_selection": cell_selection, "hourly": "wind_speed_10m,wind_direction_10m",
@@ -179,16 +182,23 @@ def _fetch(latitude, longitude, *, models, hours, cell_selection, fetched_at, ru
                   "forecast_days": min(5, math.ceil(hours / 24) + 1)}
         if run_time_utc is not None:
             params["run"] = anchor.strftime("%Y-%m-%dT%H:%M")
-        payload = _request(endpoint, params=params, session=session)
-        frame = _forecast_frame(payload, model=model, anchor=anchor, retrieved_at=retrieved_at,
-                                hours=hours, cell_selection=cell_selection, basis=basis,
-                                latitude=latitude, longitude=longitude)
+        try:
+            payload = _request(endpoint, params=params, session=session)
+            frame = _forecast_frame(payload, model=model, anchor=anchor, retrieved_at=retrieved_at,
+                                    hours=hours, cell_selection=cell_selection, basis=basis,
+                                    latitude=latitude, longitude=longitude)
+        except SourceError as error:
+            warnings.append(f"{model}: {error}")
+            sources.append({"model": model, "status": "unavailable", "n_rows": 0, "n_available": 0})
+            continue
         frames.append(frame)
         good = frame[frame["excluded"].eq("")]
         sources.append({"model": model, "grid_latitude": _number(payload.get("latitude")),
                         "grid_longitude": _number(payload.get("longitude")),
                         "n_rows": len(frame), "n_available": len(good),
                         "available_horizon_max_h": float(good["horizon_h"].max()) if len(good) else None})
+    if not frames:
+        raise SourceError("指定したモデルの予報を取得できませんでした。" + " / ".join(warnings))
     result = pd.concat(frames, ignore_index=True)
     result.attrs["metadata"] = {
         "source": "Open-Meteo", "source_url": endpoint, "attribution": "Weather data by Open-Meteo.com; originating models: " + ", ".join(models),
@@ -197,7 +207,7 @@ def _fetch(latitude, longitude, *, models, hours, cell_selection, fetched_at, ru
         "issue_basis": basis, "retrieved_at_utc": retrieved_at.isoformat(),
         "initialisation_time_utc": anchor.isoformat() if run_time_utc is not None else None,
         "availability_time_utc": None, "requested_hours": int(hours), "cell_selection": cell_selection,
-        "models": sources,
+        "models": sources, "warnings": warnings,
         "note": ("取得時刻からの時間差。モデルの初期時刻・発表時刻ではありません。" if run_time_utc is None else
                  "モデル初期時刻からの時間差。初期時刻に一般公開済みだったことは保証しません。"),
     }
@@ -302,6 +312,8 @@ def _station_metadata(station_id, *, session):
         longitude = float(station["lon"][0]) + float(station["lon"][1]) / 60
     except (KeyError, TypeError, ValueError, IndexError) as error:
         raise SourceError("観測所の座標を確認できません。") from error
+    if not (np.isfinite([latitude, longitude]).all() and -90 <= latitude <= 90 and -180 <= longitude <= 180):
+        raise SourceError("観測所の座標が範囲外です。")
     return {"station_id": station_id, "station_name": station.get("kjName", station_id),
             "latitude": latitude, "longitude": longitude,
             "altitude_m": station.get("alt"), "source_url": f"{AMEDAS_BASE}/const/amedastable.json"}
@@ -369,6 +381,7 @@ def fetch_recent_amedas(station_id, *, hours=72, session=None):
     weather = wp.prepare_weather(raw).reindex(pd.date_range(start, end, freq="h", name="time"))
     weather["wind_is_calm"] = weather["wind_is_calm"].eq(True)
     weather.attrs["station"] = station["station_name"]
+    weather.attrs["source_kind"] = "observations"
     weather.attrs["metadata"] = {**station, "source": "JMA AMeDAS", "data_kind": "station_observation",
                                   "source_url": f"{AMEDAS_BASE}/data/point/{station_id}/",
                                   "time_zone": "Asia/Tokyo (timezone-naive index)",
@@ -376,5 +389,5 @@ def fetch_recent_amedas(station_id, *, hours=72, session=None):
                                   "quality_policy": "JSON flag 0 only; preserve other flags and mark missing",
                                   "n_expected_hours": hours, "n_observed_hours": int(weather["wind_speed_ms"].notna().sum()),
                                   "warnings": warnings,
-                                  "note": "観測所の実測です。材木座海岸の現地観測ではありません。"}
+                                  "note": "観測所の実測です。沿岸の例示地点の現地観測ではありません。"}
     return weather

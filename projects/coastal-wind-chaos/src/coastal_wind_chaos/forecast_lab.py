@@ -89,9 +89,39 @@ def _split(data, train_start, validation_start, test_start, end, max_horizon):
             "test_start": test, "end": last}
 
 
-def _common_stages(data, horizons, split, stage):
+def _input_columns(table, in_train, feature_set):
+    """実際に選んだ入力だけを要求し、基準予報との比較に必要な列を加える。"""
+    recent = wp.recent_columns(table.loc[in_train]) if feature_set != "calendar" else []
+    model_columns = wp.feature_columns(feature_set, recent)
+    baseline_columns = ["u_lag0", "v_lag0", *wp.CYCLE_COLUMNS, *wp.CLIMATOLOGY_COLUMNS]
+    evaluation_columns = list(dict.fromkeys(model_columns + baseline_columns))
+    return recent, model_columns, evaluation_columns
+
+
+def _prepare_stage(data, horizon, split, stage, feature_set, max_horizon):
+    """選択した特徴量で学習表を作る。期間境界と比較する行は全手法でそろえる。"""
+    train_start, train_end, eval_start, eval_end = wp.stage_bounds(split, stage)
+    climatology = wp.fit_climatology(data, train_end, train_start)
+    table = wp.add_climatology_columns(wp.make_forecast_table(data, horizon), climatology)
+    in_train = (table.index >= train_start) & (table["target_time"] < train_end)
+    in_eval = (table.index >= eval_start) & (table.index + pd.Timedelta(hours=max_horizon) < eval_end)
+    recent, model_columns, inputs = _input_columns(table, in_train, feature_set)
+    train = table.loc[in_train].dropna(subset=model_columns + ["target_u", "target_v"])
+    evaluation = table.loc[in_eval].copy()
+    evaluation["excluded"] = wp.exclusion_reasons(evaluation, inputs)
+    wp.warn_if_optional_inputs_drop_rows(evaluation, recent)
+    if len(train) < MIN_TRAIN_ROWS:
+        raise ValueError(f"学習用のデータが{len(train)}行です。選択した入力と欠測を確認してください。"
+                         "30日以上の学習データが必要です。")
+    if not evaluation["excluded"].eq("").any():
+        raise ValueError("指定した入力と期間で評価できる時刻がありません。欠測と期間を確認してください。")
+    return {"train": train, "evaluation": evaluation, "recent": recent, "inputs": inputs,
+            "climatology": climatology, "bounds": (train_start, train_end, eval_start, eval_end)}
+
+
+def _common_stages(data, horizons, split, stage, feature_set):
     """比較する全予測時間で同じ起点・有効行を使い、除外行も保持する。"""
-    stages = {h: wp.prepare_stage(data, h, split, stage=stage, max_horizon=max(horizons))
+    stages = {h: _prepare_stage(data, h, split, stage, feature_set, max(horizons))
               for h in horizons}
     good = None
     for item in stages.values():
@@ -186,8 +216,8 @@ def run_backtest(weather, *, horizons=DEFAULT_HORIZONS, train_start=None,
     split = _split(data, train_start, validation_start, test_start, end, max(horizons))
     data = data.loc[split["start"]:split["end"]].copy()
     station = str(station or data.attrs.get("station", "観測地点"))
-    validation_stages = _common_stages(data, horizons, split, "validation")
-    test_stages = _common_stages(data, horizons, split, "test")
+    validation_stages = _common_stages(data, horizons, split, "validation", feature_set)
+    test_stages = _common_stages(data, horizons, split, "test", feature_set)
     validation_tables, test_tables, selection_rows = [], [], []
     selection, models = {}, {}
     for horizon in horizons:
@@ -224,6 +254,9 @@ def run_backtest(weather, *, horizons=DEFAULT_HORIZONS, train_start=None,
     metadata["selection"] = {str(h): spec for h, spec in selection.items()}
     metadata["selection_basis"] = "validation_speed_mae"
     metadata["n_train_by_horizon"] = {str(h): item["n_train"] for h, item in models.items()}
+    metadata["input_columns_by_horizon"] = {str(h): {"model": item["columns"],
+                                                     "comparison": test_stages[h]["inputs"]}
+                                             for h, item in models.items()}
     metadata["evaluation_kind"] = "retrospective_observation_cutoff"
     metadata["observation_release_delay_modelled"] = False
     return {"predictions": pd.concat(test_tables, ignore_index=True),
@@ -274,13 +307,12 @@ def forecast_future(weather, *, horizons=DEFAULT_HORIZONS, cutoff=None, train_st
     station = str(station or data.attrs.get("station", "観測地点"))
     # 予測起点までの観測は利用可能。学習の答えもこの時刻以前に限定する。
     climatology = wp.fit_climatology(data, issue + pd.Timedelta(nanoseconds=1), start)
-    tables, models, selection = [], {}, {}
+    tables, models, selection, input_columns = [], {}, {}, {}
     for horizon in horizons:
         table = wp.add_climatology_columns(wp.make_forecast_table(data, horizon), climatology)
         in_train = (table.index >= start) & (table["target_time"] <= issue)
-        recent = wp.recent_columns(table.loc[in_train])
-        inputs = list(wp.CALENDAR_COLUMNS) + list(wp.CLIMATOLOGY_COLUMNS) + recent + list(wp.CYCLE_COLUMNS)
-        train = table.loc[in_train].dropna(subset=inputs + ["target_u", "target_v"])
+        recent, model_columns, inputs = _input_columns(table, in_train, feature_set)
+        train = table.loc[in_train].dropna(subset=model_columns + ["target_u", "target_v"])
         if len(train) < MIN_TRAIN_ROWS:
             raise ValueError(f"{horizon}時間先の学習用データが{len(train)}行です。"
                              "欠測と直近24時間の入力分を除いた後で、30日以上のデータが必要です。")
@@ -295,6 +327,7 @@ def forecast_future(weather, *, horizons=DEFAULT_HORIZONS, cutoff=None, train_st
         bundle = _fit_bundle(stage, spec, seed)
         models[horizon] = bundle
         selection[horizon] = spec
+        input_columns[str(horizon)] = {"model": model_columns, "comparison": inputs}
         for name in (*BASELINES, spec):
             values = _predictions(stage, name, bundle if name == spec else None)
             result = _long_table(data, stage, horizon, name, values, station)
@@ -306,6 +339,7 @@ def forecast_future(weather, *, horizons=DEFAULT_HORIZONS, cutoff=None, train_st
                      "evaluation_kind": "not_yet_observed", "observations_available": False,
                      "selection": {str(h): spec for h, spec in selection.items()},
                      "selection_metric": None,
+                     "input_columns_by_horizon": input_columns,
                      "selection_basis": "provided_methods" if selected_methods is not None else "fixed_linear_default",
                      "observation_release_delay_modelled": False})
     return {"predictions": pd.concat(tables, ignore_index=True), "models": models,
