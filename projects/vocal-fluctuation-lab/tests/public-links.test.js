@@ -34,4 +34,9 @@ assert.deepEqual(JSON.parse(fs.readFileSync(catalogue, 'utf8')),
   JSON.parse(fs.readFileSync(path.join(project, 'data/reference_catalogue_public.json'), 'utf8')),
   'Published catalogue must match the bundled reference catalogue');
 checks++;
+const listening = 'reference_listening_links.json';
+assert.deepEqual(JSON.parse(fs.readFileSync(path.join(site, 'vocal-fluctuation-lab/data', listening), 'utf8')),
+  JSON.parse(fs.readFileSync(path.join(project, 'data', listening), 'utf8')),
+  'Published listening links must match the bundled reference links');
+checks++;
 console.log(`${checks} public link and asset checks passed.`);

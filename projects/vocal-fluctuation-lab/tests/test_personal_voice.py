@@ -1,5 +1,7 @@
 """自分の録音向けの設定と、現在の比較DBの一覧を確認します。"""
 from copy import deepcopy
+import importlib.util
+import json
 from pathlib import Path
 import sys
 import tempfile
@@ -152,6 +154,44 @@ class PersonalVoiceTests(unittest.TestCase):
 
 
 class DatabaseCatalogueTests(unittest.TestCase):
+    def test_listening_links_match_curated_songs_without_claiming_a_measurement_source(self):
+        project = Path(__file__).resolve().parents[1]
+        database = db.load_database(project / "data/reference_database.json")
+        rendered = ui.database_catalogue_html(database)
+        self.assertEqual(rendered.count('target="_blank"'), 12)
+        self.assertEqual(rendered.count('rel="noopener noreferrer"'), 12)
+        self.assertIn('https://www.youtube.com/watch?v=8ArAnXLbFck', rendered)
+        self.assertIn('YOSHIKI公式で曲を聴く', rendered)
+        cune_row = next(row for row in rendered.split("<tr>") if "星をみてれば" in row)
+        self.assertNotIn("href=", cune_row.split("</tr>")[0])
+        self.assertIn("測定に使用した音源へのリンクではありません", rendered)
+        spec = importlib.util.spec_from_file_location("vocal_notebook_builder", project / "scripts/build_notebook.py")
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        markdown = builder.default_reference_markdown()
+        self.assertEqual(markdown.count("https://www.youtube.com/watch?v="), 12)
+        self.assertIn("測定に使用した音源へのリンクではありません", markdown)
+
+    def test_listening_links_reject_unsafe_urls_and_a_false_source_declaration(self):
+        project = Path(__file__).resolve().parents[1]
+        fixture = json.loads((project / "data/reference_listening_links.json").read_text())
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "links.json"
+            self.assertEqual(ui.listening_references(path), {})
+            path.write_text("{broken")
+            self.assertEqual(ui.listening_references(path), {})
+            for url in ["javascript:alert(1)", "https://www.youtube.com.evil.example/watch?v=A_MjCqQoLLA", "http://www.youtube.com/watch?v=A_MjCqQoLLA"]:
+                fixture["references"][0]["url"] = url
+                path.write_text(json.dumps(fixture))
+                self.assertNotIn(("The Beatles", "Hey Jude"), ui.listening_references(path))
+            fixture["measured_source"] = True
+            path.write_text(json.dumps(fixture))
+            self.assertEqual(ui.listening_references(path), {})
+            with patch.object(ui, "BUNDLED_LISTENING_LINKS_PATH", path):
+                rendered = ui.database_catalogue_html(catalogue())
+            self.assertIn("曲A", rendered)
+            self.assertNotIn('href=', rendered)
+
     def test_catalogue_groups_intervals_across_processing_records_and_escapes_names(self):
         data = catalogue()
         data = db.add_reference(data, analysis(3), "声のみの歌手", "曲A")

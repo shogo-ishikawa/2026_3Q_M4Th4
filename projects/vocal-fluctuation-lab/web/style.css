@@ -370,6 +370,11 @@ footer > div:last-child { display: flex; gap: 18px; }
 .catalogue-toolbar input:disabled { opacity: .65; }
 .catalogue-status { margin: 18px 0 0; color: #526383; font-size: 12px; line-height: 1.8; }
 .catalogue-status.error { color: #a83b3b; }
+.listening-note { margin-bottom: 24px; }
+.listening-status { margin: 7px 0 0; color: var(--muted); font-size: 12px; line-height: 1.8; }
+.listening-status.error { color: #a83b3b; }
+.listening-reference { display: block; margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.6; }
+.listening-reference a { color: var(--cobalt); text-underline-offset: 3px; }
 .catalogue-panel .comparison-table { margin: 20px 0 9px; border: 1px solid var(--line); border-radius: 11px; }
 .catalogue-table { min-width: 520px; }
 .catalogue-table th, .catalogue-table td { padding: 15px 16px; }

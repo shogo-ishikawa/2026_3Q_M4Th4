@@ -1,11 +1,12 @@
 """個人情報や実行結果を含まない、配布用Notebookを生成します。"""
 import json
 from pathlib import Path
+import re
 import textwrap
 
 
 PROJECT = Path(__file__).resolve().parents[1]
-NOTEBOOK_VERSION = "1.7.1"
+NOTEBOOK_VERSION = "1.7.2"
 
 
 def markdown(source):
@@ -19,10 +20,27 @@ def code(source, title):
 def default_reference_markdown():
     """配布する比較DBから、数値結果に対応する曲名の一覧を作ります。"""
     records = json.loads((PROJECT / "data/reference_database.json").read_text(encoding="utf-8"))["references"]
-    rows = ["### 初期DBに数値結果を登録している曲", "", "音声ファイルや音楽データは含みません。すべてAIで抽出した歌声の解析結果です。", "", "| アーティスト | 曲名 |", "| --- | --- |"]
+    links = {}
+    try:
+        data = json.loads((PROJECT / "data/reference_listening_links.json").read_text(encoding="utf-8"))
+        if (data.get("schema_version") == "vocal-reference-listening-links-v1"
+                and data.get("purpose") == "song-identification" and data.get("measured_source") is False):
+            for row in data.get("references", []):
+                if (isinstance(row, dict) and isinstance(row.get("url"), str)
+                        and all(isinstance(row.get(key), str) for key in ("artist", "track", "publisher"))
+                        and re.fullmatch(r"https://www\.youtube\.com/watch\?v=[A-Za-z0-9_-]{11}", row["url"])):
+                    links[(row["artist"], row["track"])] = row
+    except (OSError, ValueError, AttributeError, TypeError):
+        pass
+    rows = ["### 初期DBに数値結果を登録している曲", "", "音声ファイルや音楽データは含みません。すべてAIで抽出した歌声の解析結果です。", "", "付いているリンクは楽曲紹介用の公式公開動画です。**測定に使用した音源へのリンクではありません。** 録音版・ライブ演奏・ミックスなどが測定対象と異なる場合があります。", "", "| アーティスト | 曲名 |", "| --- | --- |"]
     for record in records:
         values = [record["artist"], record["track"]]
-        rows.append("| " + " | ".join(value.replace("|", "\\|").replace("\n", " ") for value in values) + " |")
+        values = [value.replace("|", "\\|").replace("\n", " ") for value in values]
+        link = links.get((record["artist"], record["track"]))
+        if link:
+            label = "YOSHIKI公式で曲を聴く ↗" if link["publisher"] == "YOSHIKI" else "公式動画で曲を聴く ↗"
+            values[1] += " · [" + label + "](" + link["url"] + ")"
+        rows.append("| " + " | ".join(values) + " |")
     rows.extend(["", "比較は、解析・前処理の記録が一致する結果を使います。各アーティストの登録は、その曲の録音に基づく参考値です。"])
     return "\n".join(rows)
 
@@ -89,7 +107,7 @@ def build_notebook():
             except (AttributeError, ValueError):
                 version = ()
             try:
-                features = (version >= (1, 7, 1) and audio.MAX_SECONDS >= 600
+                features = (version >= (1, 7, 2) and audio.MAX_SECONDS >= 600
                             and analysis.METHOD_ID == "rms-welch-v2"
                             and hasattr(analysis.AnalysisConfig(), "auto_band")
                             and analysis.AnalysisConfig().high_hz >= 20

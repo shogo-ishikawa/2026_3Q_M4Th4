@@ -2,21 +2,23 @@
 
 このフォルダには音声ファイルや楽曲を再生するためのデータ、全長の包絡を含めていません。利用者から提供された13曲・13アーティストの解析結果を、数値の参考DBとして同梱しています。すべてAIで抽出した歌声の測定結果で、固定0.2〜20 Hz・Welch窓20秒へ再計算しています。元の自動モードの値は別に記録し、上書きしていません。
 
-| アーティスト | 曲名 |
+曲名のリンクは、楽曲を紹介するための公式公開動画です。**測定に使用した音源へのリンクではありません。** 録音版、ライブ演奏、ミックスなどが測定対象と異なる場合があります。「紅」はYOSHIKI公式の映像を案内し、cuneはリンクなしにしています。
+
+| アーティスト | 曲名（楽曲紹介リンク） |
 | --- | --- |
-| The Beatles | Hey Jude |
-| Nirvana | Smells Like Teen Spirit |
-| Tommy february6 | je t'aime ★ je t'aime |
-| Muse | Invincible |
-| 岩瀬敬吾 | レディオステレオ |
-| 斉藤和義 | 歩いて帰ろう |
-| X JAPAN | 紅 |
-| 東京事変 | 群青日和 |
-| T.M.Revolution | WHITE BREATH |
-| cune | 星をみてれば |
-| スピッツ | 春の歌 |
-| L'Arc-en-Ciel | DIVE TO BLUE |
-| hide | HURRY GO ROUND |
+| The Beatles | [Hey Jude](https://www.youtube.com/watch?v=A_MjCqQoLLA) |
+| Nirvana | [Smells Like Teen Spirit](https://www.youtube.com/watch?v=hTWKbfoikeg) |
+| Tommy february6 | [je t'aime ★ je t'aime](https://www.youtube.com/watch?v=I4JrXQrvidw) |
+| Muse | [Invincible](https://www.youtube.com/watch?v=D_5V8We3hgg) |
+| 岩瀬敬吾 | [レディオステレオ](https://www.youtube.com/watch?v=L9YxKiEPS2c) |
+| 斉藤和義 | [歩いて帰ろう](https://www.youtube.com/watch?v=g_VMBjjOjvY) |
+| X JAPAN | [紅](https://www.youtube.com/watch?v=8ArAnXLbFck) |
+| 東京事変 | [群青日和](https://www.youtube.com/watch?v=gD2mhJ3ByGQ) |
+| T.M.Revolution | [WHITE BREATH](https://www.youtube.com/watch?v=Xnws-1Oz4kM) |
+| cune | 星をみてれば（リンクなし） |
+| スピッツ | [春の歌](https://www.youtube.com/watch?v=94uxNQqmknk) |
+| L'Arc-en-Ciel | [DIVE TO BLUE](https://www.youtube.com/watch?v=l7LM_lZ91nk) |
+| hide | [HURRY GO ROUND](https://www.youtube.com/watch?v=JkKSPhq-u-I) |
 
 新しいColabでAI抽出から進めた結果と、旧版でAI抽出して保存したWAVを再解析した結果があります。この違いは再解析時の入力経路であり、AI抽出を行ったかどうかの分類ではありません。記録にない過去のモデルの版は推定して書き換えていません。音源の録音版と分離品質を音声で照合したDBではなく、各歌手1曲の参考値です。名義と曲名は提出情報を整理したもので、今回の録音版を同定したという意味ではありません。
 
@@ -25,6 +27,8 @@
 Tommy february6「je t'aime ★ je t'aime」は、新しいDemucs分離結果へ置き換え、通常DBに登録しました。今回の入力は284.6067秒、前後の無音調整後は267.46秒で、途中の無音は残しています。以前の253.14秒の入力は、旧測定で途中無音を14.32秒除いた後の長さと一致したため参考枠としていました。その旧記録と置き換え理由は履歴として残し、比較には使いません。
 
 ## 同梱ファイル
+
+- `reference_listening_links.json`：楽曲紹介用の公式公開動画への参照リンクです。測定音源の出典とは別に管理し、音声は含めません。
 
 - `reference_database.json`：Colabが起動時に読み込む13曲の比較DBです。ファイルを手動で読み込むこともできます。
 - `reference_measurements.json`：提供された13曲の元の自動モードと固定モードの推定値、設定、品質、出典ハッシュ、PSD再現確認の記録です。
