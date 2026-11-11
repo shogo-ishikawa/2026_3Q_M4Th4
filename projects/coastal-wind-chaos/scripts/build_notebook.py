@@ -18,9 +18,9 @@ import nbformat
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = PROJECT_DIR / "notebooks" / "coastal_wind_hands_on.ipynb"
 
-# main に取り込んだ後は、BRANCH を "main" に変える（Colab のリンクと、Notebook の中の取得先が変わる）
+# 公開版のリンクと取得先をmainにそろえる。
 REPOSITORY = "shogo-ishikawa/2026_3Q_M4Th4"
-BRANCH = "claude/ecstatic-dirac-af710c"
+BRANCH = "main"
 NOTEBOOK_IN_REPOSITORY = "projects/coastal-wind-chaos/notebooks/coastal_wind_hands_on.ipynb"
 COLAB_URL = f"https://colab.research.google.com/github/{REPOSITORY}/blob/{BRANCH}/{NOTEBOOK_IN_REPOSITORY}"
 
@@ -60,7 +60,7 @@ md("""
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](COLAB_URL)
 
-このリンクと、下の「0. 準備」の `BRANCH` は、どちらも作業ブランチ `BRANCH_NAME` の同じ版を指しています。作品が main に取り込まれた後は、どちらも main に変えます。
+このリンクと、下の「0. 準備」の `BRANCH` は、どちらも公開ブランチ `BRANCH_NAME` の同じ版を指しています。
 
 ### この教材で学ぶこと
 
@@ -103,7 +103,7 @@ import sys
 from pathlib import Path
 
 REPOSITORY_URL = "https://github.com/shogo-ishikawa/2026_3Q_M4Th4.git"
-BRANCH = "BRANCH_NAME"  # 作品が main に取り込まれた後は "main" に変える
+BRANCH = "BRANCH_NAME"
 PROJECT = Path("projects/coastal-wind-chaos")
 IN_COLAB = "google.colab" in sys.modules
 

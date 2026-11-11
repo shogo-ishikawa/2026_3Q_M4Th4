@@ -1,4 +1,21 @@
-# 海辺の風は何時間先まで予測できるか――機械学習とカオスから考える予測可能性
+# 海岸の風速・風向予報ラボ v1.0.0
+
+身近な海岸の風は、どの予報でどの程度わかるのでしょうか。学生が取り組んだ材木座周辺の予報比較を入口に、既存の気象予報を並べ、観測で答え合わせをし、観測から自分のモデルを学習するColab教材です。
+
+[Colabで予報ラボを開く](https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/feature/coastal-wind-colab-v1/projects/coastal-wind-chaos/notebooks/coastal_wind_forecast_lab.ipynb) · [使い方](docs/forecast-user-guide.md) · [解析方法](docs/forecast-method.md) · [出力形式](docs/forecast-format.md)
+
+最初はColabで「すべてのセルを実行」を選び、操作画面の「デモで過去検証」から「解析を実行」を押します。Google Driveや自分のデータは不要です。デモには仮想観測点の合成データを使い、実際の観測や材木座の精度と区別します。
+
+| 入口 | 内容 |
+| --- | --- |
+| [風速・風向予報ラボ](notebooks/coastal_wind_forecast_lab.ipynb) | 既存予報の比較、過去の精度検証、将来予測。風速・風向の誤差、条件別の偏り、持続予報からの改善度を調べ、結果をZIPに保存する |
+| [機械学習とカオスのハンズオン](notebooks/coastal_wind_hands_on.ipynb) | 風向の表し方、特徴量の比較、予測時間による性能の変化、独立したローレンツ系の実験をコードで学ぶ発展教材 |
+
+材木座は気象予報を比較する地点です。観測による検証と機械学習は辻堂・三浦などの観測所ごとに行い、その精度を材木座海岸の実測精度とは扱いません。Web版は仕組みの解説と結果の表示、Colab版は取得・学習・解析を担当する構成です。Webの表示画面は別途整備します。
+
+## 発展教材：海辺の風は何時間先まで予測できるか
+
+以下は、従来の「機械学習とカオスから考える予測可能性」の説明です。新しい予報ラボと共通の読込・特徴量・予測処理を使いますが、実験の目的と操作画面は分けています。
 
 海辺の風向きを、単純な予報（基準予報）と機械学習で何時間先まで予測できるかを調べ、予測が外れる原因を考えるPython教材です。あわせて、ローレンツ系で「カオス（初期値鋭敏性）」を体験します。Pythonの変数・条件分岐・繰り返し・自作関数を学んだ人を対象とし、機械学習や気象学の知識は前提にしません。
 
@@ -15,14 +32,12 @@
 
 ## すぐに使う
 
-この作品は、作業ブランチ `claude/ecstatic-dirac-af710c` にあります（main には未取り込み）。次のリンクは、どちらもこのブランチの同じ版を指します。Notebook の中でリポジトリを取得する設定（`BRANCH`）も、同じブランチです。
+発展教材は `main` ブランチから開けます。上の予報ラボとは別のNotebookです。
 
-- Notebook（GitHub で見る）：<https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/claude/ecstatic-dirac-af710c/projects/coastal-wind-chaos/notebooks/coastal_wind_hands_on.ipynb>
-- Colab で開く：<https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/claude/ecstatic-dirac-af710c/projects/coastal-wind-chaos/notebooks/coastal_wind_hands_on.ipynb>
+- Notebook（GitHub で見る）：<https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/coastal-wind-chaos/notebooks/coastal_wind_hands_on.ipynb>
+- Colab で開く：<https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/coastal-wind-chaos/notebooks/coastal_wind_hands_on.ipynb>
 
-Colab のリンクが開けない場合は、Colab の「ファイル」→「ノートブックを開く」の「GitHub」で `shogo-ishikawa/2026_3Q_M4Th4` を入力し、ブランチ `claude/ecstatic-dirac-af710c` の `projects/coastal-wind-chaos/notebooks/coastal_wind_hands_on.ipynb` を選んでも開けます（Colab の画面での操作は確認していません）。
-
-main に取り込んだ後は、上の2つのリンクの `claude/ecstatic-dirac-af710c` と、`scripts/build_notebook.py` の `BRANCH` を `main` に変え、Notebook を作り直します。
+Colab のリンクが開けない場合は、Colab の「ファイル」→「ノートブックを開く」の「GitHub」で `shogo-ishikawa/2026_3Q_M4Th4` を入力し、ブランチ `main` の `projects/coastal-wind-chaos/notebooks/coastal_wind_hands_on.ipynb` を選んでも開けます（Colab の画面での操作は確認していません）。
 
 Colab では、開いたら上から順にセルを実行します。最初のセルがリポジトリをHTTPSで `/content/2026_3Q_M4Th4-（ブランチ名の / を - にした名前）/` に取得し、作品フォルダ `projects/coastal-wind-chaos/` を作業ディレクトリにして、この作品のパッケージをインストールします。Notebookの中の相対パスは、すべて作品フォルダが基準です。パッケージのコードを書き換えたときの注意（セッションの再起動など）は、Notebook の10節にあります。
 
@@ -69,7 +84,6 @@ Python 3.11 以上が必要です。
 ```bash
 git clone https://github.com/shogo-ishikawa/2026_3Q_M4Th4.git
 cd 2026_3Q_M4Th4
-git checkout claude/ecstatic-dirac-af710c      # main に取り込まれた後は不要
 cd projects/coastal-wind-chaos
 python -m venv .venv
 source .venv/bin/activate                      # Windows では .venv\Scripts\activate
