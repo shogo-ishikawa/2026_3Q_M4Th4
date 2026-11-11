@@ -5,7 +5,7 @@ import textwrap
 
 
 PROJECT = Path(__file__).resolve().parents[1]
-NOTEBOOK_VERSION = "1.4.0"
+NOTEBOOK_VERSION = "1.5.0"
 
 
 def markdown(source):
@@ -78,7 +78,7 @@ def build_notebook():
             except (AttributeError, ValueError):
                 version = ()
             try:
-                features = (version >= (1, 3, 1) and audio.MAX_SECONDS >= 600
+                features = (version >= (1, 5, 0) and audio.MAX_SECONDS >= 600
                             and analysis.METHOD_ID == "rms-welch-v2"
                             and hasattr(analysis.AnalysisConfig(), "auto_band")
                             and analysis.AnalysisConfig().high_hz >= 20
@@ -88,6 +88,7 @@ def build_notebook():
                             and hasattr(notebook_ui.VocalNotebookUI, "_analysis_config")
                             and hasattr(notebook_ui.VocalNotebookUI, "upload_audio_from_colab")
                             and hasattr(notebook_ui.VocalNotebookUI, "_use_runtime_file")
+                            and hasattr(notebook_ui.VocalNotebookUI, "_update_db_coverage")
                             and hasattr(notebook_ui.VocalNotebookUI, "_switch_whole_track")
                             and "silence_config" in inspect.signature(pipeline.run_analysis).parameters
                             and SilenceConfig().trim_edges and not SilenceConfig().remove_internal)
@@ -232,7 +233,10 @@ def build_notebook():
         markdown("""
         ## 4 比較DBを作って使う
 
-        初期状態には、実測済みのアーティストDBは入っていません。
+        起動時に、6曲・6アーティストの参考DBを読み込みます。比較するときは固定モードを選びます。
+        Nirvana、斉藤和義、X JAPAN、東京事変、cune、hideの測定値を登録しています。
+        保存済み歌声WAVの入力とDemucsで分離した入力は別条件です。画面には総登録数と今回比較できる曲数を表示します。
+        Tommy february6は途中無音を除いた旧音源と長さが一致するため、通常比較へ混ぜず参考枠に保存しています。
         解析方法や区間が分からない数値を混ぜず、同じ方法で測った結果を蓄積します。
 
         1. 「解析モード」を「固定（比較DB用：0.2〜20 Hz）」にし、比較の基準にしたい音源を解析します。

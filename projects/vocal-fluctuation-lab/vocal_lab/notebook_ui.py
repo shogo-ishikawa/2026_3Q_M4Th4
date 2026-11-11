@@ -14,8 +14,9 @@ from uuid import uuid4
 from zipfile import ZipFile, ZIP_DEFLATED
 
 
-AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".flac", ".ogg", ".aac", ".aiff", ".aif", ".webm"}
+AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".mp4", ".flac", ".ogg", ".aac", ".aiff", ".aif", ".webm"}
 MAX_UPLOAD_BYTES = 512 * 1024 * 1024
+BUNDLED_DATABASE_PATH = Path(__file__).resolve().parents[1] / "data" / "reference_database.json"
 
 # FileUploadの標準ビューは説明に件数を付けます。ファイル入力の動作を保ち、
 # この音源ボタンだけを固定ラベルで表示します（widget自体がbuttonの版にも対応）。
@@ -298,7 +299,8 @@ class VocalNotebookUI:
         if pipeline is None:
             from .pipeline import run_analysis
             pipeline = run_analysis
-        if database is None:
+        use_bundled_database = database is None
+        if use_bundled_database:
             from . import reference_db
             database = reference_db
         self.run_pipeline, self.db_api = pipeline, database
@@ -314,6 +316,16 @@ class VocalNotebookUI:
         self._audio_input_route: str | None = None
         self._audio_upload_busy = False
         self.database = self.db_api.empty_database()
+        database_notice = "実測済みの比較DBは、まだ読み込まれていません。複数曲を同じ条件で登録すると比較できます。"
+        if use_bundled_database:
+            if BUNDLED_DATABASE_PATH.is_file():
+                try:
+                    self.database = self.db_api.load_database(BUNDLED_DATABASE_PATH)
+                    database_notice = "同梱の比較DBを読み込みました。登録曲数と、今回の条件で比較できる曲数を下に表示します。"
+                except (ValueError, OSError) as error:
+                    database_notice = "同梱の比較DBを読み込めませんでした：" + str(error) + "。比較DBのJSONを選んで読み込めます。"
+            else:
+                database_notice = "同梱の比較DBが見つかりません。比較DBのJSONを選んで読み込むか、解析した結果を追加してください。"
         self.bundle = None
         self.results_zip = None
         self.version_banner = widgets.HTML(
@@ -379,8 +391,10 @@ class VocalNotebookUI:
         self.track = widgets.Text(description="曲名", placeholder="同じ曲を重ねて登録しないようにします", style={"description_width": "initial"})
         self.add_reference_button = widgets.Button(description="この結果を比較DBへ追加", disabled=True)
         self.db_download = widgets.Button(description="比較DBを保存", icon="download")
-        self.db_status = widgets.HTML("<p>実測済みの比較DBは、まだ読み込まれていません。複数曲を同じ条件で登録すると比較できます。</p>")
+        self.db_status = widgets.HTML("<p>" + html.escape(database_notice) + "</p>")
+        self.db_coverage = widgets.HTML()
         self.comparison_output = widgets.HTML()
+        self._update_db_coverage()
         self.mode.observe(self._switch_mode, names="value")
         self.audio_upload.observe(self._audio_selected, names="value")
         self.colab_upload_button.on_click(lambda button: self.upload_audio_from_colab())
@@ -409,7 +423,7 @@ class VocalNotebookUI:
             self.silence_options, self.analyse_button, self.status,
             self.result_output, widgets.HBox([self.result_download, self.raw_vocals_download, self.vocals_download], layout=widgets.Layout(flex_flow="row wrap")),
             widgets.HTML("<h2>2 登録アーティストと比べる</h2><p>この比較は声の本人判定ではありません。音量変動の特徴を同じ方法で測った登録曲と比べます。比較DBは保存して、次回読み込めます。</p>"),
-            self.db_upload, self.db_status, self.artist, self.track,
+            self.db_upload, self.db_status, self.db_coverage, self.artist, self.track,
             widgets.HBox([self.add_reference_button, self.db_download], layout=widgets.Layout(flex_flow="row wrap")), self.comparison_output,
         ])
 
@@ -427,6 +441,7 @@ class VocalNotebookUI:
         self.result_download.disabled = self.vocals_download.disabled = self.raw_vocals_download.disabled = self.add_reference_button.disabled = True
         self.result_output.clear_output(wait=False)
         self.comparison_output.value = ""
+        self._update_db_coverage()
 
     def _clear_audio_selection(self):
         self._audio_input_path = None
@@ -618,7 +633,38 @@ class VocalNotebookUI:
             self.display(figure)
             plt.close(figure)
 
+    def _update_db_coverage(self):
+        records = self.database.get("references", [])
+        guidance = "比較するときは「固定（比較DB用：0.2〜20 Hz）」を選びます。歌声分離を省略した音源と、Demucsで分離した音源は別の条件として扱います。"
+        fallback = "登録：" + str(len(records)) + "区間。"
+        try:
+            coverage_function = getattr(self.db_api, "comparison_coverage", None)
+            if not callable(coverage_function):
+                self.db_coverage.value = "<p>" + fallback + guidance + "</p>"
+                return
+            coverage = coverage_function(self.bundle["analysis"] if self.bundle else None, self.database)
+            if not isinstance(coverage, dict):
+                self.db_coverage.value = "<p>" + fallback + guidance + "</p>"
+                return
+            total = coverage["total"]
+            text = f"登録：{total['tracks']}曲・{total['artists']}アーティスト。"
+            if coverage["eligible"] is not None:
+                eligible = coverage["eligible"]
+                text += f" 今回比較できるのは{eligible['tracks']}曲・{eligible['artists']}アーティストです。"
+                reasons = []
+                for key, label in [("settings_excluded", "帯域・窓・無音設定の違い"),
+                                   ("processing_excluded", "歌声分離方法・モデルの違い"),
+                                   ("self_excluded", "同じ音源・同じ区間")]:
+                    if coverage[key]:
+                        reasons.append(f"{label}：{coverage[key]}区間")
+                if reasons:
+                    text += " 除外した記録（" + "、".join(reasons) + "）。"
+            self.db_coverage.value = "<p>" + html.escape(text + " " + guidance) + "</p>"
+        except ValueError as error:
+            self.db_coverage.value = "<p>" + html.escape(fallback + "今回の比較条件は確認できません：" + str(error) + " " + guidance) + "</p>"
+
     def _show_comparison(self):
+        self._update_db_coverage()
         if not self.bundle:
             return
         try:

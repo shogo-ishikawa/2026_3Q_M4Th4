@@ -1,0 +1,725 @@
+{
+  "schema_version": "vocal-reference-measurements-v1",
+  "package_version": "1.5.0",
+  "prepared_at": "2026-11-11T01:07:28.719666+00:00",
+  "input_archive_sha256": "0a3fd17baefaf6f0d6659eb15b8fc9c4462db53bd2a3fb31d3c3c27bdab06b0a",
+  "reanalysis_method": "stored-envelope-fixed-band",
+  "audio_included": false,
+  "full_envelope_included": false,
+  "records": [
+    {
+      "artist": "Nirvana",
+      "track": "Smells Like Teen Spirit",
+      "include_in_comparison": true,
+      "holdout_reason": "",
+      "original_result_sha256": "247ffe9d843f6711220e430558cef5248d4d38c0a8720109aee3ced7976ec462",
+      "original_created_at": "2026-11-11T00:06:36.695290+00:00",
+      "reanalysis": {
+        "method_id": "stored-envelope-reanalysis-v1",
+        "source_result_canonical_sha256": "d45ea568d8685594b744830d94a229fd2d307abcc4be8796304f01f378953eae",
+        "source_config": {
+          "low_hz": 0.02,
+          "high_hz": 20.0,
+          "segment_seconds": 120.0,
+          "auto_band": true
+        },
+        "source_analysis_signature": "{\"analysis_signature\":\"7056f2a71fd8432d371c939a\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+        "source_created_at": "2026-11-11T00:06:36.695290+00:00",
+        "created_at": "2026-11-11T01:07:27.853574+00:00"
+      },
+      "original_config": {
+        "low_hz": 0.02,
+        "high_hz": 20.0,
+        "segment_seconds": 120.0,
+        "auto_band": true
+      },
+      "original_fit": {
+        "slope": -0.9975959498459728,
+        "intercept": -4.509378845450806,
+        "r_squared": 0.8485790152724022,
+        "distance_to_pink": 0.0024040501540272263,
+        "band_low_hz": 0.09917355371900827,
+        "band_high_hz": 20.0,
+        "segment_seconds": 30.25,
+        "bin_count": 24
+      },
+      "fixed_config": {
+        "low_hz": 0.2,
+        "high_hz": 20.0,
+        "segment_seconds": 20.0,
+        "auto_band": false
+      },
+      "fixed_fit": {
+        "slope": -1.0872186005606828,
+        "intercept": -4.445387704111799,
+        "r_squared": 0.7992360059972496,
+        "distance_to_pink": 0.08721860056068276,
+        "band_low_hz": 0.2,
+        "band_high_hz": 20.0,
+        "segment_seconds": 20.0,
+        "bin_count": 24
+      },
+      "fixed_quality": {
+        "method_id": "four-block-welch-v2",
+        "usable_for_comparison": true,
+        "reasons": [],
+        "duration_ok": true,
+        "variable_envelope": true,
+        "near_zero_fraction": 0.03276588711676721,
+        "fit_bins": 24,
+        "log_span_decades": 2.0,
+        "welch_segments": 23,
+        "independent_blocks": 4,
+        "block_slopes": [
+          -1.0972417541901909,
+          -1.2194872003050035,
+          -1.318607852058824,
+          -0.855825282808149
+        ],
+        "block_slope_spread": 0.46278256925067507
+      },
+      "duration_seconds": 242.02,
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "separation_method": "already-vocals",
+      "model_version": "",
+      "preprocessing": {
+        "method_id": "rms-silence-v1",
+        "settings": {
+          "trim_edges": true,
+          "remove_internal": false,
+          "threshold_db": -40.0,
+          "min_silence_seconds": 0.5,
+          "padding_seconds": 0.05
+        },
+        "rms_frame_seconds": 0.02,
+        "input_duration_seconds": 242.02,
+        "output_duration_seconds": 242.02,
+        "leading_removed_seconds": 0.0,
+        "trailing_removed_seconds": 0.0,
+        "internal_removed_seconds": 0.0,
+        "kept_segments_seconds": [
+          [
+            0.0,
+            242.02
+          ]
+        ],
+        "timeline_modified": false,
+        "peak_rms": 0.11816120154964127,
+        "threshold_rms": 0.0011816120154964128
+      },
+      "source_audio_sha256": "00fa7e8ec57432330aba1e9c058f5d6a3d4361ad51977989466d47df827a381f"
+    },
+    {
+      "artist": "Tommy february6",
+      "track": "je t'aime ★ je t'aime",
+      "include_in_comparison": false,
+      "holdout_reason": "今回の入力253.14秒が、旧測定で途中無音を14.32秒除去した後の253.14秒と一致します。同じ加工済みWAVの可能性があるため、前歴が確認できるまで参考枠に保存します。",
+      "original_result_sha256": "3e6cccd6820772fdfc7e47f171befc1e2d8136abccaa7759e27834063ad58ae0",
+      "original_created_at": "2026-11-10T15:16:31.367320+00:00",
+      "reanalysis": {
+        "method_id": "stored-envelope-reanalysis-v1",
+        "source_result_canonical_sha256": "9ee9a6c6a047b1d7736d868885dddeb4f6918d2fc925b55b60d52abfbef08574",
+        "source_config": {
+          "low_hz": 0.02,
+          "high_hz": 20.0,
+          "segment_seconds": 120.0,
+          "auto_band": true
+        },
+        "source_analysis_signature": "{\"analysis_signature\":\"6756a18a47427f107f9d0168\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+        "source_created_at": "2026-11-10T15:16:31.367320+00:00",
+        "created_at": "2026-11-11T01:07:27.983067+00:00"
+      },
+      "original_config": {
+        "low_hz": 0.02,
+        "high_hz": 20.0,
+        "segment_seconds": 120.0,
+        "auto_band": true
+      },
+      "original_fit": {
+        "slope": -0.9411700316963819,
+        "intercept": -3.67485052287559,
+        "r_squared": 0.8722974574073469,
+        "distance_to_pink": 0.058829968303618085,
+        "band_low_hz": 0.09481668773704172,
+        "band_high_hz": 20.0,
+        "segment_seconds": 31.64,
+        "bin_count": 24
+      },
+      "fixed_config": {
+        "low_hz": 0.2,
+        "high_hz": 20.0,
+        "segment_seconds": 20.0,
+        "auto_band": false
+      },
+      "fixed_fit": {
+        "slope": -1.1023539467321222,
+        "intercept": -3.578416714788117,
+        "r_squared": 0.906922264675542,
+        "distance_to_pink": 0.10235394673212217,
+        "band_low_hz": 0.2,
+        "band_high_hz": 20.0,
+        "segment_seconds": 20.0,
+        "bin_count": 24
+      },
+      "fixed_quality": {
+        "method_id": "four-block-welch-v2",
+        "usable_for_comparison": true,
+        "reasons": [],
+        "duration_ok": true,
+        "variable_envelope": true,
+        "near_zero_fraction": 0.023348609355246523,
+        "fit_bins": 24,
+        "log_span_decades": 2.0,
+        "welch_segments": 24,
+        "independent_blocks": 4,
+        "block_slopes": [
+          -1.1006502394703828,
+          -1.1947780185959183,
+          -1.1000543407517396,
+          -1.0562371912998285
+        ],
+        "block_slope_spread": 0.13854082729608974
+      },
+      "duration_seconds": 253.12,
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "separation_method": "already-vocals",
+      "model_version": "",
+      "preprocessing": {
+        "method_id": "rms-silence-v1",
+        "settings": {
+          "trim_edges": true,
+          "remove_internal": false,
+          "threshold_db": -40.0,
+          "min_silence_seconds": 0.5,
+          "padding_seconds": 0.05
+        },
+        "rms_frame_seconds": 0.02,
+        "input_duration_seconds": 253.14,
+        "output_duration_seconds": 253.12,
+        "leading_removed_seconds": 0.01,
+        "trailing_removed_seconds": 0.01,
+        "internal_removed_seconds": 0.0,
+        "kept_segments_seconds": [
+          [
+            0.01,
+            253.13
+          ]
+        ],
+        "timeline_modified": false,
+        "peak_rms": 0.291215760444625,
+        "threshold_rms": 0.00291215760444625
+      },
+      "source_audio_sha256": "91dff4fb2ce5e8b81412ca1dc11ec2894629cd69be2222424460287e1a03cad0"
+    },
+    {
+      "artist": "斉藤和義",
+      "track": "歩いて帰ろう",
+      "include_in_comparison": true,
+      "holdout_reason": "",
+      "original_result_sha256": "f9bbefca3b796c752c0ca316bc87ad62d161dd37438d0108190919779f1ad362",
+      "original_created_at": "2026-11-11T00:36:54.295571+00:00",
+      "reanalysis": {
+        "method_id": "stored-envelope-reanalysis-v1",
+        "source_result_canonical_sha256": "927334f863ba40857ae63de78c6933d6215987aa2aef1b125086db3e4ce0ffe0",
+        "source_config": {
+          "low_hz": 0.02,
+          "high_hz": 20.0,
+          "segment_seconds": 120.0,
+          "auto_band": true
+        },
+        "source_analysis_signature": "{\"analysis_signature\":\"6ab6a0d34523f48ac67df15f\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+        "source_created_at": "2026-11-11T00:36:54.295571+00:00",
+        "created_at": "2026-11-11T01:07:28.110208+00:00"
+      },
+      "original_config": {
+        "low_hz": 0.02,
+        "high_hz": 20.0,
+        "segment_seconds": 120.0,
+        "auto_band": true
+      },
+      "original_fit": {
+        "slope": -1.4248277124495798,
+        "intercept": -3.1794817178256034,
+        "r_squared": 0.954834959298997,
+        "distance_to_pink": 0.42482771244957984,
+        "band_low_hz": 0.12259910093992644,
+        "band_high_hz": 20.0,
+        "segment_seconds": 24.47,
+        "bin_count": 24
+      },
+      "fixed_config": {
+        "low_hz": 0.2,
+        "high_hz": 20.0,
+        "segment_seconds": 20.0,
+        "auto_band": false
+      },
+      "fixed_fit": {
+        "slope": -1.5096653875475747,
+        "intercept": -3.1284706568179628,
+        "r_squared": 0.9671327876844238,
+        "distance_to_pink": 0.5096653875475747,
+        "band_low_hz": 0.2,
+        "band_high_hz": 20.0,
+        "segment_seconds": 20.0,
+        "bin_count": 24
+      },
+      "fixed_quality": {
+        "method_id": "four-block-welch-v2",
+        "usable_for_comparison": true,
+        "reasons": [],
+        "duration_ok": true,
+        "variable_envelope": true,
+        "near_zero_fraction": 0.013356829093880886,
+        "fit_bins": 24,
+        "log_span_decades": 2.0,
+        "welch_segments": 18,
+        "independent_blocks": 4,
+        "block_slopes": [
+          -1.6018577214937668,
+          -1.468554736722652,
+          -1.5881443982040662,
+          -1.4833395038986492
+        ],
+        "block_slope_spread": 0.1333029847711149
+      },
+      "duration_seconds": 195.78,
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "separation_method": "already-vocals",
+      "model_version": "",
+      "preprocessing": {
+        "method_id": "rms-silence-v1",
+        "settings": {
+          "trim_edges": true,
+          "remove_internal": false,
+          "threshold_db": -40.0,
+          "min_silence_seconds": 0.5,
+          "padding_seconds": 0.05
+        },
+        "rms_frame_seconds": 0.02,
+        "input_duration_seconds": 195.78,
+        "output_duration_seconds": 195.78,
+        "leading_removed_seconds": 0.0,
+        "trailing_removed_seconds": 0.0,
+        "internal_removed_seconds": 0.0,
+        "kept_segments_seconds": [
+          [
+            0.0,
+            195.78
+          ]
+        ],
+        "timeline_modified": false,
+        "peak_rms": 0.29829912163984595,
+        "threshold_rms": 0.0029829912163984594
+      },
+      "source_audio_sha256": "b60af1eae6b834479e22f260301a38f4aca1cdfc4288de9961717103090a5fa3"
+    },
+    {
+      "artist": "X JAPAN",
+      "track": "紅",
+      "include_in_comparison": true,
+      "holdout_reason": "",
+      "original_result_sha256": "edd97113c8615c5b6e1c4e7acfd7eec194bfc0001527f3aa7a7e476e2fa3764f",
+      "original_created_at": "2026-11-10T12:54:37.917097+00:00",
+      "reanalysis": {
+        "method_id": "stored-envelope-reanalysis-v1",
+        "source_result_canonical_sha256": "e51340aa02bb0cf6415729a3ba427a632c747ec6acd34b0858b63775478726f8",
+        "source_config": {
+          "low_hz": 0.02,
+          "high_hz": 20.0,
+          "segment_seconds": 120.0,
+          "auto_band": true
+        },
+        "source_analysis_signature": "{\"analysis_signature\":\"32c57c662bb8d74b609e987c\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+        "source_created_at": "2026-11-10T12:54:37.917097+00:00",
+        "created_at": "2026-11-11T01:07:28.322611+00:00"
+      },
+      "original_config": {
+        "low_hz": 0.02,
+        "high_hz": 20.0,
+        "segment_seconds": 120.0,
+        "auto_band": true
+      },
+      "original_fit": {
+        "slope": -1.2605873848125517,
+        "intercept": -4.399058958099568,
+        "r_squared": 0.9691232950272769,
+        "distance_to_pink": 0.2605873848125517,
+        "band_low_hz": 0.06317784563546383,
+        "band_high_hz": 20.0,
+        "segment_seconds": 47.485,
+        "bin_count": 24
+      },
+      "fixed_config": {
+        "low_hz": 0.2,
+        "high_hz": 20.0,
+        "segment_seconds": 20.0,
+        "auto_band": false
+      },
+      "fixed_fit": {
+        "slope": -1.409332869156994,
+        "intercept": -4.271161647064736,
+        "r_squared": 0.9763399062496391,
+        "distance_to_pink": 0.40933286915699396,
+        "band_low_hz": 0.2,
+        "band_high_hz": 20.0,
+        "segment_seconds": 20.0,
+        "bin_count": 24
+      },
+      "fixed_quality": {
+        "method_id": "four-block-welch-v2",
+        "usable_for_comparison": true,
+        "reasons": [],
+        "duration_ok": true,
+        "variable_envelope": true,
+        "near_zero_fraction": 0.007673071861016057,
+        "fit_bins": 24,
+        "log_span_decades": 2.0,
+        "welch_segments": 36,
+        "independent_blocks": 4,
+        "block_slopes": [
+          -1.7765160444425756,
+          -1.4126206711151925,
+          -1.4154450297241536,
+          -1.4414553000926469
+        ],
+        "block_slope_spread": 0.3638953733273831
+      },
+      "duration_seconds": 379.8987755102041,
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "separation_method": "demucs:htdemucs",
+      "model_version": "4.1.0",
+      "preprocessing": {
+        "method_id": "rms-silence-v1",
+        "settings": {
+          "trim_edges": true,
+          "remove_internal": false,
+          "threshold_db": -40.0,
+          "min_silence_seconds": 0.5,
+          "padding_seconds": 0.05
+        },
+        "rms_frame_seconds": 0.02,
+        "input_duration_seconds": 379.8987755102041,
+        "output_duration_seconds": 379.8987755102041,
+        "leading_removed_seconds": 0.0,
+        "trailing_removed_seconds": 0.0,
+        "internal_removed_seconds": 0.0,
+        "kept_segments_seconds": [
+          [
+            0.0,
+            379.8987755102041
+          ]
+        ],
+        "timeline_modified": false,
+        "peak_rms": 0.11719804161501625,
+        "threshold_rms": 0.0011719804161501625
+      },
+      "source_audio_sha256": "bbd14e321c26d6c4d63119c6b976829506296eaa5e8fa6f8246e9a8303448f02"
+    },
+    {
+      "artist": "東京事変",
+      "track": "群青日和",
+      "include_in_comparison": true,
+      "holdout_reason": "",
+      "original_result_sha256": "9a8680303916484850eb3ae7f93cca26f6b68f5f555b3242d0de1c7e69974d94",
+      "original_created_at": "2026-11-10T12:29:34.146311+00:00",
+      "reanalysis": {
+        "method_id": "stored-envelope-reanalysis-v1",
+        "source_result_canonical_sha256": "e58af72b2bf2f9548221be01486f9dfc27bcd81ce7bb5edb835b93c12e49961d",
+        "source_config": {
+          "low_hz": 0.02,
+          "high_hz": 20.0,
+          "segment_seconds": 120.0,
+          "auto_band": true
+        },
+        "source_analysis_signature": "{\"analysis_signature\":\"f5b9ebbad526e11fc14adf64\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+        "source_created_at": "2026-11-10T12:29:34.146311+00:00",
+        "created_at": "2026-11-11T01:07:28.457117+00:00"
+      },
+      "original_config": {
+        "low_hz": 0.02,
+        "high_hz": 20.0,
+        "segment_seconds": 120.0,
+        "auto_band": true
+      },
+      "original_fit": {
+        "slope": -1.3175835489190502,
+        "intercept": -4.05741626922798,
+        "r_squared": 0.9636142017687928,
+        "distance_to_pink": 0.31758354891905016,
+        "band_low_hz": 0.086244070720138,
+        "band_high_hz": 20.0,
+        "segment_seconds": 34.785,
+        "bin_count": 23
+      },
+      "fixed_config": {
+        "low_hz": 0.2,
+        "high_hz": 20.0,
+        "segment_seconds": 20.0,
+        "auto_band": false
+      },
+      "fixed_fit": {
+        "slope": -1.4527208566658623,
+        "intercept": -4.00807656592696,
+        "r_squared": 0.9807071383531548,
+        "distance_to_pink": 0.45272085666586226,
+        "band_low_hz": 0.2,
+        "band_high_hz": 20.0,
+        "segment_seconds": 20.0,
+        "bin_count": 24
+      },
+      "fixed_quality": {
+        "method_id": "four-block-welch-v2",
+        "usable_for_comparison": true,
+        "reasons": [],
+        "duration_ok": true,
+        "variable_envelope": true,
+        "near_zero_fraction": 0.02159695270950122,
+        "fit_bins": 24,
+        "log_span_decades": 2.0,
+        "welch_segments": 26,
+        "independent_blocks": 4,
+        "block_slopes": [
+          -1.7264784097889152,
+          -1.4250840998056442,
+          -1.4027848603781785,
+          -1.5129005180332258
+        ],
+        "block_slope_spread": 0.3236935494107367
+      },
+      "duration_seconds": 278.2772562358277,
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "separation_method": "demucs:htdemucs",
+      "model_version": "4.1.0",
+      "preprocessing": {
+        "method_id": "rms-silence-v1",
+        "settings": {
+          "trim_edges": true,
+          "remove_internal": false,
+          "threshold_db": -40.0,
+          "min_silence_seconds": 0.5,
+          "padding_seconds": 0.05
+        },
+        "rms_frame_seconds": 0.02,
+        "input_duration_seconds": 278.4072562358277,
+        "output_duration_seconds": 278.2772562358277,
+        "leading_removed_seconds": 0.13,
+        "trailing_removed_seconds": 0.0,
+        "internal_removed_seconds": 0.0,
+        "kept_segments_seconds": [
+          [
+            0.13,
+            278.4072562358277
+          ]
+        ],
+        "timeline_modified": false,
+        "peak_rms": 0.1821969894005628,
+        "threshold_rms": 0.001821969894005628
+      },
+      "source_audio_sha256": "738d21b21f55e7f20c9e713721597a37c308e6bcd7c21d0fe52e1b594a46783e"
+    },
+    {
+      "artist": "cune",
+      "track": "星をみてれば",
+      "include_in_comparison": true,
+      "holdout_reason": "",
+      "original_result_sha256": "8aab6ceb0bf8840ad84c90cce075d86bffc3538f49aeb66b2947b546eab2fb5d",
+      "original_created_at": "2026-11-11T00:30:07.357235+00:00",
+      "reanalysis": {
+        "method_id": "stored-envelope-reanalysis-v1",
+        "source_result_canonical_sha256": "c01d187a5d56721907c077a807330bd81b20b62332595707a1f72531d33e31c2",
+        "source_config": {
+          "low_hz": 0.02,
+          "high_hz": 20.0,
+          "segment_seconds": 120.0,
+          "auto_band": true
+        },
+        "source_analysis_signature": "{\"analysis_signature\":\"aa05ea00d04a63a2e8263d7b\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+        "source_created_at": "2026-11-11T00:30:07.357235+00:00",
+        "created_at": "2026-11-11T01:07:28.590773+00:00"
+      },
+      "original_config": {
+        "low_hz": 0.02,
+        "high_hz": 20.0,
+        "segment_seconds": 120.0,
+        "auto_band": true
+      },
+      "original_fit": {
+        "slope": -1.3257064672826775,
+        "intercept": -3.2076513679623924,
+        "r_squared": 0.9320889237624663,
+        "distance_to_pink": 0.3257064672826775,
+        "band_low_hz": 0.08201202843083652,
+        "band_high_hz": 20.0,
+        "segment_seconds": 36.58,
+        "bin_count": 24
+      },
+      "fixed_config": {
+        "low_hz": 0.2,
+        "high_hz": 20.0,
+        "segment_seconds": 20.0,
+        "auto_band": false
+      },
+      "fixed_fit": {
+        "slope": -1.5771371145100477,
+        "intercept": -3.030732716452571,
+        "r_squared": 0.9747614413218385,
+        "distance_to_pink": 0.5771371145100477,
+        "band_low_hz": 0.2,
+        "band_high_hz": 20.0,
+        "segment_seconds": 20.0,
+        "bin_count": 24
+      },
+      "fixed_quality": {
+        "method_id": "four-block-welch-v2",
+        "usable_for_comparison": true,
+        "reasons": [],
+        "duration_ok": true,
+        "variable_envelope": true,
+        "near_zero_fraction": 0.012300543273994602,
+        "fit_bins": 24,
+        "log_span_decades": 2.0,
+        "welch_segments": 28,
+        "independent_blocks": 4,
+        "block_slopes": [
+          -1.568218105785224,
+          -1.6008360479085086,
+          -1.6343491847504839,
+          -1.666936395651759
+        ],
+        "block_slope_spread": 0.09871828986653508
+      },
+      "duration_seconds": 292.67,
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "separation_method": "already-vocals",
+      "model_version": "",
+      "preprocessing": {
+        "method_id": "rms-silence-v1",
+        "settings": {
+          "trim_edges": true,
+          "remove_internal": false,
+          "threshold_db": -40.0,
+          "min_silence_seconds": 0.5,
+          "padding_seconds": 0.05
+        },
+        "rms_frame_seconds": 0.02,
+        "input_duration_seconds": 292.68,
+        "output_duration_seconds": 292.67,
+        "leading_removed_seconds": 0.0,
+        "trailing_removed_seconds": 0.01,
+        "internal_removed_seconds": 0.0,
+        "kept_segments_seconds": [
+          [
+            0.0,
+            292.67
+          ]
+        ],
+        "timeline_modified": false,
+        "peak_rms": 0.3310865385072554,
+        "threshold_rms": 0.0033108653850725538
+      },
+      "source_audio_sha256": "f2fcc58ac75e579181b28f6dc1fbcaf9b973ab4ed360cea45330a74988e16b40"
+    },
+    {
+      "artist": "hide",
+      "track": "HURRY GO ROUND",
+      "include_in_comparison": true,
+      "holdout_reason": "",
+      "original_result_sha256": "9cd4515fc284afb7c02c6c482dd1040ecc31008ec3aa3285859650bd39c75363",
+      "original_created_at": "2026-11-10T13:20:33.814829+00:00",
+      "reanalysis": {
+        "method_id": "stored-envelope-reanalysis-v1",
+        "source_result_canonical_sha256": "a0f821416d1b7d16776652cdfcfc58bca954adaa0659280a4bf16f50efe4d182",
+        "source_config": {
+          "low_hz": 0.02,
+          "high_hz": 20.0,
+          "segment_seconds": 120.0,
+          "auto_band": true
+        },
+        "source_analysis_signature": "{\"analysis_signature\":\"efcb37cf69abea6c94de9036\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+        "source_created_at": "2026-11-10T13:20:33.814829+00:00",
+        "created_at": "2026-11-11T01:07:28.717151+00:00"
+      },
+      "original_config": {
+        "low_hz": 0.02,
+        "high_hz": 20.0,
+        "segment_seconds": 120.0,
+        "auto_band": true
+      },
+      "original_fit": {
+        "slope": -1.2443972177987632,
+        "intercept": -3.918349102855115,
+        "r_squared": 0.9619305237573358,
+        "distance_to_pink": 0.24439721779876322,
+        "band_low_hz": 0.08369368112707491,
+        "band_high_hz": 20.0,
+        "segment_seconds": 35.845,
+        "bin_count": 24
+      },
+      "fixed_config": {
+        "low_hz": 0.2,
+        "high_hz": 20.0,
+        "segment_seconds": 20.0,
+        "auto_band": false
+      },
+      "fixed_fit": {
+        "slope": -1.268663855586555,
+        "intercept": -3.867969723865233,
+        "r_squared": 0.9491900555639953,
+        "distance_to_pink": 0.26866385558655503,
+        "band_low_hz": 0.2,
+        "band_high_hz": 20.0,
+        "segment_seconds": 20.0,
+        "bin_count": 24
+      },
+      "fixed_quality": {
+        "method_id": "four-block-welch-v2",
+        "usable_for_comparison": true,
+        "reasons": [],
+        "duration_ok": true,
+        "variable_envelope": true,
+        "near_zero_fraction": 0.04423559771237272,
+        "fit_bins": 24,
+        "log_span_decades": 2.0,
+        "welch_segments": 27,
+        "independent_blocks": 4,
+        "block_slopes": [
+          -1.51070099276298,
+          -1.283774966881448,
+          -1.279463366656856,
+          -1.2301668474484186
+        ],
+        "block_slope_spread": 0.28053414531456133
+      },
+      "duration_seconds": 286.76,
+      "analysis_signature": "{\"analysis_signature\":\"543f716af17fd87202123594\",\"preprocessing_method_id\":\"rms-silence-v1\",\"preprocessing_signature\":\"337ca0f699237dcb815a0e6d\"}",
+      "separation_method": "demucs:htdemucs",
+      "model_version": "4.1.0",
+      "preprocessing": {
+        "method_id": "rms-silence-v1",
+        "settings": {
+          "trim_edges": true,
+          "remove_internal": false,
+          "threshold_db": -40.0,
+          "min_silence_seconds": 0.5,
+          "padding_seconds": 0.05
+        },
+        "rms_frame_seconds": 0.02,
+        "input_duration_seconds": 349.39068027210885,
+        "output_duration_seconds": 286.76,
+        "leading_removed_seconds": 0.33,
+        "trailing_removed_seconds": 62.30068027210884,
+        "internal_removed_seconds": 0.0,
+        "kept_segments_seconds": [
+          [
+            0.33,
+            287.09
+          ]
+        ],
+        "timeline_modified": false,
+        "peak_rms": 0.17399772617078402,
+        "threshold_rms": 0.0017399772617078403
+      },
+      "source_audio_sha256": "5bee4cba6a94ba2d35a8b4d6f77fe121aea3c67a045252e9c8c3bcc52d07e2a7"
+    }
+  ]
+}

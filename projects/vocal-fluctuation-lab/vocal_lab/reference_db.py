@@ -230,6 +230,38 @@ def _distance(left, right):
     return math.sqrt(sum(squared) / len(squared))
 
 
+def _matching_records(records, signature, metadata):
+    matched = []
+    excluded = {"settings_excluded": 0, "processing_excluded": 0, "self_excluded": 0}
+    for row in records:
+        if row["analysis_signature"] != signature:
+            excluded["settings_excluded"] += 1
+        elif _processing_key(row["metadata"]) != _processing_key(metadata):
+            excluded["processing_excluded"] += 1
+        elif _clip_key(row["metadata"]) == _clip_key(metadata):
+            excluded["self_excluded"] += 1
+        else:
+            matched.append(row)
+    return matched, excluded
+
+
+def _counts(records):
+    artists = {row["artist"].casefold() for row in records}
+    tracks = {(row["artist"].casefold(), row["track"].casefold()) for row in records}
+    return {"records": len(records), "tracks": len(tracks), "artists": len(artists)}
+
+
+def comparison_coverage(analysis, database):
+    """登録総数と、順位づけと同じ条件で使える件数を返します。"""
+    records = validate_database(database)["references"]
+    result = {"total": _counts(records), "eligible": None}
+    if analysis is not None:
+        signature, _, metadata = _analysis_values(analysis)
+        matched, excluded = _matching_records(records, signature, metadata)
+        result.update(eligible=_counts(matched), **excluded)
+    return result
+
+
 def compare_reference(analysis, database, limit=5):
     """同条件の実測値だけを使い、アーティストごとの参考順位を返します。
 
@@ -242,13 +274,8 @@ def compare_reference(analysis, database, limit=5):
     checked = validate_database(database)
     signature, features, metadata = _analysis_values(analysis)
     grouped = {}
-    for row in checked["references"]:
-        if row["analysis_signature"] != signature:
-            continue
-        if _processing_key(row["metadata"]) != _processing_key(metadata):
-            continue
-        if _clip_key(row["metadata"]) == _clip_key(metadata):
-            continue
+    matched, _ = _matching_records(checked["references"], signature, metadata)
+    for row in matched:
         artist_key = row["artist"].casefold()
         artist = grouped.setdefault(artist_key, {"artist": row["artist"], "tracks": {}})
         track_key = row["track"].casefold()
