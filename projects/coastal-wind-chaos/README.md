@@ -1,17 +1,26 @@
-# 海岸の風速・風向予報ラボ v1.0.1
+# 海岸の風速・風向予報ラボ v1.1.0
 
 身近な海岸の風は、どの予報でどの程度わかるのでしょうか。学生の海岸の風に関する予報比較を入口に、既存の気象予報を並べ、観測で答え合わせをし、観測から自分のモデルを学習するColab教材です。
 
-[Colabで予報ラボを開く](https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/feature/coastal-wind-colab-v1/projects/coastal-wind-chaos/notebooks/coastal_wind_forecast_lab.ipynb) · [使い方](docs/forecast-user-guide.md) · [解析方法](docs/forecast-method.md) · [出力形式](docs/forecast-format.md)
+[Webで風と予報を学ぶ](https://shogo-ishikawa.github.io/2026_3Q_M4Th4/coastal-wind-chaos/) · [Webの使い方](docs/web-user-guide.md) · [Colabで予報ラボを開く](https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/coastal-wind-chaos/notebooks/coastal_wind_forecast_lab.ipynb) · [使い方](docs/forecast-user-guide.md) · [解析方法](docs/forecast-method.md) · [出力形式](docs/forecast-format.md)
 
 最初はColabで「すべてのセルを実行」を選び、操作画面の「デモで過去検証」から「解析を実行」を押します。Google Driveや自分のデータは不要です。デモには仮想観測点の合成データを使い、実際の観測や沿岸の例示地点の精度と区別します。
 
 | 入口 | 内容 |
 | --- | --- |
+| [Web教材](web/index.html) | 風と予報を基礎から学び、合成データや保存結果で誤差の読み方を確かめる |
 | [風速・風向予報ラボ](notebooks/coastal_wind_forecast_lab.ipynb) | 既存予報の比較、過去の精度検証、将来予測。風速・風向の誤差、条件別の偏り、持続予報からの改善度を調べ、結果をZIPに保存する |
 | [機械学習とカオスのハンズオン](notebooks/coastal_wind_hands_on.ipynb) | 風向の表し方、特徴量の比較、予測時間による性能の変化、独立したローレンツ系の実験をコードで学ぶ発展教材 |
 
-沿岸の例示地点は気象予報を比較する地点です。観測による検証と機械学習は銚子・稚内などの観測所ごとに行い、その精度を沿岸の例示地点の実測精度とは扱いません。Web版は仕組みの解説と結果の表示、Colab版は取得・学習・解析を担当する構成です。Webの表示画面は別途整備します。
+沿岸の例示地点は気象予報を比較する地点です。観測による検証と機械学習は銚子・稚内などの観測所ごとに行い、その精度を沿岸の例示地点の実測精度とは扱いません。Web版は風速・風向、予報の違い、誤差の読み方を操作で学ぶ入口です。Colab版で取得・学習・解析し、保存した結果ZIPをWebへ読み込んで表示できます。入力ファイルはブラウザ内で処理し、サーバーへ送信しません。
+
+## Web版を手元で使う
+
+配布ZIPは展開すると `v1.1.0` フォルダになります。例えば `/Users/shogo/Dropbox/share_data/open_material/misc/apps/CoastalWindLab/v1.1.0` に置き、`web/index.html` をブラウザで開きます。教材と合成データの例は、ネット接続なしでも利用できます。Colabや出典のリンクを開くときは接続が必要です。
+
+Webの画面で「合成データの例を見る」か「結果ZIP・CSVを選ぶ」を使います。実際のデータ取得・学習はColab側で行います。Webで保存結果を開く操作は、GitHubへのアップロードではありません。
+
+GitHubでは、このクラスのリポジトリ内の `projects/coastal-wind-chaos/` で管理します。通信にはHTTPSを使います。Pages用ファイルと版番号付きZIPは、リポジトリの `python scripts/build_public_site.py` で作成します。
 
 ## 発展教材：海辺の風は何時間先まで予測できるか
 

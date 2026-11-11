@@ -6,8 +6,8 @@ from pathlib import Path
 
 PROJECT_DIR = Path(__file__).resolve().parents[1]
 DEFAULT_OUTPUT = PROJECT_DIR / "notebooks" / "coastal_wind_forecast_lab.ipynb"
-SOURCE_REF = "feature/coastal-wind-colab-v1"
-LAB_VERSION = "1.0.1"
+SOURCE_REF = "main"
+LAB_VERSION = "1.1.0"
 REPOSITORY = "shogo-ishikawa/2026_3Q_M4Th4"
 NOTEBOOK_PATH = "projects/coastal-wind-chaos/notebooks/coastal_wind_forecast_lab.ipynb"
 

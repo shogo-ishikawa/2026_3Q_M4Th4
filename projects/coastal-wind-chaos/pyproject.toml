@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "coastal-wind-chaos"
-version = "1.0.1"
+version = "1.1.0"
 description = "海岸の風速・風向の予報比較、機械学習、誤差解析を学ぶ教材"
 readme = "README.md"
 requires-python = ">=3.11"
