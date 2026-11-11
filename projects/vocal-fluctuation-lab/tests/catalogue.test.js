@@ -19,13 +19,14 @@ assert(filterReferences(catalogue.references, '  ' + first.artist + '   ' + firs
 assert.equal(filterReferences(catalogue.references, 'この曲名は登録されていません').length, 0);
 checks++;
 
-const vocals = filterReferences(catalogue.references, '', 'already-vocals');
-const separated = filterReferences(catalogue.references, '', 'demucs:htdemucs');
-assert(vocals.length > 0 && separated.length > 0);
-assert.equal(vocals.length + separated.length, catalogue.references.length);
-assert(vocals.every(row => row.separation_method === 'already-vocals'));
-assert(separated.every(row => row.separation_method === 'demucs:htdemucs'));
-assert.equal(filterReferences(vocals, '', 'demucs:htdemucs').length, 0);
+// Displayed numerical results do not need extraction-route metadata.
+const numericOnly = structuredClone(catalogue);
+for (const row of numericOnly.references) {
+  delete row.separation_method;
+  delete row.model_version;
+}
+validateCatalogue(numericOnly);
+assert.equal(filterReferences(numericOnly.references, '').length, catalogue.references.length);
 checks++;
 
 for (const update of [{low_hz: 0.02}, {auto_band: true}, {high_hz: 5}, {segment_seconds: 120}]) {
@@ -33,7 +34,7 @@ for (const update of [{low_hz: 0.02}, {auto_band: true}, {high_hz: 5}, {segment_
   Object.assign(invalid.config, update);
   assert.throws(() => validateCatalogue(invalid));
 }
-for (const update of [{artist: ''}, {slope: NaN}, {r_squared: 1.1}, {duration_seconds: -1}, {separation_method: 'unknown'}]) {
+for (const update of [{artist: ''}, {slope: NaN}, {r_squared: 1.1}, {duration_seconds: -1}]) {
   const invalid = structuredClone(catalogue);
   Object.assign(invalid.references[0], update);
   assert.throws(() => validateCatalogue(invalid));
@@ -58,7 +59,6 @@ async function main() {
   const html = fs.readFileSync(path.join(__dirname, '../web/index.html'), 'utf8');
   const elements = {};
   for (const match of html.matchAll(/\bid="([^"]+)"/g)) elements[match[1]] = new Element(match[1]);
-  elements['catalogue-group'].value = 'all';
   const requests = [];
   const fetch = url => new Promise((resolve, reject) => requests.push({url, resolve, reject}));
   const document = {getElementById: id => elements[id], createElement: () => new Element()};
@@ -82,7 +82,10 @@ async function main() {
   assert.equal(elements['catalogue-rows'].children.length, fixture.references.length);
   assert.equal(elements['catalogue-rows'].children[0].children[0].textContent, fixture.references[0].artist);
   assert.equal(elements['catalogue-table-wrap'].hidden, false);
-  assert(elements['catalogue-status'].textContent.includes(fixture.references.length + '曲'));
+  assert(elements['catalogue-status'].textContent.includes(fixture.references.length + '曲分'));
+  assert(elements['catalogue-status'].textContent.includes('解析結果（数値）'));
+  assert.equal(elements['catalogue-rows'].children[0].children.length, 4);
+  assert.equal(elements['catalogue-group'], undefined);
   checks++;
 
   elements['catalogue-search'].value = 'この曲名は登録されていません';
@@ -91,13 +94,9 @@ async function main() {
   assert.equal(elements['catalogue-empty'].hidden, false);
   assert.equal(elements['catalogue-rows'].children.length, 0);
   elements['catalogue-search'].value = '';
-  elements['catalogue-group'].value = 'already-vocals';
-  elements['catalogue-group'].listeners.change();
-  assert.equal(elements['catalogue-rows'].children.length, vocals.length);
+  elements['catalogue-search'].listeners.input();
   assert.equal(elements['catalogue-table-wrap'].hidden, false);
   assert(elements['catalogue-empty'].hidden);
-  elements['catalogue-group'].value = 'all';
-  elements['catalogue-group'].listeners.change();
   assert.equal(elements['catalogue-rows'].children.length, fixture.references.length);
   checks++;
   console.log(`${checks} catalogue checks passed.`);
