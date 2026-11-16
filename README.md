@@ -11,6 +11,7 @@ Pythonの基礎を学んだ学生が、AIや教員の支援を受けながら制
 | [Guitar Chord Lab](projects/guitar-chord-lab/) | ギターの音源分離とコード認識、分離前後の比較実験 | 初版 v0.1.0。Colab用Notebookとコマンドあり（Colab上での動作は未確認） |
 | [Park Itinerary Lab](projects/park-itinerary-lab/) | 架空のテーマパークでの一日の予定を数理最適化で計算（PuLP入門、CP-SATによる日程最適化、短縮利用の配分の比較実験） | v0.1.0 初版。ローカルでテストとNotebookの実行を確認。Colab上での実行は未確認 |
 | [海岸の風速・風向予報ラボ](projects/coastal-wind-chaos/) | Webで風と予報・誤差の読み方を学び、Colabで取得・学習・検証する教材 | v1.1.0。操作できるWeb教材と保存結果ビューア、Colabによる過去検証・将来予測・誤差解析。Web入力はブラウザ内で処理 |
+| [Swing Motion Lab](projects/swing-motion-lab/) | 動画の肩・腰の位置を推定し、線の向きと角速度を比較するブラウザアプリ | v1.0.0。打者の範囲指定、手動補正、映像とグラフの同期、座標保存と再解析 |
 
 実行できるNotebookやコマンドは、各作品のREADMEに掲載しています。
 

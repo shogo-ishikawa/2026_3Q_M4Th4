@@ -1,6 +1,7 @@
 """Package explicitly selected public works, without publishing source directories."""
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
+import json
 import shutil
 import subprocess
 import sys
@@ -12,6 +13,27 @@ PROJECT = ROOT / 'projects' / 'world-definition'
 VERSION = 'v1.3.0'
 PUBLIC_FILES = ('index.html', 'guide.html', 'style.css', 'mystery.js', 'engine.js', 'progress.js', 'renderer.js', 'session.js', 'app.js')
 COASTAL_WEB_FILES = ('index.html', 'style.css', 'learning.js', 'results-core.js', 'results-viewer.js', 'demo-data.js')
+SWING_WEB_FILES = ('index.html', 'style.css', 'app.js', 'motion-core.js', 'demo-data.js')
+
+
+def build_swing_site(output=OUTPUT):
+    project = ROOT / 'projects' / 'swing-motion-lab'
+    destination = Path(output) / 'swing-motion-lab'
+    destination.mkdir(parents=True, exist_ok=True)
+    for name in SWING_WEB_FILES:
+        shutil.copy2(project / 'web' / name, destination / name)
+    version = 'v' + json.loads((project / 'version.json').read_text(encoding='utf-8'))['version']
+    downloads = destination / 'downloads'
+    downloads.mkdir(exist_ok=True)
+    archive = downloads / f'SwingMotionLab_{version}.zip'
+    tracked = subprocess.check_output(['git', 'ls-files', '-z', '--', str(project.relative_to(ROOT))], cwd=ROOT).decode().split('\0')
+    with ZipFile(archive, 'w', ZIP_DEFLATED) as bundle:
+        for name in sorted(filter(None, tracked)):
+            path = ROOT / name
+            if path.is_file():
+                bundle.write(path, Path(version) / path.relative_to(project))
+    print(f'Built swing-motion-lab with {archive.stat().st_size:,}-byte distribution ZIP')
+    return archive
 
 
 def build_coastal_site(output=OUTPUT):
@@ -83,6 +105,7 @@ def main():
         bundle.write(vocal_destination / 'data' / listening_name, Path(vocal_version) / 'web/data' / listening_name)
     print(f'Built vocal-fluctuation-lab with {vocal_archive.stat().st_size:,}-byte distribution ZIP')
     build_coastal_site()
+    build_swing_site()
     print(f'Built {OUTPUT.relative_to(ROOT)} with {archive.stat().st_size:,}-byte distribution ZIP')
 
 
