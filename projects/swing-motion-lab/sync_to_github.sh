@@ -2,7 +2,7 @@
 set -euo pipefail
 
 asset_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-checkout_dir="$(mktemp -d "${TMPDIR:-/tmp}/swing-motion-sync.XXXXXX")"
+checkout_dir="$(mktemp -d "${TMPDIR:-/tmp}/motion-analysis-sync.XXXXXX")"
 trap 'rm -rf -- "$checkout_dir"' EXIT
 
 git clone --depth 1 --branch main https://github.com/shogo-ishikawa/2026_3Q_M4Th4.git "$checkout_dir/repo"
@@ -23,6 +23,6 @@ if git -C "$checkout_dir/repo" diff --cached --quiet; then
   echo '変更はありません。'
   exit 0
 fi
-git -C "$checkout_dir/repo" commit -m 'Update Swing Motion Lab'
+git -C "$checkout_dir/repo" commit -m 'Update Motion Analysis Lab'
 git -C "$checkout_dir/repo" push origin HEAD:main
 echo 'アップロードしました。GitHub Actionsで確認とPagesの更新が始まります。'

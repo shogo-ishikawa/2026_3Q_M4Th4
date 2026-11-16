@@ -218,7 +218,7 @@ test('JSON round trips coordinates, confidence, dimensions and the exact analysi
 
 test('JSON rejects another schema, another file kind, bad labels and bad dimensions', () => {
   const document = JSON.parse(core.exportJSON(core.analyse([frame(0)])));
-  for (const patch of [{ schemaVersion: '2.0.0' }, { schemaVersion: null }, { kind: 'weather' },
+  for (const patch of [{ schemaVersion: '3.0.0' }, { schemaVersion: null }, { kind: 'weather' },
     { sourceKind: 'unrecognised' }, { label: [] }, { width: -10 }, { height: 2.5 }, { frames: [] }])
     assert.throws(() => core.readJSON(JSON.stringify({ ...document, ...patch })));
   assert.throws(() => core.readJSON('{not JSON}'), /JSON/);
@@ -263,7 +263,7 @@ test('a JSON prototype key cannot affect result options or JavaScript prototypes
   const result = core.analyse([input], options);
   assert.equal({}.polluted, undefined);
   assert.equal(result.options.polluted, undefined);
-  assert.deepEqual(result.inputFrames[0].points, { leftShoulder: null, rightShoulder: null, leftHip: null, rightHip: null });
+  assert.deepEqual(result.inputFrames[0].points, Object.fromEntries(core.POINT_NAMES.map(name => [name, null])));
 });
 
 test('the geometric demo is marked as a demo and has finite measurements at every timestamp', () => {
@@ -299,4 +299,167 @@ test('classic browser scripts expose their APIs without a module loader or netwo
   vm.runInContext(fs.readFileSync(path.join(__dirname, '../web/demo-data.js'), 'utf8'), context);
   const summary = vm.runInContext('SwingMotionCore.analyse(SWING_DEMO.frames, SWING_DEMO.options).summary', context);
   assert.equal(summary.frameCount, 121); assert.equal(summary.pairedValidCount, 121);
+});
+
+function jointFrame(time, leftAngle, rightAngle = leftAngle) {
+  const positions = {};
+  for (const [side, angle, offset] of [['left', leftAngle, 0], ['right', rightAngle, 600]]) {
+    const radians = angle * Math.PI / 180;
+    for (const [a, b, c, x] of [['Shoulder', 'Elbow', 'Wrist', offset], ['Hip', 'Knee', 'Ankle', offset + 300]]) {
+      positions[side + a] = { x, y: -100, confidence: 1 };
+      positions[side + b] = { x, y: 0, confidence: 1 };
+      positions[side + c] = { x: x + 100 * Math.sin(radians), y: -100 * Math.cos(radians), confidence: 1 };
+    }
+  }
+  return { time, points: positions };
+}
+function trunkFrame(time, angle) {
+  const radians = angle * Math.PI / 180, x = 100 * Math.sin(radians), y = -100 * Math.cos(radians);
+  return { time, points: { leftShoulder: { x: x - 40, y }, rightShoulder: { x: x + 40, y },
+    leftHip: { x: -40, y: 0 }, rightHip: { x: 40, y: 0 } } };
+}
+
+test('interior elbow and knee angles are 0..180 degrees with a straight limb at 180', () => {
+  for (const angle of [0, 30, 90, 150, 180]) {
+    const r = core.analyse([jointFrame(0, angle)], noSmoothing);
+    for (const name of ['leftElbow', 'rightElbow', 'leftKnee', 'rightKnee']) {
+      close(r.frames[0][name + 'AngleRaw'], angle);
+      assert.equal(r.frames[0][name + 'Valid'], true);
+      assert.equal(r.summary.metrics[name].validCount, 1);
+    }
+  }
+});
+
+test('joint angles do not use half-turn axis wrapping when a limb extends rapidly', () => {
+  const r = core.analyse([jointFrame(0, 30, 150), jointFrame(0.1, 150, 30)], noSmoothing);
+  for (const name of ['leftElbow', 'leftKnee']) close(r.frames[1][name + 'Velocity'], 1200);
+  for (const name of ['rightElbow', 'rightKnee']) close(r.frames[1][name + 'Velocity'], -1200);
+  assert.equal(r.frames[1].leftKneeAmbiguous, false);
+  assert.equal(r.frames[0].leftKneeSegment, r.frames[1].leftKneeSegment);
+});
+
+test('a missing hand splits only the affected elbow series and preserves the knees', () => {
+  const input = [0, 1, 2, 3, 4].map(i => jointFrame(i / 10, 30 + i * 10));
+  input[2].points.leftWrist = null;
+  const r = core.analyse(input, { smoothingWindow: 7 });
+  assert.equal(r.frames[2].leftElbowAngle, null);
+  assert.equal(r.frames[3].leftElbowVelocity, null);
+  close(r.frames[4].leftElbowVelocity, 100);
+  close(r.frames[2].leftKneeVelocity, 100);
+  close(r.frames[2].rightElbowVelocity, 100);
+  assert.notEqual(r.frames[1].leftElbowSegment, r.frames[3].leftElbowSegment);
+});
+
+test('all three joint points need confidence and both limb segments need length', () => {
+  const a = jointFrame(0, 90); a.points.leftWrist.confidence = 0.2;
+  let r = core.analyse([a]).frames[0];
+  assert.equal(r.leftElbowReason, 'confidence'); assert.equal(r.leftElbowConfidence, 0.2);
+  assert.equal(r.leftKneeValid, true);
+  a.points.leftWrist = { ...a.points.leftElbow, x: a.points.leftElbow.x + 11 };
+  r = core.analyse([a]).frames[0]; assert.equal(r.leftElbowReason, 'short-axis');
+  a.points.leftWrist.x += 1;
+  assert.equal(core.analyse([a]).frames[0].leftElbowValid, true);
+});
+
+test('smoothing interior angles stays inside the geometric range even at abrupt endpoints', () => {
+  for (const angles of [[0, 0, 180], [180, 180, 0], [0, 180, 180, 0, 0]]) {
+    const r = core.analyse(angles.map((a, i) => jointFrame(i / 10, a)), { smoothingWindow: 5 });
+    for (const row of r.frames) for (const name of ['leftElbow', 'rightElbow', 'leftKnee', 'rightKnee'])
+      assert.ok(row[name + 'Angle'] >= 0 && row[name + 'Angle'] <= 180);
+  }
+});
+
+test('trunk is zero upright and positive towards image right', () => {
+  for (const angle of [-90, -30, 0, 30, 90])
+    close(core.analyse([trunkFrame(0, angle)], noSmoothing).frames[0].trunkTiltAngle, angle);
+  const a = trunkFrame(0, 30); a.points.leftShoulder.confidence = 0.4;
+  assert.equal(core.analyse([a]).frames[0].trunkTiltReason, 'confidence');
+  a.points.leftShoulder = a.points.rightShoulder = { x: 0, y: 0 };
+  assert.equal(core.analyse([a]).frames[0].trunkTiltReason, 'short-axis');
+});
+
+test('trunk uses a full-turn period and splits an exactly half-turn step', () => {
+  const r = core.analyse([trunkFrame(0, 179), trunkFrame(0.1, -179)], noSmoothing);
+  close(r.frames[1].trunkTiltAngleUnwrapped, 181); close(r.frames[1].trunkTiltVelocity, 20);
+  const ambiguous = core.analyse([trunkFrame(0, 0), trunkFrame(0.1, 180), trunkFrame(0.2, 175)], noSmoothing);
+  assert.equal(ambiguous.frames[1].trunkTiltAmbiguous, true);
+  assert.equal(ambiguous.frames[1].trunkTiltVelocity, null);
+  close(ambiguous.frames[2].trunkTiltVelocity, -50);
+});
+
+test('joint angular velocities preserve irregular timestamps and use the slow-motion time scale', () => {
+  const times = [2, 2.05, 2.2, 2.4, 2.7];
+  const input = times.map(t => jointFrame(t, 30 + (t - 2) * 60));
+  const r = core.analyse(input, { smoothingWindow: 5, timeScale: 0.25 });
+  for (const row of r.frames.slice(1)) close(row.leftElbowVelocity, 240);
+  close(r.summary.metrics.leftElbow.peakAbsVelocity, 240);
+  close(r.summary.metrics.leftKnee.minAngle, 30);
+});
+
+test('legacy four-point JSON imports as axes and keeps its original measurements', () => {
+  const old = { schemaVersion: '1.0.0', kind: 'swing-motion-points', sourceKind: 'video',
+    label: '肩と腰', options: noSmoothing, frames: [frame(0, 30), frame(0.1, 40)] };
+  const loaded = core.readJSON(JSON.stringify(old));
+  assert.equal(loaded.metricGroup, 'axes'); assert.equal(loaded.schemaVersion, '2.0.0');
+  assert.equal(loaded.frames[0].points.leftElbow, null);
+  const result = core.analyse(loaded.frames, loaded.options);
+  close(result.frames[1].shoulderVelocity, 100);
+  assert.equal(result.frames[1].leftElbowAngle, null);
+});
+
+test('schema2 preserves all twelve points and the selected metric group', () => {
+  const r = core.analyse([jointFrame(0, 30), jointFrame(0.1, 50)], noSmoothing);
+  assert.equal(core.POINT_NAMES.length, 12);
+  for (const metricGroup of Object.keys(core.METRIC_GROUPS)) {
+    const text = core.exportJSON(r, { metricGroup, label: '動作の座標', sourceKind: 'manual' });
+    const saved = core.readJSON(text), document = JSON.parse(text);
+    assert.equal(document.schemaVersion, '2.0.0'); assert.equal(document.kind, 'motion-analysis-points');
+    assert.equal(saved.metricGroup, metricGroup); assert.deepEqual(saved.frames, r.inputFrames);
+    assert.deepEqual(core.analyse(saved.frames, saved.options).frames, r.frames);
+  }
+  for (const metricGroup of ['__proto__', 'toString', null, 'other', 12]) {
+    assert.throws(() => core.exportJSON(r, { metricGroup }));
+    const document = JSON.parse(core.exportJSON(r)); document.metricGroup = metricGroup;
+    assert.throws(() => core.readJSON(JSON.stringify(document)));
+  }
+});
+
+test('CSV includes all joint results and original wrist and ankle coordinates', () => {
+  const input = jointFrame(0, 90), text = core.exportCSV(core.analyse([input], noSmoothing));
+  const [header, row] = text.replace(/^\uFEFF/, '').trim().split('\r\n').map(line => line.split(','));
+  close(Number(row[header.indexOf('left_knee_angle_raw_deg')]), 90);
+  close(Number(row[header.indexOf('left_wrist_x_px')]), input.points.leftWrist.x);
+  close(Number(row[header.indexOf('right_ankle_y_px')]), input.points.rightAnkle.y);
+});
+
+test('all demos supply twelve finite points and their stated analytic joint angles', () => {
+  const { demos } = require('../web/demo-data.js');
+  assert.deepEqual(Object.keys(demos), ['swing', 'squat', 'arm']);
+  for (const demo of Object.values(demos)) {
+    assert.equal(demo.sourceKind, 'demo'); assert.match(demo.label, /デモ/);
+    assert.ok(core.METRIC_GROUPS[demo.metricGroup]);
+    for (const f of demo.frames) for (const name of core.POINT_NAMES) {
+      assert.ok(f.points[name]); assert.ok(Number.isFinite(f.points[name].x)); assert.ok(Number.isFinite(f.points[name].y));
+    }
+  }
+  const squat = core.analyse(demos.squat.frames, noSmoothing);
+  close(squat.frames[0].leftKneeAngle, 180); close(squat.frames[30].leftKneeAngle, 90);
+  close(squat.frames[60].leftKneeAngle, 180); close(squat.frames[90].leftKneeAngle, 90);
+  const arm = core.analyse(demos.arm.frames, noSmoothing);
+  close(arm.frames[0].leftElbowAngle, 180); close(arm.frames[60].leftElbowAngle, 45);
+  close(arm.frames[60].rightElbowAngle, 80);
+});
+
+test('the maximum supported full-body sequence can be exported and loaded again', () => {
+  const points = jointFrame(0, 45).points;
+  for (const p of Object.values(points)) {
+    p.x = -0.0000010000000000000002;
+    p.y = -0.0000010000000000000002;
+    p.confidence = 0.0000010000000000000002;
+  }
+  const frames = Array.from({ length: core.LIMITS.maxFrames }, (_, i) => ({ time: i / 30, points }));
+  const result = core.analyse(frames, noSmoothing), text = core.exportJSON(result);
+  assert.ok(text.length <= core.LIMITS.maxJSONCharacters);
+  const saved = core.readJSON(text); assert.equal(saved.frames.length, core.LIMITS.maxFrames);
+  close(saved.frames.at(-1).points.rightAnkle.x, points.rightAnkle.x);
 });

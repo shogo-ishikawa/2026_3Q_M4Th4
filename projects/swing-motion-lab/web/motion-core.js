@@ -1,19 +1,39 @@
-/* 肩と腰を結ぶ線の、画像上の向きと変化を計算する。 */
+/* 画像上の線の向き、関節の内角、体幹の傾きと時間変化を計算する。 */
 (function (root, factory) {
   'use strict';
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;
-  if (root) root.SwingMotionCore = api;
+  if (root) { root.SwingMotionCore = api; root.MotionAnalysisCore = api; }
 })(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   'use strict';
 
-  const SCHEMA_VERSION = '1.0.0';
+  const SCHEMA_VERSION = '2.0.0';
   const DEFAULT_OPTIONS = Object.freeze({
     confidenceThreshold: 0.5, minSpanPx: 12, smoothingWindow: 3, timeScale: 1
   });
   const LIMITS = Object.freeze({ maxFrames: 20000, maxTimeSeconds: 86400,
-    maxCoordinate: 1000000, maxJSONCharacters: 20000000 });
-  const POINT_NAMES = Object.freeze(['leftShoulder', 'rightShoulder', 'leftHip', 'rightHip']);
+    maxCoordinate: 1000000, maxJSONCharacters: 64000000 });
+  const POINT_NAMES = Object.freeze(['leftShoulder', 'rightShoulder', 'leftElbow', 'rightElbow',
+    'leftWrist', 'rightWrist', 'leftHip', 'rightHip', 'leftKnee', 'rightKnee', 'leftAnkle', 'rightAnkle']);
+  const metric = (id, label, colour) => Object.freeze({ id, label, colour,
+    angleKey: id + 'Angle', velocityKey: id + 'Velocity', validKey: id + 'Valid', segmentKey: id + 'Segment' });
+  const group = (id, label, description, metrics, pointNames) => Object.freeze({ id, label, description,
+    metrics: Object.freeze(metrics), pointNames: Object.freeze(pointNames) });
+  const METRIC_GROUPS = Object.freeze({
+    axes: group('axes', '肩と腰の向き', '右向きが0度、反時計回りが正です。',
+      [metric('shoulder', '肩', '#5379ff'), metric('hip', '腰', '#ff907d')],
+      ['leftShoulder', 'rightShoulder', 'leftHip', 'rightHip']),
+    elbows: group('elbows', '肘の曲がり', '肩・肘・手首の内角です。腕が伸びるほど180度に近づきます。',
+      [metric('leftElbow', '左肘', '#5379ff'), metric('rightElbow', '右肘', '#ff907d')],
+      ['leftShoulder', 'leftElbow', 'leftWrist', 'rightShoulder', 'rightElbow', 'rightWrist']),
+    knees: group('knees', '膝の曲がり', '腰・膝・足首の内角です。脚が伸びるほど180度に近づきます。',
+      [metric('leftKnee', '左膝', '#5379ff'), metric('rightKnee', '右膝', '#ff907d')],
+      ['leftHip', 'leftKnee', 'leftAnkle', 'rightHip', 'rightKnee', 'rightAnkle']),
+    trunk: group('trunk', '体幹の傾き', '腰の中心から肩の中心へ引いた線です。直立が0度、画面の右への傾きが正です。',
+      [metric('trunkTilt', '体幹', '#5379ff')], ['leftShoulder', 'rightShoulder', 'leftHip', 'rightHip'])
+  });
+  const METRIC_PERIODS = Object.freeze({ shoulder: 180, hip: 180, leftElbow: null, rightElbow: null,
+    leftKnee: null, rightKnee: null, trunkTilt: 360 });
   const SOURCE_KINDS = new Set(['demo', 'video', 'manual', 'results', 'unknown']);
   const isObject = value => value !== null && typeof value === 'object' && !Array.isArray(value);
   const finite = value => typeof value === 'number' && Number.isFinite(value);
@@ -70,18 +90,19 @@
       if (!Number.isSafeInteger(frame) || frame < 0)
         throw new RangeError('フレーム番号は0以上の整数で指定してください。');
       const points = row.points == null ? {} : row.points;
-      if (!isObject(points)) throw new TypeError('pointsには肩と腰の座標を指定してください。');
+      if (!isObject(points)) throw new TypeError('pointsには関節の座標を指定してください。');
       const selected = {};
       for (const name of POINT_NAMES) selected[name] = normalisePoint(points[name], `${index + 1}時点目の${name}`);
       return { time: row.time, frame, points: selected };
     });
   }
 
-  function wrapAxisAngle(angle) {
+  function wrapPeriod(angle, period) {
     if (!finite(angle)) return null;
-    const result = ((angle + 90) % 180 + 180) % 180 - 90;
+    const result = ((angle + period / 2) % period + period) % period - period / 2;
     return Object.is(result, -0) ? 0 : result;
   }
+  function wrapAxisAngle(angle) { return wrapPeriod(angle, 180); }
 
   function axisMeasurement(a, b, options) {
     if (!a || !b) return { raw: null, confidence: null, span: null, valid: false, reason: 'missing' };
@@ -95,7 +116,36 @@
     return { raw: wrapAxisAngle(Math.atan2(dy, dx) * 180 / Math.PI), confidence, span, valid: true, reason: '' };
   }
 
-  function contiguousSegments(raw) {
+  function jointMeasurement(a, vertex, c, options) {
+    if (!a || !vertex || !c) return { raw: null, confidence: null, span: null, valid: false, reason: 'missing' };
+    const confidence = Math.min(a.confidence, vertex.confidence, c.confidence);
+    const ax = a.x - vertex.x, ay = a.y - vertex.y;
+    const cx = c.x - vertex.x, cy = c.y - vertex.y;
+    const span = Math.min(Math.hypot(ax, ay), Math.hypot(cx, cy));
+    if (confidence < options.confidenceThreshold)
+      return { raw: null, confidence, span, valid: false, reason: 'confidence' };
+    if (span < options.minSpanPx)
+      return { raw: null, confidence, span, valid: false, reason: 'short-axis' };
+    const raw = Math.atan2(Math.abs(ax * cy - ay * cx), ax * cx + ay * cy) * 180 / Math.PI;
+    return { raw, confidence, span, valid: true, reason: '' };
+  }
+
+  function trunkMeasurement(points, options) {
+    const names = METRIC_GROUPS.trunk.pointNames;
+    if (names.some(name => !points[name]))
+      return { raw: null, confidence: null, span: null, valid: false, reason: 'missing' };
+    const confidence = Math.min(...names.map(name => points[name].confidence));
+    const dx = (points.leftShoulder.x + points.rightShoulder.x - points.leftHip.x - points.rightHip.x) / 2;
+    const up = (points.leftHip.y + points.rightHip.y - points.leftShoulder.y - points.rightShoulder.y) / 2;
+    const span = Math.hypot(dx, up);
+    if (confidence < options.confidenceThreshold)
+      return { raw: null, confidence, span, valid: false, reason: 'confidence' };
+    if (span < options.minSpanPx)
+      return { raw: null, confidence, span, valid: false, reason: 'short-axis' };
+    return { raw: wrapPeriod(Math.atan2(dx, up) * 180 / Math.PI, 360), confidence, span, valid: true, reason: '' };
+  }
+
+  function contiguousSegments(raw, period) {
     const segments = [];
     const unwrapped = Array(raw.length).fill(null);
     const ambiguous = Array(raw.length).fill(false);
@@ -107,9 +157,9 @@
         unwrapped[index] = raw[index]; active.push(index); continue;
       }
       const previous = active[active.length - 1];
-      const change = wrapAxisAngle(raw[index] - raw[previous]);
-      // 90度の変化は、二つの回り方を区別できないため区切る。
-      if (Math.abs(Math.abs(change) - 90) < 1e-8) {
+      const change = period ? wrapPeriod(raw[index] - raw[previous], period) : raw[index] - raw[previous];
+      // 周期の半分だけ変わると回転方向を区別できないため区切る。
+      if (period && Math.abs(Math.abs(change) - period / 2) < 1e-8) {
         finish(); ambiguous[index] = true; unwrapped[index] = raw[index]; active.push(index);
       } else {
         unwrapped[index] = unwrapped[previous] + change; active.push(index);
@@ -139,12 +189,13 @@
     });
   }
 
-  function processAxis(raw, times, window) {
-    const { segments, unwrapped, ambiguous } = contiguousSegments(raw);
+  function processMetric(raw, times, window, period) {
+    const { segments, unwrapped, ambiguous } = contiguousSegments(raw, period);
     const angles = Array(raw.length).fill(null), velocities = Array(raw.length).fill(null);
     const rawVelocities = Array(raw.length).fill(null), segmentIds = Array(raw.length).fill(null);
     segments.forEach((indices, segmentId) => {
-      const smoothed = smoothSegment(indices, unwrapped, times, window);
+      const fitted = smoothSegment(indices, unwrapped, times, window);
+      const smoothed = period ? fitted : fitted.map(value => Math.max(0, Math.min(180, value)));
       indices.forEach((index, position) => {
         segmentIds[index] = segmentId; angles[index] = smoothed[position];
         if (position === 0) return;
@@ -167,14 +218,21 @@
     const times = inputFrames.map(row => row.time * options.timeScale);
     const measurements = inputFrames.map(row => ({
       shoulder: axisMeasurement(row.points.leftShoulder, row.points.rightShoulder, options),
-      hip: axisMeasurement(row.points.leftHip, row.points.rightHip, options)
+      hip: axisMeasurement(row.points.leftHip, row.points.rightHip, options),
+      leftElbow: jointMeasurement(row.points.leftShoulder, row.points.leftElbow, row.points.leftWrist, options),
+      rightElbow: jointMeasurement(row.points.rightShoulder, row.points.rightElbow, row.points.rightWrist, options),
+      leftKnee: jointMeasurement(row.points.leftHip, row.points.leftKnee, row.points.leftAnkle, options),
+      rightKnee: jointMeasurement(row.points.rightHip, row.points.rightKnee, row.points.rightAnkle, options),
+      trunkTilt: trunkMeasurement(row.points, options)
     }));
-    const shoulder = processAxis(measurements.map(row => row.shoulder.raw), times, options.smoothingWindow);
-    const hip = processAxis(measurements.map(row => row.hip.raw), times, options.smoothingWindow);
+    const seriesByMetric = {};
+    for (const [name, period] of Object.entries(METRIC_PERIODS))
+      seriesByMetric[name] = processMetric(measurements.map(row => row[name].raw), times, options.smoothingWindow, period);
+    const shoulder = seriesByMetric.shoulder, hip = seriesByMetric.hip;
     const output = inputFrames.map((row, index) => {
       const item = { frame: row.frame, time: row.time, timeSeconds: times[index],
         elapsedSeconds: times[index] - times[0] };
-      for (const [name, series] of [['shoulder', shoulder], ['hip', hip]]) {
+      for (const [name, series] of Object.entries(seriesByMetric)) {
         const measured = measurements[index][name];
         item[name + 'AngleRaw'] = measured.raw;
         item[name + 'AngleUnwrapped'] = series.unwrapped[index];
@@ -204,6 +262,18 @@
       shoulderPeakAbsVelocity: peakAbs(output, 'shoulderVelocity'),
       hipPeakAbsVelocity: peakAbs(output, 'hipVelocity'), relativePeakAbsAngle: peakAbs(output, 'relativeAngle')
     };
+    summary.metrics = {};
+    for (const name of Object.keys(METRIC_PERIODS)) {
+      const values = output.map(row => row[name + 'Angle']).filter(finite);
+      const validCount = count(name + 'Valid');
+      summary.metrics[name] = {
+        validCount, validRate: validCount / output.length,
+        velocityCount: output.filter(row => row[name + 'Velocity'] !== null).length,
+        peakAbsVelocity: peakAbs(output, name + 'Velocity'),
+        minAngle: values.length ? Math.min(...values) : null,
+        maxAngle: values.length ? Math.max(...values) : null
+      };
+    }
     return { schemaVersion: SCHEMA_VERSION, options, inputFrames, frames: output, summary };
   }
 
@@ -234,6 +304,13 @@
       ['hip_velocity_smoothed_deg_s', 'hipVelocity'], ['hip_confidence', 'hipConfidence'], ['hip_span_px', 'hipSpanPx'],
       ['hip_valid', 'hipValid'], ['hip_ambiguous_step', 'hipAmbiguous'], ['shoulder_minus_hip_deg', 'relativeAngle']
     ];
+    for (const name of ['leftElbow', 'rightElbow', 'leftKnee', 'rightKnee', 'trunkTilt']) {
+      const prefix = name.replace(/[A-Z]/g, letter => '_' + letter.toLowerCase());
+      for (const [suffix, column] of [['AngleRaw', 'angle_raw_deg'], ['AngleUnwrapped', 'angle_unwrapped_deg'],
+        ['Angle', 'angle_smoothed_deg'], ['VelocityRaw', 'velocity_raw_deg_s'], ['Velocity', 'velocity_smoothed_deg_s'],
+        ['Confidence', 'confidence'], ['SpanPx', 'span_px'], ['Valid', 'valid'], ['Ambiguous', 'ambiguous_step'], ['Reason', 'reason']])
+        fields.push([prefix + '_' + column, name + suffix]);
+    }
     const pointHeaders = POINT_NAMES.flatMap(name => {
       const prefix = name.replace(/[A-Z]/g, letter => '_' + letter.toLowerCase());
       return [prefix + '_x_px', prefix + '_y_px', prefix + '_confidence'];
@@ -263,16 +340,25 @@
     return value;
   }
 
+  function metricGroup(value) {
+    if (value === undefined) return 'axes';
+    if (typeof value !== 'string' || !Object.hasOwn(METRIC_GROUPS, value))
+      throw new TypeError('解析する部位を確認してください。');
+    return value;
+  }
+
   function exportJSON(result, metadata) {
     const current = checkedResult(result);
     if (metadata == null) metadata = {};
     if (!isObject(metadata)) throw new TypeError('保存するデータ名などはオブジェクトで指定してください。');
     const sourceKind = metadata.sourceKind === undefined ? 'unknown' : metadata.sourceKind;
     if (!SOURCE_KINDS.has(sourceKind)) throw new TypeError('データの種類を確認してください。');
-    return JSON.stringify({ schemaVersion: SCHEMA_VERSION, kind: 'swing-motion-points',
-      label: labelText(metadata.label), sourceKind,
+    const text = JSON.stringify({ schemaVersion: SCHEMA_VERSION, kind: 'motion-analysis-points',
+      label: labelText(metadata.label), sourceKind, metricGroup: metricGroup(metadata.metricGroup),
       width: dimension(metadata.width, '画像の幅'), height: dimension(metadata.height, '画像の高さ'),
       options: current.options, frames: current.inputFrames }, null, 2);
+    if (text.length > LIMITS.maxJSONCharacters) throw new RangeError('保存するJSONが大きすぎます。時点数を減らしてください。');
+    return text;
   }
 
   function readJSON(text) {
@@ -281,15 +367,17 @@
     let data;
     try { data = JSON.parse(text.replace(/^\uFEFF/, '')); }
     catch (_) { throw new TypeError('JSONとして読み込めませんでした。'); }
-    if (!isObject(data) || data.schemaVersion !== SCHEMA_VERSION || data.kind !== 'swing-motion-points')
-      throw new TypeError('この版に対応したスイング解析のJSONを選んでください。');
+    if (!isObject(data) || !((data.schemaVersion === SCHEMA_VERSION && data.kind === 'motion-analysis-points')
+      || (data.schemaVersion === '1.0.0' && data.kind === 'swing-motion-points')))
+      throw new TypeError('対応した動作解析のJSONを選んでください。');
     const sourceKind = data.sourceKind === undefined ? 'unknown' : data.sourceKind;
     if (!SOURCE_KINDS.has(sourceKind)) throw new TypeError('データの種類を確認してください。');
     return { schemaVersion: SCHEMA_VERSION, label: labelText(data.label), sourceKind,
+      metricGroup: data.schemaVersion === '1.0.0' ? 'axes' : metricGroup(data.metricGroup),
       width: dimension(data.width, '画像の幅'), height: dimension(data.height, '画像の高さ'),
       frames: normaliseFrames(data.frames), options: normaliseOptions(data.options) };
   }
 
-  return Object.freeze({ SCHEMA_VERSION, DEFAULT_OPTIONS, LIMITS, POINT_NAMES,
+  return Object.freeze({ SCHEMA_VERSION, DEFAULT_OPTIONS, LIMITS, POINT_NAMES, METRIC_GROUPS,
     normaliseOptions, normaliseFrames, wrapAxisAngle, analyse, exportCSV, exportJSON, readJSON });
 });
