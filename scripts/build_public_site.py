@@ -13,7 +13,7 @@ PROJECT = ROOT / 'projects' / 'world-definition'
 VERSION = 'v1.3.0'
 PUBLIC_FILES = ('index.html', 'guide.html', 'style.css', 'mystery.js', 'engine.js', 'progress.js', 'renderer.js', 'session.js', 'app.js')
 COASTAL_WEB_FILES = ('index.html', 'style.css', 'learning.js', 'results-core.js', 'results-viewer.js', 'demo-data.js')
-SWING_WEB_FILES = ('index.html', 'style.css', 'app.js', 'motion-core.js', 'demo-data.js')
+SWING_WEB_FILES = ('index.html', 'style.css', 'app.js', 'motion-core.js', 'demo-data.js', 'video-input.js')
 
 
 def build_swing_site(output=OUTPUT):
@@ -25,7 +25,7 @@ def build_swing_site(output=OUTPUT):
     version = 'v' + json.loads((project / 'version.json').read_text(encoding='utf-8'))['version']
     downloads = destination / 'downloads'
     downloads.mkdir(exist_ok=True)
-    archive = downloads / f'SwingMotionLab_{version}.zip'
+    archive = downloads / f'MotionAnalysisLab_{version}.zip'
     tracked = subprocess.check_output(['git', 'ls-files', '-z', '--', str(project.relative_to(ROOT))], cwd=ROOT).decode().split('\0')
     with ZipFile(archive, 'w', ZIP_DEFLATED) as bundle:
         for name in sorted(filter(None, tracked)):

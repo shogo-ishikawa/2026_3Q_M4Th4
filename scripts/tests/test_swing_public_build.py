@@ -31,7 +31,7 @@ class SwingPublicBuildTests(unittest.TestCase):
             self.assertFalse((public / 'input-video.mp4').exists())
             self.assertFalse((public / 'uploads').exists())
             self.assertTrue((public / 'app.js').is_file())
-            self.assertEqual(archive.name, 'SwingMotionLab_v1.0.0.zip')
+            self.assertEqual(archive.name, 'MotionAnalysisLab_v1.0.0.zip')
             with ZipFile(archive) as bundle:
                 self.assertTrue(all(name.startswith('v1.0.0/') for name in bundle.namelist()))
                 self.assertIn('v1.0.0/README.md', bundle.namelist())
