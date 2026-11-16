@@ -7,8 +7,10 @@ on:
       - 'projects/world-definition/**'
       - 'projects/vocal-fluctuation-lab/**'
       - 'projects/coastal-wind-chaos/**'
+      - 'projects/swing-motion-lab/**'
       - 'scripts/build_public_site.py'
       - 'scripts/tests/test_coastal_public_build.py'
+      - 'scripts/tests/test_swing_public_build.py'
       - 'web/**'
       - '.github/workflows/public-works.yml'
   pull_request:
@@ -16,8 +18,10 @@ on:
       - 'projects/world-definition/**'
       - 'projects/vocal-fluctuation-lab/**'
       - 'projects/coastal-wind-chaos/**'
+      - 'projects/swing-motion-lab/**'
       - 'scripts/build_public_site.py'
       - 'scripts/tests/test_coastal_public_build.py'
+      - 'scripts/tests/test_swing_public_build.py'
       - 'web/**'
       - '.github/workflows/public-works.yml'
   workflow_dispatch:
@@ -82,6 +86,13 @@ jobs:
           node projects/vocal-fluctuation-lab/tests/interaction.test.js _site/vocal-fluctuation-lab/data
           node projects/vocal-fluctuation-lab/tests/public-links.test.js _site
           node projects/vocal-fluctuation-lab/tests/catalogue.test.js _site/vocal-fluctuation-lab/data/reference_catalogue_public.json
+      - name: Check swing motion analysis
+        run: |
+          node --check projects/swing-motion-lab/web/app.js
+          node --check projects/swing-motion-lab/web/motion-core.js
+          node --check projects/swing-motion-lab/web/demo-data.js
+          node --test projects/swing-motion-lab/tests/motion-core.test.js
+          python -m unittest discover -s scripts/tests -p 'test_swing_public_build.py'
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#112438">
+  <meta name="description" content="スイング映像から肩と腰の動きを読み解く。動画の姿勢推定と手動指定で、角度・角速度・動くタイミングを比較できます。">
+  <title>Swing Motion Lab｜スイングの動作解析</title>
+  <link rel="stylesheet" href="style.css">
+  <script defer src="motion-core.js"></script>
+  <script defer src="demo-data.js"></script>
+  <script defer src="app.js"></script>
+</head>
+<body>
+<a class="skip" href="#workspace">操作画面へ</a>
+<header class="header shell">
+  <a class="brand" href="./" aria-label="Swing Motion Lab ホーム"><span class="brand-symbol" aria-hidden="true">↗</span><span>SWING<br>MOTION LAB</span></a>
+  <nav aria-label="ページ内の案内"><a href="#workspace">動きを見る</a><a href="#how-to">使い方</a><a href="../">作品集へ <span aria-hidden="true">↗</span></a></nav>
+</header>
+<main>
+  <section class="intro shell" aria-labelledby="intro-title">
+    <div><p class="eyebrow">MOTION / TIMING / DATA</p><h1 id="intro-title">一瞬のスイングを、<br><em>線と数字で読む。</em></h1><p class="lead">肩と腰は、いつ動く？<br>映像をコマ送りしながら、向きと変化の速さを見比べよう。</p></div>
+    <div class="intro-side"><span class="chapter">01 — OBSERVE</span><p>画像上の肩と腰を線で結び、<br>その角度と角度の変化を測ります。</p><button class="quiet" id="demo-top" type="button">デモをもう一度見る <span aria-hidden="true">↗</span></button></div>
+  </section>
+
+  <section class="workspace shell" id="workspace" aria-label="スイング解析の操作画面">
+    <div class="workspace-head"><div class="workspace-label"><span class="live-dot" aria-hidden="true"></span><h2>スイングを読む</h2><span id="source-kind" class="source-badge">デモ</span></div><div class="toolbar"><button id="upload-video" class="primary" type="button">動画を開く <span aria-hidden="true">＋</span></button><button id="open-result" class="secondary" type="button">結果を読み込む</button><input id="video-file" type="file" accept="video/*" hidden><input id="result-file" type="file" accept=".json,application/json" hidden></div></div>
+    <div class="work-grid">
+      <div class="view-column">
+        <div class="video-stage" id="video-stage"><canvas id="motion-canvas" width="960" height="540" aria-label="スイング映像と肩・腰の位置">映像と解析した位置を表示します。</canvas><span class="stage-label" id="stage-label">DEMO / 肩と腰の動き</span><span class="stage-guide" id="stage-guide">肩は青、腰はコーラル</span><video id="source-video" playsinline preload="metadata" hidden></video></div>
+        <div class="transport"><button type="button" id="previous-frame" class="icon-button" aria-label="1コマ戻る">‹</button><button type="button" id="play-video" class="icon-button play" aria-label="再生">▶</button><button type="button" id="next-frame" class="icon-button" aria-label="1コマ進む">›</button><div class="seek-wrap"><label for="time-position" class="sr-only">表示する時刻</label><input id="time-position" type="range" min="0" max="1" step="0.001" value="0"><div class="seek-captions"><span id="current-time">0.000 秒</span><span id="total-time">1.000 秒</span></div></div><label class="fps-label">コマ送り<input id="video-fps" type="number" min="1" max="240" step="1" value="30" aria-label="コマ送りのフレームレート"><span>fps</span></label></div>
+        <div class="frame-readout" aria-live="polite"><div><span class="readout-title shoulder-colour">肩の線</span><strong id="current-shoulder">—</strong><small id="current-shoulder-speed">—</small></div><div><span class="readout-title hip-colour">腰の線</span><strong id="current-hip">—</strong><small id="current-hip-speed">—</small></div><div><span class="readout-title">肩と腰の向きの差</span><strong id="current-relative">—</strong><small>画像上の角度</small></div></div>
+      </div>
+
+      <aside class="control-panel" aria-label="解析の設定">
+        <div class="panel-top"><span class="eyebrow">SET THE SCENE</span><span class="step-number">01</span></div>
+        <h3>見る範囲を決める</h3><div class="range-fields"><label>開始<input id="start-time" type="number" min="0" step="0.01" value="0"><span>秒</span></label><label>終了<input id="end-time" type="number" min="0" step="0.01" value="1"><span>秒</span></label></div><button type="button" id="range-reset" class="text-button">秒数をリセット</button>
+        <div class="roi-tools"><button id="select-roi" type="button" class="secondary" aria-pressed="false">打者の範囲を囲む</button><button id="clear-roi" type="button" class="text-button">解除</button></div><p class="control-note" id="roi-note">動画を開いたら、解析したい打者を囲みます。</p>
+        <div class="panel-divider"></div><div class="panel-top"><span class="eyebrow">FIND THE MOVEMENT</span><span class="step-number">02</span></div><h3>姿勢をとらえる</h3>
+        <div class="setting-pair"><label>解析する頻度<select id="sample-rate"><option value="10">1秒に10点</option><option value="15" selected>1秒に15点</option><option value="30">1秒に30点</option><option value="60">1秒に60点</option></select></label><label>スロー倍率<select id="slow-factor"><option value="1">通常の速さ</option><option value="2">2倍スロー</option><option value="4">4倍スロー</option><option value="8">8倍スロー</option></select></label></div>
+        <button id="analyse-video" type="button" class="primary analyse">AIで肩・腰を解析 <span aria-hidden="true">↗</span></button><button id="cancel-analysis" type="button" class="secondary" hidden>解析を中止</button><progress id="analysis-progress" max="1" value="0" hidden></progress>
+        <p class="control-note">初回は姿勢推定モデルを読み込みます。動画はこのブラウザで処理します。</p>
+        <details class="manual-panel"><summary>4点を手動で指定・修正する</summary><p>映像の時刻を決め、ボタンに対応する位置をクリックします。左右は打者から見た側です。</p><div class="point-buttons"><button data-point="leftShoulder" type="button">左肩</button><button data-point="rightShoulder" type="button">右肩</button><button data-point="leftHip" type="button">左腰</button><button data-point="rightHip" type="button">右腰</button></div><p class="control-note" id="manual-note">指定する点を選んでください。</p><div class="manual-actions"><button id="save-points" type="button" class="secondary">この時刻の4点を保存</button><button id="clear-points" type="button" class="text-button">4点を消す</button></div></details>
+        <details class="quality-panel"><summary>グラフの整え方</summary><label class="range-label">点の信頼度 <output id="confidence-value">0.50</output><input id="confidence-threshold" type="range" min="0" max="1" step="0.05" value="0.5"></label><div class="setting-pair"><label>最小の線の長さ<input id="min-span" type="number" min="1" max="500" value="12"><span class="field-unit">px</span></label><label>平滑化<select id="smoothing"><option value="1">なし</option><option value="3" selected>3点</option><option value="5">5点</option><option value="7">7点</option></select></label></div><p>短すぎる線や信頼度の低い点はグラフの空欄になります。平滑化は前後の連続した点を使います。</p></details>
+      </aside>
+    </div>
+    <p class="status" id="status" role="status" aria-live="polite">デモの解析結果を表示しています。</p>
+  </section>
+
+  <section class="results shell" aria-labelledby="results-title"><div class="section-heading"><div><p class="eyebrow">03 — COMPARE</p><h2 id="results-title">肩と腰の、動くタイミング。</h2></div><div class="legend"><span><i class="shoulder-swatch"></i>肩</span><span><i class="hip-swatch"></i>腰</span></div></div>
+    <div class="summary-grid"><article><span>肩の角速度ピーク</span><strong id="shoulder-peak">—</strong><small>度/秒・絶対値</small></article><article><span>腰の角速度ピーク</span><strong id="hip-peak">—</strong><small>度/秒・絶対値</small></article><article><span>肩と腰の向きの差</span><strong id="relative-peak">—</strong><small>最大の絶対値・度</small></article><article><span>線を測れた割合</span><strong id="valid-rate">—</strong><small id="valid-count">肩 — ／ 腰 —</small></article></div>
+    <div class="chart-grid"><article class="chart-card"><div class="chart-head"><h3>線の向き</h3><span>度</span></div><div id="angle-chart" class="chart" aria-label="肩と腰の線の角度のグラフ"></div></article><article class="chart-card"><div class="chart-head"><h3>角度変化の速さ</h3><span>度/秒</span></div><div id="velocity-chart" class="chart" aria-label="肩と腰の角速度のグラフ"></div></article></div>
+    <div class="result-footer"><p>グラフをクリックすると、その時刻へ移動します。<br>横軸は<span id="time-basis">動画の時間</span>です。線の向きは右向きを0°とし、反時計回りを正にしています。</p><div class="export-actions"><button id="download-csv" class="secondary" type="button">数値をCSVで保存 ↓</button><button id="download-json" class="secondary" type="button">座標・条件を保存 ↓</button><button id="clear-results" type="button" class="text-button">結果をリセット</button></div></div>
+  </section>
+
+  <section class="how-to shell" id="how-to" aria-labelledby="how-title"><div><p class="eyebrow">HOW TO USE</p><h2 id="how-title">映像から、動きの違いへ。</h2><p>解析の流れと、数字の読み方を確認しよう。</p></div><div class="how-content"><details open><summary>1. まずデモを動かす</summary><p>時刻のバーを動かすと、肩と腰の線、角度、グラフ上の位置が一緒に変わります。肩が先に動く瞬間と、腰が動き始める瞬間を比べてみましょう。</p></details><details><summary>2. 自分の動画を解析する</summary><p>「動画を開く」でファイルを選び、開始・終了秒を指定します。「打者の範囲を囲む」で全身の動きが入るように囲み、「AIで肩・腰を解析」を押します。投手や審判が範囲に入らないようにすると、打者を選びやすくなります。</p></details><details><summary>3. 点を確かめて修正する</summary><p>映像の4点が肩と腰の位置に合っているか、コマ送りで確認します。修正したい時刻で「4点を手動で指定・修正する」を開き、各点を指定して保存します。複数の時刻を手動で入力する使い方もできます。</p></details><details><summary>4. 角度と角速度を読む</summary><p>肩と腰それぞれを結んだ、画像上の線を測ります。角速度の絶対値が大きいほど、その線の向きが速く変化しています。正負は画面内の回る向きです。肩と腰の向きの差や、ピークが現れる時刻を見比べます。</p><p>スロー映像は、実際に引き伸ばされた倍率を設定すると実時間に換算できます。元の速さが分からない場合は「通常の速さ」で動画内の変化として読みます。</p></details><details><summary>5. 保存した座標を再解析する</summary><p>CSVには各時刻の数値を保存します。「座標・条件を保存」のJSONには4点と解析条件を保存します。後から「結果を読み込む」で開けば、動画がなくても閾値や平滑化を変えてグラフを作り直せます。</p></details></div></section>
+</main>
+<footer class="footer shell"><span class="brand-name">SWING MOTION LAB <small>v1.0.0</small></span><a href="./downloads/SwingMotionLab_v1.0.0.zip" download>コードをダウンロード ↓</a><a href="../">プログラム作品集へ ↗</a></footer>
+</body></html>
