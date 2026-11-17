@@ -1,3 +1,5 @@
+import { predictModelWait } from './wait-model.js';
+import { liveWaitFor } from './wait-data.js';
 /* Browser itinerary search. Every returned plan is checked; the search does not claim global optimality. */
 const FOOD = new Set(['restaurant', 'cafe', 'snack', 'popcorn']);
 const FIXED = new Set(['show', 'parade']);
@@ -63,7 +65,7 @@ function historicalWait(activity, start, settings, history) {
     const wait = Number(row.wait ?? row.waitMinutes ?? row.wait_minutes);
     let time;
     try { time = toMinutes(row.time ?? row.minute); } catch { continue; }
-    if (!Number.isFinite(wait) || wait < 0 || wait > 600 || Math.abs(time - start) > 120) continue;
+    if (!Number.isFinite(wait) || wait < 0 || wait > 600 || Math.abs(time - start) > 120 || (row.date === settings.date && time > start)) continue;
     const weekday = new Date(row.date + 'T12:00:00Z').getUTCDay();
     const weekend = weekday === 0 || weekday === 6;
     let weight = 1 / (1 + Math.abs(time - start) / 30);
@@ -86,6 +88,10 @@ export function estimateWait(activity, start, settings, history = []) {
     minutes: Math.round(numberIn(selection.manualWait ?? activity.baseWait ?? 0, '手動の待ち時間', 0, 600)),
     source: 'manual', samples: 0,
   };
+  const live = liveWaitFor(activity, start, settings, { now: settings.waitAsOf ?? Date.now() });
+  if (live?.isOpen) return live;
+  const prediction = predictModelWait(activity, start, settings, settings.waitModel);
+  if (prediction) return prediction;
   const measured = historicalWait(activity, start, settings, history);
   if (measured) return measured;
   const weekday = dateValid(settings.date) ? new Date(settings.date + 'T12:00:00Z').getUTCDay() : 2;
@@ -105,7 +111,7 @@ function normalise(park, settings) {
   if (!dateValid(settings?.date)) throw new RangeError('訪問日を確認してください。');
   const entry = toMinutes(settings.entry), exit = toMinutes(settings.exit);
   if (entry < 0 || exit > 1439 || entry >= exit) throw new RangeError('退園時刻は入園時刻より後にしてください。');
-  const result = { ...settings, entry, exit };
+  const result = { ...settings, entry, exit, waitAsOf: Date.now() };
   result.speed = numberIn(settings.speed ?? 65, '歩く速さ', 10, 150);
   result.budget = numberIn(settings.budget ?? 12000, '予算', 0, 10000000, true);
   result.spentBudget = numberIn(settings.spentBudget ?? 0, '支払済みの金額', 0, 10000000, true);
@@ -117,7 +123,21 @@ function normalise(park, settings) {
   }
   result.restEvery = numberIn(settings.restEvery ?? 120, '休憩の間隔', 0, 600, true);
   result.restMinutes = numberIn(settings.restMinutes ?? 10, '休憩の長さ', 0, 120, true);
-  result.searchSeconds = numberIn(settings.searchSeconds ?? 3, '探索時間', 0.05, 30);
+  result.searchSeconds = numberIn(settings.searchSeconds ?? 10, '探索時間', 0.05, 120);
+  result.searchMethod = settings.searchMethod ?? 'beam';
+  if (!['beam', 'multistart', 'portfolio'].includes(result.searchMethod)) throw new RangeError('探索手法を確認してください。');
+  if (!Array.isArray(settings.fixedBreaks || []) || (settings.fixedBreaks || []).length > 30) throw new RangeError('追加する休憩は30件以内にしてください。');
+  const breakIds = new Set();
+  result.fixedBreaks = (settings.fixedBreaks || []).map(item => {
+    if (!item || typeof item.id !== 'string' || !item.id || item.id.length > 100 || breakIds.has(item.id)) throw new RangeError('休憩のIDを確認してください。');
+    breakIds.add(item.id);
+    if (!park.nodes.some(node => node.id === item.node)) throw new RangeError('休憩する地点を確認してください。');
+    const start = toMinutes(item.start), duration = numberIn(item.duration, '休憩の長さ', 1, 180, true);
+    if (start < entry || start + duration > exit) throw new RangeError('追加する休憩は滞在時間内にしてください。');
+    if (item.label !== undefined && (typeof item.label !== 'string' || item.label.length > 100)) throw new RangeError('休憩の名前を確認してください。');
+    return { id: item.id, start, duration, node: item.node, label: item.label || 'ひと休み' };
+  }).sort((a, b) => a.start - b.start);
+  if (result.fixedBreaks.some((item, index, all) => index && all[index - 1].start + all[index - 1].duration > item.start)) throw new RangeError('追加した休憩の時間が重なっています。');
   result.history = Array.isArray(settings.history) ? settings.history.slice(0, 100000) : [];
   result.activeEvents = (park.events || []).filter(event => event.startDate <= settings.date && settings.date <= event.endDate);
   const activities = new Map(park.activities.map(activity => [activity.id, activity]));
@@ -210,7 +230,7 @@ function contextFor(park, settings, initialPlan) {
     const startedVisitIds = new Set(priorRows.filter(item => item.start < cutoff && ['queue', 'activity'].includes(item.kind)).map(item => item.activityId));
     prefix = priorRows.filter(item => item.kind !== 'exit' &&
       (item.start < cutoff || (startedVisitIds.has(item.activityId) && ['queue', 'activity'].includes(item.kind)))).map(item => {
-        const end = ['wait', 'rest'].includes(item.kind) ? Math.min(item.end, cutoff) : item.end;
+        const end = ['wait', 'rest'].includes(item.kind) && !item.fixedBreakId ? Math.min(item.end, cutoff) : item.end;
         return { ...copy(item), end, duration: end - item.start, preserved: true };
       });
     if (prefix.length) {
@@ -225,6 +245,8 @@ function contextFor(park, settings, initialPlan) {
   }
   if (!graph.distances[location]) throw new RangeError('現在地を地図から選んでください。');
   const prefixVisits = (initialPlan?.visits || []).filter(visit => prefix.some(item => item.kind === 'activity' && item.activityId === visit.id)).map(copy);
+  const replanCutoff = settings.replanFrom === undefined || settings.replanFrom === '' ? settings.entry : toMinutes(settings.replanFrom);
+  if (settings.fixedBreaks.some(item => item.start < beginning && item.start + item.duration > replanCutoff && !prefix.some(saved => saved.fixedBreakId === item.id))) throw new RangeError('進行中の予定と追加した休憩が重なっています。休憩時刻を見直してください。');
   const completedSelections = settings.selections.filter(selection => completed.has(selection.id));
   const selected = settings.selections.filter(selection => !completed.has(selection.id));
   const paidDpa = settings.purchases.reduce((sum, purchase) => sum + purchase.cost, 0);
@@ -234,6 +256,7 @@ function contextFor(park, settings, initialPlan) {
   const sourceRows = prefix.filter(item => item.kind === 'activity');
   const initial = {
     time: beginning, node: location, rows: prefix, visits: prefixVisits, visited: new Set(completed),
+    breakIndex: settings.fixedBreaks.filter(item => item.start + item.duration <= beginning).length,
     score: completedSelections.reduce((sum, item) => sum + item.weight, 0),
     cost: spent, foodCost: sourceRows.filter(item => FOOD.has(item.category)).reduce((sum, item) => sum + finite(item.cost), 0),
     dpaCost: Math.max(prefixDpa, paidDpa), shoppingCost: sourceRows.filter(item => item.category === 'shop').reduce((sum, item) => sum + finite(item.cost), 0),
@@ -241,6 +264,12 @@ function contextFor(park, settings, initialPlan) {
     lastRest: beginning, purchases: settings.purchases.map(copy),
     required: completedSelections.filter(item => item.required).length,
   };
+  for (const item of prefix.filter(item => item.fixedBreakId)) {
+    const expected = settings.fixedBreaks.find(candidate => candidate.id === item.fixedBreakId);
+    if (expected && (item.start !== expected.start || item.end !== expected.start + expected.duration || item.node !== expected.node)) throw new RangeError('開始済みの休憩は時刻・長さ・地点を変えられません。');
+  }
+  const pendingBreak = settings.fixedBreaks[initial.breakIndex];
+  if (pendingBreak && pendingBreak.start < beginning) throw new RangeError('進行中の予定と追加した休憩が重なっています。休憩時刻を見直してください。');
   const historyById = new Map();
   for (const record of settings.history) {
     const id = record.activityId ?? record.activity_id ?? record.id;
@@ -347,9 +376,12 @@ function scheduledOptions(state, baseActivity, selection, context) {
     for (const window of windows) for (const proposed of starts) {
       if (context.deadline && now() >= context.deadline) return options;
       let queueStart = Math.max(earliest, window[0], proposed);
+      if (liveWaitFor(activity, fixed ? proposed : queueStart, settings, { now: settings.waitAsOf })?.isOpen === false) continue;
       const cacheKey = activity.id + ':' + queueStart;
       if (!context.waitCache.has(cacheKey)) context.waitCache.set(cacheKey, estimateWait(activity, queueStart, settings, context.historyById.get(activity.id) || []));
-      let wait = method.method === 'dpa' ? Math.round(finite(activity.dpa.wait, 10)) : context.waitCache.get(cacheKey).minutes;
+      const waitEstimate = context.waitCache.get(cacheKey);
+      const waitSource = method.method === 'dpa' ? 'dpa' : waitEstimate.source;
+      let wait = method.method === 'dpa' ? Math.round(finite(activity.dpa.wait, 10)) : waitEstimate.minutes;
       let start = queueStart + wait;
       if (fixed) {
         start = proposed;
@@ -363,15 +395,17 @@ function scheduledOptions(state, baseActivity, selection, context) {
       const endNode = activity.endNode || activity.node;
       const exitMetres = graph.distances[endNode]?.[context.park.exitNode] ?? Infinity;
       if (end + Math.ceil(exitMetres / settings.speed) > settings.exit) continue;
+      const nextBreak = settings.fixedBreaks[state.breakIndex];
+      if (nextBreak && end + Math.ceil(graph.distances[endNode][nextBreak.node] / settings.speed) > nextBreak.start) continue;
       const key = method.method + ':' + queueStart + ':' + end;
       if (options.some(option => option.key === key)) continue;
       const extra = rows.slice();
       if (queueStart > arrival) extra.push(row('wait', arrival, queueStart, fixed ? '開演前の時間' : '時間帯まで待機', { node: activity.node, activityId: activity.id }));
-      if (wait) extra.push(row('queue', queueStart, start, fixed ? '鑑賞場所へ・入場待ち' : '待ち時間', { node: activity.node, activityId: activity.id, dpa: method.method === 'dpa' }));
+      if (wait) extra.push(row('queue', queueStart, start, fixed ? '鑑賞場所へ・入場待ち' : '待ち時間', { node: activity.node, activityId: activity.id, dpa: method.method === 'dpa', waitSource }));
       const activityCost = selection.cost + method.price;
       extra.push(row('activity', start, end, activity.name, {
         activityId: activity.id, node: activity.node, endNode, category: activity.category,
-        cost: activityCost, dpaCost: method.price, dpa: method.method === 'dpa', method: method.method,
+        cost: activityCost, dpaCost: method.price, dpa: method.method === 'dpa', method: method.method, waitSource,
         sourceUrl: activity.sourceUrl,
       }));
       const purchases = state.purchases.slice();
@@ -381,10 +415,10 @@ function scheduledOptions(state, baseActivity, selection, context) {
       });
       const visited = new Set(state.visited); visited.add(activity.id);
       options.push({
-        key, time: end, node: endNode, rows: state.rows.concat(extra),
+        key, time: end, node: endNode, rows: state.rows.concat(extra), breakIndex: state.breakIndex,
         visits: state.visits.concat({ id: activity.id, activityId: activity.id, name: activity.name,
           node: activity.node, endNode, category: activity.category, start, end, queueStart, arrival,
-          method: method.method, weight: selection.weight, cost: activityCost, dpaCost: method.price }),
+          method: method.method, waitSource, weight: selection.weight, cost: activityCost, dpaCost: method.price }),
         visited, score: state.score + selection.weight, cost: state.cost + activityCost,
         foodCost: state.foodCost + (FOOD.has(activity.category) ? selection.cost : 0),
         shoppingCost: state.shoppingCost + (activity.category === 'shop' ? selection.cost : 0),
@@ -413,9 +447,28 @@ function requiredMet(state, context) {
   return context.settings.selections.filter(item => item.required).every(item => state.visited.has(item.id));
 }
 
+/** A fixed rest is a zero-score reservation. Walking and any idle time are explicit. */
+function nextFixedBreak(state, context) {
+  const reservation = context.settings.fixedBreaks[state.breakIndex];
+  if (!reservation) return null;
+  const metres = context.graph.distances[state.node]?.[reservation.node] ?? Infinity;
+  const arrival = state.time + Math.ceil(metres / context.settings.speed);
+  if (!Number.isFinite(metres) || arrival > reservation.start) return null;
+  const rows = state.rows.slice();
+  if (arrival > state.time) rows.push(row('walk', state.time, arrival, reservation.label + 'の場所へ移動', {
+    from: state.node, to: reservation.node, node: reservation.node, metres,
+    path: context.graph.paths[state.node][reservation.node],
+  }));
+  if (arrival < reservation.start) rows.push(row('wait', arrival, reservation.start, '休憩までの自由時間', { node: reservation.node }));
+  const end = reservation.start + reservation.duration;
+  rows.push(row('rest', reservation.start, end, reservation.label, { node: reservation.node, fixedBreakId: reservation.id }));
+  return { ...state, rows, time: end, node: reservation.node, lastRest: end,
+    walk: state.walk + metres, breakIndex: state.breakIndex + 1 };
+}
+
 function canFinish(state, context) {
   const metres = context.graph.distances[state.node]?.[context.park.exitNode] ?? Infinity;
-  return Number.isFinite(metres) && state.time + Math.ceil(metres / context.settings.speed) <= context.settings.exit &&
+  return state.breakIndex === context.settings.fixedBreaks.length && Number.isFinite(metres) && state.time + Math.ceil(metres / context.settings.speed) <= context.settings.exit &&
     state.cost + Math.max(0, finite(context.settings.souvenirReserve) - state.shoppingCost) <= context.settings.budget;
 }
 
@@ -453,6 +506,8 @@ function resultFrom(state, context, diagnostics, quick = false) {
   const money = state?.cost ?? context.initial.cost;
   const walk = rows.filter(item => item.kind === 'walk').reduce((sum, item) => sum + finite(item.metres), 0);
   const sumMinutes = kind => rows.filter(item => item.kind === kind).reduce((sum, item) => sum + item.end - item.start, 0);
+  const waitSources = [...new Set(rows.filter(item => item.kind === 'activity').map(item => item.waitSource).filter(Boolean))];
+  diagnostics = { ...diagnostics, waitSources, waitSource: waitSources.length ? waitSources.join(',') : diagnostics.waitSource };
   const omissions = selections.filter(item => !visited.has(item.id)).map(selection => quick ? {
     id: selection.id, name: context.map.get(selection.id).name, weight: selection.weight, required: selection.required, reason: '探索中のため、まだ採用されていません。',
   } : omissionFor(selection, context, state));
@@ -480,86 +535,156 @@ function resultFrom(state, context, diagnostics, quick = false) {
   };
 }
 
-/** Anytime beam search over visits, admission methods and time windows. */
-export function solveItinerary(park, rawSettings, options = {}) {
-  const started = now();
-  const replan = rawSettings?.replanFrom !== undefined && rawSettings.replanFrom !== '';
-  let input = rawSettings;
-  if (replan && rawSettings.purchases === undefined && options.initialPlan?.purchases?.length) {
-    const entered = Array.isArray(rawSettings.purchases) ? rawSettings.purchases : [];
-    const enteredIds = new Set(entered.map(purchase => purchase.id));
-    const priorOwned = options.initialPlan.purchases.filter(purchase => purchase.owned && !enteredIds.has(purchase.id));
-    input = { ...rawSettings, purchases: entered.concat(priorOwned) };
-  }
-  const settings = normalise(park, input), context = contextFor(park, settings, options.initialPlan);
-  const milliseconds = Math.min(settings.searchSeconds * 1000,
-    options.deadlineMs === undefined ? Infinity : Math.max(1, Number(options.deadlineMs)));
-  const deadline = started + milliseconds;
-  context.deadline = deadline;
+/** Keep the strongest feasible incumbent across independent search strategies. */
+function searchTracker(context, options, started) {
   let best = requiredMet(context.initial, context) && canFinish(context.initial, context) ? context.initial : null;
-  let expanded = 0, timedOut = false, lastProgress = started;
-  let beam = [context.initial];
-  const width = context.selected.length <= 7 ? 12000 : context.selected.length <= 15 ? 320 : 180;
-  for (let depth = 0; depth < context.selected.length && beam.length; depth++) {
-    const next = [];
-    for (const state of beam) {
-      if (now() >= deadline) { timedOut = true; break; }
-      for (const selection of context.selected) {
-        if (state.visited.has(selection.id)) continue;
-        const activity = context.map.get(selection.id);
-        const children = scheduledOptions(state, activity, selection, context);
-        expanded += children.length;
-        for (const child of children) {
-          if (requiredMet(child, context) && canFinish(child, context) && (!best || compare(child, best, context) < 0)) best = child;
-          next.push(child);
-        }
+  let expanded = 0, lastProgress = started;
+  const method = { beam: 'beam-search', multistart: 'multistart-local-search', portfolio: 'portfolio-search' }[context.settings.searchMethod];
+  const diagnostics = running => ({ elapsedMs: Math.round(now() - started), expanded, method,
+    optimal: false, timedOut: now() >= context.deadline, running,
+    waitSource: context.settings.crowdMode === 'manual' ? 'manual' : context.settings.history.length ? 'history-or-trend' : 'trend' });
+  return {
+    accept(state) {
+      expanded++;
+      let complete = state;
+      while (complete.breakIndex < context.settings.fixedBreaks.length) {
+        const next = nextFixedBreak(complete, context);
+        if (!next) break;
+        complete = next;
       }
+      if (requiredMet(complete, context) && canFinish(complete, context) && (!best || compare(complete, best, context) < 0)) best = complete;
       if (now() - lastProgress >= 150) {
-        const elapsedMs = Math.round(now() - started);
-        const preview = best ? resultFrom(best, context, {
-          elapsedMs, expanded, method: 'beam-search', optimal: false, timedOut: false, running: true,
-          waitSource: settings.crowdMode === 'manual' ? 'manual' : settings.history.length ? 'history-or-trend' : 'trend',
-          notes: ['探索中に得られた実行可能な案です。探索を続けると採用内容が変わる場合があります。'],
-        }, true) : null;
-        options.onProgress?.({ elapsedMs, bestScore: best?.score ?? 0, visits: best?.visits.length ?? 0, expanded, preview });
+        const details = diagnostics(true), preview = best ? resultFrom(best, context, { ...details,
+          notes: ['探索中に得られた実行可能な案です。探索を続けると採用内容が変わる場合があります。'] }, true) : null;
+        options.onProgress?.({ elapsedMs: details.elapsedMs, bestScore: best?.score ?? 0, visits: best?.visits.length ?? 0, expanded, preview });
         lastProgress = now();
       }
+    },
+    get best() { return best; },
+    diagnostics,
+  };
+}
+
+/** Breadth-first search retains alternatives with different locations and purchases. */
+function beamSearch(context, tracker, deadline) {
+  let beam = [context.initial];
+  const count = context.selected.length;
+  const width = count <= 7 ? 12000 : count <= 15 ? 320 : 180;
+  for (let depth = 0; depth < count + context.settings.fixedBreaks.length && beam.length; depth++) {
+    const next = [];
+    for (const state of beam) {
+      if (now() >= deadline) return;
+      const rest = nextFixedBreak(state, context);
+      if (rest) { tracker.accept(rest); next.push(rest); }
+      for (const selection of context.selected) {
+        if (state.visited.has(selection.id)) continue;
+        if (now() >= deadline) return;
+        for (const child of scheduledOptions(state, context.map.get(selection.id), selection, context)) {
+          tracker.accept(child); next.push(child);
+        }
+      }
     }
-    if (timedOut) break;
-    // Preserve alternatives that have different final places and purchased DPA histories.
     const grouped = new Map();
     for (const state of next) {
-      const key = [...state.visited].sort().join('|') + ';' + state.node + ';' +
+      const key = [...state.visited].sort().join('|') + ';' + state.node + ';' + state.breakIndex + ';' +
         state.purchases.map(purchase => purchase.id + ':' + purchase.start).join(',');
       const previous = grouped.get(key);
       if (!previous || state.time < previous.time || (state.time === previous.time && compare(state, previous, context) < 0)) grouped.set(key, state);
     }
     beam = [...grouped.values()].sort((a, b) => {
-      const requiredRemainingA = context.selected.filter(item => item.required && !a.visited.has(item.id)).length;
-      const requiredRemainingB = context.selected.filter(item => item.required && !b.visited.has(item.id)).length;
-      const boundA = a.score + context.selected.filter(item => !a.visited.has(item.id)).reduce((sum, item) => sum + item.weight, 0);
-      const boundB = b.score + context.selected.filter(item => !b.visited.has(item.id)).reduce((sum, item) => sum + item.weight, 0);
-      return requiredRemainingA - requiredRemainingB || boundB - boundA || compare(a, b, context);
+      const remaining = state => context.selected.filter(item => item.required && !state.visited.has(item.id)).length;
+      return remaining(a) - remaining(b) || compare(a, b, context);
     }).slice(0, width);
   }
-  const diagnostics = {
-    elapsedMs: Math.round(now() - started), expanded, method: 'beam-search', optimal: false, timedOut,
-    waitSource: settings.crowdMode === 'manual' ? 'manual' : settings.history.length ? 'history-or-trend' : 'trend',
-    notes: [
-      '重要度の合計を優先し、同点では支出・歩行距離を比べた探索中の最良案です。最適性の証明は行いません。',
-      settings.history.length ? '対応する履歴がある施設・時間帯は類似日の観測値を使用し、ない部分は傾向モデルで補います。' :
-        '待ち時間は曜日・天気・時刻・イベントによる傾向モデルです。実測履歴を読み込むと類似日の推定へ切り替わります。',
-      'DPAの購入案は入力した空き枠と購入履歴から計算しています。在庫は公式アプリで確認してください。',
-    ],
-  };
-  if (!best) diagnostics.notes.unshift('必須条件をすべて満たす案は見つかりませんでした。必須指定・時刻・予算を見直してください。実行不可能と証明した結果ではありません。');
+}
+
+/** Fixed-seed pseudo-random choices make repeated comparisons reproducible. */
+function randomGenerator() {
+  let seed = 17012026;
+  return () => { seed = (1664525 * seed + 1013904223) >>> 0; return seed / 4294967296; };
+}
+
+/** Replay a priority order; defer activities that fit only after the next fixed rest. */
+function replayOrder(order, context, tracker, random, diversify = false) {
+  let state = context.initial, remaining = order.slice();
+  while (remaining.length || state.breakIndex < context.settings.fixedBreaks.length) {
+    if (now() >= context.deadline) break;
+    let chosen = null, chosenId = null;
+    for (const selection of remaining) {
+      const choices = scheduledOptions(state, context.map.get(selection.id), selection, context);
+      if (choices.length) {
+        choices.sort((a, b) => a.time - b.time || compare(a, b, context));
+        chosen = choices[diversify && choices.length > 1 && random() < 0.25 ? Math.floor(random() * Math.min(3, choices.length)) : 0];
+        chosenId = selection.id; break;
+      }
+    }
+    if (chosen) remaining = remaining.filter(item => item.id !== chosenId);
+    else chosen = nextFixedBreak(state, context);
+    if (!chosen) break;
+    state = chosen; tracker.accept(state);
+  }
+  return state;
+}
+
+/** Multiple greedy starts followed by order insertion and swap neighbourhoods. */
+function multiStartSearch(context, tracker, deadline) {
+  const random = randomGenerator(), count = context.selected.length;
+  let order = context.selected.slice().sort((a, b) => Number(b.required) - Number(a.required) || b.weight - a.weight);
+  const limit = Math.min(1600, Math.max(80, count * 60));
+  let accepted = replayOrder(order, context, tracker, random);
+  for (let attempt = 0; attempt < limit && now() < deadline; attempt++) {
+    let candidate;
+    if (attempt % 5 === 0) {
+      candidate = context.selected.map(item => ({ item, value: random() + (item.required ? 2 : 0) + item.weight / 8 }))
+        .sort((a, b) => b.value - a.value).map(row => row.item);
+    } else {
+      candidate = order.slice();
+      const from = Math.floor(random() * count), to = Math.floor(random() * count);
+      if (count && attempt % 2) [candidate[from], candidate[to]] = [candidate[to], candidate[from]];
+      else if (count) candidate.splice(to, 0, candidate.splice(from, 1)[0]);
+    }
+    const result = replayOrder(candidate, context, tracker, random, attempt % 5 === 0);
+    if (compare(result, accepted, context) <= 0 || attempt % 17 === 0) { order = candidate; accepted = result; }
+  }
+}
+
+/** Time-bounded search over visits, admission methods, breaks and time windows. */
+export function solveItinerary(park, rawSettings, options = {}) {
+  const started = now();
+  const replan = rawSettings?.replanFrom !== undefined && rawSettings.replanFrom !== '';
+  let input = rawSettings;
+  if (replan && rawSettings.purchases === undefined && options.initialPlan?.purchases?.length) {
+    const priorOwned = options.initialPlan.purchases.filter(purchase => purchase.owned);
+    input = { ...rawSettings, purchases: priorOwned };
+  }
+  const settings = normalise(park, input), context = contextFor(park, settings, options.initialPlan);
+  const milliseconds = Math.min(settings.searchSeconds * 1000,
+    options.deadlineMs === undefined ? Infinity : Math.max(1, Number(options.deadlineMs)));
+  context.deadline = started + milliseconds;
+  const tracker = searchTracker(context, options, started);
+  tracker.accept(context.initial);
+  if (settings.searchMethod === 'beam') beamSearch(context, tracker, context.deadline);
+  else if (settings.searchMethod === 'multistart') multiStartSearch(context, tracker, context.deadline);
+  else {
+    // Both algorithms share a verified incumbent, with a reserved time slice for each.
+    beamSearch(context, tracker, started + milliseconds * 0.55);
+    multiStartSearch(context, tracker, context.deadline);
+  }
+  const diagnostics = tracker.diagnostics(false);
+  delete diagnostics.running;
+  diagnostics.notes = [
+    '重要度の合計を優先し、同点では支出・歩行距離を比べた探索中の最良案です。最適性の証明は行いません。',
+    '待ち時間は手動指定、当日の新しい外部データ、検証で改善した学習モデル、履歴、傾向モデルの順に使います。施設ごとの出典は予定表に表示します。',
+    'DPAの購入案は入力した空き枠と購入履歴から計算しています。在庫は公式アプリで確認してください。',
+  ];
+  if (!tracker.best) diagnostics.notes.unshift('必須条件と追加した休憩をすべて満たす案は見つかりませんでした。指定した時刻・場所・予算を見直してください。実行不可能と証明した結果ではありません。');
   context.deadline = null;
-  const result = resultFrom(best, context, diagnostics);
-  if (best) {
+  const result = resultFrom(tracker.best, context, diagnostics);
+  if (tracker.best) {
     const verification = validatePlan(park, settings, result);
     if (!verification.valid) throw new Error('予定の検証で問題が見つかりました：' + verification.errors.join(' / '));
   }
-  options.onProgress?.({ elapsedMs: diagnostics.elapsedMs, bestScore: result.totals.score, visits: result.visits.length, expanded });
+  options.onProgress?.({ elapsedMs: diagnostics.elapsedMs, bestScore: result.totals.score, visits: result.visits.length, expanded: diagnostics.expanded });
   return result;
 }
 
@@ -585,6 +710,7 @@ export function validatePlan(park, settings, result) {
       if (!settings.currentNode || item.node !== settings.currentNode || settings.replanFrom === undefined || item.start < toMinutes(settings.replanFrom)) errors.push('現在地の確認地点が不正です。');
       node = item.node;
     }
+    if (item.kind === 'rest' && item.node !== node) errors.push('休憩の場所までの移動がありません。');
     if (item.kind === 'activity') {
       if (!Number.isFinite(item.cost) || item.cost < 0 || item.cost % 100) errors.push('体験費用が不正です。');
       const activity = activities.get(item.activityId), selection = selectionMap.get(item.activityId);
@@ -617,6 +743,14 @@ export function validatePlan(park, settings, result) {
     if (item.kind === 'exit' && (item.node !== park.exitNode || node !== park.exitNode)) errors.push('出口に到着していません。');
     previous = item.end;
   }
+  for (const reservation of settings.fixedBreaks || []) {
+    const expectedStart = toMinutes(reservation.start), expectedEnd = expectedStart + Number(reservation.duration);
+    const cutoff = settings.replanFrom === undefined || settings.replanFrom === '' ? entry : toMinutes(settings.replanFrom);
+    const matches = rows.filter(item => item.fixedBreakId === reservation.id);
+    if (expectedEnd <= cutoff && !matches.length) continue; // A past reservation need not be recreated.
+    if (matches.length !== 1 || matches[0].kind !== 'rest' || matches[0].start !== expectedStart || matches[0].end !== expectedEnd || matches[0].node !== reservation.node) errors.push('追加した休憩の時刻・長さ・地点が一致しません。');
+  }
+  for (const item of rows.filter(item => item.fixedBreakId && !item.preserved)) if (!(settings.fixedBreaks || []).some(reservation => reservation.id === item.fixedBreakId)) errors.push('設定にない休憩が含まれています。');
   for (const selection of settings.selections || []) if (selection.required && !visited.has(selection.id)) errors.push('必須の希望がありません。');
   const purchased = result.purchases || [];
   const ownedCosts = purchased.filter(item => item.owned).reduce((sum, item) => sum + item.cost, 0);

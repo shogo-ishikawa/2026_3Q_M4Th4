@@ -24,7 +24,7 @@
 
 ## 地図と徒歩距離
 
-公式のガイドマップを参照して独自の概略図を作りました。画像やイラストは使っていません。通路の交差点と施設の入口を分け、橋や回り道を経由するネットワークで距離を求めます。同じエリアにある施設にも専用の入口ノードがあります。
+公式のガイドマップを参照して独自の概略図を作りました。ランドとシーの背景には生成したイラストを使っています。施設の位置を見つけやすくするための概略図で、通路の厳密な形を表す画像ではありません。通路の交差点と施設の入口を分け、橋や回り道を経由するネットワークで距離を求めます。同じエリアにある施設にも専用の入口ノードがあります。
 
 `edges[].metres` は地図を読んで置いた徒歩距離の概算です。現地での測量値やGPSの記録ではありません。シーの縮尺は、入口からファンタジースプリングスへ徒歩約15〜25分とする[公式の体験学習シート](https://www.tokyodisneyresort.jp/treasure/fantasy/learningfun/pdf/studysheet_teamwork_tds.pdf)とも比較して調整しています。シーのエレクトリックレールウェイは片道の移動として扱い、降車後の地点を `endNode` に記録しています。ランドのトムソーヤ島いかだは往復と短い島内散策を一つの予定として計画します。図の `x` と `y` は見やすい配置のための座標です。未確認の緯度経度は `null` にしています。実際の入口や通行状況は各施設の公式ページ内の地図で確認できます。
 
@@ -50,3 +50,11 @@ JSONを入れ替えるとブラウザの候補一覧へ反映できます。新�
 | 公式マップ | [地図](https://www.tokyodisneyresort.jp/tdl/map.html) | [地図](https://www.tokyodisneyresort.jp/tds/map.html) |
 
 [DPAの対象・料金・購入ルール](https://www.tokyodisneyresort.jp/tdr/guide/app_service/disneypremieraccess) ／ [シー25周年の公式案内](https://www.tokyodisneyresort.jp/treasure/tds25th/)
+
+## 待ち時間と天気
+
+- 待ち時間・稼働状況：[Queue-Times Real Time API](https://queue-times.com/en-US/pages/api)。元データは約5分更新。アプリの収集は15分間隔です。出典リンク「Powered by Queue-Times.com」を取得画面に表示します。公開APIの現在値を蓄積し、過去のカレンダーページの複製は行いません。
+- 天気：[Open-Meteo](https://open-meteo.com/)。無料APIの非商用・教育利用の条件で使用します。[CC BY 4.0](https://open-meteo.com/en/license)の出典を取得画面と学習データに記録します。予報の範囲を超える日付では手動の天気を使います。
+- [混雑予想カレンダー](https://yosocal.com/)、[Queue-Timesのカレンダー](https://queue-times.com/ja/parks/274/calendar)、[ディズニーリアル](https://disneyreal.asumirai.info/realtime/disneyland-wait-today.html)は比較用のリンクです。公開ページの予測値や履歴を学習データへ取り込む機能はありません。
+
+待ち時間と体験時間は別の値です。外部情報で更新するのは待ち時間と稼働状況です。乗車時間は公式の所要時間、食事・買い物などは自分で指定した滞在時間を使います。
