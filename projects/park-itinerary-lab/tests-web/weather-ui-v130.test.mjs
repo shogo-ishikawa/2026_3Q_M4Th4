@@ -1,10 +1,23 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {prepareWeatherForPlan,foodLinks,genreOf,defaultSettings,activitySchedule} from '../web/app.js';
+import {prepareWeatherForPlan,foodLinks,genreOf,defaultSettings,activitySchedule,chooseCatalogue,catalogueRefreshNotice} from '../web/app.js';
 import {fetchWeather,forecastForSettings,fetchPublishedModel,fetchPublishedCatalogue,fetchPublishedCalendar,validateCalendarData,renderCorrelations,correlationNumbers,describeWaitModel} from '../web/wait-data.js';
 
 const settings={date:'2026-11-20',entry:1020,exit:1260,weather:'sun',weatherMode:'auto',weatherForecast:{date:'2026-11-19',weather:'rain',hours:[]}};
 const park={id:'sea'};
+test('failed remote refresh retains newer bundled facts and visibly reports the failed attempt',()=>{
+ const bundled={pipelineVersion:2,fetchedAt:'2026-11-17T12:00:00Z',parks:[{name:'new facts'}]};
+ const remote={pipelineVersion:2,fetchedAt:'2026-11-16T12:00:00Z',parks:[{name:'old facts'}],updateStatus:'failed',refreshAttempt:{checkedAt:'2026-11-17T13:00:00Z',status:'failed'}};
+ const chosen=chooseCatalogue(bundled,remote);
+ assert.equal(chosen.parks,bundled.parks);assert.equal(chosen.fetchedAt,bundled.fetchedAt);assert.match(catalogueRefreshNotice(chosen),/公式サイトから取得できませんでした/);assert.equal(bundled.refreshAttempt,undefined);
+ const tied={...remote,fetchedAt:bundled.fetchedAt};assert.equal(chooseCatalogue(bundled,tied),tied);
+ assert.equal(chooseCatalogue(bundled,{...remote,pipelineVersion:1}),bundled);
+ assert.match(catalogueRefreshNotice({...chosen,refreshAttempt:{...remote.refreshAttempt,status:'partial'}}),/一部/);
+ const laterBundledAttempt={...bundled,updateStatus:'failed',refreshAttempt:{checkedAt:'2026-11-17T15:00:00Z',status:'failed'}};
+ const newerFacts={...bundled,fetchedAt:'2026-11-17T14:00:00Z',parks:[{name:'newer facts'}],updateStatus:'complete',refreshAttempt:{checkedAt:'2026-11-17T14:00:00Z',status:'complete'}};
+ const combined=chooseCatalogue(laterBundledAttempt,newerFacts);assert.equal(combined.parks,newerFacts.parks);assert.match(catalogueRefreshNotice(combined),/取得できませんでした/);
+ assert.equal(catalogueRefreshNotice(chooseCatalogue(laterBundledAttempt,{...newerFacts,fetchedAt:'2026-11-17T16:00:00Z',refreshAttempt:{checkedAt:'2026-11-17T16:00:00Z',status:'complete'}})),'');
+});
 const forecast={date:'2026-11-20',weather:'rain',provider:'open-meteo',sourceUrl:'https://open-meteo.com/',fetchedAt:'2026-11-17T12:00:00Z',hours:[{minute:540,weather:'rain',temperature:18,precipitation:5,precipitationProbability:90},{minute:1020,weather:'cloud',temperature:16,precipitation:0,precipitationProbability:10},{minute:1080,weather:'sun',temperature:15,precipitation:0,precipitationProbability:0}]};
 test('planning defaults to automatic weather and manual mode does not contact a provider',async()=>{
  assert.equal(defaultSettings().weatherMode,'auto');let calls=0;

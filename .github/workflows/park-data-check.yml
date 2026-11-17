@@ -37,13 +37,25 @@ jobs:
         with:
           python-version: '3.12'
       - name: Prepare the shared data branch
+        id: prepare
         run: |
           if git fetch origin park-wait-data; then
             git worktree add -b park-wait-data data-publish FETCH_HEAD
           else
             git worktree add -b park-wait-data data-publish HEAD
           fi
+      - name: Seed validated last-known facts
+        id: seed
+        run: |
+          python projects/park-itinerary-lab/scripts/update_park_data.py --seed-only --previous-catalogue data-publish/catalogue.json --output data-publish/catalogue.json
+          python - <<'PY'
+          import pathlib,shutil
+          target=pathlib.Path('data-publish/calendar.json')
+          if not target.exists():shutil.copyfile('projects/park-itinerary-lab/web/data/calendar.json',target)
+          PY
       - name: Refresh official dates, closures and events
+        id: facts
+        continue-on-error: true
         env:
           VISIT_DATE: ${{ inputs.visit_date }}
         run: |
@@ -53,28 +65,76 @@ jobs:
           if os.environ.get('VISIT_DATE'):command+=['--date',os.environ['VISIT_DATE']]
           subprocess.run(command,check=True)
           PY
-      - name: Refresh venue menus and official holiday calendar
+      - name: Refresh venue menus independently
+        id: menus
+        if: always() && steps.prepare.outcome == 'success' && steps.seed.outcome == 'success'
+        continue-on-error: true
+        env:
+          FACTS_OUTCOME: ${{ steps.facts.outcome }}
         run: |
-          python projects/park-itinerary-lab/scripts/update_food_menus.py --catalogue data-publish/catalogue.json --output data-publish/catalogue.json
           python - <<'PY'
-          import pathlib,subprocess
+          import datetime as dt,json,os,pathlib,sys
+          sys.path.insert(0,'projects/park-itinerary-lab/scripts')
+          import update_food_menus as menus
+          target=pathlib.Path('data-publish/catalogue.json')
+          date=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat()
+          # A failed list fetch may also affect venue pages: try once with a bounded shorter timeout.
+          fetcher=menus.fetch_text if os.environ['FACTS_OUTCOME']=='success' else lambda url:menus.fetch_text(url,timeout=4)
+          result,report=menus.update_catalogue(json.loads(target.read_text()),date,workers=8,fetcher=fetcher)
+          menus.atomic_json(target,result)
+          print(f"Food menus: {report['updated']}/{report['checked']} verified, {len(report['errors'])} failed. Previous verified menu facts are retained on failure.")
+          PY
+      - name: Refresh official holiday calendar independently
+        id: calendar
+        if: always() && steps.prepare.outcome == 'success' && steps.seed.outcome == 'success'
+        continue-on-error: true
+        run: |
+          python - <<'PY'
+          import datetime as dt,json,pathlib,subprocess
           output=pathlib.Path('data-publish/calendar.json')
           result=subprocess.run(['python','projects/park-itinerary-lab/scripts/update_calendar.py','--output',str(output)])
-          if result.returncode and not output.exists():raise SystemExit(result.returncode)
-          if result.returncode:print('Holiday update failed; retained the previous official calendar.')
+          report={'checkedAt':dt.datetime.now(dt.timezone.utc).isoformat().replace('+00:00','Z'),'status':'complete' if result.returncode==0 else 'failed','lastKnownCalendarUsed':result.returncode!=0}
+          pathlib.Path('data-publish/calendar-report.json').write_text(json.dumps(report,indent=2)+'\n')
+          if result.returncode:print('Holiday retrieval failed; retained the previous official calendar.')
+          raise SystemExit(result.returncode)
           PY
-      - name: Publish checked facts without rebuilding Pages
+      - name: Publish last-known facts and retrieval report
+        id: publish
+        if: always() && steps.prepare.outcome == 'success' && steps.seed.outcome == 'success'
         working-directory: data-publish
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add catalogue.json catalogue-report.json calendar.json
+          if [ -f calendar-report.json ]; then git add calendar-report.json; fi
           if ! git diff --cached --quiet; then
-            git commit -m 'Refresh official park dates, closures, events and menus'
+            git commit -m 'Publish checked park facts and retrieval status'
             git push origin HEAD:park-wait-data
           fi
       - uses: actions/upload-artifact@v4
-        if: always()
+        if: always() && steps.seed.outcome == 'success'
         with:
           name: park-catalogue-update
-          path: data-publish/catalogue*.json
+          path: |
+            data-publish/catalogue*.json
+            data-publish/calendar-report.json
+      - name: Report retrieval failures explicitly
+        if: always() && steps.prepare.outcome == 'success' && steps.seed.outcome == 'success'
+        env:
+          FACTS_OUTCOME: ${{ steps.facts.outcome }}
+          MENUS_OUTCOME: ${{ steps.menus.outcome }}
+          CALENDAR_OUTCOME: ${{ steps.calendar.outcome }}
+          PUBLISH_OUTCOME: ${{ steps.publish.outcome }}
+        run: |
+          python - <<'PY'
+          import json,os,pathlib
+          facts=json.loads(pathlib.Path('data-publish/catalogue-report.json').read_text())
+          catalogue=json.loads(pathlib.Path('data-publish/catalogue.json').read_text())
+          food=catalogue.get('foodMenuUpdate',{})
+          lines=['## Official park data retrieval',f"Catalogue: {facts.get('status','unknown')}. Last-known facts retained: {facts.get('lastKnownCatalogueUsed',False)}.",f"Official source errors: {len(facts.get('sourceErrors',[]))}.",f"Menus verified: {food.get('updated',0)}/{food.get('checked',0)}; failed venue requests: {len(food.get('errors',[]))}.",f"Holiday retrieval: {os.environ['CALENDAR_OUTCOME']}.",f"Publishing cached facts and reports: {os.environ['PUBLISH_OUTCOME']}."]
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as target:target.write('\n\n'.join(lines)+'\n')
+          failures=[key for key in ['FACTS_OUTCOME','MENUS_OUTCOME','CALENDAR_OUTCOME','PUBLISH_OUTCOME'] if os.environ[key]!='success']
+          if facts.get('status')=='failed' or failures:
+              print('Retrieval failed. Last confirmed facts were published; this run does not claim a successful refresh.')
+              raise SystemExit(1)
+          PY

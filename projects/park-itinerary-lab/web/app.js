@@ -20,6 +20,24 @@ const $ = id => document.getElementById(id);
 const defaultDate = () => { const now = new Date();return new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(now); };
 export const defaultSettings = () => ({date:defaultDate(),entry:540,exit:1260,speed:70,budget:12000,foodBudget:5000,dpaBudget:5000,souvenirReserve:2000,souvenirMode:'reserve',budgetPreference:'balanced',crowdMode:'estimate',crowdLevel:'normal',weather:'sun',weatherMode:'auto',weatherForecast:null,selections:[],restEvery:90,restMinutes:10,searchSeconds:15,searchMethod:'portfolio',fixedBreaks:[],spentBudget:0,purchases:[],history:[]});
 
+/** Keep the newest facts while retaining the outcome of the latest refresh attempt. */
+export function chooseCatalogue(bundled,published) {
+  const usable=published&&published.pipelineVersion>=2;
+  const selected=usable&&Date.parse(published.fetchedAt)>=Date.parse(bundled.fetchedAt||bundled.updatedAt)?published:bundled;
+  const latest=[bundled,...(usable?[published]:[])].filter(item=>Number.isFinite(Date.parse(item.refreshAttempt?.checkedAt))).sort((a,b)=>Date.parse(b.refreshAttempt.checkedAt)-Date.parse(a.refreshAttempt.checkedAt))[0];
+  if(latest&&latest!==selected&&Date.parse(latest.refreshAttempt.checkedAt)>=Date.parse(selected.fetchedAt||selected.updatedAt))return {...selected,refreshAttempt:latest.refreshAttempt,updateStatus:latest.updateStatus};
+  return selected;
+}
+
+export function catalogueRefreshNotice(catalogue) {
+  const attempt=catalogue.refreshAttempt;
+  if(!attempt||!Number.isFinite(Date.parse(attempt.checkedAt)))return '';
+  const checked=new Date(attempt.checkedAt).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'});
+  if(attempt.status==='failed')return ` 更新確認 ${checked}：公式サイトから取得できませんでした。前回確認済みの情報を使用しています。`;
+  if(attempt.status==='partial')return ` 更新確認 ${checked}：一部の公式情報を取得できず、その項目は前回の情報を保持しています。`;
+  return '';
+}
+
 /** A different visit date starts a fresh day; DPA purchases belong to one day. */
 export function resetForNewVisitDay(state) {
   state.settings.purchases=[];state.settings.spentBudget=0;
@@ -133,7 +151,7 @@ export function initialiseApp() {
     for(const node of park.nodes){const option=document.createElement('option');option.value=node.id;option.textContent=node.name||node.id;$('breakNode').append(option);}
     $('breakNode').value=park.nodes.some(n=>n.id===breakNode)?breakNode:park.entryNode;renderFixedBreaks();
     const purchaseId=$('purchaseActivity').value;$('purchaseActivity').replaceChildren();for(const a of park.activities.filter(a=>a.dpa)){const option=document.createElement('option');option.value=a.id;option.textContent=a.name;$('purchaseActivity').append(option);}$('purchaseActivity').value=park.activities.some(a=>a.id===purchaseId&&a.dpa)?purchaseId:park.activities.find(a=>a.dpa)?.id||'';if(byId($('purchaseActivity').value)?.dpa)$('purchaseCost').value=byId($('purchaseActivity').value).dpa.price;renderPurchaseHistory();
-    $('dataVersion').textContent=`施設・イベントの確認日：${catalogue.updatedAt || park.updatedAt || 'データ内の出典を確認'} / データ版 ${catalogue.version || '—'}。フードの予算は変更できます。施設・休止・イベントは毎朝6:15、学習モデルは毎日21:55に自動更新します。${catalogue.fetchedAt?` 最終取得 ${new Date(catalogue.fetchedAt).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}`:''}`;
+    $('dataVersion').textContent=`施設・イベントの確認日：${catalogue.updatedAt || park.updatedAt || 'データ内の出典を確認'} / データ版 ${catalogue.version || '—'}。フードの予算は変更できます。施設・休止・イベントは毎朝6:15に更新を確認し、学習モデルは毎日21:55に再学習します。${catalogue.fetchedAt?` 最終取得 ${new Date(catalogue.fetchedAt).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}`:''}${catalogueRefreshNotice(catalogue)}`;
     updateCrowd();renderCatalogue();renderWishlist();renderMap();renderResult();
     document.dispatchEvent(new CustomEvent('park-context-change',{detail:{park,settings:state.settings,history:state.history}}));
   }
@@ -301,7 +319,7 @@ export function initialiseApp() {
     const bundled=validateCatalogue(await response.json());
     let published=null;
     try{published=await fetchPublishedCatalogue({timeoutMs:5000});}catch{}
-    catalogue=published&&published.pipelineVersion>=2&&Date.parse(published.fetchedAt)>Date.parse(bundled.fetchedAt||bundled.updatedAt)?published:bundled;
+    catalogue=chooseCatalogue(bundled,published);
     if(!catalogue.parks.some(p=>p.id===state.parkId))state.parkId=catalogue.parks[0].id;
     const known=new Set(currentPark().activities.map(a=>a.id));state.settings.selections=state.settings.selections.filter(item=>known.has(item.id));
   }
