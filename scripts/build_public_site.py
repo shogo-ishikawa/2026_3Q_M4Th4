@@ -21,6 +21,28 @@ PIPE_WEB_FILES = ('index.html', 'style.css', 'app.js', 'physics.js', 'sph.js',
                   'experiment-state.js')
 
 
+def build_lantern_site(output=OUTPUT):
+    project = ROOT / 'projects' / 'lantern-post'
+    destination = Path(output) / 'lantern-post'
+    destination.mkdir(parents=True, exist_ok=True)
+    game = project / 'Lantern_Post.html'
+    shutil.copy2(game, destination / 'index.html')
+    shutil.copy2(game, destination / 'Lantern_Post.html')
+    shutil.copy2(project / 'guide.html', destination / 'guide.html')
+    version = 'v' + json.loads((project / 'version.json').read_text(encoding='utf-8'))['version']
+    downloads = destination / 'downloads'
+    downloads.mkdir(exist_ok=True)
+    archive = downloads / f'LanternPost_{version}.zip'
+    tracked = subprocess.check_output(['git', 'ls-files', '-z', '--', str(project.relative_to(ROOT))], cwd=ROOT).decode().split('\0')
+    with ZipFile(archive, 'w', ZIP_DEFLATED) as bundle:
+        for name in sorted(filter(None, tracked)):
+            path = ROOT / name
+            if path.is_file():
+                bundle.write(path, Path(version) / path.relative_to(project))
+    print(f'Built lantern-post with {archive.stat().st_size:,}-byte distribution ZIP')
+    return archive
+
+
 def build_pipe_site(output=OUTPUT):
     project = ROOT / 'projects' / 'reynolds-pipe-lab'
     destination = Path(output) / 'reynolds-pipe-lab'
@@ -132,6 +154,7 @@ def main():
     build_coastal_site()
     build_swing_site()
     build_pipe_site()
+    build_lantern_site()
     print(f'Built {OUTPUT.relative_to(ROOT)} with {archive.stat().st_size:,}-byte distribution ZIP')
 
 
