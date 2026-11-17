@@ -23,7 +23,7 @@ class CatalogueUpdateTests(unittest.TestCase):
         self.assertEqual(len(report['dpaReview']), 1)
 
     def test_closed_day_and_missing_date_are_distinguished(self):
-        html = '''<li data-categorize="show"><a href="/tds/show/detail/2/"><h3 class="heading3">Show</h3><div class="date-20261117">ー 運営/公演予定</div></a></li>'''
+        html = '''<li data-categorize="show"><a href="/tds/show/detail/2/"><h3 class="heading3">Show</h3><div class="date-20261117">終日運営・公演中止</div></a></li>'''
         self.assertTrue(UPDATER.parse_list(html, '2026-11-17', 'sea')[0]['hasDailySchedule'])
         self.assertFalse(UPDATER.parse_list(html, '2027-01-01', 'sea')[0]['hasDailySchedule'])
         original = {'parks': [{'id': 'sea', 'activities': [{'id': 'show', 'name': 'Show', 'category': 'show', 'sourceUrl': 'https://www.tokyodisneyresort.jp/tds/show/detail/2/', 'showTimes': [720, 900], 'showTimesDate': '2026-11-16'}]}]}

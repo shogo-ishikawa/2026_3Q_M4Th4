@@ -1,34 +1,80 @@
-name: Check park catalogue
+name: Update official park catalogue
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/park-data-check.yml'
+      - 'projects/park-itinerary-lab/scripts/update_park_data.py'
+      - 'projects/park-itinerary-lab/scripts/update_food_menus.py'
+      - 'projects/park-itinerary-lab/scripts/update_calendar.py'
+      - 'projects/park-itinerary-lab/web/data/parks.json'
   workflow_dispatch:
     inputs:
       visit_date:
         description: '照合する日付（YYYY-MM-DD、空欄は日本時間の当日）'
         required: false
         type: string
+  schedule:
+    - cron: '15 21 * * *' # 06:15 JST, before park opening
 
 permissions:
-  contents: read
+  contents: write
+
+concurrency:
+  group: park-data-publication
+  cancel-in-progress: false
 
 jobs:
-  check-catalogue:
+  update-catalogue:
     runs-on: ubuntu-latest
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Compare official operating and show times
+      - name: Prepare the shared data branch
+        run: |
+          if git fetch origin park-wait-data; then
+            git worktree add -b park-wait-data data-publish FETCH_HEAD
+          else
+            git worktree add -b park-wait-data data-publish HEAD
+          fi
+      - name: Refresh official dates, closures and events
         env:
           VISIT_DATE: ${{ inputs.visit_date }}
         run: |
-          if [ -n "$VISIT_DATE" ]; then
-            python projects/park-itinerary-lab/scripts/update_park_data.py --date "$VISIT_DATE"
-          else
-            python projects/park-itinerary-lab/scripts/update_park_data.py
+          python - <<'PY'
+          import os,subprocess
+          command=['python','projects/park-itinerary-lab/scripts/update_park_data.py','--previous-catalogue','data-publish/catalogue.json','--output','data-publish/catalogue.json']
+          if os.environ.get('VISIT_DATE'):command+=['--date',os.environ['VISIT_DATE']]
+          subprocess.run(command,check=True)
+          PY
+      - name: Refresh venue menus and official holiday calendar
+        run: |
+          python projects/park-itinerary-lab/scripts/update_food_menus.py --catalogue data-publish/catalogue.json --output data-publish/catalogue.json
+          python - <<'PY'
+          import pathlib,subprocess
+          output=pathlib.Path('data-publish/calendar.json')
+          result=subprocess.run(['python','projects/park-itinerary-lab/scripts/update_calendar.py','--output',str(output)])
+          if result.returncode and not output.exists():raise SystemExit(result.returncode)
+          if result.returncode:print('Holiday update failed; retained the previous official calendar.')
+          PY
+      - name: Publish checked facts without rebuilding Pages
+        working-directory: data-publish
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add catalogue.json catalogue-report.json calendar.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Refresh official park dates, closures, events and menus'
+            git push origin HEAD:park-wait-data
           fi
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: park-catalogue-update
-          path: projects/park-itinerary-lab/outputs/catalogue-update*.json
+          path: data-publish/catalogue*.json
