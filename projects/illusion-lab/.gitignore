@@ -1,0 +1,6 @@
+__pycache__/
+node_modules/
+web/downloads/
+*.zip
+outputs/
+.DS_Store
