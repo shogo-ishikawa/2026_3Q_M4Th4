@@ -235,7 +235,7 @@ def _run_setup(project_dir, folder, replacements, src_dir=None):
 
 
 def test_setup_cell_rejects_an_empty_repo_ref_without_falling_back(project_dir, tmp_path):
-    done = _run_setup(project_dir, tmp_path, [('REPO_REF = "claude/new-session-cc8kr0"', 'REPO_REF = "   "')])
+    done = _run_setup(project_dir, tmp_path, [('REPO_REF = "main"', 'REPO_REF = "   "')])
     assert done.returncode != 0
     assert "REPO_REF が空です" in done.stderr
     assert not (tmp_path / "2026_3Q_M4Th4").exists()

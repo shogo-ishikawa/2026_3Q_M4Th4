@@ -11,12 +11,14 @@ on:
       - 'projects/reynolds-pipe-lab/**'
       - 'projects/lantern-post/**'
       - 'projects/illusion-lab/**'
+      - 'projects/park-itinerary-lab/**'
       - 'scripts/build_public_site.py'
       - 'scripts/tests/test_coastal_public_build.py'
       - 'scripts/tests/test_swing_public_build.py'
       - 'scripts/tests/test_pipe_public_build.py'
       - 'scripts/tests/test_lantern_public_build.py'
       - 'scripts/tests/test_illusion_public_build.py'
+      - 'scripts/tests/test_park_public_build.py'
       - 'web/**'
       - '.github/workflows/public-works.yml'
   pull_request:
@@ -28,12 +30,14 @@ on:
       - 'projects/reynolds-pipe-lab/**'
       - 'projects/lantern-post/**'
       - 'projects/illusion-lab/**'
+      - 'projects/park-itinerary-lab/**'
       - 'scripts/build_public_site.py'
       - 'scripts/tests/test_coastal_public_build.py'
       - 'scripts/tests/test_swing_public_build.py'
       - 'scripts/tests/test_pipe_public_build.py'
       - 'scripts/tests/test_lantern_public_build.py'
       - 'scripts/tests/test_illusion_public_build.py'
+      - 'scripts/tests/test_park_public_build.py'
       - 'web/**'
       - '.github/workflows/public-works.yml'
   workflow_dispatch:
@@ -118,6 +122,13 @@ jobs:
         run: |
           node --test projects/illusion-lab/tests/*.test.mjs
           python -m unittest discover -s scripts/tests -p 'test_illusion_public_build.py'
+      - name: Check park planner and Python teaching models
+        run: |
+          node --test projects/park-itinerary-lab/tests-web/*.test.mjs
+          python -m unittest discover -s projects/park-itinerary-lab/tests-web -p 'test_*.py'
+          python -m unittest discover -s scripts/tests -p 'test_park_public_build.py'
+          python -m pip install -e "projects/park-itinerary-lab[dev]"
+          python -m pytest -q projects/park-itinerary-lab/tests
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
