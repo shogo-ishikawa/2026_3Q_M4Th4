@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-17T13:13:22.467Z",
+  "updatedAt": "2026-11-17T14:23:33.926Z",
   "parks": [
     {
       "schemaVersion": 2,
@@ -8,7 +8,7 @@
       "parkId": "land",
       "status": "trained",
       "usable": true,
-      "trainedAt": "2026-11-17T13:13:22.468Z",
+      "trainedAt": "2026-11-17T14:23:33.926Z",
       "beforeDate": "2026-11-18",
       "samples": 2819,
       "availableSamples": 2819,
@@ -87,67 +87,67 @@
         "land-attraction-197"
       ],
       "coefficients": [
-        0.33612292478567757,
-        0.24008926301093478,
-        -0.26061030393642526,
-        0.07079360269409908,
-        -0.28215268904487895,
-        0.39106932830170055,
-        0.10830940574177537,
-        0.1460167431776931,
-        -0.08286229102840886,
-        -0.09194332635734372,
-        0.02817764204227686,
-        0.25386933581180476,
-        0.30427546691292967,
-        -0.00029109098659897524,
-        0.00016806146238276028,
+        0.27636687470838833,
+        0.2513977337348239,
+        -0.22779947802465544,
+        0.08513946768599569,
+        -0.26749449717614016,
+        0.3899327499050889,
+        0.09631257475785712,
+        0.15640346413976558,
+        -0.06876888750607621,
+        -0.08722719809867602,
+        0.03403602260536244,
+        0.26059140602398795,
+        0.3158923061451028,
+        -0.00023934072896224083,
+        0.00013818343734272467,
         0,
         0,
         0,
-        -0.053269974622878254,
-        0.08723370000981019,
-        -0.02536464446792055,
-        0.1187722583190913,
-        -0.025364644467920538,
-        -0.0896273285890926,
-        -0.025364644467920548,
-        0.00033612292476687593,
-        0.00033612292476687593,
-        -0.46748268000205057,
-        -0.22181105564546483,
-        -0.1130421957004438,
-        -0.18758101041439046,
-        -0.2398842864737132,
-        1.3896997995042526,
-        -0.15444901523121726,
-        -0.3230107662539926,
-        0.08481030600701547,
-        -0.22883289846891014,
-        0.12974173386079962,
-        -0.15153744467868524,
-        0.217549413023703,
-        -0.1704123478470947,
-        -0.4051115473760895,
-        -0.3699611539380593,
-        0.2685347010110446,
-        -0.24526870873746565,
-        -0.013242131030438684,
-        -0.3124313929633647,
-        -0.3995308406284117,
-        0.2467195202017543,
-        -0.056674665435345176,
-        1.2796088152494502,
-        0.20471229943044572,
-        -0.17023961656444137,
-        0.20471229943044564,
-        -0.44932836301119056,
-        -0.3909309101917044,
-        0.16348276679002754,
-        -0.023359666970547123,
-        -0.02335966697054711,
-        0.5454617719241761,
-        0.38278506102551224
+        -0.04914347277863797,
+        0.08156271077012833,
+        0.00027636687468598185,
+        0.10282194263448886,
+        0.00027636687468598174,
+        -0.0821882413284408,
+        0.00027636687468598185,
+        0.00027636687468598185,
+        0.00027636687468598174,
+        -0.46882510623757484,
+        -0.22421992124747636,
+        -0.1149649814386138,
+        -0.19011479473558918,
+        -0.24038711537824892,
+        1.3902854234223156,
+        -0.15555003015889984,
+        -0.32352025555328656,
+        0.08179676499298465,
+        -0.22931292589913893,
+        0.12725193011706196,
+        -0.1521787872771579,
+        0.2125059306677658,
+        -0.17553774761001875,
+        -0.40432682547020776,
+        -0.371081606218476,
+        0.2667922576724334,
+        -0.2463959216382458,
+        -0.016705399939669976,
+        -0.31373288392760024,
+        -0.3997397024185265,
+        0.24387386975798503,
+        -0.05932983676632844,
+        1.2822836360786993,
+        0.2143943599334326,
+        -0.17112953183563367,
+        0.21439435993343262,
+        -0.4500528797330725,
+        -0.3922452921582044,
+        0.15908296176569459,
+        -0.00623455843536197,
+        -0.006234558435361973,
+        0.5409792332770169,
+        0.3784563017688289
       ],
       "validation": {
         "method": "later-days-holdout",
@@ -156,8 +156,8 @@
         "testThrough": "2026-11-17",
         "trainSamples": 2088,
         "testSamples": 729,
-        "modelMae": 8.770919067215363,
-        "baselineMae": 19.347050754458163,
+        "modelMae": 8.7119341563786,
+        "baselineMae": 19.242798353909464,
         "units": "minutes",
         "unseenEvents": []
       },
@@ -165,21 +165,25 @@
         {
           "name": "ThemeParks.wiki",
           "url": "https://www.themeparks.wiki/",
-          "kind": "recent-historical-waits",
-          "attribution": "Powered by ThemeParks.wiki",
-          "termsUrl": "https://www.themeparks.wiki/terms"
+          "kind": "permitted-historical-waits",
+          "attribution": "Powered by ThemeParks.wiki"
         },
         {
           "name": "Open-Meteo",
           "url": "https://open-meteo.com/",
           "kind": "past-weather-forecast",
-          "attribution": "Weather data by Open-Meteo.com",
-          "licenceUrl": "https://creativecommons.org/licenses/by/4.0/"
+          "attribution": "Weather data by Open-Meteo.com"
+        },
+        {
+          "name": "Queue-Times.com",
+          "url": "https://queue-times.com/",
+          "kind": "collected-live-observations",
+          "attribution": "Powered by Queue-Times.com"
         }
       ],
       "calendarData": {
         "schemaVersion": 1,
-        "updatedAt": "2026-11-17T12:37:38.967306Z",
+        "updatedAt": "2026-11-17T13:27:34.640339Z",
         "sourceUrl": "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv",
         "sourcePage": "https://www8.cao.go.jp/chosei/shukujitsu/gaiyou.html",
         "attribution": "内閣府「国民の祝日」CSVを加工",
@@ -269,7 +273,7 @@
           "samples": 7,
           "days": 7,
           "meanWait": 5.7,
-          "correctionMinutes": -1.050558224504553
+          "correctionMinutes": -1.0520173600950893
         },
         {
           "activityId": "land-attraction-151",
@@ -277,7 +281,7 @@
           "samples": 6,
           "days": 6,
           "meanWait": 5,
-          "correctionMinutes": -1.2683062764372424
+          "correctionMinutes": -1.2891704792028889
         },
         {
           "activityId": "land-attraction-151",
@@ -285,7 +289,7 @@
           "samples": 7,
           "days": 7,
           "meanWait": 7.1,
-          "correctionMinutes": -1.3419746518437405
+          "correctionMinutes": -1.3391225103711082
         },
         {
           "activityId": "land-attraction-152",
@@ -293,7 +297,7 @@
           "samples": 19,
           "days": 7,
           "meanWait": 12.9,
-          "correctionMinutes": -0.2024001974846442
+          "correctionMinutes": -0.19993801534943673
         },
         {
           "activityId": "land-attraction-152",
@@ -301,7 +305,7 @@
           "samples": 11,
           "days": 6,
           "meanWait": 16.8,
-          "correctionMinutes": 0.761949746916844
+          "correctionMinutes": 0.7654681181043694
         },
         {
           "activityId": "land-attraction-152",
@@ -309,7 +313,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 16.4,
-          "correctionMinutes": -0.6551962301423876
+          "correctionMinutes": -0.651998478612323
         },
         {
           "activityId": "land-attraction-152",
@@ -317,7 +321,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 10.7,
-          "correctionMinutes": -1.470539110977092
+          "correctionMinutes": -1.4865890714218555
         },
         {
           "activityId": "land-attraction-152",
@@ -325,7 +329,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 17.5,
-          "correctionMinutes": -0.05470770634397759
+          "correctionMinutes": -0.07654889498878728
         },
         {
           "activityId": "land-attraction-152",
@@ -333,7 +337,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 16.9,
-          "correctionMinutes": -0.5213423136066423
+          "correctionMinutes": -0.5168376869577417
         },
         {
           "activityId": "land-attraction-152",
@@ -341,7 +345,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 16.8,
-          "correctionMinutes": -1.5057275408215338
+          "correctionMinutes": -1.4870710412254706
         },
         {
           "activityId": "land-attraction-152",
@@ -349,7 +353,7 @@
           "samples": 7,
           "days": 4,
           "meanWait": 17.1,
-          "correctionMinutes": -0.20395980010586476
+          "correctionMinutes": -0.21707150373692663
         },
         {
           "activityId": "land-attraction-152",
@@ -357,7 +361,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 12.5,
-          "correctionMinutes": -0.7388532948184832
+          "correctionMinutes": -0.7508040367578259
         },
         {
           "activityId": "land-attraction-152",
@@ -365,7 +369,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 13.3,
-          "correctionMinutes": 0.624895433687525
+          "correctionMinutes": 0.5842184999668046
         },
         {
           "activityId": "land-attraction-152",
@@ -373,7 +377,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 11,
-          "correctionMinutes": 1.8896758878296864
+          "correctionMinutes": 1.9162774069124333
         },
         {
           "activityId": "land-attraction-153",
@@ -381,7 +385,7 @@
           "samples": 21,
           "days": 7,
           "meanWait": 12.9,
-          "correctionMinutes": -2.1307932754367442
+          "correctionMinutes": -2.1332951762501002
         },
         {
           "activityId": "land-attraction-153",
@@ -389,7 +393,7 @@
           "samples": 15,
           "days": 7,
           "meanWait": 20.7,
-          "correctionMinutes": 0.9059721989970401
+          "correctionMinutes": 0.9062746835219238
         },
         {
           "activityId": "land-attraction-153",
@@ -397,7 +401,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 18.5,
-          "correctionMinutes": -0.49038083386649894
+          "correctionMinutes": -0.49620621122195246
         },
         {
           "activityId": "land-attraction-153",
@@ -405,7 +409,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 11,
-          "correctionMinutes": -2.895778106239776
+          "correctionMinutes": -2.92053998659897
         },
         {
           "activityId": "land-attraction-153",
@@ -413,7 +417,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 23.2,
-          "correctionMinutes": 0.9804625012733794
+          "correctionMinutes": 0.9670328185721443
         },
         {
           "activityId": "land-attraction-153",
@@ -421,7 +425,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 24.5,
-          "correctionMinutes": 1.010067329793107
+          "correctionMinutes": 0.9995355668113433
         },
         {
           "activityId": "land-attraction-153",
@@ -429,7 +433,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 20.6,
-          "correctionMinutes": -0.04675295794341249
+          "correctionMinutes": -0.0670911517652386
         },
         {
           "activityId": "land-attraction-153",
@@ -437,7 +441,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 22.5,
-          "correctionMinutes": -0.3711888278751196
+          "correctionMinutes": -0.3502607012117578
         },
         {
           "activityId": "land-attraction-153",
@@ -445,7 +449,7 @@
           "samples": 8,
           "days": 5,
           "meanWait": 28.8,
-          "correctionMinutes": 1.6248677727172922
+          "correctionMinutes": 1.65465549617381
         },
         {
           "activityId": "land-attraction-153",
@@ -453,7 +457,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 13.3,
-          "correctionMinutes": -0.5392263281533889
+          "correctionMinutes": -0.5512420107910185
         },
         {
           "activityId": "land-attraction-153",
@@ -461,7 +465,7 @@
           "samples": 7,
           "days": 4,
           "meanWait": 18.6,
-          "correctionMinutes": 0.5370050408736132
+          "correctionMinutes": 0.486674527192767
         },
         {
           "activityId": "land-attraction-153",
@@ -469,7 +473,7 @@
           "samples": 8,
           "days": 5,
           "meanWait": 15,
-          "correctionMinutes": 1.0048261952475614
+          "correctionMinutes": 1.0753553732207477
         },
         {
           "activityId": "land-attraction-154",
@@ -477,7 +481,7 @@
           "samples": 15,
           "days": 7,
           "meanWait": 17.3,
-          "correctionMinutes": 1.1922004596217635
+          "correctionMinutes": 1.196738611490135
         },
         {
           "activityId": "land-attraction-154",
@@ -485,7 +489,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 22.2,
-          "correctionMinutes": 1.0255833480595737
+          "correctionMinutes": 1.0384120449912573
         },
         {
           "activityId": "land-attraction-154",
@@ -493,7 +497,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 16.5,
-          "correctionMinutes": -0.03210229548151661
+          "correctionMinutes": -0.03706020759790454
         },
         {
           "activityId": "land-attraction-154",
@@ -501,7 +505,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 7,
-          "correctionMinutes": -3.502654359086526
+          "correctionMinutes": -3.521592989916284
         },
         {
           "activityId": "land-attraction-154",
@@ -509,7 +513,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 15.8,
-          "correctionMinutes": -0.8774977915854878
+          "correctionMinutes": -0.8971941999379787
         },
         {
           "activityId": "land-attraction-154",
@@ -517,7 +521,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 15.8,
-          "correctionMinutes": -0.38014692218126744
+          "correctionMinutes": -0.38927238272845366
         },
         {
           "activityId": "land-attraction-154",
@@ -525,7 +529,7 @@
           "samples": 7,
           "days": 6,
           "meanWait": 15.7,
-          "correctionMinutes": -1.2758718465674106
+          "correctionMinutes": -1.2664953678938788
         },
         {
           "activityId": "land-attraction-154",
@@ -533,7 +537,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 20,
-          "correctionMinutes": -0.2796772811188909
+          "correctionMinutes": -0.24703830569412383
         },
         {
           "activityId": "land-attraction-154",
@@ -541,7 +545,7 @@
           "samples": 5,
           "days": 3,
           "meanWait": 15,
-          "correctionMinutes": -0.49423169019697455
+          "correctionMinutes": -0.4704745337994808
         },
         {
           "activityId": "land-attraction-154",
@@ -549,7 +553,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 20,
-          "correctionMinutes": 1.587425014372704
+          "correctionMinutes": 1.5659215637816237
         },
         {
           "activityId": "land-attraction-156",
@@ -557,7 +561,7 @@
           "samples": 8,
           "days": 7,
           "meanWait": 8.8,
-          "correctionMinutes": -1.674253686651633
+          "correctionMinutes": -1.6808992462502998
         },
         {
           "activityId": "land-attraction-157",
@@ -565,7 +569,7 @@
           "samples": 7,
           "days": 7,
           "meanWait": 5,
-          "correctionMinutes": -1.2566890500195793
+          "correctionMinutes": -1.260059137475082
         },
         {
           "activityId": "land-attraction-157",
@@ -573,7 +577,7 @@
           "samples": 11,
           "days": 4,
           "meanWait": 10,
-          "correctionMinutes": -0.4216581497485412
+          "correctionMinutes": -0.42413013064750377
         },
         {
           "activityId": "land-attraction-157",
@@ -581,7 +585,7 @@
           "samples": 5,
           "days": 4,
           "meanWait": 14,
-          "correctionMinutes": 0.5256655937679668
+          "correctionMinutes": 0.523233220474591
         },
         {
           "activityId": "land-attraction-157",
@@ -589,7 +593,7 @@
           "samples": 7,
           "days": 4,
           "meanWait": 10.7,
-          "correctionMinutes": -0.07950476987099114
+          "correctionMinutes": -0.08452756181569905
         },
         {
           "activityId": "land-attraction-157",
@@ -597,7 +601,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 13.8,
-          "correctionMinutes": 1.1231264485344707
+          "correctionMinutes": 1.1144165918860618
         },
         {
           "activityId": "land-attraction-157",
@@ -605,7 +609,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 14.4,
-          "correctionMinutes": 1.0375987054184266
+          "correctionMinutes": 1.0342809603979795
         },
         {
           "activityId": "land-attraction-157",
@@ -613,7 +617,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 13,
-          "correctionMinutes": 0.4636636508372412
+          "correctionMinutes": 0.4651094641340412
         },
         {
           "activityId": "land-attraction-157",
@@ -621,7 +625,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 12.8,
-          "correctionMinutes": 0.4910409317296638
+          "correctionMinutes": 0.4892949331559682
         },
         {
           "activityId": "land-attraction-157",
@@ -629,7 +633,7 @@
           "samples": 6,
           "days": 3,
           "meanWait": 14.2,
-          "correctionMinutes": 0.5729855655692896
+          "correctionMinutes": 0.5745918731341008
         },
         {
           "activityId": "land-attraction-158",
@@ -637,7 +641,7 @@
           "samples": 8,
           "days": 7,
           "meanWait": 14.4,
-          "correctionMinutes": -0.7994131544444553
+          "correctionMinutes": -0.8009314052732919
         },
         {
           "activityId": "land-attraction-159",
@@ -645,7 +649,7 @@
           "samples": 9,
           "days": 7,
           "meanWait": 6.1,
-          "correctionMinutes": -2.005857610751384
+          "correctionMinutes": -2.0151537392327885
         },
         {
           "activityId": "land-attraction-160",
@@ -653,7 +657,7 @@
           "samples": 31,
           "days": 7,
           "meanWait": 55.3,
-          "correctionMinutes": 7.668782486232575
+          "correctionMinutes": 7.69979238690556
         },
         {
           "activityId": "land-attraction-160",
@@ -661,7 +665,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 56.5,
-          "correctionMinutes": 1.5465838133278287
+          "correctionMinutes": 1.5757493145139494
         },
         {
           "activityId": "land-attraction-160",
@@ -669,7 +673,7 @@
           "samples": 9,
           "days": 5,
           "meanWait": 51.1,
-          "correctionMinutes": 0.7652380435855599
+          "correctionMinutes": 0.7584742147697493
         },
         {
           "activityId": "land-attraction-160",
@@ -677,7 +681,7 @@
           "samples": 14,
           "days": 7,
           "meanWait": 40.7,
-          "correctionMinutes": -3.5238113638052333
+          "correctionMinutes": -3.5763933985617964
         },
         {
           "activityId": "land-attraction-160",
@@ -685,7 +689,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 58,
-          "correctionMinutes": 1.164355592391022
+          "correctionMinutes": 1.1600615067413123
         },
         {
           "activityId": "land-attraction-160",
@@ -693,7 +697,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 49,
-          "correctionMinutes": -1.7361214408750294
+          "correctionMinutes": -1.7147686306045264
         },
         {
           "activityId": "land-attraction-160",
@@ -701,7 +705,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 47.7,
-          "correctionMinutes": -3.6422938552320256
+          "correctionMinutes": -3.6265531037395724
         },
         {
           "activityId": "land-attraction-160",
@@ -709,7 +713,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 59.5,
-          "correctionMinutes": -0.0879416216833234
+          "correctionMinutes": -0.01058848914806964
         },
         {
           "activityId": "land-attraction-160",
@@ -717,7 +721,7 @@
           "samples": 7,
           "days": 6,
           "meanWait": 53.6,
-          "correctionMinutes": -0.6242260268105019
+          "correctionMinutes": -0.592405904724642
         },
         {
           "activityId": "land-attraction-160",
@@ -725,7 +729,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 32.5,
-          "correctionMinutes": -3.364536857988686
+          "correctionMinutes": -3.4045218507255868
         },
         {
           "activityId": "land-attraction-160",
@@ -733,7 +737,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 36.2,
-          "correctionMinutes": 0.38308687660631074
+          "correctionMinutes": 0.17322062266534194
         },
         {
           "activityId": "land-attraction-160",
@@ -741,7 +745,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 23.2,
-          "correctionMinutes": -1.4122048388128343
+          "correctionMinutes": -1.3620053272505348
         },
         {
           "activityId": "land-attraction-161",
@@ -749,7 +753,7 @@
           "samples": 7,
           "days": 7,
           "meanWait": 5,
-          "correctionMinutes": -2.5425877607656693
+          "correctionMinutes": -2.547921398879324
         },
         {
           "activityId": "land-attraction-162",
@@ -757,7 +761,7 @@
           "samples": 33,
           "days": 7,
           "meanWait": 49.4,
-          "correctionMinutes": 2.9715801017298564
+          "correctionMinutes": 2.9852346757848927
         },
         {
           "activityId": "land-attraction-162",
@@ -765,7 +769,7 @@
           "samples": 14,
           "days": 7,
           "meanWait": 63.6,
-          "correctionMinutes": 4.205843202955835
+          "correctionMinutes": 4.226623006969188
         },
         {
           "activityId": "land-attraction-162",
@@ -773,7 +777,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 60,
-          "correctionMinutes": 2.528436906946888
+          "correctionMinutes": 2.5302338065596124
         },
         {
           "activityId": "land-attraction-162",
@@ -781,7 +785,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 46.7,
-          "correctionMinutes": -1.9698464886938927
+          "correctionMinutes": -2.0390115106182565
         },
         {
           "activityId": "land-attraction-162",
@@ -789,7 +793,7 @@
           "samples": 12,
           "days": 6,
           "meanWait": 62.1,
-          "correctionMinutes": 1.6581329715311348
+          "correctionMinutes": 1.677145960815093
         },
         {
           "activityId": "land-attraction-162",
@@ -797,7 +801,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 56.9,
-          "correctionMinutes": -1.0567416896118311
+          "correctionMinutes": -1.047945570923311
         },
         {
           "activityId": "land-attraction-162",
@@ -805,7 +809,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 65.4,
-          "correctionMinutes": 2.2460778457794506
+          "correctionMinutes": 2.2549794843764253
         },
         {
           "activityId": "land-attraction-162",
@@ -813,7 +817,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 56.8,
-          "correctionMinutes": -0.3819029869428882
+          "correctionMinutes": -0.355163150123719
         },
         {
           "activityId": "land-attraction-162",
@@ -821,7 +825,7 @@
           "samples": 8,
           "days": 7,
           "meanWait": 51.3,
-          "correctionMinutes": -1.6863839731886239
+          "correctionMinutes": -1.6693214157913514
         },
         {
           "activityId": "land-attraction-162",
@@ -829,7 +833,7 @@
           "samples": 12,
           "days": 6,
           "meanWait": 32.9,
-          "correctionMinutes": -4.57968615972381
+          "correctionMinutes": -4.664435044193708
         },
         {
           "activityId": "land-attraction-162",
@@ -837,7 +841,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 30,
-          "correctionMinutes": -2.1430046178573923
+          "correctionMinutes": -2.2724689507250537
         },
         {
           "activityId": "land-attraction-162",
@@ -845,7 +849,7 @@
           "samples": 9,
           "days": 5,
           "meanWait": 20.6,
-          "correctionMinutes": -2.399607744781646
+          "correctionMinutes": -2.296585696731185
         },
         {
           "activityId": "land-attraction-163",
@@ -853,7 +857,7 @@
           "samples": 9,
           "days": 7,
           "meanWait": 7.2,
-          "correctionMinutes": -3.80594659647731
+          "correctionMinutes": -3.808139588680225
         },
         {
           "activityId": "land-attraction-163",
@@ -861,7 +865,7 @@
           "samples": 7,
           "days": 4,
           "meanWait": 28.6,
-          "correctionMinutes": 1.7289358656606948
+          "correctionMinutes": 1.7197694142658018
         },
         {
           "activityId": "land-attraction-163",
@@ -869,7 +873,7 @@
           "samples": 8,
           "days": 4,
           "meanWait": 15.6,
-          "correctionMinutes": -1.487472751484917
+          "correctionMinutes": -1.5081082709800657
         },
         {
           "activityId": "land-attraction-163",
@@ -877,7 +881,7 @@
           "samples": 9,
           "days": 5,
           "meanWait": 26.7,
-          "correctionMinutes": 1.2676830034154793
+          "correctionMinutes": 1.264781665206276
         },
         {
           "activityId": "land-attraction-163",
@@ -885,7 +889,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 35,
-          "correctionMinutes": 1.923423530696982
+          "correctionMinutes": 1.9416161369904565
         },
         {
           "activityId": "land-attraction-163",
@@ -893,7 +897,7 @@
           "samples": 5,
           "days": 5,
           "meanWait": 19,
-          "correctionMinutes": -1.075705293367799
+          "correctionMinutes": -1.0634007424755867
         },
         {
           "activityId": "land-attraction-164",
@@ -901,7 +905,7 @@
           "samples": 29,
           "days": 7,
           "meanWait": 21.9,
-          "correctionMinutes": -1.8856003890870494
+          "correctionMinutes": -1.833105592143356
         },
         {
           "activityId": "land-attraction-164",
@@ -909,7 +913,7 @@
           "samples": 13,
           "days": 6,
           "meanWait": 29.2,
-          "correctionMinutes": -0.37519801748080356
+          "correctionMinutes": -0.3328250007684588
         },
         {
           "activityId": "land-attraction-164",
@@ -917,7 +921,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 30.4,
-          "correctionMinutes": 0.7488917190034395
+          "correctionMinutes": 0.7719927456411948
         },
         {
           "activityId": "land-attraction-164",
@@ -925,7 +929,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 23.8,
-          "correctionMinutes": -1.682451119345611
+          "correctionMinutes": -1.6893366659226894
         },
         {
           "activityId": "land-attraction-164",
@@ -933,7 +937,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 34.2,
-          "correctionMinutes": 1.5796734216982427
+          "correctionMinutes": 1.5870371699488954
         },
         {
           "activityId": "land-attraction-164",
@@ -941,7 +945,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 32.7,
-          "correctionMinutes": -0.05231180930167068
+          "correctionMinutes": -0.013642478664386483
         },
         {
           "activityId": "land-attraction-164",
@@ -949,7 +953,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 34,
-          "correctionMinutes": 0.8164076986749699
+          "correctionMinutes": 0.8309137280440829
         },
         {
           "activityId": "land-attraction-164",
@@ -957,7 +961,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 32.9,
-          "correctionMinutes": 0.7086091121887037
+          "correctionMinutes": 0.7177881632380866
         },
         {
           "activityId": "land-attraction-164",
@@ -965,7 +969,7 @@
           "samples": 8,
           "days": 5,
           "meanWait": 36.3,
-          "correctionMinutes": 0.7919354588937192
+          "correctionMinutes": 0.8318294445753837
         },
         {
           "activityId": "land-attraction-164",
@@ -973,7 +977,7 @@
           "samples": 8,
           "days": 5,
           "meanWait": 28.1,
-          "correctionMinutes": -0.14628225564677586
+          "correctionMinutes": -0.13400112663542288
         },
         {
           "activityId": "land-attraction-164",
@@ -981,7 +985,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 26.5,
-          "correctionMinutes": 1.9341728983223732
+          "correctionMinutes": 1.8549276870986944
         },
         {
           "activityId": "land-attraction-164",
@@ -989,7 +993,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 18.5,
-          "correctionMinutes": 0.7713976554334951
+          "correctionMinutes": 0.5603155231705439
         },
         {
           "activityId": "land-attraction-165",
@@ -997,7 +1001,7 @@
           "samples": 18,
           "days": 7,
           "meanWait": 10.6,
-          "correctionMinutes": -1.4026260619767397
+          "correctionMinutes": -1.3579372703088557
         },
         {
           "activityId": "land-attraction-165",
@@ -1005,7 +1009,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 17.5,
-          "correctionMinutes": -0.7690914275864166
+          "correctionMinutes": -0.7412931362147082
         },
         {
           "activityId": "land-attraction-165",
@@ -1013,7 +1017,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 16,
-          "correctionMinutes": -0.3364195588325726
+          "correctionMinutes": -0.3143066233706294
         },
         {
           "activityId": "land-attraction-165",
@@ -1021,7 +1025,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 12.2,
-          "correctionMinutes": -2.0832950743821397
+          "correctionMinutes": -2.0623912027331035
         },
         {
           "activityId": "land-attraction-165",
@@ -1029,7 +1033,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 20,
-          "correctionMinutes": 0.6775243118522145
+          "correctionMinutes": 0.6884065289714474
         },
         {
           "activityId": "land-attraction-165",
@@ -1037,7 +1041,7 @@
           "samples": 5,
           "days": 5,
           "meanWait": 21,
-          "correctionMinutes": 0.27932167314836076
+          "correctionMinutes": 0.2855881095513265
         },
         {
           "activityId": "land-attraction-165",
@@ -1045,7 +1049,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 18,
-          "correctionMinutes": -0.8883101727168783
+          "correctionMinutes": -0.8511209466440908
         },
         {
           "activityId": "land-attraction-165",
@@ -1053,7 +1057,7 @@
           "samples": 12,
           "days": 6,
           "meanWait": 21.7,
-          "correctionMinutes": -0.05821600594044746
+          "correctionMinutes": -0.01095319307806919
         },
         {
           "activityId": "land-attraction-165",
@@ -1061,7 +1065,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 19.4,
-          "correctionMinutes": 0.4004541601401452
+          "correctionMinutes": 0.41041916406396456
         },
         {
           "activityId": "land-attraction-165",
@@ -1069,7 +1073,7 @@
           "samples": 11,
           "days": 6,
           "meanWait": 14.5,
-          "correctionMinutes": -0.08300171888721142
+          "correctionMinutes": -0.07357795382936895
         },
         {
           "activityId": "land-attraction-165",
@@ -1077,7 +1081,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 12.5,
-          "correctionMinutes": 0.7858735516728486
+          "correctionMinutes": 0.7113514247455663
         },
         {
           "activityId": "land-attraction-165",
@@ -1085,7 +1089,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 10.4,
-          "correctionMinutes": 1.835668367248838
+          "correctionMinutes": 1.6310565751782642
         },
         {
           "activityId": "land-attraction-167",
@@ -1093,7 +1097,7 @@
           "samples": 7,
           "days": 7,
           "meanWait": 5,
-          "correctionMinutes": -0.06197197252962862
+          "correctionMinutes": -0.08374103716790172
         },
         {
           "activityId": "land-attraction-167",
@@ -1101,7 +1105,7 @@
           "samples": 7,
           "days": 6,
           "meanWait": 13.6,
-          "correctionMinutes": 0.04531005099345884
+          "correctionMinutes": 0.012753624109262984
         },
         {
           "activityId": "land-attraction-167",
@@ -1109,7 +1113,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 16.7,
-          "correctionMinutes": -0.04229756740627389
+          "correctionMinutes": -0.05821243228180729
         },
         {
           "activityId": "land-attraction-167",
@@ -1117,7 +1121,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 10,
-          "correctionMinutes": -2.1806066233681496
+          "correctionMinutes": -2.1939509744310133
         },
         {
           "activityId": "land-attraction-167",
@@ -1125,7 +1129,7 @@
           "samples": 11,
           "days": 6,
           "meanWait": 13.6,
-          "correctionMinutes": -0.09968464156959564
+          "correctionMinutes": -0.12081842332438304
         },
         {
           "activityId": "land-attraction-167",
@@ -1133,7 +1137,7 @@
           "samples": 5,
           "days": 3,
           "meanWait": 17,
-          "correctionMinutes": -0.32598803079728755
+          "correctionMinutes": -0.31791931848475824
         },
         {
           "activityId": "land-attraction-168",
@@ -1141,7 +1145,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 6.8,
-          "correctionMinutes": -0.5783335819420544
+          "correctionMinutes": -0.5921939245954018
         },
         {
           "activityId": "land-attraction-168",
@@ -1149,7 +1153,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 12.5,
-          "correctionMinutes": 0.20497978827214094
+          "correctionMinutes": 0.20306317311243635
         },
         {
           "activityId": "land-attraction-168",
@@ -1157,7 +1161,7 @@
           "samples": 5,
           "days": 4,
           "meanWait": 11,
-          "correctionMinutes": 0.6309329707398825
+          "correctionMinutes": 0.6182818356079374
         },
         {
           "activityId": "land-attraction-168",
@@ -1165,7 +1169,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 6.4,
-          "correctionMinutes": -1.6158419221161842
+          "correctionMinutes": -1.645743953517993
         },
         {
           "activityId": "land-attraction-168",
@@ -1173,7 +1177,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 12.3,
-          "correctionMinutes": -0.4935991161207238
+          "correctionMinutes": -0.5275596543298262
         },
         {
           "activityId": "land-attraction-168",
@@ -1181,7 +1185,7 @@
           "samples": 10,
           "days": 5,
           "meanWait": 14,
-          "correctionMinutes": -0.6330622023231027
+          "correctionMinutes": -0.6552866342580359
         },
         {
           "activityId": "land-attraction-168",
@@ -1189,7 +1193,7 @@
           "samples": 7,
           "days": 6,
           "meanWait": 11.4,
-          "correctionMinutes": -1.378895751879063
+          "correctionMinutes": -1.3797732960839513
         },
         {
           "activityId": "land-attraction-168",
@@ -1197,7 +1201,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 15.8,
-          "correctionMinutes": -0.07309017382396071
+          "correctionMinutes": -0.05152593019820073
         },
         {
           "activityId": "land-attraction-168",
@@ -1205,7 +1209,7 @@
           "samples": 8,
           "days": 5,
           "meanWait": 12.5,
-          "correctionMinutes": 0.06719455385792103
+          "correctionMinutes": 0.06971689844844728
         },
         {
           "activityId": "land-attraction-168",
@@ -1213,7 +1217,7 @@
           "samples": 5,
           "days": 4,
           "meanWait": 7,
-          "correctionMinutes": -0.7500913280181876
+          "correctionMinutes": -0.748396410432525
         },
         {
           "activityId": "land-attraction-168",
@@ -1221,7 +1225,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 6.7,
-          "correctionMinutes": 0.9712705093405432
+          "correctionMinutes": 1.082602854474136
         },
         {
           "activityId": "land-attraction-169",
@@ -1229,7 +1233,7 @@
           "samples": 29,
           "days": 7,
           "meanWait": 25.2,
-          "correctionMinutes": -0.5947234020229782
+          "correctionMinutes": -0.6008003576249873
         },
         {
           "activityId": "land-attraction-169",
@@ -1237,7 +1241,7 @@
           "samples": 10,
           "days": 5,
           "meanWait": 31,
-          "correctionMinutes": 0.35370428049044284
+          "correctionMinutes": 0.35173911415410675
         },
         {
           "activityId": "land-attraction-169",
@@ -1245,7 +1249,7 @@
           "samples": 7,
           "days": 4,
           "meanWait": 34.3,
-          "correctionMinutes": 1.0322081605250357
+          "correctionMinutes": 1.0239431732204336
         },
         {
           "activityId": "land-attraction-169",
@@ -1253,7 +1257,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 29.4,
-          "correctionMinutes": -0.09746642481710158
+          "correctionMinutes": -0.12687781669299905
         },
         {
           "activityId": "land-attraction-169",
@@ -1261,7 +1265,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 34,
-          "correctionMinutes": 0.8371936658812148
+          "correctionMinutes": 0.8060416949788595
         },
         {
           "activityId": "land-attraction-169",
@@ -1269,7 +1273,7 @@
           "samples": 11,
           "days": 6,
           "meanWait": 35.5,
-          "correctionMinutes": 0.37782190888759976
+          "correctionMinutes": 0.3640147028959801
         },
         {
           "activityId": "land-attraction-169",
@@ -1277,7 +1281,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 31.3,
-          "correctionMinutes": -1.1360044735683414
+          "correctionMinutes": -1.1239119346948065
         },
         {
           "activityId": "land-attraction-169",
@@ -1285,7 +1289,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 34.2,
-          "correctionMinutes": -0.10258957266555604
+          "correctionMinutes": -0.07947757573193598
         },
         {
           "activityId": "land-attraction-169",
@@ -1293,7 +1297,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 34.2,
-          "correctionMinutes": 0.24607032845072313
+          "correctionMinutes": 0.26082354888870324
         },
         {
           "activityId": "land-attraction-169",
@@ -1301,7 +1305,7 @@
           "samples": 8,
           "days": 5,
           "meanWait": 26.3,
-          "correctionMinutes": -0.4470624282216392
+          "correctionMinutes": -0.4560099075193899
         },
         {
           "activityId": "land-attraction-169",
@@ -1309,7 +1313,7 @@
           "samples": 8,
           "days": 5,
           "meanWait": 30.6,
-          "correctionMinutes": 1.3801071392046687
+          "correctionMinutes": 1.3068056766456588
         },
         {
           "activityId": "land-attraction-169",
@@ -1317,7 +1321,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 29.2,
-          "correctionMinutes": 1.6776257920278395
+          "correctionMinutes": 1.7997320394101568
         },
         {
           "activityId": "land-attraction-170",
@@ -1325,7 +1329,7 @@
           "samples": 15,
           "days": 7,
           "meanWait": 10,
-          "correctionMinutes": -1.2583470254692013
+          "correctionMinutes": -1.2715728043287022
         },
         {
           "activityId": "land-attraction-170",
@@ -1333,7 +1337,7 @@
           "samples": 13,
           "days": 6,
           "meanWait": 17.3,
-          "correctionMinutes": -0.3591904978474841
+          "correctionMinutes": -0.35797990357003145
         },
         {
           "activityId": "land-attraction-170",
@@ -1341,7 +1345,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 15,
-          "correctionMinutes": -0.19508783687508968
+          "correctionMinutes": -0.21017562157911687
         },
         {
           "activityId": "land-attraction-170",
@@ -1349,7 +1353,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 10,
-          "correctionMinutes": -2.0304681126867927
+          "correctionMinutes": -2.0463892546090006
         },
         {
           "activityId": "land-attraction-170",
@@ -1357,7 +1361,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 18.5,
-          "correctionMinutes": 0.13115503940644105
+          "correctionMinutes": 0.11811705285408684
         },
         {
           "activityId": "land-attraction-170",
@@ -1365,7 +1369,7 @@
           "samples": 7,
           "days": 6,
           "meanWait": 15,
-          "correctionMinutes": -1.106040778540214
+          "correctionMinutes": -1.11601895977872
         },
         {
           "activityId": "land-attraction-170",
@@ -1373,7 +1377,7 @@
           "samples": 11,
           "days": 6,
           "meanWait": 16.8,
-          "correctionMinutes": -1.3634578685090144
+          "correctionMinutes": -1.3519339758490023
         },
         {
           "activityId": "land-attraction-170",
@@ -1381,7 +1385,7 @@
           "samples": 8,
           "days": 5,
           "meanWait": 20,
-          "correctionMinutes": 0.5284568630381126
+          "correctionMinutes": 0.5564306546844815
         },
         {
           "activityId": "land-attraction-170",
@@ -1389,7 +1393,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 20.6,
-          "correctionMinutes": 0.8951811303257531
+          "correctionMinutes": 0.9146355298515233
         },
         {
           "activityId": "land-attraction-170",
@@ -1397,7 +1401,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 14.3,
-          "correctionMinutes": -0.0015692483300466633
+          "correctionMinutes": -0.00864023204835017
         },
         {
           "activityId": "land-attraction-170",
@@ -1405,7 +1409,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 13.3,
-          "correctionMinutes": 0.6757758489088824
+          "correctionMinutes": 0.6241503022757597
         },
         {
           "activityId": "land-attraction-170",
@@ -1413,7 +1417,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 12.2,
-          "correctionMinutes": 1.8807304392352047
+          "correctionMinutes": 1.9304575275899136
         },
         {
           "activityId": "land-attraction-171",
@@ -1421,7 +1425,7 @@
           "samples": 27,
           "days": 7,
           "meanWait": 37,
-          "correctionMinutes": 0.46406999791258824
+          "correctionMinutes": 0.5108391092801065
         },
         {
           "activityId": "land-attraction-171",
@@ -1429,7 +1433,7 @@
           "samples": 12,
           "days": 6,
           "meanWait": 47.5,
-          "correctionMinutes": 0.5565076665167097
+          "correctionMinutes": 0.6060031082804205
         },
         {
           "activityId": "land-attraction-171",
@@ -1437,7 +1441,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 47,
-          "correctionMinutes": -0.17257759403874123
+          "correctionMinutes": -0.1507701803746194
         },
         {
           "activityId": "land-attraction-171",
@@ -1445,7 +1449,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 35,
-          "correctionMinutes": -3.179493160836888
+          "correctionMinutes": -3.22000020221556
         },
         {
           "activityId": "land-attraction-171",
@@ -1453,7 +1457,7 @@
           "samples": 14,
           "days": 7,
           "meanWait": 49.3,
-          "correctionMinutes": 1.1184549764904896
+          "correctionMinutes": 1.107360211280618
         },
         {
           "activityId": "land-attraction-171",
@@ -1461,7 +1465,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 54.5,
-          "correctionMinutes": 1.140135849915183
+          "correctionMinutes": 1.153939509175593
         },
         {
           "activityId": "land-attraction-171",
@@ -1469,7 +1473,7 @@
           "samples": 8,
           "days": 7,
           "meanWait": 50,
-          "correctionMinutes": -0.17006423128168663
+          "correctionMinutes": -0.1335669540516347
         },
         {
           "activityId": "land-attraction-171",
@@ -1477,7 +1481,7 @@
           "samples": 11,
           "days": 6,
           "meanWait": 56.4,
-          "correctionMinutes": 1.499328352596843
+          "correctionMinutes": 1.5471950262525052
         },
         {
           "activityId": "land-attraction-171",
@@ -1485,7 +1489,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 48.9,
-          "correctionMinutes": 1.31355676298527
+          "correctionMinutes": 1.332154219143477
         },
         {
           "activityId": "land-attraction-171",
@@ -1493,7 +1497,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 34.5,
-          "correctionMinutes": -0.11485767803991405
+          "correctionMinutes": -0.18768635328640074
         },
         {
           "activityId": "land-attraction-171",
@@ -1501,7 +1505,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 26.5,
-          "correctionMinutes": -0.202175303698362
+          "correctionMinutes": -0.413064825073966
         },
         {
           "activityId": "land-attraction-171",
@@ -1509,7 +1513,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 14.8,
-          "correctionMinutes": -2.604943509861679
+          "correctionMinutes": -2.5854788856702196
         },
         {
           "activityId": "land-attraction-172",
@@ -1517,7 +1521,7 @@
           "samples": 15,
           "days": 7,
           "meanWait": 10.3,
-          "correctionMinutes": -0.33687808618770804
+          "correctionMinutes": -0.3504006978425406
         },
         {
           "activityId": "land-attraction-172",
@@ -1525,7 +1529,7 @@
           "samples": 7,
           "days": 6,
           "meanWait": 14.3,
-          "correctionMinutes": 0.3423906599428556
+          "correctionMinutes": 0.34171898894099945
         },
         {
           "activityId": "land-attraction-172",
@@ -1533,7 +1537,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 15.6,
-          "correctionMinutes": 0.7055265920717994
+          "correctionMinutes": 0.6883171679388786
         },
         {
           "activityId": "land-attraction-172",
@@ -1541,7 +1545,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 10,
-          "correctionMinutes": -1.647471223833953
+          "correctionMinutes": -1.6627953011169745
         },
         {
           "activityId": "land-attraction-172",
@@ -1549,7 +1553,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 16.4,
-          "correctionMinutes": 0.12230663107124494
+          "correctionMinutes": 0.10722914920284994
         },
         {
           "activityId": "land-attraction-172",
@@ -1557,7 +1561,7 @@
           "samples": 9,
           "days": 7,
           "meanWait": 11.1,
-          "correctionMinutes": -2.173329887485536
+          "correctionMinutes": -2.169274781099225
         },
         {
           "activityId": "land-attraction-172",
@@ -1565,7 +1569,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 15,
-          "correctionMinutes": 0.06711911042805721
+          "correctionMinutes": 0.05760560535662946
         },
         {
           "activityId": "land-attraction-172",
@@ -1573,7 +1577,7 @@
           "samples": 8,
           "days": 5,
           "meanWait": 15,
-          "correctionMinutes": -0.4599941641452673
+          "correctionMinutes": -0.45510066468968013
         },
         {
           "activityId": "land-attraction-172",
@@ -1581,7 +1585,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 10,
-          "correctionMinutes": -0.47727725888741085
+          "correctionMinutes": -0.5004142706011738
         },
         {
           "activityId": "land-attraction-172",
@@ -1589,7 +1593,7 @@
           "samples": 5,
           "days": 4,
           "meanWait": 11,
-          "correctionMinutes": 0.22935677445170013
+          "correctionMinutes": 0.15891010921897133
         },
         {
           "activityId": "land-attraction-172",
@@ -1597,7 +1601,7 @@
           "samples": 5,
           "days": 4,
           "meanWait": 9,
-          "correctionMinutes": 0.6040783292944117
+          "correctionMinutes": 0.753084993169734
         },
         {
           "activityId": "land-attraction-173",
@@ -1605,7 +1609,7 @@
           "samples": 9,
           "days": 7,
           "meanWait": 6.1,
-          "correctionMinutes": -0.3185452319429001
+          "correctionMinutes": -0.3385342508195315
         },
         {
           "activityId": "land-attraction-173",
@@ -1613,7 +1617,7 @@
           "samples": 5,
           "days": 3,
           "meanWait": 12,
-          "correctionMinutes": -0.6738086262372036
+          "correctionMinutes": -0.6760555149030829
         },
         {
           "activityId": "land-attraction-173",
@@ -1621,7 +1625,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 7.1,
-          "correctionMinutes": -1.5837753095666487
+          "correctionMinutes": -1.6186460168357286
         },
         {
           "activityId": "land-attraction-173",
@@ -1629,7 +1633,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 11.4,
-          "correctionMinutes": -1.0616628763989726
+          "correctionMinutes": -1.0666500238424699
         },
         {
           "activityId": "land-attraction-173",
@@ -1637,7 +1641,7 @@
           "samples": 5,
           "days": 5,
           "meanWait": 7,
-          "correctionMinutes": -1.2844362276994505
+          "correctionMinutes": -1.2977237856377093
         },
         {
           "activityId": "land-attraction-173",
@@ -1645,7 +1649,7 @@
           "samples": 5,
           "days": 5,
           "meanWait": 15,
-          "correctionMinutes": -0.38343360285693306
+          "correctionMinutes": -0.3664049818453707
         },
         {
           "activityId": "land-attraction-173",
@@ -1653,7 +1657,7 @@
           "samples": 5,
           "days": 5,
           "meanWait": 7,
-          "correctionMinutes": 1.2269119322215842
+          "correctionMinutes": 1.3567924185495968
         },
         {
           "activityId": "land-attraction-174",
@@ -1661,7 +1665,7 @@
           "samples": 29,
           "days": 7,
           "meanWait": 63.5,
-          "correctionMinutes": 6.921901446699253
+          "correctionMinutes": 6.942275632530391
         },
         {
           "activityId": "land-attraction-174",
@@ -1669,7 +1673,7 @@
           "samples": 14,
           "days": 7,
           "meanWait": 67,
-          "correctionMinutes": 2.5278614389152465
+          "correctionMinutes": 2.556302541417789
         },
         {
           "activityId": "land-attraction-174",
@@ -1677,7 +1681,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 57,
-          "correctionMinutes": -1.2124142089986267
+          "correctionMinutes": -1.2063667666860491
         },
         {
           "activityId": "land-attraction-174",
@@ -1685,7 +1689,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 49.1,
-          "correctionMinutes": -3.3724736145700227
+          "correctionMinutes": -3.432317238490186
         },
         {
           "activityId": "land-attraction-174",
@@ -1693,7 +1697,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 76.7,
-          "correctionMinutes": 4.6145827502345975
+          "correctionMinutes": 4.618474256846369
         },
         {
           "activityId": "land-attraction-174",
@@ -1701,7 +1705,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 67.3,
-          "correctionMinutes": -0.7671540551794519
+          "correctionMinutes": -0.7111699896025128
         },
         {
           "activityId": "land-attraction-174",
@@ -1709,7 +1713,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 67.2,
-          "correctionMinutes": 0.721375751625066
+          "correctionMinutes": 0.7436827773106807
         },
         {
           "activityId": "land-attraction-174",
@@ -1717,7 +1721,7 @@
           "samples": 9,
           "days": 7,
           "meanWait": 67.1,
-          "correctionMinutes": 0.555274770718069
+          "correctionMinutes": 0.6030913016895743
         },
         {
           "activityId": "land-attraction-174",
@@ -1725,7 +1729,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 63.2,
-          "correctionMinutes": 0.21205193877647185
+          "correctionMinutes": 0.24934606368867568
         },
         {
           "activityId": "land-attraction-174",
@@ -1733,7 +1737,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 37.2,
-          "correctionMinutes": -4.057722133049523
+          "correctionMinutes": -4.130531203262924
         },
         {
           "activityId": "land-attraction-174",
@@ -1741,7 +1745,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 44.4,
-          "correctionMinutes": -1.4678208622284274
+          "correctionMinutes": -1.5979472812233975
         },
         {
           "activityId": "land-attraction-174",
@@ -1749,7 +1753,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 22.4,
-          "correctionMinutes": -4.545433499244087
+          "correctionMinutes": -4.577828643847166
         },
         {
           "activityId": "land-attraction-175",
@@ -1757,7 +1761,7 @@
           "samples": 23,
           "days": 7,
           "meanWait": 12.6,
-          "correctionMinutes": -2.9519839577463713
+          "correctionMinutes": -2.9460860094219656
         },
         {
           "activityId": "land-attraction-175",
@@ -1765,7 +1769,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 25,
-          "correctionMinutes": 0.8908000433618567
+          "correctionMinutes": 0.9056249804364117
         },
         {
           "activityId": "land-attraction-175",
@@ -1773,7 +1777,7 @@
           "samples": 11,
           "days": 6,
           "meanWait": 25.9,
-          "correctionMinutes": 1.7888656661286269
+          "correctionMinutes": 1.7917051968114508
         },
         {
           "activityId": "land-attraction-175",
@@ -1781,7 +1785,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 14.5,
-          "correctionMinutes": -1.4719754561301002
+          "correctionMinutes": -1.5063635655049181
         },
         {
           "activityId": "land-attraction-175",
@@ -1789,7 +1793,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 23.1,
-          "correctionMinutes": 0.7286294182666401
+          "correctionMinutes": 0.7102477413017976
         },
         {
           "activityId": "land-attraction-175",
@@ -1797,7 +1801,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 29.5,
-          "correctionMinutes": 2.456153244961982
+          "correctionMinutes": 2.46061520352521
         },
         {
           "activityId": "land-attraction-175",
@@ -1805,7 +1809,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 22.3,
-          "correctionMinutes": -1.233520639207333
+          "correctionMinutes": -1.2272120200784244
         },
         {
           "activityId": "land-attraction-175",
@@ -1813,7 +1817,7 @@
           "samples": 14,
           "days": 7,
           "meanWait": 29.6,
-          "correctionMinutes": 2.2074534714520158
+          "correctionMinutes": 2.2325153989509916
         },
         {
           "activityId": "land-attraction-175",
@@ -1821,7 +1825,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 23.8,
-          "correctionMinutes": -0.09896419275471079
+          "correctionMinutes": -0.08682308611088718
         },
         {
           "activityId": "land-attraction-175",
@@ -1829,7 +1833,7 @@
           "samples": 9,
           "days": 5,
           "meanWait": 16.1,
-          "correctionMinutes": -0.5520915618319057
+          "correctionMinutes": -0.5523032111228287
         },
         {
           "activityId": "land-attraction-175",
@@ -1837,7 +1841,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 12.5,
-          "correctionMinutes": -0.7124372893648251
+          "correctionMinutes": -0.8151114670578345
         },
         {
           "activityId": "land-attraction-175",
@@ -1845,7 +1849,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 8.3,
-          "correctionMinutes": -0.7242607673351139
+          "correctionMinutes": -0.6672066059850768
         },
         {
           "activityId": "land-attraction-176",
@@ -1853,7 +1857,7 @@
           "samples": 7,
           "days": 7,
           "meanWait": 5,
-          "correctionMinutes": -1.1139785148744652
+          "correctionMinutes": -1.1200568205481718
         },
         {
           "activityId": "land-attraction-176",
@@ -1861,7 +1865,7 @@
           "samples": 9,
           "days": 5,
           "meanWait": 15,
-          "correctionMinutes": 1.223191963712197
+          "correctionMinutes": 1.2204883506768407
         },
         {
           "activityId": "land-attraction-176",
@@ -1869,7 +1873,7 @@
           "samples": 5,
           "days": 4,
           "meanWait": 11,
-          "correctionMinutes": -0.07434197189531694
+          "correctionMinutes": -0.07499562591237151
         },
         {
           "activityId": "land-attraction-176",
@@ -1877,7 +1881,7 @@
           "samples": 9,
           "days": 5,
           "meanWait": 16.1,
-          "correctionMinutes": 1.668635414697769
+          "correctionMinutes": 1.6671477158993202
         },
         {
           "activityId": "land-attraction-178",
@@ -1885,7 +1889,7 @@
           "samples": 7,
           "days": 7,
           "meanWait": 5,
-          "correctionMinutes": 0.27940585748350366
+          "correctionMinutes": 0.2642440929734703
         },
         {
           "activityId": "land-attraction-179",
@@ -1893,7 +1897,7 @@
           "samples": 18,
           "days": 7,
           "meanWait": 11.7,
-          "correctionMinutes": -1.636146098468152
+          "correctionMinutes": -1.6591397221745476
         },
         {
           "activityId": "land-attraction-179",
@@ -1901,7 +1905,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 19.2,
-          "correctionMinutes": 0.43525312514499825
+          "correctionMinutes": 0.429121706895762
         },
         {
           "activityId": "land-attraction-179",
@@ -1909,7 +1913,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 15.8,
-          "correctionMinutes": 0.1671711450974654
+          "correctionMinutes": 0.1501866922919046
         },
         {
           "activityId": "land-attraction-179",
@@ -1917,7 +1921,7 @@
           "samples": 8,
           "days": 5,
           "meanWait": 12.5,
-          "correctionMinutes": -2.245885485937645
+          "correctionMinutes": -2.2609503046117942
         },
         {
           "activityId": "land-attraction-179",
@@ -1925,7 +1929,7 @@
           "samples": 7,
           "days": 6,
           "meanWait": 21.4,
-          "correctionMinutes": 0.6664725983651141
+          "correctionMinutes": 0.6348423093462675
         },
         {
           "activityId": "land-attraction-179",
@@ -1933,7 +1937,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 18.3,
-          "correctionMinutes": -1.1341172178854977
+          "correctionMinutes": -1.1164985728072736
         },
         {
           "activityId": "land-attraction-179",
@@ -1941,7 +1945,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 30.7,
-          "correctionMinutes": 1.5036894601614885
+          "correctionMinutes": 1.534696597479963
         },
         {
           "activityId": "land-attraction-179",
@@ -1949,7 +1953,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 20.8,
-          "correctionMinutes": 0.20910729806931777
+          "correctionMinutes": 0.22592161925697526
         },
         {
           "activityId": "land-attraction-179",
@@ -1957,7 +1961,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 16.7,
-          "correctionMinutes": -0.5352368166727486
+          "correctionMinutes": -0.5371601047048877
         },
         {
           "activityId": "land-attraction-179",
@@ -1965,7 +1969,7 @@
           "samples": 7,
           "days": 4,
           "meanWait": 15,
-          "correctionMinutes": 0.14058588699477242
+          "correctionMinutes": 0.07827183520612241
         },
         {
           "activityId": "land-attraction-179",
@@ -1973,7 +1977,7 @@
           "samples": 7,
           "days": 6,
           "meanWait": 11.4,
-          "correctionMinutes": 0.9170097006719305
+          "correctionMinutes": 1.0040889260337376
         },
         {
           "activityId": "land-attraction-180",
@@ -1981,7 +1985,7 @@
           "samples": 7,
           "days": 7,
           "meanWait": 5,
-          "correctionMinutes": 0.2794058574835039
+          "correctionMinutes": 0.2642440929734702
         },
         {
           "activityId": "land-attraction-181",
@@ -1989,7 +1993,7 @@
           "samples": 14,
           "days": 7,
           "meanWait": 10.7,
-          "correctionMinutes": 0.8210140316064302
+          "correctionMinutes": 0.8113558609650285
         },
         {
           "activityId": "land-attraction-181",
@@ -1997,7 +2001,7 @@
           "samples": 5,
           "days": 4,
           "meanWait": 8,
-          "correctionMinutes": -0.0034759523985062302
+          "correctionMinutes": -0.018691017237116903
         },
         {
           "activityId": "land-attraction-181",
@@ -2005,7 +2009,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 9.2,
-          "correctionMinutes": -1.0234100614612829
+          "correctionMinutes": -1.036381609427739
         },
         {
           "activityId": "land-attraction-181",
@@ -2013,7 +2017,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 10.5,
-          "correctionMinutes": -0.3599010584047134
+          "correctionMinutes": -0.3919239468142645
         },
         {
           "activityId": "land-attraction-181",
@@ -2021,7 +2025,7 @@
           "samples": 7,
           "days": 4,
           "meanWait": 15.7,
-          "correctionMinutes": 0.4412652362429054
+          "correctionMinutes": 0.4568115946698779
         },
         {
           "activityId": "land-attraction-181",
@@ -2029,7 +2033,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 7.5,
-          "correctionMinutes": -2.1333649583078267
+          "correctionMinutes": -2.11409801069193
         },
         {
           "activityId": "land-attraction-181",
@@ -2037,7 +2041,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 12.5,
-          "correctionMinutes": -0.8882652366824973
+          "correctionMinutes": -0.8599442151192718
         },
         {
           "activityId": "land-attraction-181",
@@ -2045,7 +2049,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 9.2,
-          "correctionMinutes": -1.586549545738632
+          "correctionMinutes": -1.5665344680593898
         },
         {
           "activityId": "land-attraction-183",
@@ -2053,7 +2057,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 6.3,
-          "correctionMinutes": -0.16577095170110867
+          "correctionMinutes": -0.16733402309504397
         },
         {
           "activityId": "land-attraction-183",
@@ -2061,7 +2065,7 @@
           "samples": 5,
           "days": 3,
           "meanWait": 20,
-          "correctionMinutes": 0.6317986100120321
+          "correctionMinutes": 0.6309711469499638
         },
         {
           "activityId": "land-attraction-183",
@@ -2069,7 +2073,7 @@
           "samples": 5,
           "days": 3,
           "meanWait": 8,
-          "correctionMinutes": -1.6988017468933025
+          "correctionMinutes": -1.7059902766726285
         },
         {
           "activityId": "land-attraction-183",
@@ -2077,7 +2081,7 @@
           "samples": 7,
           "days": 4,
           "meanWait": 9.3,
-          "correctionMinutes": -1.3524067819897354
+          "correctionMinutes": -1.3846081014921992
         },
         {
           "activityId": "land-attraction-183",
@@ -2085,7 +2089,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 12.3,
-          "correctionMinutes": -0.8399329700110089
+          "correctionMinutes": -0.8377969226384606
         },
         {
           "activityId": "land-attraction-183",
@@ -2093,7 +2097,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 8.1,
-          "correctionMinutes": -2.0898292200049413
+          "correctionMinutes": -2.1103106291739806
         },
         {
           "activityId": "land-attraction-183",
@@ -2101,7 +2105,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 15.8,
-          "correctionMinutes": -0.7381544271785171
+          "correctionMinutes": -0.7071215072468303
         },
         {
           "activityId": "land-attraction-183",
@@ -2109,7 +2113,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 13.2,
-          "correctionMinutes": 0.6530457515701956
+          "correctionMinutes": 0.656045849975413
         },
         {
           "activityId": "land-attraction-183",
@@ -2117,7 +2121,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 7.5,
-          "correctionMinutes": -0.4382350805980701
+          "correctionMinutes": -0.4625308034123857
         },
         {
           "activityId": "land-attraction-183",
@@ -2125,7 +2129,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 10.7,
-          "correctionMinutes": 2.2852186178068754
+          "correctionMinutes": 2.3744243282175717
         },
         {
           "activityId": "land-attraction-189",
@@ -2133,7 +2137,7 @@
           "samples": 25,
           "days": 6,
           "meanWait": 58.4,
-          "correctionMinutes": 6.131559004950211
+          "correctionMinutes": 6.196638558070686
         },
         {
           "activityId": "land-attraction-189",
@@ -2141,7 +2145,7 @@
           "samples": 15,
           "days": 7,
           "meanWait": 63,
-          "correctionMinutes": 1.519092240276962
+          "correctionMinutes": 1.598691915702408
         },
         {
           "activityId": "land-attraction-189",
@@ -2149,7 +2153,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 50.8,
-          "correctionMinutes": -1.7866676256906113
+          "correctionMinutes": -1.7457263399231382
         },
         {
           "activityId": "land-attraction-189",
@@ -2157,7 +2161,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 41.5,
-          "correctionMinutes": -5.197439983515578
+          "correctionMinutes": -5.214872496251954
         },
         {
           "activityId": "land-attraction-189",
@@ -2165,7 +2169,7 @@
           "samples": 11,
           "days": 6,
           "meanWait": 55.5,
-          "correctionMinutes": 0.4698882672639507
+          "correctionMinutes": 0.46166535334906267
         },
         {
           "activityId": "land-attraction-189",
@@ -2173,7 +2177,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 67,
-          "correctionMinutes": 0.9776643274467858
+          "correctionMinutes": 1.0646124139775315
         },
         {
           "activityId": "land-attraction-189",
@@ -2181,7 +2185,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 57.3,
-          "correctionMinutes": -1.6139506724828852
+          "correctionMinutes": -1.5728664583578442
         },
         {
           "activityId": "land-attraction-189",
@@ -2189,7 +2193,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 70.9,
-          "correctionMinutes": 2.2687128413135835
+          "correctionMinutes": 2.3737638926654614
         },
         {
           "activityId": "land-attraction-189",
@@ -2197,7 +2201,7 @@
           "samples": 9,
           "days": 5,
           "meanWait": 47.2,
-          "correctionMinutes": -1.2178435809029375
+          "correctionMinutes": -1.2465036758905126
         },
         {
           "activityId": "land-attraction-189",
@@ -2205,7 +2209,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 39,
-          "correctionMinutes": -1.6146140162868003
+          "correctionMinutes": -1.730096776029669
         },
         {
           "activityId": "land-attraction-189",
@@ -2213,7 +2217,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 33.5,
-          "correctionMinutes": 0.29094741329281504
+          "correctionMinutes": -0.10907186529582381
         },
         {
           "activityId": "land-attraction-196",
@@ -2221,7 +2225,7 @@
           "samples": 24,
           "days": 7,
           "meanWait": 102.5,
-          "correctionMinutes": 17.57006463817577
+          "correctionMinutes": 17.640844024316525
         },
         {
           "activityId": "land-attraction-196",
@@ -2229,7 +2233,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 90.9,
-          "correctionMinutes": 5.228657792796031
+          "correctionMinutes": 5.277684378799085
         },
         {
           "activityId": "land-attraction-196",
@@ -2237,7 +2241,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 75,
-          "correctionMinutes": -0.8433501801309431
+          "correctionMinutes": -0.8077558509057079
         },
         {
           "activityId": "land-attraction-196",
@@ -2245,7 +2249,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 68.5,
-          "correctionMinutes": -3.7802300722809834
+          "correctionMinutes": -3.7732794509744814
         },
         {
           "activityId": "land-attraction-196",
@@ -2253,7 +2257,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 80,
-          "correctionMinutes": 0.5442670666500035
+          "correctionMinutes": 0.5495311916416974
         },
         {
           "activityId": "land-attraction-196",
@@ -2261,7 +2265,7 @@
           "samples": 9,
           "days": 5,
           "meanWait": 80,
-          "correctionMinutes": 0.004103635550617825
+          "correctionMinutes": 0.011561414360194288
         },
         {
           "activityId": "land-attraction-196",
@@ -2269,7 +2273,7 @@
           "samples": 11,
           "days": 6,
           "meanWait": 80,
-          "correctionMinutes": -3.1026214803595624
+          "correctionMinutes": -3.009063653095308
         },
         {
           "activityId": "land-attraction-196",
@@ -2277,7 +2281,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 86.7,
-          "correctionMinutes": 0.738977184426806
+          "correctionMinutes": 0.8121769013184132
         },
         {
           "activityId": "land-attraction-196",
@@ -2285,7 +2289,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 72.2,
-          "correctionMinutes": -1.843853993049847
+          "correctionMinutes": -1.786898438776661
         },
         {
           "activityId": "land-attraction-196",
@@ -2293,7 +2297,7 @@
           "samples": 11,
           "days": 6,
           "meanWait": 63.6,
-          "correctionMinutes": -1.8647293594048884
+          "correctionMinutes": -1.9126821843483168
         },
         {
           "activityId": "land-attraction-196",
@@ -2301,7 +2305,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 55,
-          "correctionMinutes": -4.060744233773305
+          "correctionMinutes": -4.13574178752545
         },
         {
           "activityId": "land-attraction-196",
@@ -2309,7 +2313,7 @@
           "samples": 11,
           "days": 6,
           "meanWait": 35.5,
-          "correctionMinutes": -5.438854646457228
+          "correctionMinutes": -5.83369179377799
         },
         {
           "activityId": "land-attraction-197",
@@ -2317,7 +2321,7 @@
           "samples": 18,
           "days": 6,
           "meanWait": 133.9,
-          "correctionMinutes": 18.59618088189755
+          "correctionMinutes": 18.672765880600245
         },
         {
           "activityId": "land-attraction-197",
@@ -2325,7 +2329,7 @@
           "samples": 12,
           "days": 5,
           "meanWait": 114.2,
-          "correctionMinutes": 4.030188718356796
+          "correctionMinutes": 4.132848628234274
         },
         {
           "activityId": "land-attraction-197",
@@ -2333,7 +2337,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 94.2,
-          "correctionMinutes": -1.7868243938165866
+          "correctionMinutes": -1.7435961262112354
         },
         {
           "activityId": "land-attraction-197",
@@ -2341,7 +2345,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 100,
-          "correctionMinutes": -1.0639200051132511
+          "correctionMinutes": -1.0639589276611354
         },
         {
           "activityId": "land-attraction-197",
@@ -2349,7 +2353,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 108.8,
-          "correctionMinutes": -0.5146165023419808
+          "correctionMinutes": -0.4439802240910404
         },
         {
           "activityId": "land-attraction-197",
@@ -2357,7 +2361,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 107.5,
-          "correctionMinutes": -2.224497606299165
+          "correctionMinutes": -2.1220667982953314
         },
         {
           "activityId": "land-attraction-197",
@@ -2365,7 +2369,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 112.5,
-          "correctionMinutes": 1.7429272397439384
+          "correctionMinutes": 1.7287391509436993
         },
         {
           "activityId": "land-attraction-197",
@@ -2373,7 +2377,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 109.2,
-          "correctionMinutes": -1.8418083545064285
+          "correctionMinutes": -1.717351181689211
         },
         {
           "activityId": "land-attraction-197",
@@ -2381,7 +2385,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 100,
-          "correctionMinutes": 0.46563318593608327
+          "correctionMinutes": 0.487141281080862
         },
         {
           "activityId": "land-attraction-197",
@@ -2389,7 +2393,7 @@
           "samples": 7,
           "days": 6,
           "meanWait": 81.4,
-          "correctionMinutes": -1.9691074878817754
+          "correctionMinutes": -2.006830373802838
         },
         {
           "activityId": "land-attraction-197",
@@ -2397,7 +2401,7 @@
           "samples": 9,
           "days": 7,
           "meanWait": 66.7,
-          "correctionMinutes": -4.4052243036815355
+          "correctionMinutes": -4.588003893486827
         },
         {
           "activityId": "land-attraction-197",
@@ -2405,7 +2409,7 @@
           "samples": 8,
           "days": 5,
           "meanWait": 38.1,
-          "correctionMinutes": -4.818056920369556
+          "correctionMinutes": -5.344604064595514
         }
       ],
       "correlations": {
@@ -2499,18 +2503,10 @@
           {
             "key": "rain",
             "label": "雨",
-            "samples": 543,
+            "samples": 564,
             "days": 2,
-            "meanWait": 27,
-            "meanRatio": 0.608
-          },
-          {
-            "key": "unknown",
-            "label": "不明",
-            "samples": 21,
-            "days": 1,
-            "meanWait": null,
-            "meanRatio": null
+            "meanWait": 26.2,
+            "meanRatio": 0.598
           }
         ],
         "holiday": [
@@ -2534,70 +2530,35 @@
           }
         ],
         "temperature": {
-          "samples": 2798,
+          "samples": 2819,
           "days": 7,
-          "r": 0.256
+          "r": 0.262
         },
         "precipitation": {
-          "samples": 2798,
+          "samples": 2819,
           "days": 7,
-          "r": -0.154
+          "r": -0.165
         },
         "note": "記録内の相関の傾向です。平均は5件以上・2日以上、数値の相関係数は20件以上・3日以上で表示します。施設ごとの基準値でも補正しますが因果関係は表しません。"
       },
       "bootstrap": {
         "provider": "themeparks-wiki",
-        "fromDate": "2026-11-11",
-        "throughDate": "2026-11-17",
-        "partialThroughDate": "2026-11-17",
-        "attemptedAt": "2026-11-17T13:13:22.467Z",
-        "requestedDays": 7,
+        "accessMode": "anonymous",
+        "attemptedAt": "2026-11-17T14:23:33.926Z",
+        "requestedDays": null,
         "observedDays": 7,
+        "historyRequestsSelected": 14,
+        "historyRequestsPending": 0,
+        "coverage": {
+          "parkId": "land",
+          "accessibleFrom": "2026-11-11",
+          "throughDate": "2026-11-17",
+          "archiveFrom": "2021-07-04",
+          "archiveRecordedThrough": "2026-11-15"
+        },
         "weatherProvenance": "past-weather-forecast",
-        "requests": [
-          {
-            "parkId": "land",
-            "date": "2026-11-11",
-            "samples": 374,
-            "status": "ok"
-          },
-          {
-            "parkId": "land",
-            "date": "2026-11-12",
-            "samples": 419,
-            "status": "ok"
-          },
-          {
-            "parkId": "land",
-            "date": "2026-11-13",
-            "samples": 473,
-            "status": "ok"
-          },
-          {
-            "parkId": "land",
-            "date": "2026-11-14",
-            "samples": 481,
-            "status": "ok"
-          },
-          {
-            "parkId": "land",
-            "date": "2026-11-15",
-            "samples": 341,
-            "status": "ok"
-          },
-          {
-            "parkId": "land",
-            "date": "2026-11-16",
-            "samples": 390,
-            "status": "ok"
-          },
-          {
-            "parkId": "land",
-            "date": "2026-11-17",
-            "samples": 320,
-            "status": "ok"
-          }
-        ]
+        "failedDays": 0,
+        "privateCacheRetained": true
       }
     },
     {
@@ -2606,7 +2567,7 @@
       "parkId": "sea",
       "status": "trained",
       "usable": true,
-      "trainedAt": "2026-11-17T13:13:22.754Z",
+      "trainedAt": "2026-11-17T14:23:34.228Z",
       "beforeDate": "2026-11-18",
       "samples": 2686,
       "availableSamples": 2686,
@@ -2680,61 +2641,61 @@
         "sea-attraction-258"
       ],
       "coefficients": [
-        0.15689582082222941,
-        0.20250675266190266,
-        -0.3669760243002323,
-        0.2511709301161367,
-        -0.1296236996514554,
-        0.67257177082514,
-        -0.28528223063054114,
-        0.2095841787545641,
-        0.007924317962989723,
-        -0.044158851963819086,
-        0.11410302093888305,
-        0.2976557268234303,
-        0.23967275158836626,
-        -0.00013587575859176713,
-        7.844791039701963e-05,
+        0.2720585340077459,
+        0.2157780802811278,
+        -0.33065077566064616,
+        0.26614927216723616,
+        -0.11431613479917731,
+        0.670161587116723,
+        -0.2966924939012655,
+        0.21262177581903705,
+        0.018919590433760347,
+        -0.043599188627669865,
+        0.11407384436205653,
+        0.29773793381574903,
+        0.24508147256102303,
+        -0.00023560959339601357,
+        0.00013602926699094077,
         0,
         0,
         0,
-        -0.15913953996357014,
-        -0.024962240415458328,
-        0.02890414192553117,
-        0.1666083130564466,
-        0.02890414192553118,
-        0.03312629503864393,
-        0.028904141925531188,
-        0.00015689582081069022,
-        0.00015689582081069024,
-        0.00015689582081069024,
-        -0.019062149649239926,
-        0.4904607025786358,
-        0.7226520827293468,
-        -0.13932685822844293,
-        0.5006985236777812,
-        -0.15893902326577614,
-        -0.3724363137400085,
-        -0.12591799896170708,
-        -0.29529124899182096,
-        -0.32200103816693876,
-        -0.4703832780883642,
-        -0.568179318957825,
-        -0.1203193549846466,
-        -0.2725263417415104,
-        -0.3329578438650347,
-        -0.0354986501446686,
-        -0.23720188178684293,
-        0.24596342464162463,
-        0.8231774210102959,
-        -0.019062149649239912,
-        0.21183046028658414,
-        -0.07948583809089771,
-        -0.24372543927556856,
-        0.6921666542421732,
-        -0.05074442942389952,
-        -0.16188818333146066,
-        0.3381549669973125
+        -0.15867493423921797,
+        -0.031235344035396545,
+        0.000272058533999862,
+        0.16323546947929246,
+        0.00027205853399986195,
+        0.03186485021598962,
+        0.00027205853399986195,
+        0.00027205853399986195,
+        0.00027205853399986195,
+        0.00027205853399986195,
+        -0.006271866479190813,
+        0.4887200231367531,
+        0.721323089664929,
+        -0.1400980157854796,
+        0.49910200280972683,
+        -0.1604673854792294,
+        -0.3717247272058823,
+        -0.12585168870956187,
+        -0.29760844140362097,
+        -0.32256125831687166,
+        -0.4697040917989327,
+        -0.5654507462653737,
+        -0.12129759578278328,
+        -0.27314103754346525,
+        -0.33354136891010056,
+        -0.036899683561053276,
+        -0.2386466465289802,
+        0.2441082376488491,
+        0.8218227879637985,
+        -0.006271866479190823,
+        0.21131515580800925,
+        -0.08300368943541789,
+        -0.24209070956828352,
+        0.6887153532797697,
+        -0.052873311308019505,
+        -0.16371075476836983,
+        0.3363802935510371
       ],
       "validation": {
         "method": "later-days-holdout",
@@ -2743,8 +2704,8 @@
         "testThrough": "2026-11-17",
         "trainSamples": 1952,
         "testSamples": 732,
-        "modelMae": 12.699453551912569,
-        "baselineMae": 24.51366120218579,
+        "modelMae": 12.53551912568306,
+        "baselineMae": 24.316939890710383,
         "units": "minutes",
         "unseenEvents": []
       },
@@ -2752,21 +2713,25 @@
         {
           "name": "ThemeParks.wiki",
           "url": "https://www.themeparks.wiki/",
-          "kind": "recent-historical-waits",
-          "attribution": "Powered by ThemeParks.wiki",
-          "termsUrl": "https://www.themeparks.wiki/terms"
+          "kind": "permitted-historical-waits",
+          "attribution": "Powered by ThemeParks.wiki"
         },
         {
           "name": "Open-Meteo",
           "url": "https://open-meteo.com/",
           "kind": "past-weather-forecast",
-          "attribution": "Weather data by Open-Meteo.com",
-          "licenceUrl": "https://creativecommons.org/licenses/by/4.0/"
+          "attribution": "Weather data by Open-Meteo.com"
+        },
+        {
+          "name": "Queue-Times.com",
+          "url": "https://queue-times.com/",
+          "kind": "collected-live-observations",
+          "attribution": "Powered by Queue-Times.com"
         }
       ],
       "calendarData": {
         "schemaVersion": 1,
-        "updatedAt": "2026-11-17T12:37:38.967306Z",
+        "updatedAt": "2026-11-17T13:27:34.640339Z",
         "sourceUrl": "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv",
         "sourcePage": "https://www8.cao.go.jp/chosei/shukujitsu/gaiyou.html",
         "attribution": "内閣府「国民の祝日」CSVを加工",
@@ -2856,7 +2821,7 @@
           "samples": 22,
           "days": 7,
           "meanWait": 128.6,
-          "correctionMinutes": 16.339185570789738
+          "correctionMinutes": 16.338698670784535
         },
         {
           "activityId": "sea-attraction-218",
@@ -2864,7 +2829,7 @@
           "samples": 18,
           "days": 7,
           "meanWait": 148.9,
-          "correctionMinutes": 7.432954982494607
+          "correctionMinutes": 7.493353463716795
         },
         {
           "activityId": "sea-attraction-218",
@@ -2872,7 +2837,7 @@
           "samples": 9,
           "days": 5,
           "meanWait": 121.1,
-          "correctionMinutes": -5.521906983013739
+          "correctionMinutes": -5.523688765511075
         },
         {
           "activityId": "sea-attraction-218",
@@ -2880,7 +2845,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 114.4,
-          "correctionMinutes": -6.723153508098953
+          "correctionMinutes": -6.747200551534832
         },
         {
           "activityId": "sea-attraction-218",
@@ -2888,7 +2853,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 137.5,
-          "correctionMinutes": -1.9993135168564962
+          "correctionMinutes": -1.9932351756291513
         },
         {
           "activityId": "sea-attraction-218",
@@ -2896,7 +2861,7 @@
           "samples": 8,
           "days": 5,
           "meanWait": 150,
-          "correctionMinutes": 0.4668380110271997
+          "correctionMinutes": 0.5060656411549138
         },
         {
           "activityId": "sea-attraction-218",
@@ -2904,7 +2869,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 130.9,
-          "correctionMinutes": -4.137277240974482
+          "correctionMinutes": -4.104633875869539
         },
         {
           "activityId": "sea-attraction-218",
@@ -2912,7 +2877,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 147.5,
-          "correctionMinutes": 3.995860980109163
+          "correctionMinutes": 4.064813468094293
         },
         {
           "activityId": "sea-attraction-218",
@@ -2920,7 +2885,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 128.6,
-          "correctionMinutes": 1.3394795680919478
+          "correctionMinutes": 1.353638634116427
         },
         {
           "activityId": "sea-attraction-218",
@@ -2928,7 +2893,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 101.1,
-          "correctionMinutes": -0.9683178179853724
+          "correctionMinutes": -1.0493151106807286
         },
         {
           "activityId": "sea-attraction-218",
@@ -2936,7 +2901,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 79.1,
-          "correctionMinutes": -2.3866635784566945
+          "correctionMinutes": -2.689557932751171
         },
         {
           "activityId": "sea-attraction-218",
@@ -2944,7 +2909,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 60,
-          "correctionMinutes": -1.807463701511116
+          "correctionMinutes": -1.6515828370113737
         },
         {
           "activityId": "sea-attraction-219",
@@ -2952,7 +2917,7 @@
           "samples": 26,
           "days": 7,
           "meanWait": 156.2,
-          "correctionMinutes": 21.624647214789512
+          "correctionMinutes": 21.616383193865246
         },
         {
           "activityId": "sea-attraction-219",
@@ -2960,7 +2925,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 166.7,
-          "correctionMinutes": 4.544904180780309
+          "correctionMinutes": 4.585108953109101
         },
         {
           "activityId": "sea-attraction-219",
@@ -2968,7 +2933,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 148.9,
-          "correctionMinutes": -2.8214783477189305
+          "correctionMinutes": -2.8458904210503833
         },
         {
           "activityId": "sea-attraction-219",
@@ -2976,7 +2941,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 142.9,
-          "correctionMinutes": -2.904281023157024
+          "correctionMinutes": -3.0080118742091115
         },
         {
           "activityId": "sea-attraction-219",
@@ -2984,7 +2949,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 140,
-          "correctionMinutes": -1.7827246016407798
+          "correctionMinutes": -1.8591472467854617
         },
         {
           "activityId": "sea-attraction-219",
@@ -2992,7 +2957,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 160,
-          "correctionMinutes": -1.2865148915463076
+          "correctionMinutes": -1.2393114814740624
         },
         {
           "activityId": "sea-attraction-219",
@@ -3000,7 +2965,7 @@
           "samples": 5,
           "days": 4,
           "meanWait": 172,
-          "correctionMinutes": 2.3274009854522317
+          "correctionMinutes": 2.3494535530088445
         },
         {
           "activityId": "sea-attraction-219",
@@ -3008,7 +2973,7 @@
           "samples": 5,
           "days": 4,
           "meanWait": 176,
-          "correctionMinutes": 2.706125133388953
+          "correctionMinutes": 2.7469243957593825
         },
         {
           "activityId": "sea-attraction-219",
@@ -3016,7 +2981,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 144.4,
-          "correctionMinutes": 0.05697714171801028
+          "correctionMinutes": 0.06776395950475061
         },
         {
           "activityId": "sea-attraction-219",
@@ -3024,7 +2989,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 118.9,
-          "correctionMinutes": -2.1009125375580613
+          "correctionMinutes": -2.18008347903796
         },
         {
           "activityId": "sea-attraction-219",
@@ -3032,7 +2997,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 87.8,
-          "correctionMinutes": -5.924200445965622
+          "correctionMinutes": -6.159817221152887
         },
         {
           "activityId": "sea-attraction-220",
@@ -3040,7 +3005,7 @@
           "samples": 17,
           "days": 7,
           "meanWait": 10.9,
-          "correctionMinutes": -2.523052245527538
+          "correctionMinutes": -2.5370982867070344
         },
         {
           "activityId": "sea-attraction-220",
@@ -3048,7 +3013,7 @@
           "samples": 18,
           "days": 7,
           "meanWait": 21.7,
-          "correctionMinutes": -1.6072708904533652
+          "correctionMinutes": -1.5988032157180292
         },
         {
           "activityId": "sea-attraction-220",
@@ -3056,7 +3021,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 25,
-          "correctionMinutes": -0.5241283696585628
+          "correctionMinutes": -0.5357456084466482
         },
         {
           "activityId": "sea-attraction-220",
@@ -3064,7 +3029,7 @@
           "samples": 9,
           "days": 5,
           "meanWait": 21.7,
-          "correctionMinutes": -1.2471007045750695
+          "correctionMinutes": -1.2827925430299976
         },
         {
           "activityId": "sea-attraction-220",
@@ -3072,7 +3037,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 30.6,
-          "correctionMinutes": 1.1243264048781185
+          "correctionMinutes": 1.0996652254308183
         },
         {
           "activityId": "sea-attraction-220",
@@ -3080,7 +3045,7 @@
           "samples": 7,
           "days": 6,
           "meanWait": 28.6,
-          "correctionMinutes": -0.16656420019726978
+          "correctionMinutes": -0.16181409411885916
         },
         {
           "activityId": "sea-attraction-220",
@@ -3088,7 +3053,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 29.3,
-          "correctionMinutes": -0.07149657673838121
+          "correctionMinutes": -0.04170687313596857
         },
         {
           "activityId": "sea-attraction-220",
@@ -3096,7 +3061,7 @@
           "samples": 7,
           "days": 4,
           "meanWait": 33.6,
-          "correctionMinutes": 1.5974885421515632
+          "correctionMinutes": 1.6201490817831203
         },
         {
           "activityId": "sea-attraction-220",
@@ -3104,7 +3069,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 29.2,
-          "correctionMinutes": 1.6764148016617901
+          "correctionMinutes": 1.6753231861210323
         },
         {
           "activityId": "sea-attraction-220",
@@ -3112,7 +3077,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 16.7,
-          "correctionMinutes": 0.6418209908858841
+          "correctionMinutes": 0.5933990579598946
         },
         {
           "activityId": "sea-attraction-220",
@@ -3120,7 +3085,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 13.3,
-          "correctionMinutes": 1.0316936287369989
+          "correctionMinutes": 1.0876844903040364
         },
         {
           "activityId": "sea-attraction-223",
@@ -3128,7 +3093,7 @@
           "samples": 24,
           "days": 7,
           "meanWait": 85.8,
-          "correctionMinutes": -7.833452966064982
+          "correctionMinutes": -7.8465264742594805
         },
         {
           "activityId": "sea-attraction-223",
@@ -3136,7 +3101,7 @@
           "samples": 17,
           "days": 7,
           "meanWait": 144.7,
-          "correctionMinutes": 3.2250835004612077
+          "correctionMinutes": 3.2771512264691296
         },
         {
           "activityId": "sea-attraction-223",
@@ -3144,7 +3109,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 150.8,
-          "correctionMinutes": 5.040539098446038
+          "correctionMinutes": 5.027109972336047
         },
         {
           "activityId": "sea-attraction-223",
@@ -3152,7 +3117,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 153.3,
-          "correctionMinutes": 2.143410838145221
+          "correctionMinutes": 2.118289336054208
         },
         {
           "activityId": "sea-attraction-223",
@@ -3160,7 +3125,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 148,
-          "correctionMinutes": 5.305566673735198
+          "correctionMinutes": 5.245086181704283
         },
         {
           "activityId": "sea-attraction-223",
@@ -3168,7 +3133,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 162,
-          "correctionMinutes": 6.810492670221921
+          "correctionMinutes": 6.852564992482329
         },
         {
           "activityId": "sea-attraction-223",
@@ -3176,7 +3141,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 150,
-          "correctionMinutes": 3.2802632124393996
+          "correctionMinutes": 3.316919945028815
         },
         {
           "activityId": "sea-attraction-223",
@@ -3184,7 +3149,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 146.3,
-          "correctionMinutes": 2.4930746355085938
+          "correctionMinutes": 2.562560030930544
         },
         {
           "activityId": "sea-attraction-223",
@@ -3192,7 +3157,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 128.3,
-          "correctionMinutes": 2.7717290989026795
+          "correctionMinutes": 2.7429062704591236
         },
         {
           "activityId": "sea-attraction-223",
@@ -3200,7 +3165,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 109,
-          "correctionMinutes": 0.9049727860057487
+          "correctionMinutes": 0.8276899900426845
         },
         {
           "activityId": "sea-attraction-223",
@@ -3208,7 +3173,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 78.9,
-          "correctionMinutes": -2.0848348532472354
+          "correctionMinutes": -2.345848920865333
         },
         {
           "activityId": "sea-attraction-224",
@@ -3216,7 +3181,7 @@
           "samples": 22,
           "days": 7,
           "meanWait": 16.1,
-          "correctionMinutes": 0.24891840642185778
+          "correctionMinutes": 0.2442985606043794
         },
         {
           "activityId": "sea-attraction-224",
@@ -3224,7 +3189,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 32.3,
-          "correctionMinutes": 3.2889007876011718
+          "correctionMinutes": 3.300518287745862
         },
         {
           "activityId": "sea-attraction-224",
@@ -3232,7 +3197,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 27.5,
-          "correctionMinutes": 0.9812144133749893
+          "correctionMinutes": 0.976744713058277
         },
         {
           "activityId": "sea-attraction-224",
@@ -3240,7 +3205,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 25.5,
-          "correctionMinutes": -0.5345637977065095
+          "correctionMinutes": -0.5542320923412798
         },
         {
           "activityId": "sea-attraction-224",
@@ -3248,7 +3213,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 27.7,
-          "correctionMinutes": 0.6316431111415438
+          "correctionMinutes": 0.6120396838147286
         },
         {
           "activityId": "sea-attraction-224",
@@ -3256,7 +3221,7 @@
           "samples": 5,
           "days": 4,
           "meanWait": 29,
-          "correctionMinutes": -0.6699249912403243
+          "correctionMinutes": -0.6508710159924216
         },
         {
           "activityId": "sea-attraction-224",
@@ -3264,7 +3229,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 23.5,
-          "correctionMinutes": -1.3285876731228137
+          "correctionMinutes": -1.3068569594861823
         },
         {
           "activityId": "sea-attraction-224",
@@ -3272,7 +3237,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 18.3,
-          "correctionMinutes": -1.2816191279541842
+          "correctionMinutes": -1.2806554195819861
         },
         {
           "activityId": "sea-attraction-224",
@@ -3280,7 +3245,7 @@
           "samples": 9,
           "days": 7,
           "meanWait": 17.8,
-          "correctionMinutes": -0.9928677500674136
+          "correctionMinutes": -0.9879079774066519
         },
         {
           "activityId": "sea-attraction-224",
@@ -3288,7 +3253,7 @@
           "samples": 8,
           "days": 5,
           "meanWait": 15,
-          "correctionMinutes": -0.8808797848572957
+          "correctionMinutes": -0.9057097623837469
         },
         {
           "activityId": "sea-attraction-224",
@@ -3296,7 +3261,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 7.5,
-          "correctionMinutes": -1.8171722655410372
+          "correctionMinutes": -1.8638127433595815
         },
         {
           "activityId": "sea-attraction-224",
@@ -3304,7 +3269,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 6.7,
-          "correctionMinutes": -0.3199687852975822
+          "correctionMinutes": -0.26900755129347603
         },
         {
           "activityId": "sea-attraction-226",
@@ -3312,7 +3277,7 @@
           "samples": 7,
           "days": 7,
           "meanWait": 15,
-          "correctionMinutes": 0.018296901501027456
+          "correctionMinutes": 0.010039351703815577
         },
         {
           "activityId": "sea-attraction-226",
@@ -3320,7 +3285,7 @@
           "samples": 5,
           "days": 3,
           "meanWait": 25,
-          "correctionMinutes": -0.2779021740380028
+          "correctionMinutes": -0.2721761545035102
         },
         {
           "activityId": "sea-attraction-226",
@@ -3328,7 +3293,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 19.2,
-          "correctionMinutes": -1.416786935624858
+          "correctionMinutes": -1.3951194309527635
         },
         {
           "activityId": "sea-attraction-230",
@@ -3336,7 +3301,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 8.5,
-          "correctionMinutes": -0.9899502259236217
+          "correctionMinutes": -1.0071532240220373
         },
         {
           "activityId": "sea-attraction-230",
@@ -3344,7 +3309,7 @@
           "samples": 8,
           "days": 7,
           "meanWait": 10,
-          "correctionMinutes": -4.884899575728974
+          "correctionMinutes": -4.91087333802057
         },
         {
           "activityId": "sea-attraction-230",
@@ -3352,7 +3317,7 @@
           "samples": 8,
           "days": 7,
           "meanWait": 23.1,
-          "correctionMinutes": -0.8781322139313142
+          "correctionMinutes": -0.9127421150488132
         },
         {
           "activityId": "sea-attraction-230",
@@ -3360,7 +3325,7 @@
           "samples": 7,
           "days": 7,
           "meanWait": 32.9,
-          "correctionMinutes": 1.0324430432159923
+          "correctionMinutes": 1.0330022873127942
         },
         {
           "activityId": "sea-attraction-230",
@@ -3368,7 +3333,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 42.9,
-          "correctionMinutes": 3.9350139045753876
+          "correctionMinutes": 3.95136812744287
         },
         {
           "activityId": "sea-attraction-231",
@@ -3376,7 +3341,7 @@
           "samples": 7,
           "days": 7,
           "meanWait": 5,
-          "correctionMinutes": 0.24486058406824565
+          "correctionMinutes": 0.2483344360617363
         },
         {
           "activityId": "sea-attraction-231",
@@ -3384,7 +3349,7 @@
           "samples": 9,
           "days": 7,
           "meanWait": 12.2,
-          "correctionMinutes": -3.561038231229642
+          "correctionMinutes": -3.561414551167089
         },
         {
           "activityId": "sea-attraction-231",
@@ -3392,7 +3357,7 @@
           "samples": 9,
           "days": 7,
           "meanWait": 12.8,
-          "correctionMinutes": -3.1193616492201865
+          "correctionMinutes": -3.1335022620505852
         },
         {
           "activityId": "sea-attraction-231",
@@ -3400,7 +3365,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 20,
-          "correctionMinutes": -0.9678940916070997
+          "correctionMinutes": -0.9679116747739185
         },
         {
           "activityId": "sea-attraction-231",
@@ -3408,7 +3373,7 @@
           "samples": 11,
           "days": 6,
           "meanWait": 23.2,
-          "correctionMinutes": 0.25884704487425275
+          "correctionMinutes": 0.26866015580303554
         },
         {
           "activityId": "sea-attraction-231",
@@ -3416,7 +3381,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 20,
-          "correctionMinutes": -1.6087837045747295
+          "correctionMinutes": -1.5744512364624743
         },
         {
           "activityId": "sea-attraction-231",
@@ -3424,7 +3389,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 20.5,
-          "correctionMinutes": -0.8421055645636579
+          "correctionMinutes": -0.7980709060638796
         },
         {
           "activityId": "sea-attraction-231",
@@ -3432,7 +3397,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 19.6,
-          "correctionMinutes": 0.3374564543377783
+          "correctionMinutes": 0.36201056610063626
         },
         {
           "activityId": "sea-attraction-231",
@@ -3440,7 +3405,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 20,
-          "correctionMinutes": 2.600372911506488
+          "correctionMinutes": 2.578421186614652
         },
         {
           "activityId": "sea-attraction-231",
@@ -3448,7 +3413,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 11.5,
-          "correctionMinutes": 1.7527652044227946
+          "correctionMinutes": 1.6609839218069462
         },
         {
           "activityId": "sea-attraction-231",
@@ -3456,7 +3421,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 8.5,
-          "correctionMinutes": 2.1779069211147
+          "correctionMinutes": 2.1594785328858377
         },
         {
           "activityId": "sea-attraction-232",
@@ -3464,7 +3429,7 @@
           "samples": 17,
           "days": 7,
           "meanWait": 11.5,
-          "correctionMinutes": 0.42564818318607894
+          "correctionMinutes": 0.4121853531998499
         },
         {
           "activityId": "sea-attraction-232",
@@ -3472,7 +3437,7 @@
           "samples": 20,
           "days": 7,
           "meanWait": 20,
-          "correctionMinutes": 0.07233241637979129
+          "correctionMinutes": 0.07637727261716724
         },
         {
           "activityId": "sea-attraction-232",
@@ -3480,7 +3445,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 15.5,
-          "correctionMinutes": -2.590381649885887
+          "correctionMinutes": -2.605945365072599
         },
         {
           "activityId": "sea-attraction-232",
@@ -3488,7 +3453,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 18.1,
-          "correctionMinutes": -1.0603530885618329
+          "correctionMinutes": -1.104845796086895
         },
         {
           "activityId": "sea-attraction-232",
@@ -3496,7 +3461,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 22.5,
-          "correctionMinutes": 0.24352341329061922
+          "correctionMinutes": 0.21335516696282242
         },
         {
           "activityId": "sea-attraction-232",
@@ -3504,7 +3469,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 20.8,
-          "correctionMinutes": -0.377376399107911
+          "correctionMinutes": -0.3823570626761177
         },
         {
           "activityId": "sea-attraction-232",
@@ -3512,7 +3477,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 21.5,
-          "correctionMinutes": -0.5674797200614035
+          "correctionMinutes": -0.571730943058674
         },
         {
           "activityId": "sea-attraction-232",
@@ -3520,7 +3485,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 19.5,
-          "correctionMinutes": -1.2143582653730154
+          "correctionMinutes": -1.1907217145184459
         },
         {
           "activityId": "sea-attraction-232",
@@ -3528,7 +3493,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 20.5,
-          "correctionMinutes": 0.7401668677682997
+          "correctionMinutes": 0.7535964215154418
         },
         {
           "activityId": "sea-attraction-232",
@@ -3536,7 +3501,7 @@
           "samples": 9,
           "days": 5,
           "meanWait": 14.4,
-          "correctionMinutes": 0.16999776179299253
+          "correctionMinutes": 0.16010521399429112
         },
         {
           "activityId": "sea-attraction-232",
@@ -3544,7 +3509,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 8.3,
-          "correctionMinutes": 0.33878314791499076
+          "correctionMinutes": 0.30042252264376784
         },
         {
           "activityId": "sea-attraction-235",
@@ -3552,7 +3517,7 @@
           "samples": 7,
           "days": 7,
           "meanWait": 5,
-          "correctionMinutes": 1.6066874770413602
+          "correctionMinutes": 1.5868561613586052
         },
         {
           "activityId": "sea-attraction-235",
@@ -3560,7 +3525,7 @@
           "samples": 5,
           "days": 4,
           "meanWait": 13,
-          "correctionMinutes": -1.6774743110681578
+          "correctionMinutes": -1.6900280705384434
         },
         {
           "activityId": "sea-attraction-235",
@@ -3568,7 +3533,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 15.8,
-          "correctionMinutes": -0.8673616628273562
+          "correctionMinutes": -0.8911425557224374
         },
         {
           "activityId": "sea-attraction-235",
@@ -3576,7 +3541,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 16.3,
-          "correctionMinutes": -0.5703724216421492
+          "correctionMinutes": -0.598349646677901
         },
         {
           "activityId": "sea-attraction-235",
@@ -3584,7 +3549,7 @@
           "samples": 7,
           "days": 4,
           "meanWait": 15,
-          "correctionMinutes": -0.673472797265662
+          "correctionMinutes": -0.6878430760303365
         },
         {
           "activityId": "sea-attraction-235",
@@ -3592,7 +3557,7 @@
           "samples": 5,
           "days": 4,
           "meanWait": 14,
-          "correctionMinutes": -0.94672440959326
+          "correctionMinutes": -0.9547612075850205
         },
         {
           "activityId": "sea-attraction-235",
@@ -3600,7 +3565,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 15.8,
-          "correctionMinutes": -1.0331825196782005
+          "correctionMinutes": -1.016556988728659
         },
         {
           "activityId": "sea-attraction-235",
@@ -3608,7 +3573,7 @@
           "samples": 5,
           "days": 3,
           "meanWait": 12,
-          "correctionMinutes": -1.2786268504991398
+          "correctionMinutes": -1.2670578829716872
         },
         {
           "activityId": "sea-attraction-236",
@@ -3616,7 +3581,7 @@
           "samples": 7,
           "days": 7,
           "meanWait": 5,
-          "correctionMinutes": -1.0518500949529925
+          "correctionMinutes": -1.0757953148705117
         },
         {
           "activityId": "sea-attraction-236",
@@ -3624,7 +3589,7 @@
           "samples": 7,
           "days": 4,
           "meanWait": 14.3,
-          "correctionMinutes": -1.0527647501878798
+          "correctionMinutes": -1.0833544340326144
         },
         {
           "activityId": "sea-attraction-236",
@@ -3632,7 +3597,7 @@
           "samples": 5,
           "days": 4,
           "meanWait": 15,
-          "correctionMinutes": -1.0905007689476807
+          "correctionMinutes": -1.088897833301052
         },
         {
           "activityId": "sea-attraction-236",
@@ -3640,7 +3605,7 @@
           "samples": 5,
           "days": 3,
           "meanWait": 13,
-          "correctionMinutes": -1.0833062186936808
+          "correctionMinutes": -1.0736660075355338
         },
         {
           "activityId": "sea-attraction-236",
@@ -3648,7 +3613,7 @@
           "samples": 5,
           "days": 4,
           "meanWait": 13,
-          "correctionMinutes": -0.6660073822868188
+          "correctionMinutes": -0.6640166446060793
         },
         {
           "activityId": "sea-attraction-236",
@@ -3656,7 +3621,7 @@
           "samples": 5,
           "days": 3,
           "meanWait": 10,
-          "correctionMinutes": -0.15616857899748965
+          "correctionMinutes": -0.1762867213062824
         },
         {
           "activityId": "sea-attraction-237",
@@ -3664,7 +3629,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 10.8,
-          "correctionMinutes": -1.8114896667059095
+          "correctionMinutes": -1.8193938138566899
         },
         {
           "activityId": "sea-attraction-237",
@@ -3672,7 +3637,7 @@
           "samples": 15,
           "days": 7,
           "meanWait": 22,
-          "correctionMinutes": -1.8876127646527854
+          "correctionMinutes": -1.878031583073416
         },
         {
           "activityId": "sea-attraction-237",
@@ -3680,7 +3645,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 29,
-          "correctionMinutes": 0.5532141382378746
+          "correctionMinutes": 0.5480851527165956
         },
         {
           "activityId": "sea-attraction-237",
@@ -3688,7 +3653,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 27.5,
-          "correctionMinutes": -0.009278386653857749
+          "correctionMinutes": -0.0303432155225849
         },
         {
           "activityId": "sea-attraction-237",
@@ -3696,7 +3661,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 29,
-          "correctionMinutes": 0.38479286031511106
+          "correctionMinutes": 0.36296710957566797
         },
         {
           "activityId": "sea-attraction-237",
@@ -3704,7 +3669,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 27,
-          "correctionMinutes": 0.09974548600467005
+          "correctionMinutes": 0.0871738140661531
         },
         {
           "activityId": "sea-attraction-237",
@@ -3712,7 +3677,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 29.1,
-          "correctionMinutes": -0.3528365513550251
+          "correctionMinutes": -0.3376761885521507
         },
         {
           "activityId": "sea-attraction-237",
@@ -3720,7 +3685,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 28.3,
-          "correctionMinutes": 0.035132329191442255
+          "correctionMinutes": 0.04713930474733329
         },
         {
           "activityId": "sea-attraction-237",
@@ -3728,7 +3693,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 26.4,
-          "correctionMinutes": 0.34929675502018104
+          "correctionMinutes": 0.3662923940927226
         },
         {
           "activityId": "sea-attraction-237",
@@ -3736,7 +3701,7 @@
           "samples": 5,
           "days": 4,
           "meanWait": 24,
-          "correctionMinutes": 0.4537285418214179
+          "correctionMinutes": 0.45200792465447237
         },
         {
           "activityId": "sea-attraction-237",
@@ -3744,7 +3709,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 15.7,
-          "correctionMinutes": 0.14857400108347832
+          "correctionMinutes": 0.10017700851152117
         },
         {
           "activityId": "sea-attraction-237",
@@ -3752,7 +3717,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 17.5,
-          "correctionMinutes": 1.6270884024736354
+          "correctionMinutes": 1.6851047844245362
         },
         {
           "activityId": "sea-attraction-238",
@@ -3760,7 +3725,7 @@
           "samples": 16,
           "days": 7,
           "meanWait": 9.4,
-          "correctionMinutes": -0.8028741712627684
+          "correctionMinutes": -0.8142326813765256
         },
         {
           "activityId": "sea-attraction-238",
@@ -3768,7 +3733,7 @@
           "samples": 17,
           "days": 7,
           "meanWait": 18.8,
-          "correctionMinutes": -0.8731702227310049
+          "correctionMinutes": -0.870442464797022
         },
         {
           "activityId": "sea-attraction-238",
@@ -3776,7 +3741,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 20.8,
-          "correctionMinutes": -0.7474436711349334
+          "correctionMinutes": -0.7613824258191606
         },
         {
           "activityId": "sea-attraction-238",
@@ -3784,7 +3749,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 23,
-          "correctionMinutes": -0.3845523598770392
+          "correctionMinutes": -0.40533726358658984
         },
         {
           "activityId": "sea-attraction-238",
@@ -3792,7 +3757,7 @@
           "samples": 11,
           "days": 6,
           "meanWait": 24.1,
-          "correctionMinutes": -0.15777205719199358
+          "correctionMinutes": -0.18369377317537466
         },
         {
           "activityId": "sea-attraction-238",
@@ -3800,7 +3765,7 @@
           "samples": 9,
           "days": 5,
           "meanWait": 28.9,
-          "correctionMinutes": 0.40908955271752795
+          "correctionMinutes": 0.42794147181585435
         },
         {
           "activityId": "sea-attraction-238",
@@ -3808,7 +3773,7 @@
           "samples": 10,
           "days": 5,
           "meanWait": 23,
-          "correctionMinutes": -0.907563551288619
+          "correctionMinutes": -0.8845098175548526
         },
         {
           "activityId": "sea-attraction-238",
@@ -3816,7 +3781,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 23.3,
-          "correctionMinutes": -0.3097980627322201
+          "correctionMinutes": -0.28153518962274077
         },
         {
           "activityId": "sea-attraction-238",
@@ -3824,7 +3789,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 16.7,
-          "correctionMinutes": 0.350451983342603
+          "correctionMinutes": 0.3421663221114342
         },
         {
           "activityId": "sea-attraction-238",
@@ -3832,7 +3797,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 9.2,
-          "correctionMinutes": -0.2397162153792685
+          "correctionMinutes": -0.29130238501454525
         },
         {
           "activityId": "sea-attraction-238",
@@ -3840,7 +3805,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 12.5,
-          "correctionMinutes": 1.6960750019374575
+          "correctionMinutes": 1.7469102728914896
         },
         {
           "activityId": "sea-attraction-239",
@@ -3848,7 +3813,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 6.5,
-          "correctionMinutes": -0.51974633869686
+          "correctionMinutes": -0.5315555819883709
         },
         {
           "activityId": "sea-attraction-239",
@@ -3856,7 +3821,7 @@
           "samples": 12,
           "days": 6,
           "meanWait": 15.8,
-          "correctionMinutes": -1.9246473477375285
+          "correctionMinutes": -1.9249988706302787
         },
         {
           "activityId": "sea-attraction-239",
@@ -3864,7 +3829,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 18,
-          "correctionMinutes": -0.7429716497177494
+          "correctionMinutes": -0.7654657015741893
         },
         {
           "activityId": "sea-attraction-239",
@@ -3872,7 +3837,7 @@
           "samples": 7,
           "days": 6,
           "meanWait": 23.6,
-          "correctionMinutes": 0.2425172859593894
+          "correctionMinutes": 0.2160079415040076
         },
         {
           "activityId": "sea-attraction-239",
@@ -3880,7 +3845,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 19,
-          "correctionMinutes": -0.20525458739091515
+          "correctionMinutes": -0.23432550407384067
         },
         {
           "activityId": "sea-attraction-239",
@@ -3888,7 +3853,7 @@
           "samples": 8,
           "days": 7,
           "meanWait": 23.1,
-          "correctionMinutes": 0.14231591884215028
+          "correctionMinutes": 0.14494222131324566
         },
         {
           "activityId": "sea-attraction-239",
@@ -3896,7 +3861,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 22.7,
-          "correctionMinutes": -0.0027006720579324695
+          "correctionMinutes": 0.00910403492450725
         },
         {
           "activityId": "sea-attraction-239",
@@ -3904,7 +3869,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 18.6,
-          "correctionMinutes": 0.05908939540417134
+          "correctionMinutes": 0.06819583526148941
         },
         {
           "activityId": "sea-attraction-239",
@@ -3912,7 +3877,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 17.5,
-          "correctionMinutes": 0.2339707265461231
+          "correctionMinutes": 0.2395630422448065
         },
         {
           "activityId": "sea-attraction-239",
@@ -3920,7 +3885,7 @@
           "samples": 9,
           "days": 5,
           "meanWait": 11.1,
-          "correctionMinutes": -0.3639594289917038
+          "correctionMinutes": -0.3722996806028873
         },
         {
           "activityId": "sea-attraction-239",
@@ -3928,7 +3893,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 7.5,
-          "correctionMinutes": -0.24307061115255324
+          "correctionMinutes": -0.3009760222665942
         },
         {
           "activityId": "sea-attraction-240",
@@ -3936,7 +3901,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 7.7,
-          "correctionMinutes": -3.8627560466418362
+          "correctionMinutes": -3.8619840591728027
         },
         {
           "activityId": "sea-attraction-240",
@@ -3944,7 +3909,7 @@
           "samples": 20,
           "days": 7,
           "meanWait": 24.8,
-          "correctionMinutes": -2.224941807904593
+          "correctionMinutes": -2.207689111537505
         },
         {
           "activityId": "sea-attraction-240",
@@ -3952,7 +3917,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 27.2,
-          "correctionMinutes": -0.21648604541978966
+          "correctionMinutes": -0.2259736540014197
         },
         {
           "activityId": "sea-attraction-240",
@@ -3960,7 +3925,7 @@
           "samples": 8,
           "days": 7,
           "meanWait": 36.9,
-          "correctionMinutes": 1.724698813500106
+          "correctionMinutes": 1.7044269437149029
         },
         {
           "activityId": "sea-attraction-240",
@@ -3968,7 +3933,7 @@
           "samples": 7,
           "days": 4,
           "meanWait": 32.9,
-          "correctionMinutes": 0.6221516398829635
+          "correctionMinutes": 0.5983176298476697
         },
         {
           "activityId": "sea-attraction-240",
@@ -3976,7 +3941,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 36.4,
-          "correctionMinutes": 1.7369228594400772
+          "correctionMinutes": 1.7363704885103004
         },
         {
           "activityId": "sea-attraction-240",
@@ -3984,7 +3949,7 @@
           "samples": 11,
           "days": 6,
           "meanWait": 39.1,
-          "correctionMinutes": 2.162340200015199
+          "correctionMinutes": 2.1853912187004374
         },
         {
           "activityId": "sea-attraction-240",
@@ -3992,7 +3957,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 32.8,
-          "correctionMinutes": 1.6230585737432437
+          "correctionMinutes": 1.6295472245832525
         },
         {
           "activityId": "sea-attraction-240",
@@ -4000,7 +3965,7 @@
           "samples": 8,
           "days": 5,
           "meanWait": 25.6,
-          "correctionMinutes": -0.8723921035526635
+          "correctionMinutes": -0.8455131253251514
         },
         {
           "activityId": "sea-attraction-240",
@@ -4008,7 +3973,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 22.2,
-          "correctionMinutes": 0.7199300371062852
+          "correctionMinutes": 0.6929400811366477
         },
         {
           "activityId": "sea-attraction-240",
@@ -4016,7 +3981,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 12.1,
-          "correctionMinutes": -0.3531079868173406
+          "correctionMinutes": -0.44629613392619183
         },
         {
           "activityId": "sea-attraction-241",
@@ -4024,7 +3989,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 7,
-          "correctionMinutes": -1.3129997233198942
+          "correctionMinutes": -1.3147393959393765
         },
         {
           "activityId": "sea-attraction-241",
@@ -4032,7 +3997,7 @@
           "samples": 15,
           "days": 7,
           "meanWait": 18.7,
-          "correctionMinutes": -2.5305675407409027
+          "correctionMinutes": -2.515470491308176
         },
         {
           "activityId": "sea-attraction-241",
@@ -4040,7 +4005,7 @@
           "samples": 11,
           "days": 6,
           "meanWait": 20.9,
-          "correctionMinutes": -0.9898838813660977
+          "correctionMinutes": -0.9984329188344355
         },
         {
           "activityId": "sea-attraction-241",
@@ -4048,7 +4013,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 24.5,
-          "correctionMinutes": -0.1824268317399093
+          "correctionMinutes": -0.2042853637284035
         },
         {
           "activityId": "sea-attraction-241",
@@ -4056,7 +4021,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 24.5,
-          "correctionMinutes": 0.11753176553488451
+          "correctionMinutes": 0.09435899136872265
         },
         {
           "activityId": "sea-attraction-241",
@@ -4064,7 +4029,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 26.1,
-          "correctionMinutes": 0.6009783700827238
+          "correctionMinutes": 0.6125986477707649
         },
         {
           "activityId": "sea-attraction-241",
@@ -4072,7 +4037,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 25.6,
-          "correctionMinutes": 0.03851307573213601
+          "correctionMinutes": 0.053158257741564165
         },
         {
           "activityId": "sea-attraction-241",
@@ -4080,7 +4045,7 @@
           "samples": 14,
           "days": 7,
           "meanWait": 25.4,
-          "correctionMinutes": 0.5137203813499233
+          "correctionMinutes": 0.5446528989501465
         },
         {
           "activityId": "sea-attraction-241",
@@ -4088,7 +4053,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 20,
-          "correctionMinutes": 0.07695365173742842
+          "correctionMinutes": 0.09003638695172717
         },
         {
           "activityId": "sea-attraction-241",
@@ -4096,7 +4061,7 @@
           "samples": 10,
           "days": 5,
           "meanWait": 17,
-          "correctionMinutes": 1.4779683013749296
+          "correctionMinutes": 1.4517196374286594
         },
         {
           "activityId": "sea-attraction-241",
@@ -4104,7 +4069,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 8,
-          "correctionMinutes": -0.1321688807108692
+          "correctionMinutes": -0.2123424978581056
         },
         {
           "activityId": "sea-attraction-241",
@@ -4112,7 +4077,7 @@
           "samples": 5,
           "days": 3,
           "meanWait": 7,
-          "correctionMinutes": 0.4279906302159091
+          "correctionMinutes": 0.4957773608356456
         },
         {
           "activityId": "sea-attraction-242",
@@ -4120,7 +4085,7 @@
           "samples": 29,
           "days": 7,
           "meanWait": 34.1,
-          "correctionMinutes": -11.682905024125187
+          "correctionMinutes": -11.6712518850145
         },
         {
           "activityId": "sea-attraction-242",
@@ -4128,7 +4093,7 @@
           "samples": 16,
           "days": 7,
           "meanWait": 85,
-          "correctionMinutes": 4.326059808266702
+          "correctionMinutes": 4.38025315881332
         },
         {
           "activityId": "sea-attraction-242",
@@ -4136,7 +4101,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 95,
-          "correctionMinutes": 5.422503446208975
+          "correctionMinutes": 5.422802664545215
         },
         {
           "activityId": "sea-attraction-242",
@@ -4144,7 +4109,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 79,
-          "correctionMinutes": 0.6333726907006977
+          "correctionMinutes": 0.57684412667631
         },
         {
           "activityId": "sea-attraction-242",
@@ -4152,7 +4117,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 85.9,
-          "correctionMinutes": 3.227688241228155
+          "correctionMinutes": 3.2187665654601125
         },
         {
           "activityId": "sea-attraction-242",
@@ -4160,7 +4125,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 90,
-          "correctionMinutes": 4.309596751280236
+          "correctionMinutes": 4.313015875945132
         },
         {
           "activityId": "sea-attraction-242",
@@ -4168,7 +4133,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 106.4,
-          "correctionMinutes": 9.613479658743238
+          "correctionMinutes": 9.660416891475052
         },
         {
           "activityId": "sea-attraction-242",
@@ -4176,7 +4141,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 83,
-          "correctionMinutes": 2.7153032603164613
+          "correctionMinutes": 2.756483636140885
         },
         {
           "activityId": "sea-attraction-242",
@@ -4184,7 +4149,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 82.3,
-          "correctionMinutes": 5.4952853097669925
+          "correctionMinutes": 5.524173548100315
         },
         {
           "activityId": "sea-attraction-242",
@@ -4192,7 +4157,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 40,
-          "correctionMinutes": -5.287036641396432
+          "correctionMinutes": -5.334320945081535
         },
         {
           "activityId": "sea-attraction-242",
@@ -4200,7 +4165,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 28.3,
-          "correctionMinutes": -5.44043061632606
+          "correctionMinutes": -5.6323960202910595
         },
         {
           "activityId": "sea-attraction-242",
@@ -4208,7 +4173,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 28.1,
-          "correctionMinutes": -2.315130250477412
+          "correctionMinutes": -2.238081753034568
         },
         {
           "activityId": "sea-attraction-243",
@@ -4216,7 +4181,7 @@
           "samples": 35,
           "days": 7,
           "meanWait": 75.7,
-          "correctionMinutes": -6.9006060236499085
+          "correctionMinutes": -6.901412015725151
         },
         {
           "activityId": "sea-attraction-243",
@@ -4224,7 +4189,7 @@
           "samples": 18,
           "days": 7,
           "meanWait": 134.4,
-          "correctionMinutes": 13.28100053151224
+          "correctionMinutes": 13.30470686896115
         },
         {
           "activityId": "sea-attraction-243",
@@ -4232,7 +4197,7 @@
           "samples": 8,
           "days": 5,
           "meanWait": 97.5,
-          "correctionMinutes": -3.9481730930806505
+          "correctionMinutes": -3.949459965151975
         },
         {
           "activityId": "sea-attraction-243",
@@ -4240,7 +4205,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 118.8,
-          "correctionMinutes": 2.155564976749743
+          "correctionMinutes": 2.105467696477448
         },
         {
           "activityId": "sea-attraction-243",
@@ -4248,7 +4213,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 113.8,
-          "correctionMinutes": 1.006127014673591
+          "correctionMinutes": 0.9823840215944019
         },
         {
           "activityId": "sea-attraction-243",
@@ -4256,7 +4221,7 @@
           "samples": 7,
           "days": 6,
           "meanWait": 127.1,
-          "correctionMinutes": 3.2685580751131478
+          "correctionMinutes": 3.299814507532818
         },
         {
           "activityId": "sea-attraction-243",
@@ -4264,7 +4229,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 123.3,
-          "correctionMinutes": 1.8951742024986815
+          "correctionMinutes": 1.9375141290566178
         },
         {
           "activityId": "sea-attraction-243",
@@ -4272,7 +4237,7 @@
           "samples": 5,
           "days": 3,
           "meanWait": 126,
-          "correctionMinutes": 2.360935177142916
+          "correctionMinutes": 2.4028992057885903
         },
         {
           "activityId": "sea-attraction-243",
@@ -4280,7 +4245,7 @@
           "samples": 5,
           "days": 5,
           "meanWait": 132,
-          "correctionMinutes": 6.347204518420231
+          "correctionMinutes": 6.353612661467185
         },
         {
           "activityId": "sea-attraction-243",
@@ -4288,7 +4253,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 111,
-          "correctionMinutes": 6.5621827432004185
+          "correctionMinutes": 6.523839494401737
         },
         {
           "activityId": "sea-attraction-243",
@@ -4296,7 +4261,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 76.4,
-          "correctionMinutes": -1.0309556670566296
+          "correctionMinutes": -1.1959245530728044
         },
         {
           "activityId": "sea-attraction-243",
@@ -4304,7 +4269,7 @@
           "samples": 5,
           "days": 3,
           "meanWait": 32,
-          "correctionMinutes": -5.174068469739556
+          "correctionMinutes": -5.03228703544647
         },
         {
           "activityId": "sea-attraction-245",
@@ -4312,7 +4277,7 @@
           "samples": 8,
           "days": 7,
           "meanWait": 5.6,
-          "correctionMinutes": -0.21154908450172819
+          "correctionMinutes": -0.21588370530428905
         },
         {
           "activityId": "sea-attraction-245",
@@ -4320,7 +4285,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 11.7,
-          "correctionMinutes": 1.176714091105226
+          "correctionMinutes": 1.1759609040804848
         },
         {
           "activityId": "sea-attraction-245",
@@ -4328,7 +4293,7 @@
           "samples": 6,
           "days": 5,
           "meanWait": 5.8,
-          "correctionMinutes": -0.19960378337190338
+          "correctionMinutes": -0.20005148826336935
         },
         {
           "activityId": "sea-attraction-245",
@@ -4336,7 +4301,7 @@
           "samples": 5,
           "days": 4,
           "meanWait": 6,
-          "correctionMinutes": -0.2165524069355967
+          "correctionMinutes": -0.21236118394737574
         },
         {
           "activityId": "sea-attraction-246",
@@ -4344,7 +4309,7 @@
           "samples": 41,
           "days": 7,
           "meanWait": 16.8,
-          "correctionMinutes": 0.3559666632543569
+          "correctionMinutes": 0.40057196655454336
         },
         {
           "activityId": "sea-attraction-246",
@@ -4352,7 +4317,7 @@
           "samples": 25,
           "days": 7,
           "meanWait": 25.6,
-          "correctionMinutes": -0.2890851699332107
+          "correctionMinutes": -0.2393226464460654
         },
         {
           "activityId": "sea-attraction-246",
@@ -4360,7 +4325,7 @@
           "samples": 14,
           "days": 7,
           "meanWait": 22.5,
-          "correctionMinutes": -2.637441458764545
+          "correctionMinutes": -2.620818702772417
         },
         {
           "activityId": "sea-attraction-246",
@@ -4368,7 +4333,7 @@
           "samples": 14,
           "days": 7,
           "meanWait": 21.8,
-          "correctionMinutes": -2.821813661784775
+          "correctionMinutes": -2.829999829445764
         },
         {
           "activityId": "sea-attraction-246",
@@ -4376,7 +4341,7 @@
           "samples": 14,
           "days": 7,
           "meanWait": 26.4,
-          "correctionMinutes": -0.8652702081392496
+          "correctionMinutes": -0.8557873017348114
         },
         {
           "activityId": "sea-attraction-246",
@@ -4384,7 +4349,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 24.2,
-          "correctionMinutes": -1.917571234063948
+          "correctionMinutes": -1.8875384239575037
         },
         {
           "activityId": "sea-attraction-246",
@@ -4392,7 +4357,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 32.7,
-          "correctionMinutes": 1.0002683408454411
+          "correctionMinutes": 1.0397344910610862
         },
         {
           "activityId": "sea-attraction-246",
@@ -4400,7 +4365,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 27.7,
-          "correctionMinutes": -0.18485760225847309
+          "correctionMinutes": -0.1344427242321735
         },
         {
           "activityId": "sea-attraction-246",
@@ -4408,7 +4373,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 25.8,
-          "correctionMinutes": 0.6863252989246897
+          "correctionMinutes": 0.7224813235594365
         },
         {
           "activityId": "sea-attraction-246",
@@ -4416,7 +4381,7 @@
           "samples": 12,
           "days": 6,
           "meanWait": 18.8,
-          "correctionMinutes": 0.2325954315892781
+          "correctionMinutes": 0.2258572163401874
         },
         {
           "activityId": "sea-attraction-246",
@@ -4424,7 +4389,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 16.5,
-          "correctionMinutes": 1.9897999260910566
+          "correctionMinutes": 1.898623510875563
         },
         {
           "activityId": "sea-attraction-246",
@@ -4432,7 +4397,7 @@
           "samples": 14,
           "days": 7,
           "meanWait": 15.7,
-          "correctionMinutes": 3.640747392644416
+          "correctionMinutes": 3.3903191530466423
         },
         {
           "activityId": "sea-attraction-247",
@@ -4440,7 +4405,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 17.5,
-          "correctionMinutes": 2.314565930817866
+          "correctionMinutes": 2.281698578687239
         },
         {
           "activityId": "sea-attraction-247",
@@ -4448,7 +4413,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 20,
-          "correctionMinutes": -0.6682735156192636
+          "correctionMinutes": -0.678277038750858
         },
         {
           "activityId": "sea-attraction-247",
@@ -4456,7 +4421,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 27.5,
-          "correctionMinutes": -0.015391274257757104
+          "correctionMinutes": -0.03565219133064213
         },
         {
           "activityId": "sea-attraction-247",
@@ -4464,7 +4429,7 @@
           "samples": 6,
           "days": 3,
           "meanWait": 20,
-          "correctionMinutes": -1.7449045048535607
+          "correctionMinutes": -1.7642043870977866
         },
         {
           "activityId": "sea-attraction-247",
@@ -4472,7 +4437,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 22.1,
-          "correctionMinutes": 0.021893442083506978
+          "correctionMinutes": 0.0027124012383334126
         },
         {
           "activityId": "sea-attraction-247",
@@ -4480,7 +4445,7 @@
           "samples": 5,
           "days": 4,
           "meanWait": 17,
-          "correctionMinutes": -0.24863051685350598
+          "correctionMinutes": -0.2608671919183412
         },
         {
           "activityId": "sea-attraction-255",
@@ -4488,7 +4453,7 @@
           "samples": 28,
           "days": 7,
           "meanWait": 127.1,
-          "correctionMinutes": 6.928056605127971
+          "correctionMinutes": 7.0326166448998215
         },
         {
           "activityId": "sea-attraction-255",
@@ -4496,7 +4461,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 196.7,
-          "correctionMinutes": 16.972944408976886
+          "correctionMinutes": 17.0858637984147
         },
         {
           "activityId": "sea-attraction-255",
@@ -4504,7 +4469,7 @@
           "samples": 13,
           "days": 7,
           "meanWait": 187.7,
-          "correctionMinutes": 12.467283518154986
+          "correctionMinutes": 12.520952467268058
         },
         {
           "activityId": "sea-attraction-255",
@@ -4512,7 +4477,7 @@
           "samples": 9,
           "days": 7,
           "meanWait": 164.4,
-          "correctionMinutes": 2.915601543276337
+          "correctionMinutes": 2.9088803843831514
         },
         {
           "activityId": "sea-attraction-255",
@@ -4520,7 +4485,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 162.5,
-          "correctionMinutes": 2.226712757253501
+          "correctionMinutes": 2.238062838745882
         },
         {
           "activityId": "sea-attraction-255",
@@ -4528,7 +4493,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 170,
-          "correctionMinutes": 4.861788264034202
+          "correctionMinutes": 4.897729902810947
         },
         {
           "activityId": "sea-attraction-255",
@@ -4536,7 +4501,7 @@
           "samples": 9,
           "days": 5,
           "meanWait": 148.9,
-          "correctionMinutes": -0.8017642914195802
+          "correctionMinutes": -0.7617624272860037
         },
         {
           "activityId": "sea-attraction-255",
@@ -4544,7 +4509,7 @@
           "samples": 7,
           "days": 6,
           "meanWait": 154.3,
-          "correctionMinutes": 0.5009426349555739
+          "correctionMinutes": 0.6000128980992098
         },
         {
           "activityId": "sea-attraction-255",
@@ -4552,7 +4517,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 142.2,
-          "correctionMinutes": -0.08316070779867626
+          "correctionMinutes": -0.01909968838351139
         },
         {
           "activityId": "sea-attraction-255",
@@ -4560,7 +4525,7 @@
           "samples": 12,
           "days": 6,
           "meanWait": 106.7,
-          "correctionMinutes": -7.187483365435387
+          "correctionMinutes": -7.198767148992387
         },
         {
           "activityId": "sea-attraction-255",
@@ -4568,7 +4533,7 @@
           "samples": 11,
           "days": 6,
           "meanWait": 68.2,
-          "correctionMinutes": -12.203767738670171
+          "correctionMinutes": -12.427489115443967
         },
         {
           "activityId": "sea-attraction-255",
@@ -4576,7 +4541,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 32.9,
-          "correctionMinutes": -12.10104212368051
+          "correctionMinutes": -12.583822867812872
         },
         {
           "activityId": "sea-attraction-256",
@@ -4584,7 +4549,7 @@
           "samples": 38,
           "days": 7,
           "meanWait": 53.4,
-          "correctionMinutes": 0.6778771774461053
+          "correctionMinutes": 0.7112942238097832
         },
         {
           "activityId": "sea-attraction-256",
@@ -4592,7 +4557,7 @@
           "samples": 16,
           "days": 7,
           "meanWait": 108.8,
-          "correctionMinutes": 10.015436554022692
+          "correctionMinutes": 10.100017548718276
         },
         {
           "activityId": "sea-attraction-256",
@@ -4600,7 +4565,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 99,
-          "correctionMinutes": 2.7857090846512804
+          "correctionMinutes": 2.7837684002104472
         },
         {
           "activityId": "sea-attraction-256",
@@ -4608,7 +4573,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 78,
-          "correctionMinutes": -2.2844742170360486
+          "correctionMinutes": -2.373601641033325
         },
         {
           "activityId": "sea-attraction-256",
@@ -4616,7 +4581,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 87.5,
-          "correctionMinutes": 0.6251578596042098
+          "correctionMinutes": 0.5951834687735396
         },
         {
           "activityId": "sea-attraction-256",
@@ -4624,7 +4589,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 83.6,
-          "correctionMinutes": -1.521926843399601
+          "correctionMinutes": -1.5076543128544804
         },
         {
           "activityId": "sea-attraction-256",
@@ -4632,7 +4597,7 @@
           "samples": 9,
           "days": 5,
           "meanWait": 97.8,
-          "correctionMinutes": -0.24610923784334351
+          "correctionMinutes": -0.19533431436213605
         },
         {
           "activityId": "sea-attraction-256",
@@ -4640,7 +4605,7 @@
           "samples": 8,
           "days": 5,
           "meanWait": 81.3,
-          "correctionMinutes": -1.570839976576169
+          "correctionMinutes": -1.5134690608491435
         },
         {
           "activityId": "sea-attraction-256",
@@ -4648,7 +4613,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 78,
-          "correctionMinutes": -1.9918985746565387
+          "correctionMinutes": -1.9294507209974634
         },
         {
           "activityId": "sea-attraction-256",
@@ -4656,7 +4621,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 38.5,
-          "correctionMinutes": -6.605387232964545
+          "correctionMinutes": -6.632708195130482
         },
         {
           "activityId": "sea-attraction-256",
@@ -4664,7 +4629,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 28.5,
-          "correctionMinutes": -2.858739280688865
+          "correctionMinutes": -3.1374274106885993
         },
         {
           "activityId": "sea-attraction-256",
@@ -4672,7 +4637,7 @@
           "samples": 9,
           "days": 7,
           "meanWait": 19.4,
-          "correctionMinutes": -1.3311553178522615
+          "correctionMinutes": -1.3112361505118963
         },
         {
           "activityId": "sea-attraction-257",
@@ -4680,7 +4645,7 @@
           "samples": 29,
           "days": 6,
           "meanWait": 43.8,
-          "correctionMinutes": 0.01998915418299027
+          "correctionMinutes": 0.030201867298192516
         },
         {
           "activityId": "sea-attraction-257",
@@ -4688,7 +4653,7 @@
           "samples": 14,
           "days": 4,
           "meanWait": 98.6,
-          "correctionMinutes": 8.245133752074258
+          "correctionMinutes": 8.315988695012116
         },
         {
           "activityId": "sea-attraction-257",
@@ -4696,7 +4661,7 @@
           "samples": 12,
           "days": 7,
           "meanWait": 85.8,
-          "correctionMinutes": 1.3644438750398296
+          "correctionMinutes": 1.3666189211919275
         },
         {
           "activityId": "sea-attraction-257",
@@ -4704,7 +4669,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 76.4,
-          "correctionMinutes": -1.7152166859575706
+          "correctionMinutes": -1.7738710973401564
         },
         {
           "activityId": "sea-attraction-257",
@@ -4712,7 +4677,7 @@
           "samples": 9,
           "days": 5,
           "meanWait": 72.2,
-          "correctionMinutes": -1.8507922732895095
+          "correctionMinutes": -1.8680664542014889
         },
         {
           "activityId": "sea-attraction-257",
@@ -4720,7 +4685,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 75,
-          "correctionMinutes": -3.3509686407004984
+          "correctionMinutes": -3.2973152457052817
         },
         {
           "activityId": "sea-attraction-257",
@@ -4728,7 +4693,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 81.8,
-          "correctionMinutes": -1.5538214683034897
+          "correctionMinutes": -1.5078717718155048
         },
         {
           "activityId": "sea-attraction-257",
@@ -4736,7 +4701,7 @@
           "samples": 11,
           "days": 6,
           "meanWait": 52.7,
-          "correctionMinutes": -5.192081976840334
+          "correctionMinutes": -5.1239158360063595
         },
         {
           "activityId": "sea-attraction-257",
@@ -4744,7 +4709,7 @@
           "samples": 12,
           "days": 6,
           "meanWait": 42.5,
-          "correctionMinutes": -1.710719642846814
+          "correctionMinutes": -1.787826817475883
         },
         {
           "activityId": "sea-attraction-257",
@@ -4752,7 +4717,7 @@
           "samples": 10,
           "days": 7,
           "meanWait": 23,
-          "correctionMinutes": -1.7270049652836936
+          "correctionMinutes": -1.9392014134785478
         },
         {
           "activityId": "sea-attraction-257",
@@ -4760,7 +4725,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 23.3,
-          "correctionMinutes": 1.4900844921691052
+          "correctionMinutes": 1.516713270908975
         },
         {
           "activityId": "sea-attraction-258",
@@ -4768,7 +4733,7 @@
           "samples": 31,
           "days": 7,
           "meanWait": 30,
-          "correctionMinutes": 0.20513202181760964
+          "correctionMinutes": 0.20869657012311976
         },
         {
           "activityId": "sea-attraction-258",
@@ -4776,7 +4741,7 @@
           "samples": 9,
           "days": 7,
           "meanWait": 46.7,
-          "correctionMinutes": 2.695715557701269
+          "correctionMinutes": 2.7058059232502036
         },
         {
           "activityId": "sea-attraction-258",
@@ -4784,7 +4749,7 @@
           "samples": 8,
           "days": 6,
           "meanWait": 47.5,
-          "correctionMinutes": 1.265720173597547
+          "correctionMinutes": 1.2695526206883707
         },
         {
           "activityId": "sea-attraction-258",
@@ -4792,7 +4757,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 41.8,
-          "correctionMinutes": 0.5148137791351265
+          "correctionMinutes": 0.4833459620034436
         },
         {
           "activityId": "sea-attraction-258",
@@ -4800,7 +4765,7 @@
           "samples": 8,
           "days": 5,
           "meanWait": 39.4,
-          "correctionMinutes": 0.0026524119653405114
+          "correctionMinutes": -0.0019127726366904138
         },
         {
           "activityId": "sea-attraction-258",
@@ -4808,7 +4773,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 42,
-          "correctionMinutes": 0.21232294986364195
+          "correctionMinutes": 0.20855697124068584
         },
         {
           "activityId": "sea-attraction-258",
@@ -4816,7 +4781,7 @@
           "samples": 9,
           "days": 6,
           "meanWait": 48.3,
-          "correctionMinutes": 1.0964631541637884
+          "correctionMinutes": 1.1197376108832802
         },
         {
           "activityId": "sea-attraction-258",
@@ -4824,7 +4789,7 @@
           "samples": 11,
           "days": 7,
           "meanWait": 40.5,
-          "correctionMinutes": -0.05850860658883532
+          "correctionMinutes": -0.03145275907658262
         },
         {
           "activityId": "sea-attraction-258",
@@ -4832,7 +4797,7 @@
           "samples": 7,
           "days": 5,
           "meanWait": 25.7,
-          "correctionMinutes": -2.180474268030277
+          "correctionMinutes": -2.1845557423924395
         },
         {
           "activityId": "sea-attraction-258",
@@ -4840,7 +4805,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 25,
-          "correctionMinutes": -1.0623603080667745
+          "correctionMinutes": -1.079520913892892
         },
         {
           "activityId": "sea-attraction-258",
@@ -4848,7 +4813,7 @@
           "samples": 10,
           "days": 6,
           "meanWait": 24,
-          "correctionMinutes": 0.04948009316790826
+          "correctionMinutes": -0.03430892039225171
         },
         {
           "activityId": "sea-attraction-258",
@@ -4856,7 +4821,7 @@
           "samples": 6,
           "days": 4,
           "meanWait": 21.7,
-          "correctionMinutes": 0.38429859820453405
+          "correctionMinutes": 0.4480885670514302
         }
       ],
       "correlations": {
@@ -4950,18 +4915,10 @@
           {
             "key": "rain",
             "label": "雨",
-            "samples": 583,
+            "samples": 606,
             "days": 2,
-            "meanWait": 44.4,
-            "meanRatio": 0.736
-          },
-          {
-            "key": "unknown",
-            "label": "不明",
-            "samples": 23,
-            "days": 1,
-            "meanWait": null,
-            "meanRatio": null
+            "meanWait": 43,
+            "meanRatio": 0.714
           }
         ],
         "holiday": [
@@ -4993,70 +4950,35 @@
           }
         ],
         "temperature": {
-          "samples": 2663,
+          "samples": 2686,
           "days": 7,
-          "r": 0.283
+          "r": 0.298
         },
         "precipitation": {
-          "samples": 2663,
+          "samples": 2686,
           "days": 7,
-          "r": -0.165
+          "r": -0.187
         },
         "note": "記録内の相関の傾向です。平均は5件以上・2日以上、数値の相関係数は20件以上・3日以上で表示します。施設ごとの基準値でも補正しますが因果関係は表しません。"
       },
       "bootstrap": {
         "provider": "themeparks-wiki",
-        "fromDate": "2026-11-11",
-        "throughDate": "2026-11-17",
-        "partialThroughDate": "2026-11-17",
-        "attemptedAt": "2026-11-17T13:13:22.467Z",
-        "requestedDays": 7,
+        "accessMode": "anonymous",
+        "attemptedAt": "2026-11-17T14:23:33.926Z",
+        "requestedDays": null,
         "observedDays": 7,
+        "historyRequestsSelected": 14,
+        "historyRequestsPending": 0,
+        "coverage": {
+          "parkId": "sea",
+          "accessibleFrom": "2026-11-11",
+          "throughDate": "2026-11-17",
+          "archiveFrom": "2021-07-04",
+          "archiveRecordedThrough": "2026-11-15"
+        },
         "weatherProvenance": "past-weather-forecast",
-        "requests": [
-          {
-            "parkId": "sea",
-            "date": "2026-11-11",
-            "samples": 352,
-            "status": "ok"
-          },
-          {
-            "parkId": "sea",
-            "date": "2026-11-12",
-            "samples": 390,
-            "status": "ok"
-          },
-          {
-            "parkId": "sea",
-            "date": "2026-11-13",
-            "samples": 413,
-            "status": "ok"
-          },
-          {
-            "parkId": "sea",
-            "date": "2026-11-14",
-            "samples": 436,
-            "status": "ok"
-          },
-          {
-            "parkId": "sea",
-            "date": "2026-11-15",
-            "samples": 361,
-            "status": "ok"
-          },
-          {
-            "parkId": "sea",
-            "date": "2026-11-16",
-            "samples": 357,
-            "status": "ok"
-          },
-          {
-            "parkId": "sea",
-            "date": "2026-11-17",
-            "samples": 354,
-            "status": "ok"
-          }
-        ]
+        "failedDays": 0,
+        "privateCacheRetained": true
       }
     }
   ]
