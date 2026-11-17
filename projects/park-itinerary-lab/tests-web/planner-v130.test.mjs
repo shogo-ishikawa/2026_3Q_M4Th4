@@ -55,3 +55,12 @@ test('local early-opening records retain rising waits within the same half hour'
  assert.equal(mergeObservations([a],[b]).length,2);
  assert.equal(mergeObservations([{...a,time:695}],[{...b,time:705}]).length,1);
 });
+
+test('learned opening-period features use the selected date opening time',()=>{
+ const models=JSON.parse(fs.readFileSync(new URL('../web/data/wait-model.json',import.meta.url)));
+ const catalogue=JSON.parse(fs.readFileSync(new URL('../web/data/parks.json',import.meta.url)));
+ const model=models.parks.find(m=>m.parkId==='land'),base=catalogue.parks[0].activities.find(a=>a.id===model.activityIds[0]);
+ const shifted={...base,dailySchedules:{'2026-11-18':{closed:false,windows:[[600,1260]]}}};
+ const explicit={...base,windows:[[600,1260]],dailySchedules:undefined};
+ const s=options({waitModel:model});assert.deepEqual(estimateWait(shifted,610,s),estimateWait(explicit,610,s));
+});

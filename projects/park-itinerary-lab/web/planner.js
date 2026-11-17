@@ -99,7 +99,8 @@ export function estimateWait(activity, start, settings, history = []) {
   };
   const live = liveWaitFor(activity, start, settings, { now: settings.waitAsOf ?? Date.now() });
   if (live?.isOpen) return live;
-  const prediction = predictModelWait(activity, start, settings, settings.waitModel);
+  const predictionActivity = activity.dailySchedules?.[settings.date]?.windows ? {...activity,windows:activity.dailySchedules[settings.date].windows} : activity;
+  const prediction = predictModelWait(predictionActivity, start, settings, settings.waitModel);
   if (prediction) return prediction;
   const measured = historicalWait(activity, start, settings, history);
   if (measured) return measured;
