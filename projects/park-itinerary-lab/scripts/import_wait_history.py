@@ -95,6 +95,12 @@ def normalise_rows(rows, catalogue, before_date):
             value = number(row.get(field), *limits)
             if value is not None:
                 item[field] = value
+        if isinstance(row.get("weatherSource"),str):item["weatherSource"]=row["weatherSource"][:120]
+        if isinstance(row.get("observedAt"),str):
+            try:
+                observed=dt.datetime.fromisoformat(row["observedAt"].replace("Z","+00:00"))
+                if observed.tzinfo:item["observedAt"]=observed.isoformat()
+            except ValueError:pass
         bucket = 10 if opening <= minute < opening + 90 else 30
         key = (date, activity_id, bucket, minute // bucket)
         dedup[key] = item

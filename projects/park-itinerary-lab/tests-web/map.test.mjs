@@ -93,3 +93,13 @@ test('拡大図をドラッグした後のクリックは希望の追加と取�
   container.svg.dispatch('pointerup',{pointerId:1});
   container.markers[0].dispatch('click'); assert.equal(selected,null);
 });
+
+
+test('計画後は予定のピンへ絞り込み、利用者が戻した全件表示も保つ',()=>{
+ const container=new Container();const settings={selectedIds:['castle-ride'],plan:{visits:[{id:'castle-ride'}]}};
+ renderParkMap(container,park());assert.equal(container.svg.dataset.onlySelected,'false');
+ renderParkMap(container,park(),settings);assert.equal(container.svg.dataset.onlySelected,'true');
+ assert.match(container.innerHTML,/選んで希望から外す/);
+ container.selected.checked=false;container.selected.dispatch('change');
+ renderParkMap(container,park(),settings);assert.equal(container.svg.dataset.onlySelected,'false');
+});

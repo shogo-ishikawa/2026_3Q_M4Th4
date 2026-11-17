@@ -72,9 +72,11 @@ jobs:
               if not (data/filename).exists():shutil.copyfile(bundled,data/filename)
           PY
       - name: Learn from permitted history without publishing private raw data
+        env:
+          THEMEPARKS_API_KEY: ${{ secrets.THEMEPARKS_API_KEY }}
         if: steps.collect.outcome == 'success' && (github.event_name != 'schedule' || github.event.schedule == '55 12 * * *')
         run: |
-          python projects/park-itinerary-lab/scripts/bootstrap_wait_history.py --catalogue data-publish/catalogue.json --calendar data-publish/calendar.json --existing-observations "$RUNNER_TEMP/park-training/queue-observations.json" --output-model data-publish/wait-model.json --fallback-model "$RUNNER_TEMP/park-training/fallback-model.json" --private-dir "$RUNNER_TEMP/park-training/private"
+          python projects/park-itinerary-lab/scripts/bootstrap_wait_history.py --catalogue data-publish/catalogue.json --calendar data-publish/calendar.json --existing-observations "$RUNNER_TEMP/park-training/queue-observations.json" --output-model data-publish/wait-model.json --fallback-model "$RUNNER_TEMP/park-training/fallback-model.json" --private-dir "$RUNNER_TEMP/park-training/private" --max-history-requests 1000
       - name: Remove private training files
         if: always()
         run: python -c 'import os,pathlib,shutil; shutil.rmtree(pathlib.Path(os.environ["RUNNER_TEMP"])/"park-training",ignore_errors=True)'

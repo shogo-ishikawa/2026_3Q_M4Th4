@@ -1,6 +1,9 @@
 import {validateWaitModel} from './wait-model.js';
 /** Portable schedules: the shared link contains preferences, never a browser's saved history. */
 const STORAGE_KEY = 'park-itinerary-lab:v1';
+const PLANS_KEY = 'park-itinerary-lab:plans:v1';
+const LEGACY_PLAN_ID = 'legacy-v1';
+export const MAX_SAVED_PLANS = 20;
 const MAX_SHARED_LENGTH = 14000;
 const MAX_FILE_LENGTH = 4_000_000;
 const MAX_ACTIVITIES = 400;
@@ -16,6 +19,7 @@ const id = value => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,
 const optionalNumber = (object, key, min, max, whole = false) => object[key] === undefined || (whole ? integer : finite)(object[key], min, max);
 const validTime = value => integer(value, 0, 1440);
 const validWindow = pair => Array.isArray(pair) && pair.length === 2 && validTime(pair[0]) && validTime(pair[1]) && pair[0] < pair[1];
+const autoBreakId = value => typeof value==='string' && value.length<=220 && /^[a-zA-Z0-9][a-zA-Z0-9_.:-]*:[a-zA-Z0-9_.:-]+$/.test(value);
 
 function safeTree(value, depth = 0) {
   if (depth > 16) fail('データの入れ子が深すぎます。');
@@ -109,6 +113,14 @@ export function validateSavedState(state) {
   if (settings.searchMethod !== undefined && !['beam', 'multistart', 'portfolio'].includes(settings.searchMethod)) fail('探索方法を選び直してください。');
   if (settings.weatherMode !== undefined && !['auto', 'manual'].includes(settings.weatherMode)) fail('天気の取得方法を選び直してください。');
   if (settings.weatherNotice !== undefined && !text(settings.weatherNotice, 1000)) fail('天気の取得結果を確認してください。');
+  if (settings.liveNotice !== undefined && !text(settings.liveNotice,1500)) fail('当日の情報の取得結果を確認してください。');
+  if (settings.walkCrowdMode !== undefined && !['estimate','off'].includes(settings.walkCrowdMode)) fail('混雑による移動時間の設定を確認してください。');
+  if (settings.waitAsOf !== undefined && !integer(settings.waitAsOf,0,253402300799999)) fail('待ち時間を確認した時刻を確認してください。');
+  if (settings.excludedAutoBreaks !== undefined && (!Array.isArray(settings.excludedAutoBreaks)||settings.excludedAutoBreaks.length>60||new Set(settings.excludedAutoBreaks).size!==settings.excludedAutoBreaks.length||settings.excludedAutoBreaks.some(value=>!autoBreakId(value)))) fail('取り除いた自動休憩の一覧を確認してください。');
+  if (settings.operationalHolds!==undefined&&settings.operationalHolds!==null) {
+    const holds=settings.operationalHolds,today=new Date(Date.now()+9*3600000).toISOString().slice(0,10);
+    if(!plain(holds)||!validDate(holds.date)||holds.date!==settings.date||holds.date>today||!validTimestamp(holds.observedAt)||Date.parse(holds.observedAt)>Date.now()+60000||new Date(Date.parse(holds.observedAt)+9*3600000).toISOString().slice(0,10)!==holds.date||!Array.isArray(holds.activityIds)||holds.activityIds.length>MAX_ACTIVITIES||new Set(holds.activityIds).size!==holds.activityIds.length||holds.activityIds.some(value=>!id(value)||!value.startsWith(state.parkId+'-')))fail('運営停止の記録の日付・パーク・確認時刻を確認してください。');
+  }
   if (settings.weatherForecast !== undefined && settings.weatherForecast !== null) {
     const forecast = settings.weatherForecast;
     if (!plain(forecast) || !validDate(forecast.date) || !['sun','cloud','rain'].includes(forecast.weather) || !Array.isArray(forecast.hours) || forecast.hours.length > 400) fail('天気予報の日付と時間帯を確認してください。');
@@ -129,10 +141,11 @@ export function validateSavedState(state) {
   if (settings.liveMode !== undefined && !['auto', 'off'].includes(settings.liveMode)) fail('当日の待ち時間の利用方法を選び直してください。');
   if (settings.liveData !== undefined && settings.liveData !== null) {
     const live = settings.liveData;
-    if (!plain(live) || live.schemaVersion !== 1 || live.parkId !== state.parkId || live.provider !== 'queue-times' || !validTimestamp(live.fetchedAt) || !Array.isArray(live.rides) || live.rides.length > MAX_ACTIVITIES || !Array.isArray(live.unmatched) || live.unmatched.length > MAX_ACTIVITIES) fail('当日の待ち時間データの形式と取得時刻を確認してください。');
+    if (!plain(live) || live.schemaVersion !== 1 || live.parkId !== state.parkId || !['queue-times','themeparks-wiki'].includes(live.provider) || !validTimestamp(live.fetchedAt) || !Array.isArray(live.rides) || live.rides.length > MAX_ACTIVITIES || !Array.isArray(live.unmatched) || live.unmatched.length > MAX_ACTIVITIES) fail('当日の待ち時間データの形式と取得時刻を確認してください。');
     const rideIds = new Set();
     for (const ride of live.rides) {
-      if (!plain(ride) || !id(ride.activityId) || rideIds.has(ride.activityId) || !integer(ride.providerId, 0, 2147483647) || !text(ride.name) || !finite(ride.wait, 0, 600) || typeof ride.isOpen !== 'boolean' || !validTimestamp(ride.updatedAt)) fail('取得した施設名・待ち時間・更新時刻を確認してください。');
+      if (!plain(ride) || !id(ride.activityId) || rideIds.has(ride.activityId) || !integer(ride.providerId, 0, 2147483647) || !text(ride.name) || !(finite(ride.wait, 0, 600)||(live.provider==='themeparks-wiki'&&ride.wait===null)) || typeof ride.isOpen !== 'boolean' || !validTimestamp(ride.updatedAt)) fail('取得した施設名・待ち時間・更新時刻を確認してください。');
+      if ((ride.changedAt!==undefined&&!validTimestamp(ride.changedAt))||(ride.status!==undefined&&!['OPERATING','DOWN','CLOSED','REFURBISHMENT'].includes(ride.status))) fail('取得した施設の稼働状況と変更時刻を確認してください。');
       rideIds.add(ride.activityId);
     }
     if (live.unmatched.some(ride => !plain(ride) || !integer(ride.providerId, 0, 2147483647) || !text(ride.name))) fail('施設を対応付けられなかった待ち時間データを確認してください。');
@@ -140,7 +153,7 @@ export function validateSavedState(state) {
   if (settings.waitModel !== undefined && settings.waitModel !== null) {
     const model = settings.waitModel;
     if (!validateWaitModel(model) || !plain(model) || ![1, 2].includes(model.schemaVersion) || model.method !== 'ridge-regression' || model.parkId !== state.parkId || !['trained', 'insufficient-data'].includes(model.status) || typeof model.usable !== 'boolean' || !Array.isArray(model.activityIds) || model.activityIds.length > MAX_ACTIVITIES || new Set(model.activityIds).size !== model.activityIds.length || model.activityIds.some(value => !id(value)) || !Array.isArray(model.coefficients) || model.coefficients.length > MAX_ACTIVITIES + 100 || model.coefficients.some(value => !finite(value, -Number.MAX_VALUE, Number.MAX_VALUE))) fail('待ち時間の予測モデルの形式を確認してください。');
-    if (!integer(model.samples, 0, 50000) || !integer(model.days, 0, 50000) || !validTimestamp(model.trainedAt) || !validDate(model.beforeDate)) fail('予測モデルの学習期間と件数を確認してください。');
+    if (!integer(model.samples, 0, Number.MAX_SAFE_INTEGER) || !optionalNumber(model,'availableSamples',model.samples,Number.MAX_SAFE_INTEGER,true) || !integer(model.days, 0, 100000) || !validTimestamp(model.trainedAt) || !validDate(model.beforeDate)) fail('予測モデルの学習期間と件数を確認してください。');
     if (model.status === 'trained' && (model.coefficients.length !== model.activityIds.length + (model.schemaVersion === 2 ? model.featureNames.length : 7) || !validDate(model.firstDate) || !validDate(model.lastDate))) fail('学習済みモデルの係数と対象期間を確認してください。');
   }
   if (settings.fixedBreaks !== undefined) {
@@ -179,6 +192,9 @@ export function validateSavedState(state) {
       if (row.path !== undefined && (!Array.isArray(row.path) || row.path.length > 1000 || row.path.some(value => !id(value)))) fail('予定表の徒歩ルートを確認してください。');
       if ((row.kind || row.type) === 'location' && (row.start !== row.end || !id(row.node))) fail('現在地の変更は同じ時刻の地点として指定してください。');
       if (row.fixedBreakId !== undefined && (!id(row.fixedBreakId) || (row.kind || row.type) !== 'rest' || !id(row.node))) fail('指定した休憩のIDと地点を確認してください。');
+      if (row.autoBreakId!==undefined&&(!autoBreakId(row.autoBreakId)||(row.kind||row.type)!=='rest')) fail('自動休憩のIDを確認してください。');
+      if ((row.walkingFactor!==undefined&&(!finite(row.walkingFactor,1,3)||(row.kind||row.type)!=='walk'))||(row.walkingSource!==undefined&&(row.walkingSource!=='congestion-estimate'||(row.kind||row.type)!=='walk'))) fail('混雑を考慮した徒歩時間を確認してください。');
+      if (row.walkSpeed!==undefined&&(!finite(row.walkSpeed,10,150)||(row.kind||row.type)!=='walk')) fail('徒歩移動を計画したときの速さを確認してください。');
     }
     if (state.result.visits !== undefined && (!Array.isArray(state.result.visits) || state.result.visits.length > MAX_ACTIVITIES || state.result.visits.some(visit => !plain(visit) || !id(visit.activityId || visit.id) || !id(visit.node) || (visit.endNode !== undefined && !id(visit.endNode)) || !validTime(visit.start) || !validTime(visit.end) || visit.start > visit.end))) fail('体験した施設と地点を確認してください。');
   }
@@ -188,7 +204,7 @@ export function validateSavedState(state) {
 
 export function saveLocal(state) {
   validateSavedState(state);
-  const encoded = JSON.stringify({format:'park-itinerary-lab', version:1, ...state});
+  const encoded = JSON.stringify({format:'park-itinerary-lab', version:1, ...exportablePlan(state,false)});
   if (encoded.length > MAX_FILE_LENGTH) fail('保存するデータが大きすぎます。履歴の期間を短くしてください。');
   try { localStorage.setItem(STORAGE_KEY, encoded); } catch { throw new Error('この端末へ保存できません。JSONか予定表HTMLで保存してください。'); }
   return true;
@@ -198,6 +214,118 @@ export function loadLocal() {
   try { raw = localStorage.getItem(STORAGE_KEY); } catch { throw new Error('このブラウザでは端末への保存を利用できません。JSONを読み込んでください。'); }
   if (!raw) return null;
   try { return parsePlanJson(raw); } catch { throw new Error('端末に保存されたデータを開けません。保存済みのJSONを読み込んでください。'); }
+}
+
+function planStore(options) {
+  try {
+    const storage=options.storage===undefined?globalThis.localStorage:options.storage;
+    if(!storage||typeof storage.getItem!=='function'||typeof storage.setItem!=='function')throw new Error();
+    return storage;
+  } catch {throw new Error('このブラウザでは端末への保存を利用できません。JSONで保存してください。');}
+}
+function planName(value) {
+  if(typeof value!=='string')fail('計画の名前を入力してください。');
+  const name=value.trim().normalize('NFC');
+  if(!name||name.length>80||/[\u0000-\u001f\u007f]/.test(name))fail('計画の名前は改行を含めず1〜80文字で入力してください。');
+  return name;
+}
+function planStamp(now) {
+  const date=new Date(now===undefined?Date.now():now);
+  if(!Number.isFinite(date.getTime()))fail('保存日時を確認してください。');
+  return date.toISOString();
+}
+function planSummary(plan) {
+  return {id:plan.id,name:plan.name,createdAt:plan.createdAt,updatedAt:plan.updatedAt,parkId:plan.state.parkId,date:plan.state.settings.date,hasSchedule:!!plan.state.result?.rows?.length,legacy:plan.legacy===true};
+}
+const TRANSIENT_PLAN_FIELDS=new Set(['liveData','liveSnapshot','liveNotice','waitAsOf','history','waitModel','calendarData']);
+function compactSavedPlan(value) {
+  if(Array.isArray(value))return value.map(compactSavedPlan);
+  if(plain(value))return Object.fromEntries(Object.entries(value).filter(([key])=>!TRANSIENT_PLAN_FIELDS.has(key)).map(([key,item])=>[key,compactSavedPlan(item)]));
+  return value;
+}
+function readPlanLibrary(storage) {
+  let raw,legacy;
+  try {raw=storage.getItem(PLANS_KEY);if(raw===null||raw===undefined)legacy=storage.getItem(STORAGE_KEY);}
+  catch {throw new Error('保存した計画を読み込めません。このブラウザの保存設定を確認してください。');}
+  if(raw===null||raw===undefined) {
+    if(!legacy)return {format:'park-itinerary-lab-library',version:1,plans:[]};
+    try {return {format:'park-itinerary-lab-library',version:1,plans:[{id:LEGACY_PLAN_ID,name:'以前の計画',createdAt:null,updatedAt:null,legacy:true,state:parsePlanJson(legacy)}]};}
+    catch {throw new Error('以前に保存した計画を開けません。保存済みのJSONを読み込んでください。');}
+  }
+  try {
+    if(!text(raw,MAX_FILE_LENGTH))throw new Error();
+    const library=JSON.parse(raw);safeTree(library,-3);
+    if(!plain(library)||library.format!=='park-itinerary-lab-library'||library.version!==1||!Array.isArray(library.plans)||library.plans.length>MAX_SAVED_PLANS)throw new Error();
+    const ids=new Set();
+    for(const plan of library.plans) {
+      if(!plain(plan)||!id(plan.id)||ids.has(plan.id)||planName(plan.name)!==plan.name||!validTimestamp(plan.createdAt)||!validTimestamp(plan.updatedAt)||Date.parse(plan.createdAt)>Date.parse(plan.updatedAt)||(plan.legacy!==undefined&&typeof plan.legacy!=='boolean')||(plan.legacy===true&&plan.id!==LEGACY_PLAN_ID))throw new Error();
+      ids.add(plan.id);validateSavedState(plan.state);
+    }
+    return library;
+  } catch {throw new Error('保存した計画の一覧を開けません。元の保存データを保持しています。JSONの控えを読み込んでください。');}
+}
+function writePlanLibrary(storage,library,stamp) {
+  // The legacy key remains untouched. A library, including an empty one, records its import once.
+  for(const plan of library.plans) {
+    if(plan.createdAt===null){plan.createdAt=stamp;plan.updatedAt=stamp;}
+    plan.state=compactSavedPlan(plan.state);
+  }
+  const encoded=JSON.stringify(library);
+  if(encoded.length>MAX_FILE_LENGTH)throw new Error('計画の保存容量を超えています。不要な計画を削除するかJSONで保存してください。');
+  // One atomic setItem keeps every previous plan intact if the browser refuses the write.
+  try {storage.setItem(PLANS_KEY,encoded);}
+  catch {throw new Error('この端末へ保存できません。前の計画は保持しています。不要な計画を削除するかJSONで保存してください。');}
+}
+function newPlanId(plans) {
+  const used=new Set(plans.map(plan=>plan.id));
+  for(let attempt=0;attempt<100;attempt++) {
+    const token=globalThis.crypto?.randomUUID?.()||`${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${attempt}`;
+    const next=`plan-${token}`;if(!used.has(next))return next;
+  }
+  throw new Error('新しい計画のIDを作れませんでした。もう一度保存してください。');
+}
+
+/** List named plans without rewriting stored data or deleting a previous single-plan save. */
+export function listSavedPlans(options={}) {
+  return readPlanLibrary(planStore(options)).plans.map(planSummary).sort((a,b)=>(Date.parse(b.updatedAt)||0)-(Date.parse(a.updatedAt)||0)||a.id.localeCompare(b.id));
+}
+
+/** A name never selects an existing plan: overwriting requires its explicit stable ID. */
+export function saveNamedPlan(name,state,options={}) {
+  validateSavedState(state);
+  const cleanName=planName(name),copy=parsePlanJson(JSON.stringify(compactSavedPlan(state)));
+  const storage=planStore(options),library=readPlanLibrary(storage),stamp=planStamp(options.now);
+  let plan;
+  if(options.id!==undefined) {
+    if(!id(options.id))fail('保存する計画のIDを確認してください。');
+    plan=library.plans.find(item=>item.id===options.id);
+    if(!plan)throw new Error('更新する計画が見つかりません。新しい計画として保存してください。');
+    plan.name=cleanName;plan.state=copy;plan.updatedAt=new Date(Math.max(Date.parse(stamp),Date.parse(plan.updatedAt)||0)).toISOString();
+  } else {
+    if(library.plans.length>=MAX_SAVED_PLANS)throw new Error(`計画は${MAX_SAVED_PLANS}件まで保存できます。不要な計画を削除してから保存してください。`);
+    plan={id:newPlanId(library.plans),name:cleanName,createdAt:stamp,updatedAt:stamp,state:copy};library.plans.push(plan);
+  }
+  writePlanLibrary(storage,library,stamp);return planSummary(plan);
+}
+export function loadSavedPlan(planId,options={}) {
+  if(!id(planId))fail('開く計画のIDを確認してください。');
+  const plan=readPlanLibrary(planStore(options)).plans.find(item=>item.id===planId);
+  if(!plan)throw new Error('指定された計画が見つかりません。保存した計画の一覧を開き直してください。');
+  return compactSavedPlan(plan.state);
+}
+export function renameSavedPlan(planId,name,options={}) {
+  if(!id(planId))fail('名前を変更する計画のIDを確認してください。');
+  const cleanName=planName(name),storage=planStore(options),library=readPlanLibrary(storage),stamp=planStamp(options.now);
+  const plan=library.plans.find(item=>item.id===planId);
+  if(!plan)throw new Error('名前を変更する計画が見つかりません。');
+  plan.name=cleanName;plan.updatedAt=new Date(Math.max(Date.parse(stamp),Date.parse(plan.updatedAt)||0)).toISOString();
+  writePlanLibrary(storage,library,stamp);return planSummary(plan);
+}
+export function deleteSavedPlan(planId,options={}) {
+  if(!id(planId))fail('削除する計画のIDを確認してください。');
+  const storage=planStore(options),library=readPlanLibrary(storage),index=library.plans.findIndex(item=>item.id===planId);
+  if(index<0)return false;
+  library.plans.splice(index,1);writePlanLibrary(storage,library,planStamp(options.now));return true;
 }
 export function parsePlanJson(raw) {
   if (!text(raw, MAX_FILE_LENGTH)) fail('JSONファイルが大きすぎます。');
@@ -223,7 +351,7 @@ export function createShareUrl(state, baseUrl = location.href) {
   validateSavedState(state);
   const url = new URL(baseUrl);
   if (!['https:', 'http:'].includes(url.protocol)) fail('共有用のWebページを開いてください。');
-  const {history, initialPlan, waitModel, liveData, liveSnapshot, calendarData, weatherForecast, weatherNotice, ...portableSettings} = state.settings;
+  const {history, initialPlan, waitModel, liveData, liveSnapshot, liveNotice, waitAsOf, operationalHolds, calendarData, weatherForecast, weatherNotice, ...portableSettings} = state.settings;
   const encoded = encodeBase64(JSON.stringify({v:1, parkId:state.parkId, settings:portableSettings}));
   if (encoded.length > MAX_SHARED_LENGTH) fail('希望が多いためリンクが長くなります。JSONで共有してください。');
   url.hash = `plan=${encoded}`;
@@ -313,7 +441,12 @@ function downloadBlob(contents, type, filename) {
   anchor.href = url; anchor.download = filename; document.body.append(anchor); anchor.click(); anchor.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-export function buildPlanJson(state) { validateSavedState(state); return JSON.stringify({format:'park-itinerary-lab', version:1, ...state}, null, 2); }
+function exportablePlan(value,stripHolds=true) {
+  if(Array.isArray(value))return value.map(item=>exportablePlan(item,stripHolds));
+  if(plain(value))return Object.fromEntries(Object.entries(value).filter(([key,item])=>!(stripHolds&&key==='operationalHolds')&&!(['liveData','liveSnapshot'].includes(key)&&item?.provider==='themeparks-wiki')).map(([key,item])=>[key,exportablePlan(item,stripHolds)]));
+  return value;
+}
+export function buildPlanJson(state) { validateSavedState(state); return JSON.stringify({format:'park-itinerary-lab', version:1, ...exportablePlan(state)}, null, 2); }
 export function downloadPlanJson(state) { downloadBlob(buildPlanJson(state), 'application/json;charset=utf-8', `ParkItinerary_${state.parkId}_${state.settings.date}.json`); }
 export function buildScheduleCsv(plan, park) {
   const rows = checkedRows(plan);

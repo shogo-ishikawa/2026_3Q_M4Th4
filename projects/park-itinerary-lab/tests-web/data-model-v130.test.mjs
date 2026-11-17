@@ -26,13 +26,14 @@ test('schema2 fits independent event effects and publishes protected multi-day p
  assert.ok(a.minutes>b.minutes+10);assert.equal(predictModelWait(park.activities[0],600,{...base,date:model.lastDate},model),null);
 });
 test('ten-minute opening samples survive and missing values never become artificial zero waits',()=>{
- const records=[{date:'2026-11-01',activityId:'land-a',time:543,wait:5},{date:'2026-11-01',activityId:'land-a',time:569,wait:40},...[null,'',false].map(wait=>({date:'2026-11-02',activityId:'land-a',time:600,wait}))];
+ const records=[{date:'2026-11-01',activityId:'land-a',time:543,wait:5},{date:'2026-11-01',activityId:'land-a',time:569,wait:40},...[null,'',false].map(wait=>({date:'2026-11-02',activityId:'land-a',time:600,wait})),...['DOWN','CLOSED','REFURBISHMENT'].map(status=>({date:'2026-11-02',activityId:'land-a',time:600,wait:20,status}))];
  const model=trainWaitModel(records,park,{beforeDate:'2026-11-17'});assert.equal(model.samples,2);assert.equal(model.status,'insufficient-data');assert.equal(model.correlations.weekday[0].meanWait,null);
 });
 test('large datasets retain early months instead of discarding all but the newest records',()=>{
  const activities=Array.from({length:40},(_,i)=>({id:'land-'+i,baseWait:40,windows:[[540,1260]]})),p={id:'land',activities,events:[]},records=[];
  for(let day=0;day<100;day++){const date=new Date(Date.UTC(2025,0,1+day)).toISOString().slice(0,10);for(const activity of activities)for(let hour=6;hour<21;hour++)records.push({date,activityId:activity.id,time:hour*60,wait:20,weather:'sun'});}
  const model=trainWaitModel(records,p,{beforeDate:'2025-05-01'});assert.equal(model.availableSamples,60000);assert.equal(model.samples,50000);assert.equal(model.firstDate,'2025-01-01');assert.equal(model.lastDate,'2025-04-10');assert.equal(model.days,100);assert.equal(model.sampling,'calendar-balanced');assert.equal(validateWaitModel(model),true);
+ const all=trainWaitModel(records,p,{beforeDate:'2025-05-01',sampleLimit:null});assert.equal(all.samples,60000);assert.equal(all.availableSamples,60000);assert.equal(all.sampling,'all-eligible');assert.equal(all.days,100);assert.equal(validateWaitModel(all),true);
 });
 test('legacy v1 coefficients still predict and malformed schema2 feature order is rejected',()=>{
  const old={schemaVersion:1,method:'ridge-regression',parkId:'land',status:'trained',usable:true,activityIds:['land-a'],coefficients:[.5,0,0,0,0,0,0,0],days:7,samples:120,lastDate:'2026-11-16',validation:{method:'later-days-holdout',trainThrough:'2026-11-14',testFrom:'2026-11-15',testThrough:'2026-11-16',testSamples:20,modelMae:2,baselineMae:8}};
