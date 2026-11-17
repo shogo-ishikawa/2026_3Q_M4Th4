@@ -1,0 +1,1779 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#112c31">
+  <meta name="description" content="嵐で消えた灯台へ手紙を届ける2Dアクション。三つの章と寄り道を進む物語です。日本語・中国語に対応。">
+  <title>灯りの配達人 · Lantern Post</title>
+  <style>
+@charset "UTF-8";
+:root{--paper:#efeee6;--ink:#243b3b;--muted:#7d8983;--amber:#eabe76;--cream:#f4edd8;--dark:#10282e}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:"Yu Gothic","Hiragino Sans","Microsoft YaHei",system-ui,sans-serif;font-size:14px}button,a{-webkit-tap-highlight-color:transparent}button{font:inherit;cursor:pointer}button:focus-visible,a:focus-visible,canvas:focus-visible{outline:2px solid #dfad61;outline-offset:4px}button{touch-action:manipulation}button:disabled{opacity:.4;cursor:default}[hidden]{display:none!important}.app{max-width:1360px;margin:auto;padding:0 48px}.topbar{height:100px;display:flex;align-items:center;justify-content:space-between}.wordmark{display:flex;gap:13px;align-items:center;color:var(--ink);text-decoration:none;font-family:Georgia,serif;letter-spacing:2.2px;font-size:17px}.wordmark small{font-family:"Yu Gothic","Microsoft YaHei",sans-serif;display:block;font-size:9px;letter-spacing:2px;margin-top:7px;color:#74817a}.top-actions{display:flex;align-items:center;gap:21px}.language{display:flex;align-items:center;gap:12px;font-size:12px}.language button{padding:8px 0;border:0;background:none;color:#8b938a}.language .selected{color:#253e3a;font-weight:700}.language span{color:#bbc1b6}.separator{height:23px;width:1px;background:#d3d9ce}.icon-button{border:0;background:none;color:#53645c;padding:4px;display:flex;align-items:center;justify-content:center}.question{border:1.4px solid;border-radius:50%;width:18px;height:18px;font:13px/16px Georgia,serif;text-align:center}.game-frame{position:relative;aspect-ratio:16/9;overflow:hidden;background:#102b30;isolation:isolate;box-shadow:0 20px 45px -25px #2d433c66}canvas{display:block;width:100%;height:100%;image-rendering:pixelated;outline:none!important}.grain{position:absolute;inset:0;pointer-events:none;opacity:.11;z-index:2;background:repeating-linear-gradient(transparent 0 2px,#0003 2px 3px)}.title-screen{position:absolute;inset:0;background:linear-gradient(90deg,rgba(8,28,31,.91),rgba(8,29,32,.58) 43%,transparent 72%);color:var(--cream);z-index:3}.title-copy{position:absolute;left:7%;top:13%;width:49%}.eyebrow{display:flex;align-items:center;gap:10px;font-size:9px;letter-spacing:2.8px;font-weight:500;color:var(--amber);margin:0 0 19px}.eyebrow>span:first-child:empty{width:21px;height:1px;background:var(--amber)}h1{font-family:"Songti SC","Yu Mincho","Noto Serif CJK SC","SimSun",serif;font-weight:400;font-size:clamp(38px,5.5vw,72px);letter-spacing:8px;margin:0 0 10px;line-height:1.25}.roman-title{font-family:Georgia,serif;font-size:11px;letter-spacing:2px;margin:0;color:#c6cebd}.tagline{font-size:14px;letter-spacing:2px;line-height:2.1;color:#c3cdbf;margin:23px 0 26px}.menu-buttons{display:flex;align-items:center;gap:24px}.primary{border:1px solid #e5ba77;background:var(--amber);color:#243e38;min-width:157px;display:inline-flex;align-items:center;justify-content:space-between;gap:25px;padding:13px 20px;font-size:13px;letter-spacing:2px;box-shadow:0 3px 0 #071f2444;transition:background .2s,transform .2s}.primary:hover{background:#f6d59b;transform:translateY(-2px)}.continue{background:none;border:0;border-bottom:1px solid #bcbf9980;color:#cfcead;font-size:12px;padding:6px 0}.journey-meta{font-size:9px;letter-spacing:1px;color:#95a999;margin-top:18px}.post-stamp{position:absolute;right:4%;top:7%;width:78px;height:90px;border:1px solid #b7c8a84d;color:#c8d8b28c;text-align:center;padding:9px;transform:rotate(8deg);font-family:Georgia,serif;outline:1px dashed #b7c8a84d;outline-offset:5px}.post-stamp span{font-size:9px;letter-spacing:1.2px;line-height:1.4}.post-stamp i{display:block;font-size:25px;font-style:normal;line-height:1.2}.post-stamp small{font-size:7px;letter-spacing:2px}.chapter-preview{position:absolute;bottom:5%;left:7%;right:7%;display:grid;grid-template-columns:repeat(3,1fr);border-top:1px solid #b8c4ab30;padding-top:18px;gap:20px}.chapter-preview>div{display:grid;grid-template-columns:30px 1fr;column-gap:10px;align-items:center}.chapter-preview>div>span{grid-row:span 2;font:italic 21px Georgia,serif;color:#becbab99}.chapter-preview strong{font-weight:400;font-size:12px;letter-spacing:2px}.chapter-preview small{font:7px Georgia,serif;color:#aebda480;letter-spacing:2px;margin-top:5px}.underbar{height:73px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #d6d9ce}.control-legend{display:flex;gap:22px;align-items:center;font-size:10px;color:#7d897d}.control-legend>span{display:flex;align-items:center;gap:7px}kbd{font-family:inherit;font-size:9px;min-width:20px;border:1px solid #c5cdbf;border-radius:3px;display:inline-block;text-align:center;padding:2px 5px;line-height:15px;color:#5d7164;box-shadow:0 1px 0 #bec9b1}.journal-button{display:flex;align-items:center;gap:8px;border:0;background:none;color:#425e50;font-size:11px;letter-spacing:1px}footer{display:flex;align-items:center;justify-content:space-between;padding:25px 0 27px;color:#96a08f;font-size:9px;letter-spacing:1.3px}footer>span:last-child{font:8px Georgia,serif;letter-spacing:1.6px}.footer-star{padding:0 12px}.hud{position:absolute;z-index:4;inset:0 0 auto;pointer-events:none;padding:23px 29px;height:120px;background:linear-gradient(#08252cc9,transparent);color:var(--cream);display:flex;justify-content:space-between}.hud-chapter{display:flex;flex-direction:column;gap:5px}.hud-chapter>span{font:8px Georgia,serif;letter-spacing:2px;color:#d3bc8e}.hud-chapter strong{font-family:"Yu Mincho","SimSun",serif;font-size:21px;letter-spacing:3px;font-weight:400}.hud-right{display:flex;align-items:flex-start;gap:18px}.core-counter{font-size:11px;color:#e7c27e;letter-spacing:1px;margin-top:9px}.glass-button{pointer-events:auto;border:1px solid #b5c1a74d;background:#0a282e75;color:#e8dec1;padding:4px 12px;font-size:20px;line-height:24px}.objective{position:absolute;top:88px;font-size:11px;letter-spacing:1px;color:#d4d8bb;display:flex;gap:8px}.objective>span:first-child{color:var(--amber)}.interaction-hint{position:absolute;z-index:4;left:50%;bottom:18%;transform:translateX(-50%);display:flex;align-items:center;gap:9px;background:#0b222dda;border:1px solid #adc2a555;padding:8px 13px;white-space:nowrap;color:#ebdfbe;font-size:11px}.interaction-hint kbd{background:#d7c793;color:#233d37;border:0;box-shadow:none;font-weight:700}.toast{position:absolute;z-index:7;top:21%;left:50%;transform:translateX(-50%);padding:11px 20px;background:#102d30ed;border:1px solid #e6bf7266;color:#f1d49b;font-size:12px;white-space:nowrap;box-shadow:0 5px 30px #021b29aa}.overlay{position:absolute;z-index:9;inset:0;display:flex;align-items:flex-end;background:linear-gradient(transparent 35%,#081c2440);padding:22px}.dialog-box{background:#f0eddd;border:1px solid #b9bca8;box-shadow:0 5px 40px #06202b88;width:100%;display:flex;gap:24px;padding:24px 27px;color:#2c4540;min-height:166px}.portrait{flex:0 0 63px;align-self:flex-start;border:1px solid #c5cdba;background:#dce3d5;width:63px;height:70px;display:flex;align-items:center;justify-content:center;color:#667c66;font:32px Georgia,serif}.dialog-body{flex:1;min-width:0}.dialog-heading{display:flex;justify-content:space-between;align-items:center}.dialog-heading>span:first-child{font-size:12px;font-weight:bold;letter-spacing:2px}.dialog-heading>span:last-child{font-size:9px;color:#9ba58c;letter-spacing:2px}.dialog-body p{font-size:14px;line-height:1.9;letter-spacing:.5px;margin:12px 0 17px;min-height:27px}.dialog-actions{display:flex;justify-content:flex-end;gap:14px;flex-wrap:wrap}.dialog-actions button{background:transparent;border:1px solid #afbc9f;padding:7px 14px;color:#51684f;font-size:11px}.dialog-actions button:first-child{background:#253f38;color:#ede7cc;border-color:#253f38}.modal-overlay{background:#071f29af;align-items:center;justify-content:center;backdrop-filter:blur(5px);padding:24px}.modal{position:relative;max-height:100%;overflow:auto;width:480px;max-width:100%;background:var(--paper);padding:32px 38px;color:var(--ink);box-shadow:0 10px 60px #00121b80}.modal .eyebrow{color:#969f80;font:8px Georgia,serif;letter-spacing:3px;margin-bottom:9px}.modal h2{font-family:"Yu Mincho","SimSun",serif;font-size:29px;font-weight:400;letter-spacing:4px;margin:0 0 24px}.close-button{position:absolute;right:15px;top:11px;border:0;background:none;color:#607565;font-size:25px}.help-grid{display:grid;grid-template-columns:100px 1fr;gap:14px;font-size:12px;line-height:1.5}.help-grid kbd{align-self:start;justify-self:start}.modal-note{font-size:11px;line-height:1.9;color:#7c8a74;border-top:1px solid #d4d9c9;padding-top:16px;margin:20px 0 0}.menu-stack{display:flex;flex-direction:column;gap:10px}.menu-stack button{padding:12px 15px;border:1px solid #bdc8ad;background:none;color:var(--ink);font-size:12px;letter-spacing:1px}.menu-stack button:first-child{background:#24433d;color:var(--cream);border-color:#24433d}.journal-intro{font-size:12px;line-height:1.9;color:#71846c}.quest-row{padding:13px 0;border-top:1px solid #d2d9c7}.quest-row strong{font-size:12px;display:block;margin-bottom:5px;font-weight:500}.quest-row p{font-size:11px;line-height:1.8;color:#7a8b70;margin:0}.quest-row .done{color:#88713a}.location-label{position:absolute;z-index:5;left:50%;top:40%;transform:translate(-50%,-50%);font-family:"Yu Mincho","SimSun",serif;font-size:34px;color:#ece8cc;letter-spacing:8px;text-shadow:0 2px 12px #052531;pointer-events:none}.ending-screen{position:absolute;inset:0;z-index:8;background:linear-gradient(90deg,#0e2c30f7,#173b38de 65%,#1f473ac4);color:var(--cream);padding:7% 9%;overflow:auto}.ending-screen .eyebrow{margin-bottom:17px}.ending-screen h2{font-family:"Yu Mincho","SimSun",serif;font-size:38px;font-weight:400;letter-spacing:5px;margin:0 0 15px}.ending-screen>p:not(.eyebrow){font-size:13px;line-height:2.1;max-width:620px;color:#cdd8bf;margin:0 0 18px;white-space:pre-line}#endingMemories{border-top:1px solid #b1c09d33;padding-top:12px;font-size:11px;line-height:2.1;color:#b1c69d;min-height:30px}.ending-bottom{display:flex;justify-content:space-between;align-items:center;margin-top:20px;gap:15px}.ending-bottom>span{font-size:10px;color:#98b18c}.ending-bottom .primary{min-width:130px;font-size:11px}.touch-controls{position:absolute;z-index:6;bottom:10px;left:12px;right:12px;display:flex;justify-content:space-between;pointer-events:none}.touch-controls>div{display:flex;gap:8px}.touch-controls button{pointer-events:auto;width:49px;height:44px;border:1px solid #c5d5b377;background:#102f33aa;color:#eee8cd;font-size:20px;border-radius:7px;touch-action:none;user-select:none}.touch-controls button:active{background:#b5bc8c99}
+@media(min-width:1450px){.app{padding:10px 30px}.topbar{height:105px}}@media(max-width:850px){.app{padding:0 22px}.topbar{height:75px}.title-copy{top:11%;left:6%}.eyebrow{font-size:7px;letter-spacing:1.5px;margin-bottom:12px}h1{font-size:44px;letter-spacing:5px}.tagline{font-size:11px;line-height:1.8;margin:16px 0}.primary{padding:9px 15px;min-width:125px;font-size:11px}.journey-meta{font-size:7px;margin-top:10px}.chapter-preview{padding-top:12px;gap:10px}.chapter-preview strong{font-size:10px}.chapter-preview small{font-size:6px}.chapter-preview>div>span{font-size:18px}.post-stamp{transform:rotate(8deg) scale(.8);transform-origin:top right}.control-legend{gap:12px;font-size:9px}.underbar{height:60px}.hud{padding:15px 20px}.hud-chapter strong{font-size:17px}.objective{top:70px;font-size:9px}.dialog-box{padding:16px;gap:15px;min-height:140px}.dialog-body p{font-size:12px;margin:9px 0}.portrait{flex-basis:43px;width:43px;height:55px;font-size:25px}.modal{padding:25px 30px}.modal h2{font-size:23px;margin-bottom:18px}.help-grid{font-size:11px;gap:10px}.ending-screen{padding:5% 7%}.ending-screen h2{font-size:29px}.ending-screen>p:not(.eyebrow){font-size:11px;margin-bottom:12px}.ending-bottom{margin-top:10px}#endingMemories{font-size:10px;line-height:1.9}.footer-star{padding:0 5px}}
+@media(max-width:580px){.app{padding:0 12px}.topbar{height:68px}.wordmark{font-size:12px;gap:8px;letter-spacing:1.5px}.wordmark svg{width:22px}.wordmark small{font-size:7px;letter-spacing:1px}.top-actions{gap:12px}.language{gap:7px;font-size:10px}.separator{display:none}.game-frame{aspect-ratio:4/3}canvas{object-fit:fill}.title-copy{width:70%;top:12%}h1{font-size:35px}.roman-title{font-size:7px}.tagline{font-size:10px;margin:13px 0 16px;letter-spacing:1px}.journey-meta{font-size:7px}.title-copy .eyebrow{font-size:6px;letter-spacing:1px}.chapter-preview{left:6%;right:6%;bottom:5%;gap:8px}.chapter-preview>div{grid-template-columns:19px 1fr;gap:5px}.chapter-preview strong{font-size:8px;letter-spacing:0}.chapter-preview small{font-size:5px;letter-spacing:.8px}.chapter-preview>div>span{font-size:14px}.post-stamp{transform:rotate(8deg) scale(.6)}.underbar{height:auto;min-height:58px;gap:8px}.control-legend{gap:6px;flex-wrap:wrap;max-width:72%;padding:12px 0}.control-legend>span{gap:3px;font-size:8px}.control-legend kbd{font-size:7px;min-width:15px;padding:0 3px;line-height:14px}.journal-button{font-size:9px;gap:4px;padding:0}footer{font-size:7px;line-height:1.8;gap:20px;padding:19px 0}footer>span:last-child{font-size:6px;letter-spacing:1px}.hud{padding:12px}.hud-chapter>span{font-size:7px}.hud-chapter strong{font-size:14px}.core-counter{font-size:9px}.objective{top:61px;font-size:8px;letter-spacing:0}.glass-button{font-size:15px;padding:1px 9px}.overlay{padding:10px}.dialog-box{padding:13px 12px;gap:10px;min-height:140px}.portrait{display:none}.dialog-body p{font-size:11px;line-height:1.8}.dialog-heading>span:first-child{font-size:10px}.dialog-actions{gap:8px}.dialog-actions button{font-size:9px;padding:6px 9px}.modal{padding:23px 20px}.modal h2{font-size:21px;letter-spacing:2px;margin-bottom:13px}.modal-note{font-size:9px;margin-top:12px;padding-top:10px}.help-grid{font-size:10px;gap:8px}.menu-stack{gap:7px}.menu-stack button{padding:8px;font-size:10px}.journal-intro{font-size:10px}.quest-row{padding:8px 0}.quest-row strong{font-size:10px}.quest-row p{font-size:9px}.ending-screen{padding:7% 6%}.ending-screen h2{font-size:23px;letter-spacing:2px;margin-bottom:10px}.ending-screen>p:not(.eyebrow){font-size:10px;line-height:1.8}.ending-screen .eyebrow{font-size:7px;margin-bottom:10px}#endingMemories{font-size:8px;line-height:1.8;padding-top:7px}.ending-bottom>span{font-size:8px}.ending-bottom .primary{min-width:110px;font-size:9px}.toast{font-size:10px;max-width:95%;white-space:normal;text-align:center}.interaction-hint{font-size:9px;padding:5px 9px;bottom:23%}.location-label{font-size:22px;letter-spacing:3px}}
+@media(pointer:coarse){.touch-controls:not([hidden]){display:flex}.game-frame.playing{touch-action:none}.interaction-hint{bottom:23%}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}.grain{display:none}}
+
+:root{--paper:#f3f0e8;--ink:#213b3c;--amber:#efc483}
+body{background:radial-gradient(ellipse at 53% -40%,#fffdf4 7%,transparent 76%),var(--paper)}
+.app{max-width:min(1416px,calc((100svh - 126px)*1.7778 + 80px));min-width:min(100%,820px);padding:0 30px}
+.topbar{height:65px}.underbar{height:48px}footer{padding:13px 0}.game-frame{border:1px solid #1a3437;box-shadow:0 16px 42px -25px #2337358a}
+.title-screen{background:linear-gradient(90deg,#0a252df5 0%,#102c30db 30%,#112d308a 50%,#173b3012 72%,transparent)}
+.title-copy{top:12%;width:54%}.title-copy .eyebrow{font-size:11px;letter-spacing:3px;font-weight:650;margin-bottom:12px}
+.title-copy h1{font-weight:600;letter-spacing:.09em;text-shadow:0 2px 7px #0d272b4d;font-size:clamp(42px,5.1vw,76px)}
+html[lang=ja] .title-copy h1{font-size:clamp(32px,4.35vw,64px);letter-spacing:.055em}
+.roman-title{font-size:10px;color:#d4c7a9;letter-spacing:2.5px}.tagline{line-height:1.75;margin:16px 0 20px;font-size:clamp(12px,1.15vw,17px);letter-spacing:1.3px;color:#e2e4cf}
+.menu-buttons{gap:9px;flex-wrap:wrap}.primary,.route-button{border-radius:2px;min-width:0;padding:11px 16px;line-height:1.25;font-weight:600;font-size:13px;letter-spacing:1px;gap:15px}
+.route-button{display:inline-flex;align-items:center;gap:10px;background:#1b3b40cc;border:1px solid #a6b6a17d;color:#f0ecd9}
+.route-button:hover{background:#2c4949}.route-button small{font:10px Georgia,serif;color:#edc880;letter-spacing:1px}.title-foot{display:flex;align-items:center;gap:18px;margin-top:12px;flex-wrap:wrap}
+.title-foot .journey-meta{margin:0;font-size:10px;color:#b7c5af}.title-foot .continue{padding:2px 0;font-size:11px;color:#f3d393}
+.chapter-preview{bottom:5.5%;padding-top:13px}.chapter-preview strong{font-size:13px;color:#eee9d2}.chapter-preview small{color:#adbfab}
+.hud{padding:16px 21px;height:103px;background:linear-gradient(#0c212de6,transparent)}.hud-chapter>span{font:600 10px/1.3 system-ui,sans-serif;letter-spacing:1.4px;color:#edd39e}.hud-chapter strong{font-family:inherit;font-weight:550;font-size:21px;letter-spacing:1px}.objective{top:72px;background:#10272bc4;border-left:2px solid #d9b37a;padding:4px 8px;line-height:1.4;letter-spacing:.3px;color:#f6eacc}.objective>span:first-child{display:none}
+.hud-right{align-items:flex-start;gap:8px}.hp,.core-counter{font:600 12px/22px system-ui,sans-serif;letter-spacing:.5px;color:#f5d89d;background:#18323adc;border:1px solid #a5b8a455;padding:3px 8px;margin:0;border-radius:2px}
+.hp .lit{color:#e9a086}.hp .dim{color:#a5a293}.hp b{color:#edc3d0}.kit{display:flex;gap:3px;height:29px}.kit>span{background:#e6dbbe;border:1px solid #a4ac9d;width:24px;height:26px;display:grid;place-items:center}.kit svg{width:21px;height:22px}
+.glass-button{font-size:15px;line-height:20px;padding:4px 8px}.location-label{font-weight:500;text-shadow:0 2px 15px #08222c,0 0 40px #0e2831;top:38%;font-size:clamp(19px,2.9vw,36px);letter-spacing:.18em}
+.boss-hud{position:absolute;z-index:4;pointer-events:none;left:50%;top:5%;transform:translateX(-50%);width:22%;min-width:125px;padding:6px 10px;background:#15232cde;color:#f5dbb7;border:1px solid #e5c18266;font-size:11px}.boss-top{display:flex;justify-content:space-between;gap:5px}.boss-track{height:4px;background:#515257;margin-top:5px}.boss-track i{height:100%;display:block;background:#e4a47f}
+.director{position:absolute;z-index:5;bottom:3.5%;left:3%;max-width:90%;display:flex;align-items:center;gap:12px;background:#102e33ec;border:1px solid #a3b69d77;padding:8px 12px;color:#f0e6ca;font-size:12px}
+.director time{font:600 13px/1.4 ui-monospace,monospace;color:#f6cc83;border-right:1px solid #a4ac7d66;padding-right:10px}.director button{background:transparent;border:0;border-left:1px solid #a4ac7d66;color:#c7d2c3;padding:0 0 0 9px;font-size:11px}
+.overlay{padding:16px}.dialog-box{background:#f4efdf;border-left:4px solid #c39664;border-radius:2px;min-height:0;padding:17px 21px}.portrait{width:54px;height:58px;flex:0 0 54px;border:1px solid #d6ceae;background:repeating-linear-gradient(0deg,#e5e4d3 0 3px,#dedfcf 3px 4px)}.portrait svg{width:47px;height:47px}
+.dialog-body p{line-height:1.65;margin:8px 0 12px;font-size:clamp(12px,1.14vw,17px)}.dialog-actions button{font-weight:600}.modal-overlay{z-index:14;padding:15px}.modal{border-radius:2px;border-top:3px solid #b69a6b}
+.modal-note,.journal-intro,.quest-row p{color:#566b60}.quest-row strong{font-weight:650}.rich-row{display:flex;align-items:flex-start;gap:12px}.rich-row i{flex:0 0 33px;background:#e7e4d2;border:1px solid #cbc5a9}.rich-row i svg{width:32px;height:32px}
+.reward-overlay{z-index:10;background:#091d26bb;backdrop-filter:blur(3px);align-items:center;justify-content:center;padding:13px;--reward-tone:#c99871}
+.reward-panel{background:#f3eddb;color:#29413d;width:600px;max-width:100%;max-height:100%;overflow:auto;padding:20px 24px 18px;box-shadow:0 8px 40px #00162277;border-top:4px solid var(--reward-tone)}
+.gift-row{display:flex;gap:15px;align-items:center}.gift-mark{flex:0 0 64px;height:64px;background:#e6ddc0;border:1px dashed #978e70;display:grid;place-items:center;transform:rotate(-4deg)}.gift-mark svg{width:54px;height:54px}
+.gift-copy p{font-size:10px;color:#68796b;letter-spacing:1px;margin:0 0 3px}.gift-copy h2{font-family:"Yu Mincho","Songti SC",serif;font-size:clamp(20px,2.5vw,34px);margin:0 0 4px;color:#263f38;line-height:1.2}.gift-copy span{font-size:12px;line-height:1.55;color:#516454}.reward-prompt{margin:16px 0 10px;font-size:12px;font-weight:650}
+.stamp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.stamp-card{position:relative;display:flex;min-width:0;flex-direction:column;align-items:flex-start;gap:4px;color:#2c4440;text-align:left;background:#fff8e8;border:1px solid #bdb69b;border-bottom:3px solid var(--reward-tone);padding:10px 10px 11px;transition:transform .15s,background .15s}.stamp-card:hover,.stamp-card:focus-visible{transform:translateY(-2px);background:#fffdf4;outline:2px solid #a58a56}
+.stamp-no{position:absolute;right:9px;top:7px;font:italic 12px Georgia,serif;color:#807b63}.stamp-icon{display:block;width:37px;height:37px;background:#e9e5cf;border:1px dashed #b9b096}.stamp-icon svg{width:35px;height:35px}.stamp-card strong{font-size:14px}.stamp-card small{font-size:11px;line-height:1.55;color:#556454}
+.reward-skip{border:0;background:none;text-decoration:underline;color:#5f6c5a;display:block;margin:9px 0 0 auto;font-size:11px}
+.ending-screen{background:linear-gradient(90deg,#102e32f5 0%,#193a3de0 52%,#17363c5c 100%);padding:6% 8%}.ending-screen .memory{margin:2px 0;color:#cad6b9}.ending-build{margin:6px 0 0!important;color:#d3bd94!important;font-size:11px!important}.ending-bottom{justify-content:flex-start;flex-wrap:wrap}.ending-bottom>span{flex-basis:100%}.ending-bottom .continue{border:0}.touch-controls button{width:43px;height:40px}.interaction-hint{bottom:16%}.toast{pointer-events:none;font-weight:500}
+@media(max-width:850px){.app{padding:0 15px;min-width:0;max-width:none}.topbar{height:60px}.title-copy{top:10%}.title-copy .eyebrow{font-size:8px;margin-bottom:6px}.title-copy h1{font-size:45px}.title-copy .tagline{font-size:12px;margin:9px 0 13px}.primary,.route-button{padding:8px 12px;font-size:11px}.title-foot{gap:9px;margin-top:8px}.title-foot .journey-meta{font-size:8px}.chapter-preview{padding-top:10px}.chapter-preview strong{font-size:11px}.hud{padding:12px 16px}.objective{top:58px}.hud-chapter strong{font-size:16px}.reward-panel{width:540px;padding:14px 18px}.gift-mark{flex-basis:48px;height:48px}.gift-mark svg{width:42px;height:42px}.director{font-size:10px;gap:7px;padding:6px 9px}.stamp-card{padding:7px}.dialog-box{padding:13px 14px}.journal-button{font-size:10px}}
+@media(max-width:580px){.app{padding:0 8px}.game-frame{aspect-ratio:4/3}.topbar{height:53px}.title-copy{width:76%;top:9%}.title-copy h1{font-size:36px}.title-copy .eyebrow{font-size:7px}.title-copy .tagline{font-size:10px;line-height:1.5;margin:8px 0}.roman-title{font-size:7px}.chapter-preview{bottom:4%;padding-top:6px}.chapter-preview strong{font-size:8px}.route-button,.primary{padding:7px 9px;font-size:10px}.route-button small{font-size:8px}.title-foot .journey-meta{font-size:7px}.title-foot .continue{font-size:8px}.hud{padding:8px}.hud-right{gap:3px}.hud-chapter>span{font-size:7px}.hud-chapter strong{font-size:12px}.hp,.core-counter{font-size:8px;line-height:14px;padding:2px 4px}.objective{top:44px;font-size:8px;max-width:80%}.kit>span{width:15px;height:16px}.kit svg{width:13px;height:13px}.glass-button{padding:1px 5px;line-height:16px}.boss-hud{top:22%;left:auto;right:2%;transform:none;min-width:95px;font-size:8px}.director{font-size:8px;max-width:94%}.director time,.director button{font-size:8px}.director button{white-space:nowrap}.dialog-box{padding:10px;min-height:0}.dialog-body p{font-size:11px}.gift-row{gap:9px}.reward-panel{padding:9px}.gift-mark{flex-basis:34px;height:34px}.gift-mark svg{width:32px;height:32px}.gift-copy p{font-size:8px}.gift-copy h2{font-size:17px}.gift-copy span,.reward-prompt{font-size:9px}.reward-prompt{margin:7px 0}.stamp-grid{gap:4px}.stamp-icon,.stamp-icon svg{width:24px;height:24px}.stamp-card{padding:5px}.stamp-card strong{font-size:9px}.stamp-card small{font-size:8px;line-height:1.4}.stamp-no{font-size:8px;right:4px;top:3px}.overlay{padding:7px}.touch-controls{left:5px;right:5px;bottom:5px}.touch-controls>div{gap:3px}.touch-controls button{width:34px;height:31px;font-size:14px}.interaction-hint{bottom:19%}.ending-bottom{gap:7px}.ending-screen .memory{font-size:9px}}
+@media(max-height:520px) and (min-aspect-ratio:3/2){.topbar{height:39px}.app{max-width:calc((100svh - 47px)*1.7778 + 20px);min-width:0;padding:0 5px}.underbar{height:34px}.title-copy{top:7%}.title-copy .tagline{margin:5px 0 7px;font-size:10px}.title-copy h1{font-size:35px}.game-frame{aspect-ratio:16/9}.title-foot .journey-meta{font-size:7px}.chapter-preview{bottom:4%;padding-top:5px}.title-copy .eyebrow{margin-bottom:4px}.director{font-size:9px}}
+.side-goal{position:absolute;top:100px;left:auto;padding:3px 7px;font-size:10px;line-height:1.4;letter-spacing:.25px;background:#153339c9;color:#c6dcc9;border-left:2px solid #83a795}
+.game-frame[data-state=dialog] .director,.game-frame[data-state=draft] .director{z-index:11;top:3%;left:50%;bottom:auto;transform:translateX(-50%);padding:4px 8px}
+.game-frame[data-state=dialog] #demoCue,.game-frame[data-state=draft] #demoCue{display:none}
+.game-frame[data-state=dialog] .director button,.game-frame[data-state=draft] .director button{border:0;padding:0}
+@media(min-width:851px){.dialog-body p{font-size:clamp(15px,1.2vw,18px)}.director{font-size:13px}}
+@media(max-width:850px){.side-goal{top:81px;font-size:9px}}
+@media(max-width:580px){.side-goal{top:62px;font-size:7px;padding:2px 5px}.game-frame[data-state=draft] .director{top:2px}}
+
+/* Night Route: combat information and loadout cards. */
+.combat-panel{position:absolute;z-index:6;left:2.2%;bottom:3%;display:flex;align-items:center;gap:9px;padding:8px 11px;background:#102b32e8;border:1px solid #a1b79b44;color:#dfdfbc;font-size:10px;max-width:94%;flex-wrap:wrap}
+.combat-panel button{border:0;background:none;color:#e6cb94;font-size:11px;padding:2px 4px}.stamina-track{width:85px;height:5px;background:#526c6170;display:block}.stamina-track b{height:100%;display:block;background:#9fd6bd}.equipment-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.equipment-card{text-align:left;border:1px solid #becbb6;background:#e5e9dc;padding:13px;color:#344e46}.equipment-card.chosen{border-color:#a68a4e;background:#efe3bf}.equipment-card svg{width:35px;height:35px;display:block;margin-bottom:5px}.equipment-card strong{font-size:13px;display:block;margin-bottom:6px}.equipment-card small{font-size:10px;line-height:1.7;display:block}.modal:has(.equipment-grid){width:650px}.director{bottom:12%!important;max-width:88%;white-space:normal;line-height:1.6}.boss-hud{top:19px!important}.game-frame[data-state=dialog] .combat-panel{display:none}.game-frame[data-state=dialog] .director{top:5px!important;bottom:auto!important}.control-legend{gap:12px}.hud-right{gap:9px}.hp{font-size:12px}.game-frame[data-state=modal] .combat-panel{display:none}
+@media(max-width:850px){.combat-panel{font-size:8px;gap:5px;padding:5px}.combat-panel button{font-size:9px}.stamina-track{width:55px}.equipment-card{padding:8px}.equipment-card strong{font-size:11px}.equipment-card small{font-size:9px}.equipment-card svg{width:24px;height:24px}.director{font-size:10px}.modal:has(.equipment-grid){padding:20px 25px}.boss-hud{top:12px!important}}
+@media(pointer:coarse){.combat-panel{bottom:17%}.director{bottom:28%!important}.touch-controls>div{gap:3px}.touch-controls button{width:38px;height:37px}}
+@media(max-width:580px){.combat-panel{left:1%;right:1%;bottom:16%;font-size:7px;gap:4px}.combat-panel button{font-size:8px}.equipment-grid{gap:5px}.equipment-card{padding:6px}.equipment-card small{font-size:8px}.modal:has(.equipment-grid){padding:16px}.touch-controls button{width:28px;height:30px;font-size:12px}.director{font-size:8px;bottom:29%!important}.hp{font-size:9px}.hud-right{gap:4px}.boss-hud{width:35%!important}.control-legend{gap:5px}}
+
+.release-guide{font-size:12px;color:#496354;text-decoration:underline;text-underline-offset:4px;white-space:nowrap}footer{flex-wrap:wrap;gap:14px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <a class="wordmark" href="#" id="homeLogo" aria-label="标题画面 / タイトル画面"><svg width="28" height="34" viewBox="0 0 28 34" fill="none" aria-hidden="true"><path d="M9 8V5a5 5 0 0 1 10 0v3M6 10h16l2 19H4L6 10Z" stroke="currentColor" stroke-width="1.5"/><path d="M8 14h12v11H8zM2 32h24" stroke="currentColor"/><path d="m14 15 3 6-3 3-3-3 3-6Z" fill="currentColor"/></svg><span>LANTERN POST<small id="brandSub">一场关于光与相遇的旅程</small></span></a>
+    <nav class="top-actions" aria-label="设置 / 設定">
+      <div class="language" aria-label="Language"><button data-lang="zh" class="selected" aria-pressed="true">中文</button><span>/</span><button data-lang="ja" aria-pressed="false">日本語</button></div>
+      <span class="separator"></span>
+      <button class="icon-button" id="soundBtn" title="声音 / サウンド" aria-label="声音 / サウンド" aria-pressed="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4 5 9H2v6h3l6 5V4Z"/><path id="soundWaves" d="m16 9 6 6m0-6-6 6"/></svg></button>
+      <button class="icon-button" id="helpBtn" title="玩法 / 遊び方" aria-label="玩法 / 遊び方"><span class="question">?</span></button>
+    </nav>
+  </header>
+
+  <main>
+    <div class="game-frame" id="gameFrame">
+      <canvas id="game" width="960" height="540" tabindex="0" aria-label="灯火邮差：2D 横版闯关游戏 / 灯りの配達人：2D 横スクロールゲーム"></canvas>
+      <div class="grain" aria-hidden="true"></div>
+      <section id="titleScreen" class="title-screen">
+        <div class="title-copy">
+          <p class="eyebrow"><span></span><span id="genre">像素叙事冒险 · A LITTLE ADVENTURE</span></p>
+          <h1 id="gameTitle">灯火邮差</h1>
+          <p class="roman-title">L A N T E R N &nbsp; P O S T</p>
+          <p class="tagline" id="tagline">世界还没醒来，<br>总要有人先点亮一盏灯。</p>
+          <div class="menu-buttons"><button class="primary" id="startBtn"><span id="startText">启程</span><span aria-hidden="true">→</span></button><button class="route-button" id="demoBtn"><span id="demoText">课堂演示</span><small>04:00</small></button></div>
+          <div class="title-foot"><button id="continueBtn" class="continue" hidden>继续上次投递</button><p class="journey-meta" id="journeyMeta">三章故事 &nbsp;·&nbsp; 课堂演示约 5 分钟 &nbsp;·&nbsp; 随时存档</p></div>
+        </div>
+        <div class="post-stamp" aria-hidden="true"><span>DAWN<br>DELIVERY</span><i>✧</i><small>NO. 001</small></div>
+        <div class="chapter-preview"><div><span>01</span><strong id="chapterPreview0">雨后的小镇</strong><small>THE TOWN</small></div><div><span>02</span><strong id="chapterPreview1">萤火森林</strong><small>THE FOREST</small></div><div><span>03</span><strong id="chapterPreview2">黎明灯塔</strong><small>THE LIGHTHOUSE</small></div></div>
+      </section>
+
+      <div class="hud" id="hud" hidden><div class="hud-chapter"><span id="chapterNumber">CHAPTER 01</span><strong id="chapterName"></strong></div><div class="hud-right"><div class="kit" id="kit"></div><span class="hp" id="hpCount"></span><span class="core-counter" id="coreCounter"></span><button id="pauseBtn" class="glass-button" aria-label="暂停 / ポーズ">Ⅱ</button></div><div id="bossHud" class="boss-hud" hidden><div class="boss-top"><b id="bossName"></b><span id="bossValue"></span></div><div class="boss-track"><i id="bossMeter"></i></div></div><div class="objective"><span>◇</span><span id="objectiveText"></span></div><div id="sideGoal" class="side-goal" hidden></div></div>
+      <div class="location-label" id="locationLabel" hidden></div>
+      <div id="director" class="director" hidden><time id="demoTime"></time><span id="demoCue"></span><button id="demoPause"><span aria-hidden="true">Ⅱ </span><span id="demoPauseText"></span></button></div>
+      <div id="toast" class="toast" role="status" hidden></div>
+      <div id="interactionHint" class="interaction-hint" hidden><kbd>E</kbd><span></span></div>
+      <div class="overlay" id="dialogOverlay" hidden><section class="dialog-box" role="dialog" aria-modal="true" aria-labelledby="speaker"><div class="portrait" id="portrait" aria-hidden="true"></div><div class="dialog-body"><div class="dialog-heading"><span id="speaker"></span><span id="dialogCount"></span></div><p id="dialogText"></p><div class="dialog-actions" id="dialogActions"></div></div></section></div>
+      <div class="overlay reward-overlay" id="rewardOverlay" hidden><section class="reward-panel" role="dialog" aria-modal="true" aria-labelledby="rewardTitle"><div class="gift-row"><div class="gift-mark" id="rewardGift"></div><div class="gift-copy"><p id="rewardKicker"></p><h2 id="rewardTitle"></h2><span id="rewardDesc"></span></div></div><p class="reward-prompt" id="rewardPrompt"></p><div id="rewardCards" class="stamp-grid"></div><button id="rewardSkip" class="reward-skip" hidden></button></section></div>
+      <div class="overlay modal-overlay" id="modalOverlay" hidden><section class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle"><button id="closeModal" class="close-button" aria-label="关闭 / 閉じる">×</button><p class="eyebrow" id="modalEyebrow">LANTERN POST</p><h2 id="modalTitle"></h2><div id="modalContent"></div></section></div>
+      <section class="ending-screen" id="endingScreen" hidden><p class="eyebrow" id="endingEyebrow">THE LETTER ARRIVES</p><h2 id="endingTitle"></h2><p id="endingText"></p><div id="endingMemories"></div><p class="ending-build" id="endingBuild"></p><div class="ending-bottom"><span id="endingStats"></span><button class="primary" id="endingNext"></button><button class="continue" id="endingHome"></button></div></section>
+      <div class="touch-controls" id="touchControls" hidden><div><button data-key="ArrowLeft" aria-label="左 / 左へ">◀</button><button data-key="ArrowRight" aria-label="右 / 右へ">▶</button></div><div><button data-key="ArrowDown" aria-label="下落 / 降りる">↓</button><button data-key="KeyZ" aria-label="闪避 / 回避">Z</button><button data-key="KeyC" aria-label="格挡 / ガード">C</button><button data-key="KeyQ" aria-label="切换武器 / 武器切替">Q</button><button data-key="KeyX" aria-label="灯击 / 光を撃つ"><span id="assistKey">灯击</span></button><button data-key="KeyE" aria-label="互动 / 調べる">E</button><button data-key="Space" aria-label="跳跃 / ジャンプ">↑</button></div></div>
+    </div>
+    <div class="underbar"><div class="control-legend" id="controlLegend"></div><button class="journal-button" id="journalBtn"><svg width="17" height="17" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.2"><rect x="4" y="2" width="12" height="16" rx="1"/><path d="M2 5h4M2 10h4M2 15h4M8 6h5M8 9h5"/></svg><span id="journalLabel">旅途手记</span></button></div>
+  </main>
+  <footer><span id="footerText">献给每一个愿意为别人停下脚步的人。</span><a class="release-guide" id="manualLabel" href="guide.html" target="_blank" rel="noopener noreferrer">遊び方・操作ガイド</a><span>EST. BEFORE DAWN <span class="footer-star">✦</span> 2026</span></footer>
+</div>
+<script>
+
+/* Lantern Post · offline classroom edition */
+(() => {
+'use strict';
+// config
+const $ = id => document.getElementById(id);
+const canvas = $('game'), ctx = canvas.getContext('2d');
+const W = 960, H = 540, STEP = 1 / 60;
+const SAVE_KEY = 'lantern-post-save-v1', BOOK_KEY = 'lantern-post-stamps-v2', PREF_KEY = 'lantern-post-prefs-v1';
+const CLASS_SEED = 314159, questKeys = ['fox', 'robot', 'letter'];
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+let lang = 'ja', sound = false, storageOK = true;
+const tr = (zh, ja) => lang === 'ja' ? ja : zh;
+const T = pair => tr(pair[0], pair[1]);
+const fmtTime = s => Math.floor(s / 60) + ':' + String(Math.floor(s % 60)).padStart(2, '0');
+
+const chapters = [['雨后的小镇','雨上がりの町'], ['萤火森林','ホタルの森'], ['黎明灯塔','夜明けの灯台']];
+const quests = {
+  fox: {
+    title:['一点借来的光','借りた小さな灯り'], room:['狐火归巷','狐火の帰り道'], icon:'fox', tone:'#e58465',
+    request:['跟着琥珀进小巷，用灯光点亮三盏门灯。','コハクと路地に入り、ランタンの光で三つの軒灯をともす。'],
+    target:['门灯','軒灯'], goal:['回家路标','帰り道の道しるべ'], count:3,
+    gift:['狐火靴','狐火のくつ'], effect:['在空中再按一次跳跃，可以二段跳。','空中でもう一度ジャンプを押すと、二段跳びができる。'],
+    consequence:['琥珀在森林为你打开树冠小路。','コハクが森の木の上の道を開いてくれる。']
+  },
+  robot: {
+    title:['生锈的约定','さびた約束'], room:['沉钟泵房','沈み鐘のポンプ室'], icon:'gear', tone:'#64beba',
+    request:['拿到林中高处的备用齿轮，和洛可进泵房。用灯击启动两只飞轮。','森の高い足場で予備のギアを拾い、ロコとポンプ室へ。二つのはずみ車に光を当てる。'],
+    target:['飞轮','はずみ車'], goal:['维修工作台','整備台'], count:2,
+    gift:['双焦灯镜','二重レンズ'], effect:['攻击威力提升 35%，远程光弹可以贯穿目标。','攻撃力が35%上がり、光弾が相手を貫通する。'],
+    consequence:['洛可会修好通向灯塔的四座断桥。','ロコが灯台へ向かう四つの橋を直してくれる。']
+  },
+  letter: {
+    title:['没寄出的勇气','届かなかった勇気'], room:['退信书库','返書の書庫'], icon:'wax', tone:'#c39bcd',
+    request:['调查石阶上的旧信。跳上书架，找回青的三页散信。','石段の古い手紙を調べ、書棚に飛び乗ってアオの手紙を三枚集める。'],
+    target:['信页','手紙'], goal:['旧邮筒','古いポスト'], count:3,
+    gift:['晨邮封蜡','朝便の封ろう'], effect:['获得一层护盾，可挡一次伤害。点亮新灯柱时恢复。','一度だけダメージを防ぐ。新しい街灯をともすと回復する。'],
+    consequence:['澪会把道歉信亲手还给青。','ミオが謝罪の手紙をアオに手渡す。']
+  }
+};
+const stamps = {
+  quick:{icon:'wing', name:['飞燕邮戳','ツバメの消印'], desc:['灯击间隔缩短，可更快地连射。','光を撃つ間隔が短くなる。']},
+  heart:{icon:'heart', name:['灯油邮戳','油つぼの消印'], desc:['灯火上限增加一格，立即补满。','灯りの上限が一つ増え、全回復する。']},
+  long:{icon:'arrow', name:['远航邮戳','遠航の消印'], desc:['灯弹射程增加，可以隔着缺口打中目标。','光弾が遠くまで届き、すき間の向こうも狙える。']},
+  bounce:{icon:'boot', name:['弹簧邮戳','ばねの消印'], desc:['踩踏伤害增加 1，踩中后弹得更高。','踏みつけの威力が1増え、より高く跳ねる。']},
+  echo:{icon:'twin', name:['回声邮戳','こだまの消印'], desc:['每次灯击也会向身后发出一枚灯弹。','光を撃つたび、後ろにも一発飛ぶ。']},
+  mend:{icon:'leaf', name:['新芽邮戳','若葉の消印'], desc:['每驱散三只雾怪，恢复一格灯火。','霧の魔物を三体はらうごとに、灯りが一つ戻る。']}
+};
+const stampKeys = Object.keys(stamps);
+function mixed(seed, salt) {
+  let x = (seed ^ Math.imul(salt + 1, 0x9e3779b1)) >>> 0;
+  x = Math.imul(x ^ (x >>> 16), 0x21f0aaad);
+  x = Math.imul(x ^ (x >>> 15), 0x735a2d97);
+  return (x ^ (x >>> 15)) >>> 0;
+}
+function shuffled(items, seed, salt) {
+  const result = items.slice();
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = mixed(seed, salt + i) % (i + 1);
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+}
+let mode='title', modalKind=null, modalReturn='title', levelIndex=0, roomKey=null;
+let run=null, saved=null, book={stamps:[], deliveries:[]};
+let flags={fox:false,robot:false,letter:false,gear:false}, cores=[false,false,false], collected=new Set(), defeated=new Set();
+let world=null, player=null, nearby=null, dialog=null, deck=null;
+let keys=new Set(), jumpBuffer=0, coyote=0, camera=0, runTime=0, sceneTime=0, saveClock=0;
+let particles=[], bolts=[], waves=[], toastTime=0, labelTime=0, audioCtx=null, audioNext=0, noteIndex=0;
+let auto=null;
+const has = perk => !!run && run.stamps.includes(perk);
+const maxHp = () => 5 + (has('heart') ? 1 : 0) + (run?.charm==='tide' ? 1 : 0);
+const activeZone = () => roomKey || 'main' + levelIndex;
+const targetsDone = key => run.tasks[key].length >= quests[key].count;
+const taskDone = key => targetsDone(key) && (key!=='robot' || defeated.has('robot-2'));
+function readData(key) {
+  try { return JSON.parse(localStorage.getItem(key) || 'null'); }
+  catch (_) { return null; }
+}
+function writeData(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); }
+  catch (_) { storageOK=false; }
+}
+function buildRun(kind, seed) {
+  return {
+    version:2, id:kind === 'regular' ? Date.now().toString(36)+'-'+seed.toString(36) : 'class', kind, seed,
+    level:0, room:null, checkpoint:{x:75,y:430}, origin:null,
+    flags:{fox:false,robot:false,letter:false,gear:false}, cores:[false,false,false], collected:[], defeated:[],
+    tasks:{fox:[],robot:[],letter:[]}, stamps:[], pending:null, packing:false, hp:3, shield:false,
+    elapsed:0, respawns:0, lamps:[], complete:false
+  };
+}
+function validAnchor(point, maxX) {
+  return point && Number.isFinite(point.x) && point.x>=0 && point.x<=maxX && Number.isFinite(point.y) && point.y>=120 && point.y<=430;
+}
+function loadStoredRun() {
+  const s=readData(SAVE_KEY);
+  if (!s || ![1,2,3].includes(s.version) || !Number.isInteger(s.level) || s.level<0 || s.level>2 ||
+      !Array.isArray(s.cores) || s.cores.length!==3 || !s.cores.every(x=>typeof x==='boolean') ||
+      !s.cores.slice(0,s.level).every(Boolean) || !s.flags || !Number.isFinite(s.elapsed)) return null;
+  const n=buildRun('regular', Number.isInteger(s.seed) ? s.seed>>>0 : 81351);
+  n.id=typeof s.id==='string' ? s.id : 'legacy-'+s.level+'-'+Math.floor(s.elapsed);
+  n.packing=!!s.packing && s.level===0 && !s.room;
+  n.level=s.level; n.cores=s.cores.slice(); n.complete=!!s.complete; n.elapsed=Math.max(0,s.elapsed);
+  n.respawns=Math.max(0,Number(s.respawns)||0); n.room=questKeys[s.level]===s.room ? s.room : null;
+  for (const k of Object.keys(n.flags)) n.flags[k]=s.flags[k]===true;
+  n.checkpoint=validAnchor(s.checkpoint, [6039,6279,6379][s.level]) ? {...s.checkpoint} : n.checkpoint;
+  n.origin=validAnchor(s.origin,[6039,6279,6379][s.level]) ? {...s.origin} : null;
+  for (const k of questKeys) {
+    const bits=s.tasks?.[k]; n.tasks[k]=Array.isArray(bits) ? [...new Set(bits.filter(v=>Number.isInteger(v)&&v>=0&&v<quests[k].count))] : [];
+  }
+  const array=(v,test)=>Array.isArray(v)?[...new Set(v.filter(test))]:[];
+  n.stamps=array(s.stamps,k=>stampKeys.includes(k)); n.collected=array(s.collected,k=>typeof k==='string'&&(/^[0-2]-[0-5]$/.test(k)||/^extspark-/.test(k)));
+  n.defeated=array(s.defeated,k=>typeof k==='string'); n.lamps=array(s.lamps,k=>typeof k==='string');
+  n.pending=n.room && s.pending===n.room && n.tasks[n.room].length===quests[n.room].count && !n.flags[n.room] ? n.room : null;
+  n.hp=clamp(Math.floor(Number(s.hp)||3),1,n.stamps.includes('heart')?4:3); n.shield=n.flags.letter && (s.version===1||!!s.shield);
+  if(n.complete && !n.defeated.includes('m2-5'))n.defeated.push('m2-5');
+  if (n.room && n.flags[n.room]) n.room=null;
+  return n;
+}
+function loadBook() {
+  const b=readData(BOOK_KEY);
+  const owned=Array.isArray(b?.stamps)?b.stamps:[];
+  return {stamps:stampKeys.filter(k=>owned.includes(k)),deliveries:Array.isArray(b?.deliveries)?[...new Set(b.deliveries.filter(v=>typeof v==='string'))]:[]};
+}
+function fileStamp(id) {
+  if (run.kind!=='regular') return;
+  if(storageOK)book=loadBook(); if (!book.stamps.includes(id)) book.stamps.push(id); writeData(BOOK_KEY,book);
+}
+function saveGame() {
+  if (!run || run.kind!=='regular') return;
+  run.collected=[...collected]; run.defeated=[...defeated];
+  saved=JSON.parse(JSON.stringify(run)); writeData(SAVE_KEY,saved);
+}
+function bindRun(data) {
+  run=data; flags=run.flags; cores=run.cores; collected=new Set(run.collected); defeated=new Set(run.defeated);
+}
+
+
+// story
+const names={mio:['澪 · 见习邮差','ミオ · 見習い配達人'],post:['白婆婆 · 邮局长','シロ · 郵便局長'],fox:['小狐狸 · 琥珀','コハク · 子ギツネ'],robot:['旧机器人 · 洛可','ロコ · 古いロボット'],keeper:['守灯人 · 青','アオ · 灯台守'],letter:['未寄出的信','出されなかった手紙'],narrator:['旅途的声音','旅の声']};
+const symbols={mio:'✧',post:'〒',fox:'♧',robot:'▣',keeper:'☼',letter:'✉',narrator:'◇'};
+const line=(who,zh,ja)=>({who,zh,ja});
+const stories={
+ intro:[
+  line('narrator','昨夜的风暴熄灭了镇上的黎明灯塔。海雾封住港口，早班船迟迟没有回来。','昨夜の嵐で、町の「夜明けの灯台」が消えた。港は霧に閉ざされ、朝の船も戻れずにいる。'),
+  line('post','澪，这是最后一班投递。把这封信送给灯塔上的青，再带上沿途三座中继站的灯芯。','ミオ、最後の配達だよ。この手紙を灯台のアオに届けておくれ。途中の三つの中継所で、灯の芯も集めるんだ。'),
+  line('mio','可是……我只有这么小的一盏灯。','でも……私のランタンは、こんなに小さいのに。'),
+  line('post','够照清下一步，就够了。别忘了，送信的人，也可以在路上为谁停一停。','次の一歩が見えれば、それで十分。配達の途中でも、誰かのために足を止めていいんだよ。')
+ ],
+ enter2:[line('mio','第一枚灯芯还在发热。穿过这片森林，就能到灯塔脚下。','一つ目の芯は、まだ温かい。この森を抜ければ、灯台のふもとだ。'),line('narrator','萤火在枝叶间闪烁。林中的旧中继站，已经很久没有人维护了。','木々の間でホタルがまたたく。森の古い中継所は、長い間手入れされていない。')],
+ foxRoute:[line('fox','我认得你！前面低地的黑雾很浓，走我找到的树冠小路吧。','あ、きみだ！この先の低地は黒い霧が濃いよ。ぼくが見つけた木の上の道を使って。'),line('mio','原来，刚才停下的脚步，也会变成现在的路。','あの時立ち止まったことが、今日の道につながったんだ。')],
+ enter3:[line('mio','灯塔就在前面。风暴把石桥冲断了……但我答应过要送到。','灯台はもうすぐ。嵐で石橋が崩れている……それでも、届けるって約束した。')],
+ robotRoute:[line('robot','临时桥梁架设完毕。编号 R-06，申请陪同本次投递。','仮設橋、設置完了。識別番号 R-06。本配達への同行を申請します。'),line('mio','批准。欢迎回来，洛可。','許可します。おかえり、ロコ。')],
+ foxAsk:[line('fox','等一下！回家的路标被风吹倒了。我怕黑，不敢穿过那条小巷……你能借一点灯光给我吗？','待って！道しるべが倒れて、帰り道が分からないんだ。暗い路地が怖くて……少しだけ、灯りを貸してくれる？')],
+ foxYes:[line('mio','跟紧我。看，这条暖色的光，就通向你的家。','ついてきて。ほら、このあたたかい光の先に、きみの家があるよ。'),line('fox','谢谢！我叫琥珀。如果你要去森林，我也有一条秘密小路！','ありがとう！ぼくはコハク。森に行くなら、秘密の道を教えてあげる！')],
+ robotAsk:[line('robot','中继站维护机器人 R-06。传动齿轮遗失……无法行动。高处的旧平台上，似乎还有一枚备用齿轮。','中継所整備ロボット R-06。駆動ギア紛失……移動不能。高い古い足場に、予備のギアが一つあるはずです。')],
+ robotReady:[line('robot','检测到适配齿轮。是否将它用于维修？','適合するギアを検出。修理に使用しますか？')],
+ robotYes:[line('mio','装好了。你一直一个人守着这个中继站吗？','これでよし。ずっと一人で、この中継所を守っていたの？'),line('robot','是的。但现在不是一个人了。你可以叫我洛可。前面的断桥，就交给我。','はい。でも、今は一人ではありません。ロコと呼んでください。この先の壊れた橋は、私にお任せを。')],
+ letter:[line('letter','「给镇上的大家：风暴来临前，我就知道灯塔的齿轮已经老了。可我一直以为，守灯人的事应该自己扛。」','「町のみなさんへ。嵐の前から、灯台の歯車が古くなったことは知っていました。でも、灯台守の仕事は一人で背負うものだと思っていました。」'),line('letter','「我怕承认自己需要帮助，比灯灭了更丢脸。对不起。——青」信纸没有封口，也没有寄出。','「助けが必要だと認めることが、灯りを消すより恥ずかしかったのです。ごめんなさい。――アオ」封はされず、手紙は出されないままだった。'),line('mio','有些话不是没有写下，只是还没有勇气送出去。把这封信一起带上吧。','書けなかったんじゃない。届ける勇気が、まだなかったんだ。この手紙も持っていこう。')],
+ ending:[line('keeper','你真的来了……灯塔坏了以后，我一直不知道该怎么面对大家。','本当に来てくれたんだね……灯台が壊れてから、みんなに顔を合わせられずにいたんだ。'),line('mio','这是白婆婆让我交给你的。','シロさんから、お届けものです。'),line('letter','「青：等天亮了，下来一起吃早饭吧。灯可以一起修，日子也可以一起过。我们一直在等你。——大家」','「アオへ。朝になったら、一緒にごはんを食べよう。灯りも暮らしも、みんなで直せばいい。ずっと待っているよ。――町のみんな」')],
+ letterEnding:[line('mio','还有这封，你没能寄出的信。我读到了。需要帮助，没什么丢脸的。','それと、あなたが出せなかった手紙も。読んだよ。助けが必要なことは、恥ずかしくない。'),line('keeper','那就拜托你，下次替我把它送到每一户人家。','それなら、次はこの手紙を、一軒一軒に届けてもらえるかな。')],
+ noLetterEnding:[line('keeper','原来，他们还在等我。等天亮了，我会亲自向大家道歉。','そうか。まだ、待っていてくれたんだ。朝になったら、自分の言葉でみんなに謝るよ。')],
+ finale:[line('keeper','三枚灯芯，都到齐了。澪，和我一起点亮它吧。','三つの芯が、そろったね。ミオ、一緒に灯りをともそう。'),line('narrator','灯塔的光划开海雾。远处响起船笛。镇上的窗，一扇接着一扇亮了起来。','灯台の光が海霧を切り開く。遠くで汽笛が鳴った。町の窓に、一つ、また一つと灯りがともる。'),line('mio','信已送达。我们回家吧。','配達、完了。さあ、帰ろう。')]
+};
+
+
+// baseLevel
+const palette=[{sky:'#12363e',mid:'#225459',leaf:'#254e44',land:'#294b42',edge:'#789278',accent:'#e8bc75'},{sky:'#102f34',mid:'#1e4a43',leaf:'#1e503e',land:'#2c4938',edge:'#789c68',accent:'#c7d78c'},{sky:'#293c50',mid:'#405963',leaf:'#354d56',land:'#414f52',edge:'#a8ac8e',accent:'#edc484'}];
+function makeLevel(i){
+ const worlds=[
+  {width:2460,ground:[[0,430,610,110],[710,430,540,110],[1370,430,520,110],[2000,430,460,110]],platforms:[[285,365,135,16],[455,305,115,16],[810,355,135,16],[985,290,130,16],[1500,360,145,16],[1680,292,150,16]],hazards:[{x:1070,y:415,w:40,h:15},{x:1730,y:415,w:40,h:15}],entities:[{type:'post',x:150,y:430},{type:'fox',x:890,y:430},{type:'checkpoint',x:1430,y:430},{type:'core',x:1755,y:268},{type:'exit',x:2330,y:430}],sparks:[[340,338],[510,278],[863,328],[1050,263],[1550,333],[2090,396]]},
+  {width:2700,ground:[[0,430,480,110],[590,430,570,110],[1270,430,420,110],[1800,430,390,110],[2300,430,400,110]],platforms:[[250,363,140,16],[420,300,115,16],[600,238,165,16],[1300,360,135,16],[1470,292,140,16],[1650,226,145,16],[2110,362,155,16]],hazards:[{x:950,y:413,w:55,h:17},{x:1490,y:413,w:70,h:17},{x:2040,y:413,w:45,h:17}],entities:[{type:'gear',x:680,y:214},{type:'robot',x:910,y:430},{type:'checkpoint',x:1290,y:430},{type:'core',x:1720,y:201},{type:'exit',x:2570,y:430}],sparks:[[307,336],[475,272],[1370,333],[1540,265],[2185,333],[2390,397]]},
+  {width:2800,ground:[[0,430,480,110],[610,430,400,110],[1140,430,360,110],[1630,430,400,110],[2160,430,640,110]],platforms:[[300,363,130,16],[470,300,115,16],[645,239,140,16],[825,177,145,16],[1190,360,140,16],[1370,292,140,16],[1545,225,155,16],[1880,357,140,16],[2060,290,145,16]],hazards:[{x:810,y:413,w:55,h:17},{x:1305,y:413,w:50,h:17},{x:1830,y:413,w:60,h:17}],entities:[{type:'letter',x:895,y:153},{type:'checkpoint',x:1200,y:430},{type:'core',x:1623,y:200},{type:'keeper',x:2590,y:430}],sparks:[[359,334],[525,272],[713,211],[1250,333],[1430,265],[2130,263]]}
+ ];
+ const d=worlds[i]; d.solids=[...d.ground.map(a=>({x:a[0],y:a[1],w:a[2],h:a[3],ground:true})),...d.platforms.map(a=>({x:a[0],y:a[1],w:a[2],h:a[3],ground:false}))];
+ if(i===1&&flags.fox){for(const a of [[780,238,120,14],[930,238,120,14],[1080,238,120,14],[1230,238,120,14],[1380,238,120,14]])d.solids.push({x:a[0],y:a[1],w:a[2],h:a[3],bridge:true});d.entities.push({type:'guide',x:800,y:238});}
+ if(i===2&&flags.robot){for(const a of [[480,430,130,12],[1010,430,130,12],[1500,430,130,12],[2030,430,130,12]])d.solids.push({x:a[0],y:a[1],w:a[2],h:a[3],bridge:true});d.entities.push({type:'helper',x:650,y:430});}
+ d.sparks=d.sparks.map((a,n)=>({x:a[0],y:a[1],id:i+'-'+n}));return d;
+}
+
+
+// world
+function foe(kind, x, floor, span, key) {
+  const stats={drift:[28,22,1,28],hop:[27,27,1,21],moth:[29,20,1,25],shell:[33,27,2,21],boss:[61,61,7,20]}[kind];
+  return {kind,key,x,baseX:x,floor,y:floor-stats[1],w:stats[0],h:stats[1],hp:stats[2],max:stats[2],
+    speed:stats[3],span,dir:1,age:0,phase:mixed(run.seed,key.length+x)%30/10,hurt:0,attack:3.5,wind:0,open:0,flash:0,active:false};
+}
+function mainWorld(i) {
+  const d=makeLevel(i);
+  const sets=[
+    [['drift',246,430,13],['hop',805,430,30],['drift',1150,430,46],['moth',1550,353,33],['shell',2130,430,48]],
+    [['hop',172,430,26],['moth',533,300,24],['shell',1064,430,30],['drift',1370,430,32],['moth',1940,356,59],['hop',2410,430,32]],
+    [['shell',180,430,31],['moth',720,315,35],['hop',1230,430,19],['shell',1760,430,38],['moth',1990,350,28],['boss',2490,430,22]]
+  ];
+  d.foes=sets[i].map(([kind,x,y,span],j)=>{
+    if (run.kind==='regular' && j>0 && kind!=='boss') {
+      const roll=mixed(run.seed,i*15+j);
+      x+=(roll%21)-10;
+      if (kind==='drift'||kind==='hop') kind=(roll&1)?'hop':'drift';
+    }
+    return foe(kind,x,y,span,'m'+i+'-'+j);
+  });
+  if(i===2)d.entities.push({type:'checkpoint',x:2210,y:430});
+  d.targets=[];d.vents=[];d.lifts=[];
+  return d;
+}
+function floor(x,w) {return {x,y:430,w,h:110,ground:true};}
+function ledge(x,y,w,style) {return {x,y,w,h:16,ground:false,style};}
+function chamber(key) {
+  const number=questKeys.indexOf(key);
+  const variant=run.kind==='regular' ? mixed(run.seed,40+number)%3 : 0;
+  const shift=[0,32,-26][variant], dy=[0,-10,8][variant];
+  const d={width:1370,variant,solids:[],entities:[],foes:[],targets:[],hazards:[],sparks:[],vents:[],lifts:[]};
+  const makeFoe=(type,x,y,span)=> {
+    if (variant===2 && type==='drift')type='hop';
+    d.foes.push(foe(type,x+shift,y,span,key+'-'+d.foes.length));
+  };
+  const node=(x,y)=>d.targets.push({id:d.targets.length,x,y});
+  if (key==='fox') {
+    d.solids=[floor(0,697),floor(786,584),ledge(395+shift,357+dy,240,'wood'),ledge(800+shift,358,143,'wood'),ledge(969+shift,293+dy,173,'wood')];
+    node(269,405);node(575+shift,335+dy);node(1060+shift,271+dy);
+    makeFoe('drift',348,430,25);makeFoe('hop',883,430,31);makeFoe('moth',1160,353,45);
+  } else if(key==='robot') {
+    d.solids=[floor(0,1370),ledge(256+shift,359+dy,219,'iron'),ledge(661+shift,357,170,'iron'),ledge(847+shift,291+dy,195,'iron')];
+    node(439+shift,337+dy);node(976+shift,269+dy);
+    d.vents=[{x:533+shift,w:46,offset:0},{x:1090+shift,w:46,offset:1.9}];
+    makeFoe('shell',193,430,22); makeFoe('drift',590,430,30); makeFoe('shell',1185,430,36);
+  } else {
+    d.solids=[floor(0,655),floor(761,609),ledge(218+shift,359+dy,166,'shelf'),ledge(460+shift,295+dy,177,'shelf'),
+      ledge(663+shift,349,120,'float'),ledge(787+shift,294,135,'shelf'),ledge(955+shift,232+dy,164,'shelf')];
+    const lift=d.solids.find(s=>s.style==='float');lift.baseX=lift.x;d.lifts.push(lift);
+    node(310+shift,336+dy);node(565+shift,272+dy);node(1025+shift,208+dy);
+    makeFoe('moth',400,343,39);makeFoe('hop',845,430,35);makeFoe('moth',1160,320,31);
+  }
+  applyVariant(d,key,variant);
+  if(key==='robot')d.foes[d.foes.length-1].guard=true;
+  d.entities.push({type:'back',x:52,y:430},{type:'chest',x:1260,y:430});
+  return d;
+}
+function resetBody(point) {
+  player={x:point.x,y:point.y-32,w:20,h:32,vx:0,vy:0,face:1,walk:0,onGround:true,standing:null,extraJump:true,
+    invincible:.65,hitFlash:0,dropTimer:0,shotTimer:0,shotFlash:0,chain:0};
+  camera=clamp(point.x-W*.36,0,world.width-W); keys.clear(); jumpBuffer=0;coyote=0;nearby=null;
+}
+function setScene(point) {
+  levelIndex=run.level;roomKey=run.room;world=roomKey?chamber(roomKey):mainWorld(levelIndex);
+  world.foes=world.foes.filter(f=>!defeated.has(f.key));
+  particles=[];bolts=[];waves=[];sceneTime=0;saveClock=0;hudCache=''; labelTime=2.2;
+  $('locationLabel').textContent=roomKey?T(quests[roomKey].room):T(chapters[levelIndex]);
+  $('locationLabel').hidden=false;$('interactionHint').hidden=true;$('toast').hidden=true;
+  $('titleScreen').hidden=true;$('endingScreen').hidden=true;mode='play';resetBody(point);
+  showPlaying();updateHud();canvas.focus({preventScroll:true});
+}
+function startRun(kind, automatic=false) {
+  const seed=kind==='regular' ? (Math.random()*0x100000000)>>>0 : CLASS_SEED;
+  auto=null;modalKind=null;dialog=null;deck=null;hidePanels();bindRun(buildRun(kind,seed));
+  if (automatic) auto=makeProjection();
+  setScene(run.checkpoint);saveGame();
+  if (kind==='regular' && book.stamps.length) {run.packing=true;saveGame();openDeck('start');}
+  else openDialog(stories.intro);
+}
+function continueRun() {
+  if(!saved)return;
+  auto=null;modalKind=null;dialog=null;deck=null;hidePanels();bindRun(JSON.parse(JSON.stringify(saved)));
+  setScene(run.room?{x:83,y:430}:run.checkpoint);
+  if(run.complete){renderEnding();return;}
+  if(run.pending){openDeck(run.pending);return;}
+  if(run.packing&&book.stamps.length){openDeck('start');return;}
+  toast(tr('从灯光留下的脚印继续。','灯りが覚えた場所から、配達を再開。'));
+}
+function enterChamber(key,e) {
+  run.origin={x:e.x-10,y:key==='letter'?177:430};run.room=key;
+  setScene({x:83,y:430});saveGame();
+  const first={
+    fox:line('fox','我记得三户人家的灯。用你的邮灯点亮它们，我就找得到回家的路！','三軒の家の灯りを覚えているよ。ランタンでともしてくれたら、うちに帰れる！'),
+    robot:line('robot','齿轮到位。泵房还差两只飞轮，朝它们发射灯光。格栅冒白气时，请跳过去。','ギア装着。残るは二つのはずみ車です。光を当ててください。白い蒸気が出たら、ジャンプを。'),
+    letter:line('mio','风把旧信吹散了。还有三页落在书架上，我想把它们拼回去。','風で手紙がばらばらだ。棚の上に残った三枚を拾えば、読めるかもしれない。')
+  };openDialog([first[key]]);
+}
+function leaveChamber() {
+  const origin=run.origin||{x:[880,900,885][run.level],y:run.level===2?177:430};
+  run.checkpoint={...origin};run.room=null;run.origin=null;run.pending=null;
+  setScene(origin);saveGame();
+}
+function nextChapter() {
+  run.level++;run.room=null;run.origin=null;run.checkpoint={x:75,y:430};
+  run.hp=maxHp();
+  setScene(run.checkpoint);saveGame();
+  const seq=levelIndex===1?[...stories.enter2,...(flags.fox?stories.foxRoute:[])]:[...stories.enter3,...(flags.robot?stories.robotRoute:[])];
+  openDialog(seq);
+}
+function finishTrip() {
+  run.complete=true;
+  if(run.kind==='regular'){
+    if(storageOK)book=loadBook(); if(!book.deliveries.includes(run.id))book.deliveries.push(run.id); writeData(BOOK_KEY,book);
+  }
+  saveGame();chime('win');renderEnding();
+}
+function retry() {
+  const point=roomKey?{x:83,y:430}:run.checkpoint;run.respawns++;run.hp=maxHp();
+  resetBody(point);player.invincible=1.25;bolts=[];waves=[];saveGame();updateHud();
+  toast(roomKey?tr('回到入口，已完成的机关会保留。','入口から再開。動かした仕掛けはそのまま。'):tr('灯柱亮着，再跑一次吧。','街灯はついている。もう一度、行こう。'));
+  chime('fall');
+}
+
+
+// variants
+// Alternate blocks are hand-built so every commission can be cleared with the basic jump.
+const alternateRooms={
+  fox:[
+    {ground:[[0,708],[803,567]],platforms:[[192,359,175],[371,299,165],[821,357,142],[983,292,173]],targets:[[447,277],[649,405],[1066,270]]},
+    {ground:[[0,493],[579,352],[1011,359]],platforms:[[165,359,155],[337,296,176],[587,362,139],[850,365,144],[1029,342,155]],targets:[[424,274],[716,405],[1120,320]]}
+  ],
+  robot:[
+    {ground:[[0,1370]],platforms:[[197,362,148],[561,362,144],[726,299,146],[902,236,176]],targets:[[373,406],[994,214]],vents:[457,1100]},
+    {ground:[[0,1370]],platforms:[[179,359,155],[355,297,170],[697,361,146],[873,301,186]],targets:[[448,275],[984,279]],vents:[572,653,1083]}
+  ],
+  letter:[
+    {ground:[[0,570],[665,705]],platforms:[[191,359,150],[353,298,151],[532,238,168],[703,229,120],[865,314,117],[1015,298,173]],
+      targets:[[255,337],[633,216],[1090,276]],float:3},
+    {ground:[[0,523],[623,286],[997,373]],platforms:[[170,359,154],[348,297,170],[610,359,148],[800,299,142],[975,238,176]],
+      targets:[[440,275],[686,337],[1069,216]],float:3}
+  ]
+};
+function applyVariant(d,key,variant){
+  if(!variant)return;
+  const b=alternateRooms[key][variant-1],style={fox:'wood',robot:'iron',letter:'shelf'}[key];
+  d.solids=b.ground.map(([x,w])=>floor(x,w));d.lifts=[];
+  b.platforms.forEach(([x,y,w],i)=>{
+    const s=ledge(x,y,w,i===b.float?'float':style);if(s.style==='float'){s.baseX=x;d.lifts.push(s);}d.solids.push(s);
+  });
+  d.targets=b.targets.map(([x,y],id)=>({id,x,y}));
+  if(b.vents)d.vents=b.vents.map((x,i)=>({x,w:42,offset:i*1.6}));
+}
+
+
+// play
+function burst(x,y,n,color='#ffe1a2') {
+  for (let i=0;i<n;i++) particles.push({x,y,vx:(Math.random()-.5)*123,vy:-24-Math.random()*86,life:.32+Math.random()*.6,color,size:i%4===0?4:2});
+}
+function damage(x) {
+  if (player.invincible>0) return;
+  player.invincible=1.45;player.hitFlash=1.05;
+  if (run.shield) {run.shield=false;burst(player.x+10,player.y+15,18,'#e8bddd');toast(tr('封蜡护住了邮包','封ろうが守ってくれた')); }
+  else {run.hp--;chime('fall');burst(player.x+10,player.y+13,9,'#ed917a');}
+  if (run.hp<=0){retry();return;}
+  if(Number.isFinite(x))player.x=clamp(player.x+(player.x+10>=x?9:-9),0,world.width-20);
+  updateHud();saveGame();
+}
+function hitFoe(f,amount,stomp=false) {
+  if (f.hp<=0||f.hurt>0)return;
+  if(f.kind==='boss'&&f.open<=0&&!stomp){burst(f.x+f.w/2,f.y+29,4,'#b1b5bb');return;}
+  f.hp=Math.max(0,f.hp-amount);f.hurt=f.kind==='boss'?.24:.13;
+  burst(f.x+f.w/2,f.y+f.h/2,f.hp?7:18,f.kind==='boss'?'#efa38b':'#b7e1cf');
+  if (!f.hp) {
+    defeated.add(f.key);
+    if (has('mend') && defeated.size%3===0)run.hp=Math.min(maxHp(),run.hp+1);
+    if(f.guard&&targetsDone('robot'))toast(tr('阀门通了，去工作台领谢礼。','弁が動いた。整備台でお礼を受け取ろう。'));
+    if(f.kind==='boss'){waves=[];chime('core');toast(tr('雾钟散开了。把信交给青。','鐘の霧が晴れた。アオに手紙を渡そう。'));}else if(stomp)tone(610,.16,.035,'triangle');
+    saveGame();
+  } else tone(233,.1,.022,'triangle');
+  updateHud();
+}
+function lightTarget(target) {
+  const task=run.tasks[roomKey];
+  if(task.includes(target.id))return;
+  task.push(target.id);burst(target.x,target.y,18,quests[roomKey].tone);chime('spark');saveGame();updateHud();
+  if(roomKey==='robot'&&targetsDone(roomKey)&&!taskDone(roomKey))toast(tr('飞轮已转动。还要驱散阀门旁的雾甲。','はずみ車が回った。弁のそばの霧をはらおう。'));
+  else if(taskDone(roomKey))toast(tr('齐了！到右端领取委托谢礼。','そろった！ 右端でお礼を受け取ろう。'));
+}
+function shoot() {
+  if(player.shotTimer>0)return;
+  const dir=player.face, y=player.y+17;
+  const add=d=>bolts.push({x:player.x+10+d*13,y,dir:d,left:has('long')?378:243,power:flags.robot?2:1,pierce:flags.robot?2:1,hit:new Set()});
+  add(dir);if(has('echo'))add(-dir);
+  player.shotTimer=has('quick')?.26:.46;player.shotFlash=.12;tone(523,.09,.018,'triangle');
+}
+function stepBolts(dt) {
+  for(const b of bolts) {
+    const travel=407*dt;b.x+=b.dir*travel;b.left-=travel;
+    for(const f of world.foes) {
+      if(f.hp<=0||b.hit.has(f.key)||b.x<f.x-5||b.x>f.x+f.w+5||b.y<f.y-5||b.y>f.y+f.h+4)continue;
+      b.hit.add(f.key);hitFoe(f,b.power);if(--b.pierce<=0){b.left=0;break;}
+    }
+    if(b.left>0 && roomKey && roomKey!=='letter') for(const t of world.targets) {
+      if(!run.tasks[roomKey].includes(t.id)&&Math.abs(t.x-b.x)<17&&Math.abs(t.y-b.y)<23){lightTarget(t);b.left=0;break;}
+    }
+  }
+  bolts=bolts.filter(b=>b.left>0);
+}
+function stepFoes(dt,oldBottom,fallSpeed) {
+  for(const f of world.foes) {
+    if(f.hp<=0)continue;
+    f.hurt=Math.max(0,f.hurt-dt);
+    const near=Math.abs(player.x-f.x)<630;
+    if (!near)continue;
+    f.age+=dt;
+    if(f.kind==='boss'){
+      f.open=Math.max(0,f.open-dt);f.active=Math.abs(player.x-f.x)<410;
+      if(f.active) {
+        if(f.wind>0) {
+          f.wind-=dt;
+          if(f.wind<=0){f.open=1.9;waves.push({x:f.x+f.w/2,y:f.floor-3,dir:player.x<f.x?-1:1,life:2.5});f.attack=f.hp<=3?1.8:2.6;tone(146,.32,.04,'triangle');}
+        }else {f.attack-=dt;if(f.attack<=0){f.wind=1.05;f.attack=2.6;}}
+      }
+    }
+    if(f.wind<=0){
+      f.x+=f.dir*f.speed*dt;
+      if(f.x>=f.baseX+f.span){f.x=f.baseX+f.span;f.dir=-1;}
+      if(f.x<=f.baseX-f.span){f.x=f.baseX-f.span;f.dir=1;}
+    }
+    let rise=0;
+    if(f.kind==='hop')rise=Math.max(0,Math.sin(f.age*3.3+f.phase))*39;
+    if(f.kind==='moth')rise=18+Math.sin(f.age*2.25+f.phase)*22;
+    if(f.kind==='boss' && f.wind>0)rise=Math.sin((1.05-f.wind)*Math.PI/1.05)*9;
+    f.y=f.floor-f.h-rise;
+    if(player.x+player.w<=f.x+2||player.x>=f.x+f.w-2||player.y>=f.y+f.h||player.y+player.h<f.y)continue;
+    if(fallSpeed>5 && oldBottom<=f.y+Math.max(8,fallSpeed*dt+3)){
+      player.y=f.y-player.h;player.vy=has('bounce')?-490:-356;player.onGround=false;player.standing=null;player.extraJump=true;coyote=0;
+      hitFoe(f,has('bounce')?2:1,true);
+    }else damage(f.x+f.w/2);
+  }
+  for(const w of waves){
+    w.x+=w.dir*194*dt;w.life-=dt;
+    if(w.life>0 && player.x+player.w>w.x-12 && player.x<w.x+12 && player.y+player.h>w.y-17 && player.y<w.y+4)damage(w.x);
+  }
+  waves=waves.filter(w=>w.life>0);
+}
+function ventStage(v) {const t=(sceneTime+v.offset)%4.2;return t>3.03?'on':t>2.16?'warn':'off';}
+function activateLamp(e) {
+  const id='lamp-'+levelIndex+'-'+e.x;
+  if(run.lamps.includes(id))return;
+  run.lamps.push(id);run.checkpoint={x:e.x+22,y:e.y};run.hp=maxHp();if(flags.letter)run.shield=true;
+  burst(e.x,e.y-58,13);chime('spark');toast(tr('灯柱已亮 · 灯火补满','街灯がともった · 灯りが全回復'));saveGame();updateHud();
+}
+function scanObjects() {
+  const px=player.x+10,py=player.y+16;
+  let close=null,best=65;
+  for(const e of world.entities){
+    const floating=['gear','core','letter'].includes(e.type);
+    const dist=Math.hypot(px-e.x,py-(floating?e.y:e.y-19));
+    if(e.type==='core'){
+      if(!cores[levelIndex]&&dist<33){cores[levelIndex]=true;burst(e.x,e.y,25);chime('core');updateHud();saveGame();toast(tr('灯芯入袋','灯の芯を手に入れた')+'  '+cores.filter(Boolean).length+' / 3');}continue;
+    }
+    if(e.type==='gear'){
+      if(!flags.gear&&dist<33){flags.gear=true;burst(e.x,e.y,12);chime('spark');saveGame();updateHud();toast(tr('捡到备用齿轮，带给前方的洛可。','予備のギアだ。先にいるロコへ届けよう。'));}continue;
+    }
+    if(e.type==='checkpoint'&&dist<44)activateLamp(e);
+    if(dist<best){best=dist;close=e;}
+  }
+  if(roomKey){
+    for(const t of world.targets) {
+      if(run.tasks[roomKey].includes(t.id))continue;
+      const dist=Math.hypot(px-t.x,py-t.y);
+      if(roomKey==='letter'&&dist<31){lightTarget(t);continue;}
+      if(roomKey==='fox'&&dist<best){best=dist;close={type:'wick',target:t};}
+    }
+  }
+  for(const s of world.sparks){if(!collected.has(s.id)&&Math.hypot(px-s.x,py-s.y)<29){collected.add(s.id);burst(s.x,s.y,9);chime('spark');if(collected.size%3===0 && run.hp<maxHp()){run.hp++;toast(tr('三枚萤光补回一格灯火。','光のかけら三つで、灯りが一つ戻った。'));updateHud();}saveGame();}}
+  nearby=close;showHint();
+}
+function update(dt) {
+  runTime+=dt;
+  if(mode!=='modal'){toastTime-=dt;if(toastTime<=0)$('toast').hidden=true;}
+  if(run && ['play','dialog','draft'].includes(mode))run.elapsed+=dt;
+  if(auto && ['play','dialog','draft'].includes(mode))tickProjection(dt);
+  if(mode!=='play')return;
+  sceneTime+=dt;saveClock+=dt;if(saveClock>8){saveClock=0;saveGame();}
+  labelTime-=dt;if(labelTime<=0)$('locationLabel').hidden=true;
+  player.hitFlash=Math.max(0,player.hitFlash-dt);player.dropTimer=Math.max(0,player.dropTimer-dt);player.invincible=Math.max(0,player.invincible-dt);
+  player.shotTimer=Math.max(0,player.shotTimer-dt);player.shotFlash=Math.max(0,player.shotFlash-dt);
+  jumpBuffer-=dt;coyote=player.onGround?.115:Math.max(0,coyote-dt);
+  for(const lift of world.lifts){const last=lift.x;lift.x=lift.baseX+Math.sin(sceneTime*1.4)*22;if(player.standing===lift)player.x+=lift.x-last;}
+  const dir=Number(keys.has('ArrowRight')||keys.has('KeyD'))-Number(keys.has('ArrowLeft')||keys.has('KeyA'));
+  player.vx=dir*(ext.guard?105:218);if(dir){player.face=dir;player.walk+=dt*12;}
+  if(jumpBuffer>0 && (coyote>0 || (jumpBuffer>.09 && flags.fox && player.extraJump))){
+    const mid=coyote<=0;player.vy=mid?-393:-456;if(mid){player.extraJump=false;burst(player.x+10,player.y+29,11,'#f6ad73');}
+    jumpBuffer=0;coyote=0;player.onGround=false;player.standing=null;chime('jump');
+  }
+  if(keys.has('KeyX'))shoot();
+  const oldBottom=player.y+player.h;
+  player.x=clamp(player.x+player.vx*dt,0,world.width-player.w);player.vy=Math.min(player.vy+985*dt,640);const fallSpeed=player.vy;
+  player.y+=player.vy*dt;player.onGround=false;player.standing=null;
+  if(player.vy>=0){
+    let landing=null;
+    for(const s of world.solids) {
+      if(player.dropTimer>0&&!s.ground)continue;
+      if(player.x+player.w>s.x+2 && player.x<s.x+s.w-2 && oldBottom<=s.y+2 && player.y+player.h>=s.y && (!landing||s.y<landing.y))landing=s;
+    }
+    if(landing){player.y=landing.y-player.h;player.vy=0;player.onGround=true;player.standing=landing;player.extraJump=true;}
+  }
+  if(player.y>H+45){retry();return;}
+  stepBolts(dt);stepFoes(dt,oldBottom,fallSpeed);
+  for(const h of world.hazards){if(player.x+18>h.x+3&&player.x+2<h.x+h.w-3&&player.y+32>h.y+4&&player.y<h.y+h.h)damage(h.x+h.w/2,'hazard');}
+  for(const v of world.vents){if(ventStage(v)==='on'&&player.x+17>v.x&&player.x+3<v.x+v.w&&player.y+32>365&&player.y<430)damage(v.x+v.w/2,'hazard');}
+  scanObjects();
+  camera+=(clamp(player.x-W*.36,0,world.width-W)-camera)*Math.min(1,dt*6.7);
+  for(const p of particles){p.x+=p.vx*dt;p.y+=p.vy*dt;p.vy+=100*dt;p.life-=dt;}
+  particles=particles.filter(p=>p.life>0);updateHud();
+}
+function interact() {
+  if(mode!=='play'||!nearby)return;
+  const e=nearby;
+  if(e.type==='wick'){lightTarget(e.target);return;}
+  if(e.type==='back'){
+    openDialog([line('mio','入口通回原来的邮路。已经完成的机关会保留。','入口は元の道につながっている。動かした仕掛けはそのままだ。')],null,[
+      option('留在副本','この場所に残る',()=>{}),option('返回邮路','元の道へ戻る',leaveChamber)]);return;
+  }
+  if(e.type==='chest'){
+    if(roomKey==='robot'&&targetsDone(roomKey)&&!taskDone(roomKey)){toast(tr('阀门还被雾甲缠住了。用灯击或踩踏驱散它。','弁に霧のよろいが残っている。光か踏みつけではらおう。'));return;}
+    if(!taskDone(roomKey)){toast(tr('还差','あと ')+(quests[roomKey].count-run.tasks[roomKey].length)+tr('处，看看发光的标记。','か所。光る目印を探そう。'));return;}
+    const k=roomKey, thanks=k==='fox'?stories.foxYes:k==='robot'?stories.robotYes:stories.letter;
+    openDialog(thanks,()=>{run.pending=k;saveGame();openDeck(k);});return;
+  }
+  if(questKeys.includes(e.type)){
+    const k=e.type;
+    if(flags[k]){openDialog([k==='fox'?stories.foxYes[1]:k==='robot'?stories.robotYes[1]:stories.letter[2]]);return;}
+    if(k==='robot'&&!flags.gear){openDialog(stories.robotAsk);return;}
+    const intro=k==='fox'?stories.foxAsk:k==='robot'?stories.robotReady:[line('mio','石阶上压着青没寄出的信封。散页被风吹进了后面的退信书库……','石段に、アオが出せなかった封筒がある。中の手紙は、風で奥の書庫に飛ばされたみたい。')];
+    const accept={fox:['借灯，一起进巷','灯りを貸して路地へ'],robot:['装齿轮，进入泵房','ギアをつけてポンプ室へ'],letter:['进书库找信页','書庫で手紙を探す']}[k];
+    openDialog(intro,null,[option(...accept,()=>enterChamber(k,e)),option('先去送信','先に配達する',()=>{})]);return;
+  }
+  if(e.type==='post'){openDialog([line('post','黑雾遇到灯就会散。跳到雾团头顶也行。那边金色的菱形，是中继站的灯芯。','黒い霧は光ではらえるよ。上から踏んでもいい。金色のひし形が中継所の芯だよ。')]);return;}
+  if(e.type==='guide'){openDialog(stories.foxRoute);return;}
+  if(e.type==='helper'){openDialog(stories.robotRoute);return;}
+  if(e.type==='checkpoint'){run.checkpoint={x:e.x+22,y:430};saveGame();toast(tr('脚印记在这盏灯下。','この街灯に足跡を記録した。'));return;}
+  if(e.type==='exit'||e.type==='keeper'){
+    if(!cores[levelIndex]){openDialog([line('mio','这一站的金色灯芯还在高处。带上它才能点亮灯塔。','金色の芯が、まだ高い足場にある。灯台をともすには拾っていこう。')]);return;}
+    if(e.type==='keeper'){
+      if(world.foes.some(f=>f.kind==='boss'&&f.hp>0)){toast(tr('先用灯击或跳踩驱散雾钟。','まず光か踏みつけで鐘の霧をはらおう。'));return;}
+      openDialog([...stories.ending,...(flags.letter?stories.letterEnding:stories.noLetterEnding),...stories.finale],finishTrip);return;
+    }
+    const done=flags[questKeys[levelIndex]];
+    openDialog([line('mio',done?'灯芯和新的约定都收好了。出发吧。':'灯芯入袋。离开这一章后，这里的委托要等下次投递了。',done?'芯も新しい約束も、かばんに入った。出発しよう。':'芯を手に入れた。この章を出ると、ここの寄り道は次の配達になる。')],null,[option('前往下一章','次の章へ',nextChapter),option('再留一会儿','もう少しここにいる',()=>{})]);
+  }
+}
+
+
+// pixels
+function rect(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),w,h);}
+function poly(points,c){ctx.fillStyle=c;ctx.beginPath();points.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();ctx.fill();}
+function noise(n){const x=Math.sin(n*127.1+311.7)*43758.5453;return x-Math.floor(x);}
+function glow(x,y,r,color){const g=ctx.createRadialGradient(x,y,1,x,y,r);g.addColorStop(0,color);g.addColorStop(1,'transparent');ctx.fillStyle=g;ctx.fillRect(x-r,y-r,r*2,r*2);}
+function pixelCloud(x,y,s,c){rect(x,y,50*s,7*s,c);rect(x+8*s,y-5*s,35*s,5*s,c);rect(x+17*s,y-10*s,13*s,5*s,c);}
+function pine(x,y,s,c){rect(x-3*s,y-25*s,6*s,55*s,c);for(let i=0;i<5;i++){const yy=y-i*18*s,ww=(58-i*9)*s;poly([[x-ww,yy],[x,yy-65*s],[x+ww,yy]],c);}}
+function tree(x,y,s,seed,foreground=false){
+ const bark=foreground?'#102e2b':'#24493d';rect(x-8*s,y-220*s,16*s,220*s,bark);rect(x-13*s,y-45*s,25*s,45*s,bark);poly([[x-4*s,y-125*s],[x-66*s,y-190*s],[x-58*s,y-195*s],[x+5*s,y-150*s]],bark);poly([[x+5*s,y-165*s],[x+60*s,y-230*s],[x+67*s,y-228*s],[x+5*s,y-140*s]],bark);
+ for(let i=0;i<42;i++){const angle=noise(seed+i)*Math.PI*2,rr=noise(seed+i*2+3)*95*s;const xx=x+Math.cos(angle)*rr,yy=y-230*s+Math.sin(angle)*rr*.55,ww=(15+noise(i+seed*3)*35)*s;const colors=foreground?['#143c31','#184437','#20523d','#2b5d40']:['#2c5b43','#32674a','#3c7451','#477b54'];rect(xx,yy,ww,12*s,colors[i%4]);rect(xx+5*s,yy-8*s,ww-10*s,8*s,colors[i%4]);}
+ for(let i=0;i<9;i++){const xx=x+(noise(seed+i*7)-.5)*140*s,yy=y-230*s+noise(seed+i*9)*60*s;rect(xx,yy,2*s,(8+noise(i+21)*20)*s,'#5a8251');}
+}
+function house(x,y,s,lit=true,teal=false){const wall=teal?'#2c5351':'#3c5b50',roof=teal?'#153b41':'#23443e';rect(x,y-65*s,80*s,65*s,wall);poly([[x-7*s,y-65*s],[x+36*s,y-100*s],[x+88*s,y-65*s]],roof);rect(x+52*s,y-97*s,9*s,25*s,roof);rect(x+27*s,y-33*s,19*s,33*s,'#183d39');for(const off of [10,55]){if(lit)glow(x+(off+8)*s,y-42*s,30*s,'#e9ba4f24');rect(x+off*s,y-51*s,15*s,19*s,lit?'#d0ab67':'#254746');rect(x+(off+7)*s,y-51*s,2*s,19*s,wall);rect(x+off*s,y-43*s,15*s,2*s,wall);}rect(x+4*s,y-13*s,17*s,2*s,'#72906a');}
+function lighthouse(x,base,s,lit=false){
+ const body='#a7b6a0',shade='#708f86';poly([[x-24*s,base],[x-15*s,base-200*s],[x+14*s,base-200*s],[x+28*s,base]],body);poly([[x+5*s,base],[x+8*s,base-200*s],[x+14*s,base-200*s],[x+28*s,base]],shade);
+ for(let i=0;i<6;i++)rect(x-17*s,base-(i*29+25)*s,34*s,3*s,'#587c7866');
+ for(let i=0;i<3;i++){rect(x-4*s,base-(i*50+50)*s,9*s,17*s,'#234a51');rect(x-2*s,base-(i*50+48)*s,3*s,11*s,'#d3b476');}
+ rect(x-21*s,base-207*s,43*s,7*s,'#455f5c');rect(x-16*s,base-239*s,32*s,32*s,lit?'#f8db85':'#294c4f');
+ for(let i=-1;i<=1;i++)rect(x+i*15*s-1*s,base-240*s,3*s,35*s,'#55746a');poly([[x-28*s,base-239*s],[x,base-260*s],[x+27*s,base-239*s]],'#344c4a');rect(x-2*s,base-269*s,4*s,11*s,'#adc1a3');rect(x-30*s,base-211*s,60*s,3*s,'#b3bb9a');rect(x-30*s,base-211*s,3*s,12*s,'#91a387');rect(x+28*s,base-211*s,3*s,12*s,'#91a387');rect(x-32*s,base-200*s,64*s,4*s,'#64837b');rect(x-7*s,base-31*s,16*s,31*s,'#254847');rect(x-5*s,base-28*s,10*s,28*s,'#b29160');
+ if(lit){glow(x,base-223*s,95*s,'#fbd58266');poly([[x,base-228*s],[x-450*s,base-290*s],[x-450*s,base-180*s]],'#f5db7b15');poly([[x,base-228*s],[x+450*s,base-290*s],[x+450*s,base-180*s]],'#f5db7b15');}
+}
+function drawBackground(t,cam=0,i=0,dawn=false){
+ const p=palette[i];const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,dawn?'#658b88':p.sky);g.addColorStop(.72,dawn?'#b5b795':p.mid);g.addColorStop(1,dawn?'#d4c091':'#1c4144');ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+ for(let n=0;n<45;n++){const xx=((noise(n+8)*1200-cam*.08)%W+W)%W,yy=noise(n+62)*230;rect(xx,yy,n%4===0?2:1,n%4===0?2:1,dawn?'#dfd9ab88':'#b7d0ad77');}
+ const mx=745-cam*.07,my=88;glow(mx,my,105,dawn?'#ead4a544':'#bfd4bb18');rect(mx-22,my-30,44,60,dawn?'#e6d297':'#c4d0b5');rect(mx-30,my-21,60,42,dawn?'#e6d297':'#c4d0b5');if(!dawn){rect(mx-15,my-23,15,7,'#a1b9ab');rect(mx+10,my+9,11,8,'#b0c3ad');}
+ for(let n=0;n<7;n++)pixelCloud(((n*189+40-cam*.12+t*1.6)%1300+1300)%1300-180,55+noise(n+6)*140,1+noise(n+2),dawn?'#c8c7a555':'#51787433');
+ for(let layer=0;layer<3;layer++){const pts=[[0,H]];for(let x=-60;x<1100;x+=65){const wx=x+cam*(.09+layer*.09);pts.push([x,260+layer*45+Math.sin(wx*.006+layer*2)*42+Math.sin(wx*.013+layer)*18]);}pts.push([W,H]);poly(pts,dawn?['#74958c','#638981','#4b7972'][layer]:['#224c51','#1d4548','#173d40'][layer]);}
+ if(i===0){for(let n=0;n<10;n++){const xx=n*170-cam*.3-70;house(xx,377+noise(n+80)*17,.6+noise(n+30)*.35,n%3===0,true);}}
+ if(i===1){for(let n=0;n<14;n++)pine(n*105-cam*.24-30,380,.6+noise(n+3)*.8,n%2?'#1b4138':'#204e41');}
+ if(i===2){lighthouse(835-cam*.10,350,.72,dawn);for(let n=0;n<6;n++)poly([[n*210-cam*.18,410],[n*210+65-cam*.18,335],[n*210+135-cam*.18,410]],'#34585c');}
+ rect(0,465,W,75,dawn?'#4f7c74':'#183f43');for(let n=0;n<42;n++){const x=(noise(n*3+1)*1100+t*(n%2?5:-5))%1100-60;rect(x,473+noise(n+55)*68,15+noise(n+1)*70,2,dawn?'#a2b89933':'#79a89622');}
+ const mist=ctx.createLinearGradient(0,345,0,480);mist.addColorStop(0,'transparent');mist.addColorStop(.5,'#b1cbaa09');mist.addColorStop(1,'transparent');ctx.fillStyle=mist;ctx.fillRect(0,345,W,135);
+}
+function drawBridge(x,y,w,green=false){rect(x,y,w,10,green?'#77936a':'#8c8b6c');for(let xx=x;xx<x+w;xx+=13)rect(xx,y+2,3,8,'#3b5849');ctx.strokeStyle='#bdaf7a99';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,y-23);ctx.quadraticCurveTo(x+w/2,y-5,x+w,y-23);ctx.stroke();for(const xx of [x,x+w-4]){rect(xx,y-32,4,42,'#889875');rect(xx-2,y-35,8,4,'#c6bd88');}}
+function lantern(x,y,on=true,size=1){if(on){glow(x,y,45*size,'#ffbd5233');glow(x,y,16*size,'#ffd67555');}rect(x-5*size,y-7*size,10*size,14*size,'#9b895a');rect(x-3*size,y-5*size,6*size,10*size,on?'#f5d98c':'#49635c');rect(x-6*size,y-8*size,12*size,2*size,'#c4ad72');rect(x-6*size,y+7*size,12*size,2*size,'#685e43');rect(x-3*size,y-12*size,6*size,4*size,'#8f8c5f');}
+function drawMio(x,y,face=1,walk=0,scale=1){
+ ctx.save();ctx.translate(Math.round(x+10*scale),Math.round(y));ctx.scale(face*scale,scale);const step=Math.sin(walk)*3;rect(-7,26,5,6+step,'#213b3a');rect(3,26,5,6-step,'#213b3a');rect(-9,14,19,13,'#d7c19a');rect(-6,12,13,5,'#ebd5b0');rect(-6,0,13,13,'#d8bf96');rect(-8,-2,16,6,'#394f45');rect(-7,2,4,9,'#344d43');rect(3,5,2,2,'#24423b');rect(-9,12,21,4,'#c87554');rect(-16-Math.sin(walk)*2,14,9,4,'#be6b4c');rect(-13,18,7,8,'#8e7152');rect(8,18,6,5,'#ddc39b');lantern(17,27,true,.62);ctx.restore();
+}
+function drawFox(x,y,happy=false){const wag=Math.sin(runTime*4)*2;poly([[x-9,y-8],[x-26,y-19+wag],[x-22,y-4],[x-9,y-3]],'#c68a56');rect(x-5,y-17,17,13,'#dcaa6c');rect(x-8,y-22,7,10,'#dca36a');rect(x+8,y-23,6,11,'#dca36a');rect(x-2,y-10,11,7,'#ead3a1');rect(x-3,y-4,4,4,'#ad7954');rect(x+8,y-4,4,4,'#ad7954');rect(x+8,y-15,2,2,'#203e38');if(happy){rect(x+15,y-14,4,2,'#f3df9a');}}
+function drawRobot(x,y,on){rect(x-11,y-32,23,19,on?'#a2b594':'#66817a');rect(x-9,y-29,19,8,'#284f4a');rect(x-5,y-27,3,3,on?'#e8d38d':'#51766a');rect(x+4,y-27,3,3,on?'#e8d38d':'#51766a');rect(x-9,y-11,19,7,'#81977a');rect(x-8,y-4,5,4,'#4c6d62');rect(x+4,y-4,5,4,'#4c6d62');rect(x-16,y-12,5,9,'#8e9d7c');rect(x+12,y-12,5,9,'#8e9d7c');rect(x,y-39,2,7,'#9baf88');rect(x-2,y-41,6,3,on?'#e1bf72':'#56786c');}
+function drawAdult(x,y,post=false){rect(x-8,y-24,18,22,post?'#8b9b7b':'#749697');rect(x-6,y-40,14,15,'#cebd93');rect(x-10,y-43,22,7,post?'#a9ac8a':'#455e5c');rect(x-5,y-47,12,5,post?'#a9ac8a':'#455e5c');rect(x+3,y-35,2,2,'#3b554b');rect(x-8,y-2,7,3,'#2d4741');rect(x+5,y-2,7,3,'#2d4741');rect(x-13,y-24,5,15,'#9eb197');if(post){rect(x-4,y-28,9,4,'#d6d0ae');}else rect(x-2,y-24,4,17,'#d0b57f');}
+function drawGround(s,i){const p=palette[i];if(s.bridge){drawBridge(s.x,s.y,s.w,true);return;}rect(s.x,s.y,s.w,s.h,p.land);rect(s.x,s.y,s.w,5,p.edge);rect(s.x,s.y+5,s.w,5,i===2?'#727c70':'#4e7050');if(!s.ground){rect(s.x+8,s.y+s.h,s.w-16,5,'#1b3832');if(i===2){poly([[s.x+12,s.y+21],[s.x+30,s.y+40],[s.x+45,s.y+21]],'#465d54');}else{for(let n=0;n<s.w;n+=29)rect(s.x+n+5,s.y+10,3,14+noise(n+s.x)*24,'#4e7952');}}
+ const n=Math.floor(s.w/24);for(let j=0;j<n;j++){const xx=s.x+j*24+noise(j+s.x)*10;rect(xx,s.y-3-noise(j+s.x+8)*4,2,5+noise(j)*4,p.edge);if(s.ground){const yy=s.y+24+noise(j+s.x)*60;rect(xx,yy,8+noise(j)*10,3,i===2?'#7b897d44':'#71937333');}}
+}
+function drawTitle(t,dawn=false){
+ drawBackground(t,0,0,dawn);
+ for(let n=0;n<6;n++)pine(435+n*85,415,.65+noise(n)*.8,'#163c35');
+ poly([[720,338],[805,324],[892,333],[960,375],[960,540],[780,540],[750,452]],'#34584c');poly([[739,360],[760,371],[777,463],[800,493],[785,540],[756,540],[750,459]],'#67958a');rect(749,375,4,126,'#c2d2ae44');rect(759,439,5,70,'#b0caa655');
+ lighthouse(836,337,.79,true);
+ house(620,365,.65,true);rect(622,365,72,10,'#819575');poly([[610,375],[703,375],[695,410],[630,426]],'#2c5144');
+ drawBridge(475,426,287);drawGround({x:0,y:444,w:470,h:96,ground:true},0);drawGround({x:755,y:426,w:205,h:114,ground:true},0);
+ tree(915,475,1.24,25,true);tree(395,448,.98,8,true);tree(20,470,1.55,41,true);
+ rect(746,366,5,61,'#506f50');lantern(748,362,true);drawMio(597,394,1,0,1.23);drawFox(684,426,true);
+ for(let n=0;n<27;n++){const x=370+noise(n*5+1)*580+Math.sin(t*.45+n)*9,y=200+noise(n*3+11)*280+Math.cos(t*.7+n)*9;glow(x,y,13,'#dfdf6430');rect(x,y,2,2,n%3?'#d8d88c':'#e9d3a4');}
+ for(let n=0;n<16;n++){rect(380+noise(n+2)*570,492+noise(n+3)*37,2,9+noise(n+9)*18,'#315a48');}
+}
+
+
+// art
+const roomPaint={
+  fox:{sky:['#193838','#48635e','#8b8470'],dark:'#203c3d',mid:'#315952',light:'#a77c57',gold:'#ffbf78',wall:'#41584b'},
+  robot:{sky:['#102b39','#28515a','#4b7878'],dark:'#1a3541',mid:'#356065',light:'#71a5a0',gold:'#ebaf6a',wall:'#35535a'},
+  letter:{sky:['#292b4c','#4c4b71','#897594'],dark:'#2d344d',mid:'#494a68',light:'#9c86a2',gold:'#f3cea6',wall:'#4a425b'}
+};
+function chamberSky(t) {
+  const p=roomPaint[roomKey], g=ctx.createLinearGradient(0,0,0,540);
+  p.sky.forEach((c,i)=>g.addColorStop(i*.5,c));ctx.fillStyle=g;ctx.fillRect(0,0,W,H);
+  const drift=camera*.24;
+  if(roomKey==='fox'){
+    for(let i=-1;i<8;i++){
+      const x=i*177-drift,y=276+noise(i+14)*33;
+      rect(x,y-108,145,165,p.mid);poly([[x-12,y-108],[x+65,y-155],[x+156,y-106]],p.dark);
+      for(let j=0;j<4;j++){rect(x+11+j*33,y-85,19,32,j%2?'#52736b':'#888566');rect(x+20+j*33,y-85,2,32,p.mid);}
+      rect(x+17,y-29,104,50,p.dark);
+    }
+    for(let i=-1;i<9;i++){
+      const x=i*142-camera*.55, y=220+Math.sin(i*1.6)*19;
+      ctx.strokeStyle='#172e30';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x,y-35);ctx.quadraticCurveTo(x+70,y+8,x+142,220+Math.sin((i+1)*1.6)*19-35);ctx.stroke();
+      rect(x+63,y-13,2,22,'#405951');largeLantern(x+64,y+13,.54,i%3===0);
+    }
+  }else if(roomKey==='robot'){
+    for(let i=-1;i<7;i++){
+      const x=i*218-drift;rect(x,0,22,430,p.dark);rect(x+4,0,3,430,'#456d6c');rect(x+13,0,3,430,'#142e3a');
+      drawCog(x+107,226,62, t*.14*(i%2?-1:1),'#375b61','#537772','#294750');
+      drawCog(x+172,294,34,-t*.23,'#45696c','#628784','#2a454a');
+      rect(x+26,102,148,6,'#426268');rect(x+148,10,15,150,'#385960');rect(x+145,150,21,7,'#63837d');
+    }
+    for(let i=-1;i<4;i++){
+      const x=i*408-camera*.4;rect(x,346,391,17,'#263e48');rect(x,348,391,3,'#66877b');rect(x+121,314,9,60,'#b18461');rect(x+116,311,18,6,'#c3a078');
+    }
+  }else{
+    for(let i=-1;i<7;i++){
+      const x=i*207-drift,y=142+(i%2)*15;
+      rect(x+16,89,153,277,p.dark);rect(x+23,101,139,251,'#454361');
+      poly([[x+23,129],[x+23,107],[x+48,77],[x+136,77],[x+162,107],[x+162,129]],'#666181');
+      const light=ctx.createLinearGradient(x+31,120,x+150,345);light.addColorStop(0,'#cab4bb5c');light.addColorStop(1,'#8c84a305');
+      poly([[x+31,130],[x+155,130],[x+211,361],[x+89,361]],light);
+      for(let j=0;j<3;j++){rect(x+26+j*52,y-36,3,146,'#625f78');rect(x+22,y+j*65,138,3,'#625f78');}
+      for(let j=0;j<8;j++){const xx=x+14+j*18,yy=352-noise(i*8+j)*34;rect(xx,yy,14,363-yy,['#676078','#8a7981','#515373'][j%3]);rect(xx+2,yy+5,10,2,'#a09096');}
+    }
+    for(let i=0;i<14;i++){
+      const x=(i*94-camera*.39+Math.sin(t*.4+i)*6+1100)%1100-48,y=173+noise(i+39)*133+Math.sin(t*.8+i)*6;
+      rect(x,y,12,6,'#c8b5ae88');rect(x+3,y+6,6,2,'#bba5ae77');
+    }
+  }
+  drawLandmark(t);
+  for(let i=0;i<52;i++){
+    const xx=(noise(i+1)*1050-camera*.19+t*(i%3+1)+2100)%1050-45, yy=137+noise(i+88)*270+Math.sin(i+t*.7)*4;
+    rect(xx,yy,i%4===0?3:1,i%4===0?2:1,roomKey==='robot'?'#8cd1bf77':'#ffdeb789');
+  }
+  const dark=ctx.createLinearGradient(0,380,0,540);dark.addColorStop(0,'transparent');dark.addColorStop(1,'#172638bd');ctx.fillStyle=dark;ctx.fillRect(0,380,W,160);
+}
+function largeLantern(x,y,s,on){
+  ctx.save();ctx.translate(x,y);ctx.scale(s,s);
+  if(on)glow(0,0,59,'#ffb74f50');
+  rect(-10,-20,20,42,on?'#e3a164':'#996e5c');rect(-15,-14,30,29,on?'#f4b473':'#a47964');
+  rect(-11,-21,22,4,'#674b45');rect(-11,15,22,5,'#674b45');rect(-13,-7,26,2,'#b17e5c');rect(-13,6,26,2,'#b17e5c');
+  rect(-2,20,4,9,'#d07b54');if(on)rect(-4,-11,5,19,'#ffdaa1');ctx.restore();
+}
+function drawCog(x,y,r,angle,a,b,center){
+  ctx.save();ctx.translate(Math.round(x),Math.round(y));ctx.rotate(angle);
+  for(let i=0;i<10;i++){ctx.rotate(Math.PI/5);rect(-r*.15,-r,r*.3,r*.33,a);}
+  ctx.beginPath();ctx.arc(0,0,r*.79,0,Math.PI*2);ctx.fillStyle=a;ctx.fill();
+  ctx.beginPath();ctx.arc(0,0,r*.57,0,Math.PI*2);ctx.fillStyle=center;ctx.fill();
+  for(let i=0;i<4;i++){ctx.rotate(Math.PI/2);rect(-r*.09,-r*.64,r*.18,r*.64,b);}
+  rect(-r*.15,-r*.15,r*.3,r*.3,b);ctx.restore();
+}
+function drawRoomSolid(s) {
+  const p=roomPaint[roomKey];rect(s.x,s.y,s.w,s.h,s.ground?p.dark:p.wall);
+  rect(s.x,s.y,s.w,4,roomKey==='fox'?'#c29a69':roomKey==='robot'?'#a7c4ac':'#d0afac');
+  rect(s.x,s.y+4,s.w,5,roomKey==='fox'?'#8d7257':roomKey==='robot'?'#668f88':'#958098');
+  if(s.ground){
+    for(let j=0;j<s.w;j+=36){rect(s.x+j+4,s.y+15,26,3,p.mid);rect(s.x+j+13,s.y+43,21,3,p.mid);}
+    if(roomKey==='robot')for(let j=0;j<s.w-8;j+=62){rect(s.x+j,s.y+8,8,5,'#b58e60');rect(s.x+j+4,s.y+11,8,4,'#b58e60');}
+  }else if(s.style==='wood'){for(let j=7;j<s.w-6;j+=27){rect(s.x+j,s.y+8,3,8,'#52463f');}rect(s.x+10,s.y+15,8,19,'#705745');rect(s.x+s.w-19,s.y+15,8,19,'#705745');}
+  else if(s.style==='iron'){for(let j=8;j<s.w;j+=38)rect(s.x+j,s.y+5,4,4,'#c9cfad');poly([[s.x+9,s.y+16],[s.x+44,s.y+16],[s.x+9,s.y+38]],'#426268');}
+  else {for(let j=9;j<s.w-4;j+=20)rect(s.x+j,s.y+10,8,3,'#ac9398');if(s.style==='float'){for(let j=14;j<s.w;j+=23)rect(s.x+j,s.y+19+Math.sin(runTime*3+j)*2,8,3,'#debede');}}
+}
+function roomProp(t) {
+  if(roomKey==='fox'){
+    for(const n of world.targets){
+      const on=run.tasks.fox.includes(n.id);
+      rect(n.x-35,n.y-31,67,56,'#4b5647');poly([[n.x-42,n.y-31],[n.x-9,n.y-59],[n.x+41,n.y-31]],'#344a40');
+      rect(n.x-21,n.y-22,16,40,'#293e3b');rect(n.x+8,n.y-28,4,17,'#c9a17b');largeLantern(n.x,n.y,.64,on);
+    }
+    const x=player.x-38-player.face*4,y=player.onGround?player.y+32:Math.min(429,player.y+43);
+    drawFox(x,y,true);
+  }else if(roomKey==='robot'){
+    for(const v of world.vents){
+      rect(v.x-3,425,v.w+6,5,'#bc9165');for(let j=2;j<v.w;j+=8)rect(v.x+j,426,4,4,'#34494b');
+      const stage=ventStage(v);if(stage!=='off'){
+        for(let j=0;j<5;j++){
+          const yy=stage==='on'?425-((t*96+j*16)%67):419+Math.sin(t*6+j)*3;
+          rect(v.x+j*8,yy,8,stage==='on'?13:3,stage==='on'?'#d4e4ceaa':'#f8c16a');rect(v.x+j*8-2,yy,12,4,stage==='on'?'#e9f0cfa6':'#dba85f');
+        }
+      }
+    }
+    for(const n of world.targets){const on=run.tasks.robot.includes(n.id);rect(n.x-4,n.y,8,24,'#536d65');drawCog(n.x,n.y,22,on?t*1.7:0,on?'#8dc3a5':'#bb8b65',on?'#d7f0bd':'#e2b17b','#3f5050');}
+  }else{
+    for(const n of world.targets){if(run.tasks.letter.includes(n.id))continue;const y=n.y+Math.sin(t*2+n.id)*3;glow(n.x,y,32,'#edbbd055');envelope(n.x,y,1.0,'#f9e1ba');}
+  }
+  for(const n of world.targets){
+    if(run.tasks[roomKey].includes(n.id))continue;
+    const h=n.y-31+Math.sin(t*3+n.id)*2;
+    poly([[n.x-4,h-3],[n.x+4,h-3],[n.x,h+2]],'#ffe9b0');
+  }
+}
+function envelope(x,y,s,c){
+  ctx.save();ctx.translate(Math.round(x),Math.round(y));ctx.scale(s,s);
+  rect(-11,-7,22,15,'#635663');rect(-10,-7,20,13,c);poly([[-10,-7],[0,1],[10,-7]],'#bb9d88');poly([[-8,-7],[0,-1],[8,-7]],'#f4daba');rect(-2,-1,4,3,'#bc705b');ctx.restore();
+}
+function station(x,y,ready,entry=false){
+  rect(x-20,y-5,40,5,'#6b7062');rect(x-12,y-34,24,31,'#674f49');
+  rect(x-18,y-49,36,24,ready?'#bc7860':'#627570');rect(x-20,y-50,40,5,ready?'#e8b481':'#87988a');
+  rect(x-13,y-43,26,4,'#2a4140');rect(x-5,y-32,10,4,'#d5c8a5');
+  if(ready){glow(x,y-52,36,'#eed18832');envelope(x,y-62+Math.sin(runTime*2)*2,.60,'#ffdb9a');}
+  else if(entry){rect(x-22,y-62,40,7,'#b5bea0');poly([[x-26,y-58],[x-18,y-66],[x-18,y-50]],'#b5bea0');}
+}
+function tag(x,y,text,color='#e7d39e') {
+  ctx.save();ctx.font='bold 11px system-ui, sans-serif';ctx.textAlign='center';const w=Math.ceil(ctx.measureText(text).width)+14;
+  rect(x-w/2,y-10,w,17,'#173337e8');rect(x-w/2,y-10,2,17,color);ctx.fillStyle=color;ctx.fillText(text,Math.round(x),Math.round(y+2));ctx.restore();
+}
+function drawFoe(f,t){
+  if(!f.hp)return;
+  const x=Math.round(f.x),y=Math.round(f.y),blink=f.hurt>0,ink=blink?'#f7e5bf':'#243544',shadow='#334355',body=blink?'#f4d7b2':'#546377',light=blink?'#fff8d9':'#92a0ac',eye='#ffd394';
+  if(f.kind==='boss'){
+    const mx=x+f.w/2,shake=f.wind>0?Math.sin(t*37)*2:0;
+    ctx.save();ctx.translate(Math.round(mx+shake),y);if(f.wind>0)glow(0,34,76,'#ffb87555');
+    for(let i=0;i<6;i++){const yy=49+Math.sin(t*4+i)*3;rect(-27+i*11,yy,9,11+i%2*5,shadow);}
+    poly([[-31,48],[-23,39],[-19,15],[-12,9],[12,9],[19,15],[23,39],[31,48]],ink);
+    poly([[-25,44],[-17,36],[-15,18],[-9,13],[9,13],[15,18],[17,36],[25,44]],blink?'#fff2be':'#9d8271');
+    rect(-15,18,30,5,'#baa183');rect(-11,1,22,7,'#5b6068');rect(-6,-2,12,5,'#bba68c');
+    if(f.open>0)glow(0,31,35,'#c5efac77');rect(-12,27,24,11,f.open>0?'#b1d690':'#323b4c');rect(-9,29,6,4,eye);rect(4,29,6,4,eye);rect(-26,44,52,5,'#d4b389');rect(-5,50,10,6,'#e4b47a');
+    if(f.wind>0){rect(-2,-20,4,9,'#ffcd82');rect(-2,-8,4,3,'#ffcd82');}
+    ctx.restore();if(f.active)tag(mx,y-31,f.wind>0?tr('准备跳','ジャンプの準備'):f.open>0?tr('钟芯露出','芯を狙う'):tr('钟壳闭合','鐘は閉じている'),f.open>0?'#d4ebb2':'#ecc099');return;
+  }
+  if(f.kind==='moth'){
+    const flap=Math.sin(t*12+f.phase)*5;
+    poly([[x+13,y+12],[x-6,y-6+flap],[x-9,y+8+flap],[x+7,y+17]],light);
+    poly([[x+18,y+12],[x+32,y-7-flap],[x+35,y+8-flap],[x+23,y+17]],body);
+    rect(x+9,y+6,14,13,ink);rect(x+11,y+8,3,4,eye);rect(x+18,y+8,3,4,eye);return;
+  }
+  if(f.guard)tag(x+f.w/2,y-18,tr('阀门雾甲','弁をふさぐ霧'), '#e5b383');
+  const foot=Math.sin(t*6+f.phase)*2;
+  rect(x+1,y+f.h-6,7,6+foot,ink);rect(x+f.w-9,y+f.h-6,7,6-foot,ink);
+  const cx=x+f.w/2;
+  poly([[x,y+f.h-5],[x+3,y+8],[cx-5,y+2],[cx+6,y],[x+f.w-3,y+8],[x+f.w,y+f.h-5]],ink);
+  poly([[x+2,y+f.h-9],[x+6,y+9],[cx-4,y+4],[cx+6,y+3],[x+f.w-4,y+10],[x+f.w-2,y+f.h-9]],body);
+  if(f.kind==='hop'){poly([[x+3,y+10],[x-2,y-6],[x+10,y+6]],body);poly([[x+16,y+4],[x+26,y-8],[x+23,y+9]],light);}
+  if(f.kind==='shell'){rect(x+3,y+6,f.w-6,6,'#b59e7a');rect(x+10,y+1,13,5,'#d0b78b');}
+  rect(cx-7,y+f.h-14,15,7,ink);rect(cx-5,y+f.h-12,3,3,eye);rect(cx+3,y+f.h-12,3,3,eye);
+}
+function combatArt(t) {
+  for(const w of waves){glow(w.x,w.y-6,27,'#efa68945');poly([[w.x-14,w.y],[w.x-8,w.y-9],[w.x-2,w.y-21],[w.x+5,w.y-13],[w.x+11,w.y]],'#e8a381');rect(w.x-10,w.y-2,22,3,'#ffe5a4');}
+  for(const f of world.foes)if(f.x>camera-70&&f.x<camera+W+70)drawFoe(f,t);
+  for(const b of bolts){const x=b.x,y=b.y;glow(x,y,19,b.power>1?'#8ce6d166':'#ffcb805a');rect(x-b.dir*15,y-2,13*b.dir,3,b.power>1?'#95d9c4':'#e6af71');rect(x-4,y-3,9,6,'#fff2b4');if(b.power>1){rect(x-b.dir*17,y-5,15*b.dir,2,'#b7f6d7');rect(x-b.dir*17,y+4,15*b.dir,2,'#b7f6d7');}}
+  if(run.shield && player){ctx.save();ctx.strokeStyle='#f2c4c6ad';ctx.lineWidth=1.4;ctx.beginPath();ctx.ellipse(player.x+10,player.y+15,24,26,-.12,0,Math.PI*2);ctx.stroke();ctx.restore();}
+  if(player.shotFlash>0)glow(player.x+10+player.face*18,player.y+17,22,'#ffdfac5a');
+}
+
+
+// details
+// Named landmarks sit behind the path. Their lights react to the commission.
+function drawLandmark(t) {
+  const slow=camera*.44;
+  if(roomKey==='fox'){
+    const x=673-slow,y=328;
+    // The fox family's closed tea-house, with a round window and cloth awning.
+    rect(x-77,y-128,154,130,'#314c48');rect(x-83,y-133,168,7,'#9b836b');
+    poly([[x-92,y-134],[x-47,y-159],[x+54,y-159],[x+93,y-134]],'#263f3f');
+    for(let j=0;j<9;j++)rect(x-67+j*16,y-135,8,3,'#748779');
+    ctx.beginPath();ctx.arc(x-27,y-86,22,0,Math.PI*2);ctx.fillStyle='#7d8a71';ctx.fill();
+    const ready=run.tasks.fox.length>0;if(ready)glow(x-27,y-86,37,'#ffd18235');
+    rect(x-48,y-88,42,3,'#465c50');rect(x-28,y-108,3,45,'#465c50');
+    rect(x+11,y-119,34,17,'#ad9976');rect(x+17,y-114,12,2,'#655d4d');rect(x+20,y-110,17,2,'#655d4d');
+    for(let i=0;i<4;i++){rect(x+4+i*13,y-98,12,23+(i%2)*4,i%2?'#a46d58':'#976852');rect(x+8+i*13,y-80,4,2,'#c59872');}
+    rect(x-69,y-45,138,6,'#685f4b');for(let i=0;i<5;i++){rect(x-63+i*29,y-39,3,41,'#637262');}
+    rect(x-79,y+1,159,5,'#8a8b6d');rect(x-68,y+6,6,16,'#526658');
+    largeLantern(x+68,y-80,.48,run.tasks.fox.length>=2);
+  }else if(roomKey==='robot'){
+    const x=679-slow,y=336;
+    // A glass reservoir and a pressure dial anchor the center of the pump hall.
+    rect(x-49,y-145,103,148,'#294851');rect(x-54,y-145,112,9,'#748780');rect(x-54,y-5,112,9,'#778b80');
+    rect(x-44,y-132,93,121,'#426569');const height=40+run.tasks.robot.length*16;
+    rect(x-43,y-12-height,91,height,'#548782');rect(x-43,y-14-height,91,3,'#8eb3a0');
+    for(let j=0;j<5;j++){const xx=x-34+j*16,yy=y-17-((t*11+j*9)%height);rect(xx,yy,3,3,'#97b5a0');}
+    for(let j=0;j<8;j++)rect(x+37,y-24-j*14,6,2,'#9cad98');
+    rect(x-51,y-139,5,130,'#6f8079');rect(x+50,y-139,5,130,'#6f8079');
+    rect(x-23,y-166,49,12,'#475e5e');rect(x-6,y-183,15,34,'#7b8172');
+    ctx.beginPath();ctx.arc(x+64,y-109,23,0,Math.PI*2);ctx.fillStyle='#546d66';ctx.fill();ctx.beginPath();ctx.arc(x+64,y-109,18,0,Math.PI*2);ctx.fillStyle='#b6b39a';ctx.fill();
+    ctx.strokeStyle='#a87558';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x+64,y-109);ctx.lineTo(x+67+Math.sin(t+run.tasks.robot.length)*9,y-121);ctx.stroke();
+    rect(x-78,y-28,29,13,'#8d8b73');rect(x-82,y-29,8,36,'#647d73');
+  }else{
+    const x=670-slow,y=340;
+    // A sorting cabinet stores letters from the harbor. Empty pigeonholes light up.
+    rect(x-91,y-112,184,114,'#393b52');rect(x-97,y-118,196,8,'#948091');
+    for(let row=0;row<3;row++)for(let col=0;col<7;col++){
+      const xx=x-85+col*25,yy=y-103+row*31;rect(xx,yy,20,23,'#58516b');
+      if((row+col)%3===0)envelope(xx+10,yy+15,.51,run.tasks.letter.length>row?'#d7bb9b':'#aa99a0');
+      rect(xx+6,yy+20,8,2,'#b5a097');
+    }
+    rect(x-94,y-5,190,8,'#8b7b88');rect(x-80,y+3,8,20,'#695f72');rect(x+75,y+3,8,20,'#695f72');
+    ctx.save();ctx.translate(x+16,y-137);ctx.rotate(-.17);envelope(0,0,.75,'#c4b1a5');ctx.restore();
+  }
+}
+
+
+// draw
+function drawWorld(t){
+ if(roomKey)chamberSky(t);else drawBackground(t,camera,levelIndex,mode==='ending');
+ ctx.save();ctx.translate(-Math.round(camera),0);
+ if(!roomKey)for(let n=0;n<Math.ceil(world.width/290);n++){
+  const x=n*290+60;
+  if(levelIndex===0){if(n%2===0)house(x,430,.9,n%4===0);else tree(x,430,.73,n+81);}
+  if(levelIndex===1)tree(x,430,1.0+noise(n)*.32,n+13);
+  if(levelIndex===2){rect(x,368,21,62,'#506666');rect(x-6,366,33,7,'#829487');if(n%2===0){rect(x+7,325,7,43,'#57736c');rect(x+1,325,18,4,'#94a18c');}}
+ }
+ if(!roomKey&&levelIndex===2)lighthouse(world.width-170,430,.85,mode==='ending');
+ for(const s of world.solids)if(s.x+s.w>camera-60&&s.x<camera+W+60){if(roomKey)drawRoomSolid(s);else drawGround(s,levelIndex);}
+ if(roomKey)roomProp(t);
+ for(const h of world.hazards){for(let n=0;n<Math.ceil(h.w/8);n++){const y=h.y-2+Math.sin(t*3+n)*4;rect(h.x+n*8,y,9,h.h+3,'#142d36');rect(h.x+n*8+2,y-4,5,4,'#385052');}glow(h.x+h.w/2,h.y,32,'#50687925');}
+ for(const s of world.sparks)if(!collected.has(s.id)){const y=s.y+Math.sin(t*2+s.x)*3;glow(s.x,y,17,'#d5e68920');poly([[s.x,y-4],[s.x+3,y],[s.x,y+4],[s.x-3,y]],'#d3df9a');}
+ for(const e of world.entities){
+  if(e.x<camera-100||e.x>camera+W+100)continue;
+  if(e.type==='back'||e.type==='chest'){
+    const chest=e.type==='chest',ready=chest&&taskDone(roomKey);
+    station(e.x,e.y,ready,!chest);tag(e.x,e.y-83,chest?T(quests[roomKey].goal):tr('返回','戻る'),ready?'#f2c784':'#bed0be');
+  }
+  if(e.type==='post'){drawAdult(e.x,e.y,true);if(player.x<425)tag(277,366,tr('跳踩 ↓　或　X 灯击','上から踏む　／　X で光'), '#eed6a6');}
+  if(e.type==='fox'||e.type==='guide')drawFox(e.x,e.y,flags.fox);
+  if(e.type==='robot'||e.type==='helper')drawRobot(e.x,e.y,flags.robot);
+  if(e.type==='keeper')drawAdult(e.x,e.y);
+  if(e.type==='checkpoint'){rect(e.x-3,e.y-58,6,58,'#8c9973');rect(e.x-7,e.y-9,14,9,'#647b60');lantern(e.x,e.y-66,true);}
+  if(e.type==='exit'){rect(e.x-4,e.y-60,8,60,'#8b8e68');rect(e.x-21,e.y-61,47,19,'#bbc298');poly([[e.x+26,e.y-61],[e.x+35,e.y-52],[e.x+26,e.y-42]],'#bbc298');rect(e.x-14,e.y-54,30,3,'#527260');rect(e.x+11,e.y-57,3,9,'#527260');lantern(e.x-28,e.y-25,true,.7);}
+  if(e.type==='core'){rect(e.x-19,e.y+18,38,6,'#b0b486');rect(e.x-12,e.y+12,24,6,'#7c9b7b');if(!cores[levelIndex]){const yy=e.y+Math.sin(t*2)*4;glow(e.x,yy,58,'#f7cf5340');glow(e.x,yy,20,'#fce8a155');poly([[e.x,yy-15],[e.x+10,yy],[e.x,yy+15],[e.x-10,yy]],'#ecd093');poly([[e.x,yy-10],[e.x+5,yy],[e.x,yy+10],[e.x-5,yy]],'#fff4c5');}else{rect(e.x-4,e.y+6,8,5,'#c5dba1');}}
+  if(e.type==='gear'&&!flags.gear){const yy=e.y+Math.sin(t*2)*3;glow(e.x,yy,20,'#d3b87033');ctx.save();ctx.translate(e.x,yy);ctx.rotate(t*.3);for(let n=0;n<8;n++){ctx.rotate(Math.PI/4);rect(-3,-12,6,7,'#cead68');}rect(-7,-7,14,14,'#c8a25d');rect(-3,-3,6,6,'#304f41');ctx.restore();}
+  if(e.type==='letter'&&!flags.letter){glow(e.x,e.y,24,'#edcc8e30');rect(e.x-10,e.y-7,20,14,'#e2d4a8');poly([[e.x-10,e.y-7],[e.x,e.y+1],[e.x+10,e.y-7]],'#b7a97e');rect(e.x-2,e.y-1,4,4,'#b26d4e');}
+  if(questKeys.includes(e.type)&&!flags[e.type]){
+    const label=e.type==='fox'?tr('琥珀','コハク'):e.type==='robot'?tr('洛可','ロコ'):tr('青的旧信','古い手紙');
+    tag(e.x,e.y-(e.type==='letter'?45:72),label+'  ◇',quests[e.type].tone);
+  }
+  if(e.type==='core'&&!cores[levelIndex])tag(e.x,e.y-34,tr('灯芯','灯の芯'));
+  if(e.type==='gear'&&!flags.gear)tag(e.x,e.y-30,tr('备用齿轮','予備のギア'));
+  if(e.type==='keeper')tag(e.x,e.y-60,tr('青 · 交信','アオ · 配達'));
+  if(['fox','robot','letter'].includes(e.type)&&!flags[e.type]){const yy=(e.type==='letter'?e.y-27:e.y-55)+Math.sin(t*3)*2;poly([[e.x,yy-4],[e.x+4,yy],[e.x,yy+4],[e.x-4,yy]],'#e7c582');}
+ }
+ combatArt(t);
+ for(const p of particles){ctx.globalAlpha=clamp(p.life*2,0,1);rect(p.x,p.y,p.size,p.size,p.color);}ctx.globalAlpha=1;
+ if(player&&(player.hitFlash<=0||Math.floor(t*12)%3!==0))drawMio(player.x,player.y,player.face,player.onGround?player.walk:0);
+ ctx.restore();
+ for(let n=0;n<18;n++){const x=((noise(n*7+1)*W-camera*.2+Math.sin(t*.8+n)*7)%W+W)%W,y=160+noise(n*5+2)*285+Math.cos(t*.8+n)*8;rect(x,y,2,2,'#dae09988');}
+ // Dark edges make the player's lantern and story objects read clearly.
+ const vignette=ctx.createRadialGradient(W/2,H/2,160,W/2,H/2,600);vignette.addColorStop(0,'transparent');vignette.addColorStop(1,'#041c2c55');ctx.fillStyle=vignette;ctx.fillRect(0,0,W,H);
+}
+
+function draw(t) {
+  ctx.imageSmoothingEnabled=false;
+  if(mode==='title'||(mode==='modal'&&modalReturn==='title')||!world)drawTitle(t);
+  else drawWorld(mode==='modal'?runTime:t);
+}
+
+
+// sound
+function initAudio(){if(!audioCtx){const C=window.AudioContext||window.webkitAudioContext;if(C)audioCtx=new C();}if(audioCtx?.state==='suspended')audioCtx.resume().catch(()=>{});}
+function tone(freq,duration,volume=.04,type='sine',delay=0){if(!sound||!audioCtx)return;const o=audioCtx.createOscillator(),g=audioCtx.createGain(),t=audioCtx.currentTime+delay;o.type=type;o.frequency.value=freq;g.gain.setValueAtTime(0,t);g.gain.linearRampToValueAtTime(volume,t+.025);g.gain.exponentialRampToValueAtTime(.0001,t+duration);o.connect(g);g.connect(audioCtx.destination);o.start(t);o.stop(t+duration+.02);}
+function chime(type){if(!sound)return;initAudio();if(type==='jump')tone(330,.12,.018,'triangle');if(type==='spark')tone(880,.38,.035);if(type==='core')for(let i=0;i<3;i++)tone([523.25,659.25,783.99][i],.8,.045,'sine',i*.12);if(type==='fall')tone(164.8,.3,.024,'triangle');if(type==='win')for(let i=0;i<5;i++)tone([392,523.25,659.25,783.99,1046.5][i],1.5,.05,'sine',i*.23);}
+function ambient(){if(!sound||!audioCtx||document.hidden)return;if(audioCtx.currentTime<audioNext)return;const notes=[261.63,392,329.63,293.66,440,392,329.63,293.66];tone(notes[noteIndex%notes.length],2.7,.018);if(noteIndex%4===0)tone(130.81,4.3,.018);noteIndex++;audioNext=audioCtx.currentTime+1.55;}
+
+
+// ui
+const icons={
+ fox:['..2....2..','.232..232.','.23322332.','2333333332','2332332332','.33344333.','..344443..','...4224...','....22....'],
+ gear:['....22....','.22.33.22.','.23333332.','..334433..','2334..4332','2334..4332','..334433..','.23333332.','.22.33.22.','....22....'],
+ wax:['...2222...','.22333322.','.23344332.','2334444332','2333443332','.23333332.','..223322..','..32..23..','.332..233.'],
+ wing:['........22','......2232','....223332','..2233332.','.2333442..','23344332..','..44332...','.4322.....','22........'],
+ heart:['.222..222.','2333223332','2334333332','2333333332','.23333332.','..233332..','...2332...','....22....'],
+ arrow:['......22..','......232.','2222223322','.333443332','2222223322','......232.','......22..'],
+ boot:['..2222....','..2332....','..2342....','..233222..','..2333332.','.22222222.','...2..2...','..2..2....','..2222....'],
+ twin:['..2....2..','.23....32.','2342222432','3443333443','2342222432','.23....32.','..2....2..'],
+ leaf:['.....22222','...2233332','..23344332','.233443332','.23443332.','.2443322..','..4222....','.22.......'],
+ post:['..222222..','.23333332.','2222222222','..433434..','..444444..','...3443...','.22344322.','2333333332','2333443332'],
+ mio:['..222222..','.22222222.','.22444442.','.2244244..','..244444..','..333333..','233332444.','...444444.','..2444422.'],
+ keeper:['...2222...','..222222..','.22222222.','..444244..','..444444..','...3443...','.22333322.','2333443332','2333443332'],
+ letter:['2222222222','3444444443','2344444432','2234444322','2433443342','2444334442','2444444442','2222222222'],
+ robot:['....44....','....22....','.22222222.','2333333332','2344444432','2324424432','.23333332.','..223322..','.23333332.','..22..22..']
+};
+function iconSvg(key,color='#ad774a') {
+  const grid=icons[key]||icons.letter, cells=[];
+  for(let y=0;y<grid.length;y++)for(let x=0;x<grid[y].length;x++){const v=grid[y][x];if(v!=='.')cells.push('<rect x="'+(x+2)+'" y="'+(y+2)+'" width="1" height="1" fill="'+({'2':'#405552','3':color,'4':'#f2dba9'}[v])+'"/>');}
+  return '<svg aria-hidden="true" viewBox="0 0 14 14" shape-rendering="crispEdges">'+cells.join('')+'</svg>';
+}
+const copy = {
+  manualLabel:['操作指南','遊び方・操作ガイド'],
+  brandSub:['海港镇夜间邮局','港町・夜間郵便局'],genre:['横版动作冒险','横スクロールアクション'],
+  gameTitle:['灯火邮差','灯りの配達人'],tagline:['风暴熄灭了灯塔。<br>天亮以前，把这封信送到青手里。','嵐で、灯台が消えた。<br>夜が明けるまでに、この手紙をアオへ。'],
+  startText:['开始投递','配達をはじめる'],demoText:['课堂演示','授業デモ'],journeyMeta:['三章邮路　·　三处秘境　·　自动存档','三つの章　·　三つの寄り道　·　自動セーブ'],
+  chapterPreview0:chapters[0],chapterPreview1:chapters[1],chapterPreview2:chapters[2],
+  journalLabel:['邮差手记','配達手帳'],footerText:['献给每一个愿意为别人停下脚步的人。','誰かのために足を止める、すべての人へ。']
+};
+const hintLabels={post:['和白婆婆交谈','シロと話す'],fox:['琥珀的委托','コハクのお願い'],robot:['洛可的委托','ロコの依頼'],letter:['调查旧信','古い手紙を調べる'],
+  guide:['听琥珀指路','コハクと話す'],helper:['和洛可交谈','ロコと話す'],exit:['前往下一章','次の章へ'],keeper:['把信交给青','アオに手紙を渡す'],
+  checkpoint:['记录旅程','配達を記録'],wick:['借出灯光','灯りを貸す'],back:['回到邮路','元の道へ戻る'],chest:['查看委托谢礼','お礼を調べる']};
+let hudCache='', hintCache='';
+function hidePanels(){for(const k of ['dialogOverlay','modalOverlay','rewardOverlay','endingScreen','toast','interactionHint','locationLabel','director'])$(k).hidden=true;}
+function showPlaying(){
+  const live=['play','dialog','draft'].includes(mode);
+  $('hud').hidden=!live;$('touchControls').hidden=mode!=='play'||!!auto||!matchMedia('(pointer:coarse)').matches;
+  $('gameFrame').classList.toggle('playing',live);$('gameFrame').dataset.state=mode;$('director').hidden=!auto||!live;
+  $('helpBtn').disabled=false;$('journalBtn').disabled=false;
+}
+function title() {
+  auto=null;run=null;world=null;player=null;roomKey=null;nearby=null;dialog=null;deck=null;modalKind=null;keys.clear();hidePanels();
+  mode='title';$('titleScreen').hidden=false;showPlaying();localize();$('startBtn').focus({preventScroll:true});
+}
+function localize() {
+  document.documentElement.lang=lang==='ja'?'ja':'zh-CN';
+  for(const [id,v] of Object.entries(copy))$(id).innerHTML=T(v);
+  if(!storageOK)$('journeyMeta').textContent=tr('浏览器限制存档 · 本次可完整游玩','この環境は保存制限あり · 今回の配達は最後まで遊べます');
+  document.querySelectorAll('[data-lang]').forEach(b=>{b.classList.toggle('selected',b.dataset.lang===lang);b.setAttribute('aria-pressed',String(b.dataset.lang===lang));});
+  $('continueBtn').hidden=!saved;$('continueBtn').textContent=saved?.complete?tr('查看上次送达记录','前回の配達記録'):tr('继续上次投递','前回のつづき');
+  $('controlLegend').innerHTML=[['← →',tr('移动','移動')],['Space',tr('跳跃 / 踩踏','ジャンプ・踏む')],['X',tr('灯击','光を撃つ')],['E',tr('交谈 / 互动','話す・調べる')],['Esc',tr('暂停','ポーズ')]].map(([k,l])=>'<span><kbd>'+k+'</kbd>'+l+'</span>').join('');
+  $('soundBtn').title=$('soundBtn').ariaLabel=sound?tr('关闭声音','音を消す'):tr('开启声音','音を出す');$('helpBtn').title=tr('玩法','遊び方');
+  $('assistKey').textContent=tr('灯击','光');$('demoPauseText').textContent=tr('暂停','一時停止');
+  if(run){$('locationLabel').textContent=roomKey?T(quests[roomKey].room):T(chapters[levelIndex]);hudCache='';hintCache='';updateHud();showHint();}
+  if(dialog)renderDialog();if(deck)renderDeck();if(modalKind)renderModal();if(mode==='ending')renderEnding();if(auto)updateDirector();
+}
+function liveGoal(){
+  if(roomKey){const q=quests[roomKey],n=run.tasks[roomKey].length;if(n===q.count&&roomKey==='robot'&&!taskDone(roomKey))return tr('向右，驱散卡住阀门的雾甲','右へ進み、弁にまとわりつく霧をはらう');if(n===q.count)return tr('向右到','右端の')+T(q.goal)+tr('领取谢礼','でお礼を受け取る');
+    const how={fox:['对准门灯按 X，或近身按 E','軒灯に X で光を当てるか、近くで E'],robot:['站上平台，用 X 启动飞轮','足場に乗り X ではずみ車を動かす'],letter:['跳上书架，拾回散落的信页','書棚に飛び乗って手紙を拾う']};
+    return T(how[roomKey])+'  '+n+' / '+q.count;
+  }
+  if(!cores[levelIndex])return coreBehind()?tr('← 灯芯在身后，沿台阶上去','← 芯は後ろ。足場を登ろう'):tr('去高处取金色灯芯','高い足場の金色の芯を取る');
+  if(levelIndex===2&&world.foes.some(f=>f.kind==='boss'&&f.hp>0))return tr('前往塔前，驱散缠住雾钟的黑雾','塔の前に進み、鐘を包む霧をはらう');
+  return levelIndex===2?tr('把信交给灯塔下的青','灯台の下でアオに手紙を渡す'):tr('向右到路标，前往下一章','右端の道しるべから次の章へ');
+}
+function coreBehind(){return !roomKey&&!cores[levelIndex]&&player.x>(world.entities.find(e=>e.type==='core')?.x??Infinity)+75;}
+function updateHud(){
+  if(!world||!run)return;
+  const boss=!roomKey&&world.foes.find(f=>f.kind==='boss'&&f.hp>0&&f.active);
+  const signature=[lang,levelIndex,roomKey,run.hp,run.shield,cores.filter(Boolean).length,...questKeys.map(k=>+flags[k]),run.tasks[roomKey]?.length,boss?.hp,defeated.has('m2-5'),defeated.has('robot-2'),coreBehind(),+flags.gear,mode].join('/');
+  if(signature===hudCache)return;hudCache=signature;
+  $('chapterNumber').textContent=(roomKey?tr('支线副本','寄り道'):tr('主线邮路','配達ルート'))+'   '+String(levelIndex+1).padStart(2,'0')+' / 03';
+  $('chapterName').textContent=T(roomKey?quests[roomKey].room:chapters[levelIndex]);$('objectiveText').textContent=liveGoal();
+  const side=$('sideGoal');side.hidden=!!roomKey||flags[questKeys[levelIndex]];
+  if(!side.hidden){
+    const hints=[['可选 · 在路边和琥珀说话','寄り道 · 道ばたのコハクと話す'],flags.gear?['可选 · 把齿轮交给洛可','寄り道 · ギアをロコに届ける']:['可选 · 沿入口的高台寻找齿轮','寄り道 · 入口付近の高い足場でギアを探す'],['可选 · 登上第一段石阶调查旧信','寄り道 · 最初の石段を登り、古い手紙を調べる']];
+    side.textContent=T(hints[levelIndex]);
+  }
+  $('coreCounter').textContent=tr('灯芯 ','灯の芯 ')+'✦ '+cores.filter(Boolean).length+'/3';
+  $('hpCount').innerHTML='<span class="lit">'+'♥'.repeat(run.hp)+'</span><span class="dim">'+'♡'.repeat(Math.max(0,maxHp()-run.hp))+'</span>'+(run.shield?' <b>◇</b>':'');
+  $('hpCount').setAttribute('aria-label',tr('灯火 ','灯り ')+run.hp+'/'+maxHp());
+  const items=questKeys.filter(k=>flags[k]);$('kit').innerHTML=items.map(k=>'<span title="'+T(quests[k].gift)+'">'+iconSvg(quests[k].icon,quests[k].tone)+'</span>').join('');
+  $('bossHud').hidden=!boss;
+  if(boss){$('bossName').textContent=tr('雾潮大钟','霧鳴りの大鐘');$('bossMeter').style.width=(boss.hp/boss.max*100)+'%';$('bossValue').textContent=boss.hp+' / '+boss.max;}
+}
+function showHint() {
+  if(mode!=='play'||!nearby){$('interactionHint').hidden=true;hintCache='';return;}
+  const text=T(hintLabels[nearby.type]||['互动','調べる']);
+  if(hintCache!==text){$('interactionHint').querySelector('span').textContent=text;hintCache=text;}
+  $('interactionHint').hidden=false;
+}
+function toast(text){$('toast').textContent=text;$('toast').hidden=false;toastTime=2.5;}
+function option(zh,ja,action){return {label:[zh,ja],action};}
+function openDialog(lines,done=null,choices=null) {
+  keys.clear();jumpBuffer=0;mode='dialog';dialog={lines,done,choices,index:0,age:0};$('dialogOverlay').hidden=false;$('interactionHint').hidden=true;$('locationLabel').hidden=true;
+  showPlaying();renderDialog();canvas.focus({preventScroll:true});
+}
+function renderDialog(){
+  const d=dialog,l=d.lines[d.index],who=l.who;
+  $('speaker').textContent=T(names[who]);$('portrait').innerHTML=iconSvg(who==='narrator'?'wing':who,who==='fox'?'#d59460':who==='robot'?'#8aa9a0':'#ac886a');
+  $('dialogText').textContent=l[lang];$('dialogCount').textContent=(d.index+1)+' / '+d.lines.length;
+  const box=$('dialogActions');box.replaceChildren();
+  if(d.index===d.lines.length-1&&d.choices)d.choices.forEach((c,i)=>box.append(button((i+1)+'　'+T(c.label),()=>{if(!auto)chooseDialog(i);})));
+  else box.append(button(auto?tr('自动翻页','自動送り'):tr('继续　→','次へ　→'),()=>{if(!auto)advanceDialog();}));
+}
+function endDialog(){
+  const d=dialog;dialog=null;$('dialogOverlay').hidden=true;mode='play';showPlaying();keys.clear();canvas.focus({preventScroll:true});return d;
+}
+function advanceDialog(){
+  if(mode!=='dialog')return;const d=dialog;
+  if(d.index===d.lines.length-1&&d.choices)return;
+  if(d.index<d.lines.length-1){d.index++;d.age=0;renderDialog();}
+  else {endDialog();if(d.done)d.done();}
+}
+function chooseDialog(i){
+  if(mode!=='dialog'||dialog.index!==dialog.lines.length-1||!dialog.choices?.[i])return;
+  const action=dialog.choices[i].action;endDialog();action();
+}
+function openDeck(key) {
+  keys.clear();jumpBuffer=0;mode='draft';
+  const choices=key==='start' ? book.stamps.slice() : shuffled(stampKeys.filter(k=>!has(k)),run.seed,201+questKeys.indexOf(key)*19).slice(0,3);
+  deck={key,choices,age:0};$('rewardOverlay').hidden=false;$('interactionHint').hidden=true;$('toast').hidden=true;$('locationLabel').hidden=true;
+  showPlaying();renderDeck();canvas.focus({preventScroll:true});
+}
+function renderDeck(){
+  const start=deck.key==='start',q=quests[deck.key],container=$('rewardCards');container.replaceChildren();
+  $('rewardOverlay').style.setProperty('--reward-tone',q?.tone||'#c9ac72');
+  $('rewardKicker').textContent=start?tr('邮局 · 出发准备','郵便局 · 出発の支度'):T(q.room)+'　/　'+tr('委托完成','依頼達成');
+  $('rewardTitle').textContent=start?tr('从集邮册带一枚出发','消印帳から一枚選ぶ'):tr('收到','届いた道具　')+T(q.gift);
+  $('rewardGift').innerHTML=iconSvg(start?'letter':q.icon,q?.tone||'#bea16c');
+  $('rewardDesc').textContent=start?tr('之前盖过的邮戳，可以选一枚作为这次的起始能力。','今までの消印から一枚選んで、今回の配達に持っていける。'):T(q.effect);
+  $('rewardPrompt').textContent=start?tr('选择起始邮戳','出発の消印を選ぶ'):tr('再选一枚邮戳，本次投递一直生效','消印をもう一枚選ぶ。今回の配達中ずっと有効');
+  deck.choices.forEach((k,i)=>{
+    const s=stamps[k],b=button('',()=>{if(!auto)takeStamp(i);});b.className='stamp-card';
+    b.innerHTML='<span class="stamp-no">'+String(i+1).padStart(2,'0')+'</span><span class="stamp-icon">'+iconSvg(s.icon,q?.tone||'#c2a173')+'</span><strong>'+T(s.name)+'</strong><small>'+T(s.desc)+'</small>';container.append(b);
+  });
+  $('rewardSkip').hidden=!start;$('rewardSkip').textContent=tr('空手启程','持たずに出発');$('rewardSkip').onclick=()=>takeStamp(-1);
+}
+function takeStamp(index){
+  if(mode!=='draft'||!deck)return;const key=deck.key,stamp=deck.choices[index];if(!stamp && !(key==='start'&&index===-1))return;
+  if(stamp&&!has(stamp)){run.stamps.push(stamp);if(stamp==='heart')run.hp=maxHp();fileStamp(stamp);}
+  deck=null;$('rewardOverlay').hidden=true;mode='play';showPlaying();canvas.focus({preventScroll:true});
+  if(key==='start'){run.packing=false;saveGame();openDialog(stories.intro);return;}
+  flags[key]=true;if(key==='letter')run.shield=true;run.hp=maxHp();run.pending=null;
+  leaveChamber();chime('core');toast(T(quests[key].gift)+'  ＋  '+T(stamps[stamp].name));
+}
+function button(label,fn){const b=document.createElement('button');b.type='button';b.textContent=label;b.onclick=fn;return b;}
+function paragraph(parent,text,cls='journal-intro'){const p=document.createElement('p');p.className=cls;p.textContent=text;parent.append(p);}
+function openModal(kind){
+  if(mode!=='modal')modalReturn=mode;
+  mode='modal';modalKind=kind;keys.clear();jumpBuffer=0;$('modalOverlay').hidden=false;showPlaying();renderModal();$('closeModal').focus({preventScroll:true});
+}
+function closeModal(){
+  mode=modalReturn;modalKind=null;$('modalOverlay').hidden=true;showPlaying();if(mode==='play'||mode==='dialog'||mode==='draft')canvas.focus({preventScroll:true});
+}
+function startRegular(){
+  if(saved&&!saved.complete)openModal('restart');else startRun('regular');
+}
+function renderModal(){
+  const box=$('modalContent');box.replaceChildren();const kind=modalKind;
+  const menu=(...buttons)=>{const s=document.createElement('div');s.className='menu-stack';s.append(...buttons);box.append(s);};
+  $('modalEyebrow').textContent=kind==='class'?'CLASSROOM DELIVERY':'LANTERN POST';
+  if(kind==='class'){
+    $('modalTitle').textContent=tr('课堂演示','授業デモ');
+    paragraph(box,tr('从邮局出发，经过三个副本和雾潮大钟，最后亲手把信交给青。两种演示使用同一条固定邮路。','郵便局を出て三つの寄り道と大鐘を通り、最後にアオへ手紙を渡します。どちらも同じ固定ルートです。'));
+    menu(button(tr('▶ 自动演示　约 5 分钟','▶ 自動で上映　約5分'),()=>startRun('class',true)),button(tr('自己操作这条邮路','このルートを自分で遊ぶ'),()=>startRun('class')));
+    paragraph(box,tr('放映中可按 Esc 暂停、继续或接手操作。正式投递的进度单独保存。','上映中は Esc で一時停止・再開・手動操作ができます。通常の配達記録は別に保存されます。'),'modal-note');
+  }else if(kind==='restart'){
+    $('modalTitle').textContent=tr('开始新的投递？','新しく配達する？');paragraph(box,tr('将换一条随机邮路。本次途中进度会被覆盖，已经收录的邮戳会保留。','新しい組み合わせで出発します。途中の記録は上書きされ、消印帳は引き継がれます。'));
+    menu(button(tr('开始新一局','新しい配達へ'),()=>startRun('regular')),button(tr('继续原来的旅程','元の配達に戻る'),()=>{closeModal();continueRun();}));
+  }else if(kind==='help'){
+    $('modalTitle').textContent=tr('邮差的操作','配達人の操作');
+    const labels=[['← → / A D',tr('左右移动','左右に移動')],['Space / ↑ / W',tr('跳跃，长按跳高。从上方踩中雾怪会反弹。','ジャンプ。長押しで高く、魔物を踏むと跳ねる。')],['X',tr('向面前发射灯弹，可按住连射。','向いている方向に光を撃つ。長押しで連射。')],['↓ / S',tr('从高处的单向平台落下','足場を下に降りる')],['E / Enter',tr('调查、交谈、翻页；数字键可以选回答和邮戳。','調べる・話す・ページ送り。数字キーで返事や消印を選ぶ。')],['Esc / P · J',tr('暂停 / 继续；J 打开手记。','一時停止・再開。J は手帳。')]];
+    const g=document.createElement('div');g.className='help-grid';g.innerHTML=labels.map(([k,l])=>'<kbd>'+k+'</kbd><span>'+l+'</span>').join('');box.append(g);
+    paragraph(box,tr('每章取一枚金色灯芯。灯火耗尽或落水后从灯柱重试，已获得的物品和已完成的机关保留。触屏可用画面按键。','各章で金色の芯を一つ集めます。落下したり灯りが尽きたりしたら街灯からやり直せます。取得物と仕掛けの進行は残ります。タッチ操作にも対応。'),'modal-note');
+  }else if(kind==='pause'){
+    $('modalTitle').textContent=tr('在灯下歇一会儿','灯りの下で、ひと休み');
+    const buttons=[button(tr('继续','つづける'),closeModal),button(tr('查看邮差手记','配達手帳を開く'),()=>{modalKind='journal';renderModal();})];
+    if(auto)buttons.push(button(tr('接手操作','自分で操作する'),()=>{auto=null;closeModal();localize();}));
+    else if(modalReturn==='play')buttons.push(button(tr('回到最近的灯柱 / 副本入口','街灯・寄り道の入口に戻る'),()=>{closeModal();retry();}));
+    buttons.push(button(run?.kind==='regular'?tr('保存并回到标题','記録してタイトルへ'):tr('结束演示，回到标题','デモを終えてタイトルへ'),()=>{saveGame();title();}));menu(...buttons);
+  }else if(kind==='journal'){
+    $('modalTitle').textContent=tr('邮差手记','配達手帳');const data=run||saved;
+    paragraph(box,tr('收集三枚灯芯，把大家的信送给青。','三つの芯を集め、町のみんなの手紙をアオへ。'));
+    for(const k of questKeys){const q=quests[k],done=data?.flags[k];const row=document.createElement('div');row.className='quest-row rich-row';
+      row.innerHTML='<i>'+iconSvg(q.icon,q.tone)+'</i><div><strong>'+(done?'✓ ':'◇ ')+T(q.title)+'　·　'+T(q.room)+'</strong><p>'+T(q.request)+'</p><p>'+T(q.gift)+'　'+T(q.effect)+'</p></div>';box.append(row);}
+    const mine=(data?.stamps||[]).map(k=>T(stamps[k].name)).join('、');
+    paragraph(box,tr('本局邮戳　','今回の消印　')+(mine||'—'),'modal-note');
+    paragraph(box,tr('集邮册　','消印帳　')+book.stamps.length+' / '+stampKeys.length+'　·　'+tr('正式送达 ','配達完了 ')+book.deliveries.length+tr(' 次',' 回')+(book.stamps.length?'　'+book.stamps.map(k=>T(stamps[k].name)).join('、'):''),'modal-note');
+  }
+}
+function renderEnding(){
+  mode='ending';keys.clear();$('endingScreen').hidden=false;$('titleScreen').hidden=true;$('interactionHint').hidden=true;$('locationLabel').hidden=true;$('toast').hidden=true;showPlaying();
+  $('endingEyebrow').textContent='DELIVERED  /  03';$('endingTitle').textContent=tr('天亮了，我们回家。','夜が明けた。帰ろう。');
+  $('endingText').textContent=tr('第一艘船穿过金色的海面。邮局门口飘起早饭的香气。青走下灯塔，跟澪一起踏上回家的路。','最初の船が金色の海を渡る。郵便局から朝ごはんの香りがした。アオは灯台を降り、ミオと一緒に家へ向かった。');
+  const memories=[['fox',['琥珀在路口等你，尾巴上还沾着森林的露水。','コハクが道で待っていた。しっぽには、森の朝露。']],['robot',['洛可敲响港口的晨钟，约好了明天一起修路。','ロコが港の朝の鐘を鳴らす。明日は一緒に道を直す約束だ。']],['letter',['青把道歉信交给澪。这次，它会送到每一户人家。','アオが謝罪の手紙をミオに託す。今度は一軒一軒に届く。']]];
+  const m=$('endingMemories');m.replaceChildren();for(const [k,v] of memories)if(flags[k])paragraph(m,'✧　'+T(v),'memory');
+  if(!m.children.length)paragraph(m,tr('归途中，澪记下了那些还想再去一次的地方。','帰り道、ミオはもう一度訪れたい場所を手帳に書いた。'),'memory');
+  const f=questKeys.filter(k=>flags[k]).length;
+  $('endingStats').textContent=fmtTime(run.elapsed)+'　·　'+tr('委托 ','依頼 ')+f+'/3　·　'+tr('驱雾 ','はらった霧 ')+defeated.size+'　·　'+tr('萤光 ','光のかけら ')+collected.size+'/36';
+  $('endingBuild').textContent=run.stamps.map(k=>T(stamps[k].name)).join('　·　');
+  $('endingNext').textContent=run.kind==='class'?tr('试玩随机投递','ランダム配達を遊ぶ'):tr('带着邮戳再投一程','消印を持って次の配達へ');
+  $('endingHome').textContent=tr('回到标题','タイトルへ');
+}
+
+
+// projection
+// The projector issues ordinary movement, jump, lamp and interaction inputs.
+// It follows the fixed classroom layouts and the same collisions as a player.
+const walk=(x,fire=true)=>({kind:'walk',x,fire});
+const jump=(x,y,extra=false,fire=true)=>({kind:'jump',x,y,extra,fire});
+const readAt=(type)=>({kind:'use',type});
+const aimAt=(id)=>({kind:'aim',id});
+const rest=(s,zh,ja)=>({kind:'rest',s,caption:[zh,ja]});
+const routePlans={
+  main0a:[
+    rest(3,'白婆婆的信要送到港口尽头的灯塔。','シロの手紙を、港の先にある灯台へ。'),
+    walk(144,false),{kind:'stomp'},
+    walk(552),jump(744,430),walk(878),readAt('fox')
+  ],
+  fox:[
+    rest(2.3,'第一盏灯在地面，后两盏藏在屋檐下。','一つ目は地面。残りは軒下にある。'),
+    walk(166,false),aimAt(0),walk(359),jump(458,357),walk(489,false),aimAt(1),
+    walk(617),jump(822,358),walk(901),jump(1001,293),aimAt(2),walk(1247),readAt('chest')
+  ],
+  main0b:[
+    rest(2.8,'琥珀的狐火靴可以在空中再跳一次。','コハクのくつで、空中でもう一度跳べる。'),
+    walk(1013),jump(1160,430),walk(1218),jump(1401,430),walk(1466),jump(1550,360),walk(1601),jump(1745,292,true),
+    walk(1809),jump(2023,430),walk(2318),readAt('exit')
+  ],
+  main1a:[
+    rest(2.2,'沿左边的树枝爬高，备用齿轮就在枝头。','手前の足場を登ると、枝の先に予備のギアがある。'),
+    walk(212),jump(316,363),walk(355),jump(471,300),walk(497),jump(667,238,true),walk(755),
+    walk(900),{kind:'down',y:430},readAt('robot')
+  ],
+  robot:[
+    rest(2.4,'泵房的飞轮要从同一高度照射。','はずみ車と同じ高さから、光を当てよう。'),
+    walk(214),jump(307,359),aimAt(0),walk(449),jump(631,430),walk(648),jump(733,357),walk(790),jump(884,291),
+    aimAt(1),walk(1035),jump(1183,430),walk(1247),readAt('chest')
+  ],
+  main1b:[
+    rest(2.6,'双焦灯镜可以一击驱散披甲雾怪。','二重レンズなら、よろいを着た霧も一発。'),
+    walk(916),jump(1091,430),walk(1124),jump(1320,360,true),walk(1385),jump(1510,292),
+    walk(1566),jump(1709,226,true),walk(1768),jump(1913,430),walk(1998),jump(2151,362),walk(2168),jump(2321,430),walk(2557),readAt('exit')
+  ],
+  main2a:[
+    rest(2.3,'洛可架好了桥。左边的石阶通向青的旧信。','ロコが橋を直した。手前の石段を登ると、アオの古い手紙がある。'),
+    walk(258),jump(359,363),walk(395),jump(518,300),walk(553),jump(696,239),walk(754),jump(885,177),readAt('letter')
+  ],
+  letter:[
+    rest(2.2,'散开的信页还留在原地。要亲手一页页捡回来。','風で飛んだ手紙を、一枚ずつ拾っていく。'),
+    walk(178),jump(298,359),walk(355),jump(514,295,true),walk(552),walk(615),
+    jump(711,349),walk(737),jump(825,294),walk(883),jump(1013,232,true),walk(1247),readAt('chest')
+  ],
+  main2b:[
+    rest(2.8,'一圈封蜡围在澪身边，能挡下一次伤害。','封ろうがミオを包む。一度だけダメージを防げる。'),
+    walk(1154),{kind:'down',y:430},walk(1168),jump(1240,360),walk(1284),jump(1425,292),walk(1466),jump(1613,225,true),
+    walk(1769),{kind:'down',y:430},walk(1785),jump(1960,357),walk(2204),{kind:'down',y:430},walk(2242,false),
+    rest(3,'看见钟身闪光就准备跳，等声波过去再打钟芯。','鐘が光ったらジャンプの準備。音の波を越えたら芯を狙おう。'),
+    {kind:'boss'},walk(2577),readAt('keeper')
+  ]
+};
+function makeProjection(){return {zone:'',index:0,step:null,caption:null,shown:'',clock:-1};}
+function planKey(){return roomKey||('main'+levelIndex+(flags[questKeys[levelIndex]]?'b':'a'));}
+function updateDirector(){
+  if(!auto||!run)return;
+  const time=Math.floor(run.elapsed);
+  if(time!==auto.clock){auto.clock=time;$('demoTime').textContent=fmtTime(time);}
+  const fallback=roomKey?T(quests[roomKey].title):T(chapters[levelIndex]);
+  const c=auto.caption?T(auto.caption):fallback;
+  if(c!==auto.shown){auto.shown=c;$('demoCue').textContent=c;}
+}
+function guideDirection(dir){
+  if(dir>0){keys.add('ArrowRight');keys.delete('ArrowLeft');}
+  else if(dir<0){keys.add('ArrowLeft');keys.delete('ArrowRight');}
+  else {keys.delete('ArrowLeft');keys.delete('ArrowRight');}
+}
+function towards(x){
+  const delta=x-player.x;
+  if(Math.abs(delta)<3.2){guideDirection(0);return true;}
+  guideDirection(Math.sign(delta));return false;
+}
+function projectJump(){press('Space');}
+function nextBeat(){
+  keys.clear();jumpBuffer=0;auto.index++;auto.step=null;auto.caption=null;
+}
+function tickProjection(dt) {
+  updateDirector();
+  if(mode==='dialog'){
+    dialog.age+=dt;
+    const finalChoice=dialog.index===dialog.lines.length-1&&dialog.choices;
+    if(dialog.age >= (finalChoice ? 5.7 : 5.10)){
+      if(finalChoice)chooseDialog(0);else advanceDialog();
+    }return;
+  }
+  if(mode==='draft'){
+    deck.age+=dt;if(deck.age>=8.0){
+      const prefer=deck.key==='fox'?'bounce':deck.key==='robot'?'quick':'heart';
+      takeStamp(Math.max(0,deck.choices.indexOf(prefer)));
+    }return;
+  }
+  if(mode!=='play')return;
+  const zone=planKey();
+  if(auto.zone!==zone){auto.zone=zone;auto.index=0;auto.step=null;auto.caption=null;}
+  const action=routePlans[zone][auto.index];if(!action)return;
+  if(!auto.step){auto.step={age:0,launched:false,mid:false,found:null};auto.caption=action.caption||null;}
+  const state=auto.step;state.age+=dt;
+  if(action.fire)keys.add('KeyX');else keys.delete('KeyX');
+  const feet=player.y+32;
+  if(action.kind==='rest'){if(state.age>=action.s)nextBeat();return;}
+  if(action.kind==='walk'){if(towards(action.x))nextBeat();return;}
+  if(action.kind==='down'){
+    guideDirection(0);
+    if(player.onGround && Math.abs(feet-action.y)<3){nextBeat();return;}
+    if(player.onGround){press('ArrowDown');keys.delete('ArrowDown');}return;
+  }
+  if(action.kind==='jump'){
+    const atX=towards(action.x);
+    if(state.launched && atX && player.onGround && Math.abs(feet-action.y)<3){nextBeat();return;}
+    if(atX && player.onGround && feet<action.y-3){press('ArrowDown');keys.delete('ArrowDown');return;}
+    if(player.onGround && (!state.launched || state.age>state.lastJump+.5)){
+      projectJump();state.launched=true;state.mid=false;state.lastJump=state.age;
+    }else if(action.extra && state.launched && !state.mid && !player.onGround && player.vy>-65 && player.extraJump){
+      projectJump();state.mid=true;
+    }return;
+  }
+  if(action.kind==='stomp'){
+    const f=world.foes.find(v=>v.kind==='drift'&&v.hp>0&&v.baseX===246);
+    auto.caption=['从头顶踩落，雾团就散成了萤光。','上から踏むと、霧のかたまりが光にほどける。'];
+    if(!f){nextBeat();return;}
+    towards(f.x+f.w/2-10);if(player.onGround)projectJump();return;
+  }
+  if(action.kind==='aim'){
+    if(run.tasks[roomKey].includes(action.id)){nextBeat();return;}
+    const n=world.targets[action.id];guideDirection(0);
+    if(player.face!==Math.sign(n.x-player.x-10))guideDirection(Math.sign(n.x-player.x-10));
+    keys.add('KeyX');return;
+  }
+  if(action.kind==='use'){
+    guideDirection(0);
+    if(nearby?.type===action.type){nextBeat();press('KeyE');}return;
+  }
+  if(action.kind==='boss'){
+    const f=world.foes.find(v=>v.kind==='boss'&&v.hp>0);
+    if(!f){nextBeat();return;}
+    towards(2348);
+    if(player.face<0)guideDirection(1);
+    auto.caption=f.open>0?['钟芯露出来了，现在用灯击。','芯が見えた。今が光を当てるチャンス。']:['钟身晃动时留意脚边的声波。','鐘が揺れたら、足元の音の波に注意。'];
+    if(player.onGround&&waves.some(w=>w.dir<0&&w.x>player.x&&w.x-player.x<86)){projectJump();state.mid=true;}
+    if(state.mid && (player.onGround||player.vy>155) && f.open>0)keys.add('KeyX');
+  }
+}
+
+
+// NIGHT ROUTE EXPANSION v3 — builds on the supplied Nov. 5 classroom edition.
+// All upgrades below retain the original story, side rooms, artwork and stamp book.
+const weapons = {
+  lantern:{name:['守夜邮灯','夜番のランタン'],desc:['均衡光弹 · 连射稳定 · 适合初次投递','安定した連射。初めての配達におすすめ'],power:1.2,cool:.4,range:335,speed:450,icon:'letter',tone:'#edc47f'},
+  bow:{name:['星线弓','星糸の弓'],desc:['远距离贯穿 · 威力高 · 出手较慢','遠距離を貫く高威力の光。発射はゆっくり'],power:2.35,cool:.78,range:570,speed:610,icon:'arrow',tone:'#92c9de'},
+  staff:{name:['钟摆杖','振り子の杖'],desc:['近距扇形重击 · 可同时击退多个敌人','近距離の重い一撃。複数の敵を押し返す'],power:3.2,cool:.86,range:128,speed:560,icon:'gear',tone:'#dba0a0'},
+  fan:{name:['风铃扇','風鈴の扇'],desc:['三向散射 · 擅长对空 · 单发威力较低','三方向に光を放つ。空中の敵を狙いやすい'],power:.72,cool:.51,range:285,speed:370,icon:'wing',tone:'#a9d7ab'}
+};
+const weaponKeys=Object.keys(weapons);
+const charms={
+  none:{name:['不装备护符','お守りなし'],desc:['基础属性；主线不要求任何护符。','基本能力。お守りなしでも本編をクリア可能。'],icon:'letter'},
+  tide:{name:['潮汐平安结','潮のお守り'],desc:['灯火上限 +1。邮局出发时即可选用。','灯りの上限 +1。郵便局で最初から選べる。'],icon:'heart'},
+  feather:{name:['燕羽护符','ツバメ羽のお守り'],desc:['闪避精力消耗降低 30%。','回避の気力消費が30%減る。'],icon:'wing'},
+  copper:{name:['铜铃守印','銅鈴の守り印'],desc:['精准格挡时机延长至 0.32 秒。','ジャストガードの猶予が0.32秒になる。'],icon:'gear'},
+  moss:{name:['苔灯香囊','苔灯の香袋'],desc:['18 秒未受伤，恢复一格灯火。','18秒間ダメージを受けなければ灯りを一つ回復。'],icon:'leaf'},
+  wax:{name:['晨邮封蜡护符','朝便の封ろう守り'],desc:['格挡消耗减少 25%；旧信仍赠送一层护盾。','ガード消費が25%減る。古い手紙のお礼には盾も付く。'],icon:'wax'}
+};
+const bossDefs=[
+ {id:'warden',name:['雾巷巡灯','霧路の巡灯'],hint:['举灯预警后冲刺：闪避穿过或格挡，再反击。','灯を掲げたら突進。回避かガードの後に反撃。'],hp:24,color:'#c99a68',wind:1.15,wait:3.2},
+ {id:'crab',name:['潮桥寄居王','潮橋のヤドカリ王'],hint:['抬钳后产生低波：跳过声波，打露出的腹部。','はさみを上げたら地面の波。跳び越えて腹を狙う。'],hp:28,color:'#91b9ae',wind:1.12,wait:3.1},
+ {id:'queen',name:['荆灯蛾后','イバラ灯の蛾王'],hint:['翅膀发光后散射：找空隙，跳起射击。','羽が光ったら拡散弾。すき間を見て跳びながら攻撃。'],hp:32,color:'#c5a1cd',wind:1.08,wait:2.95},
+ {id:'pump',name:['旧泵守卫','古いポンプの番人'],hint:['脚下红框将喷出蒸汽：离开标记或及时闪避。','足元の赤い印から蒸気。印の外へ移動か回避。'],hp:36,color:'#8fbcb7',wind:1.05,wait:2.85},
+ {id:'scribe',name:['退信执笔者','返書の書き手'],hint:['墨弹有明显轨迹：格挡反弹，再避开贴地波。','墨弾をガードで反射し、地面の波は跳び越える。'],hp:40,color:'#c4a8bf',wind:1.0,wait:2.8},
+ {id:'bell',name:['雾潮大钟','霧鳴りの大鐘'],hint:['钟响前准备跳；半血后追加光弹，别连续贪攻。','鐘の前兆でジャンプ。半分以下では光弾も追加。'],hp:46,color:'#e5bc83',wind:1.0,wait:2.75}
+];
+const enemyNames={drift:['游雾','さまよう霧'],hop:['雾跳兔','霧の跳ねウサギ'],moth:['灰翅蛾','灰羽の蛾'],shell:['雾甲','霧のよろい'],spitter:['吐墨灯','墨吐き灯'],charger:['雾角兽','霧角の獣'],wisp:['游灯灵','浮遊灯'],sentinel:['持盾邮影','盾持ちの郵影']};
+const ext={shots:[],marks:[],dash:0,dashCD:0,dashDir:1,stamina:100,guardAge:9,guard:false,parry:0,safe:0,effect:0,melee:0,metrics:new Set(),demoIndex:-1,sceneAge:0,weaponChoice:false};
+const metric=k=>ext.metrics.add(k);
+const eq=key=>run?.charm===key;
+const baseBuildRun=buildRun;
+buildRun=function(kind,seed){const n=baseBuildRun(kind,seed);Object.assign(n,{version:3,hp:5,weapon:'lantern',charm:'none',charms:['tide'],relays:[],combat:{},loadoutChosen:false});return n;};
+const baseLoadStored=loadStoredRun;
+loadStoredRun=function(){const n=baseLoadStored();if(!n)return null;const s=readData(SAVE_KEY);n.weapon=weaponKeys.includes(s.weapon)?s.weapon:'lantern';n.charm=charms[s.charm]?s.charm:'none';n.charms=[...new Set(['tide',...(Array.isArray(s.charms)?s.charms:[]).filter(k=>charms[k]&&k!=='none')])];if(n.charm!=='none'&&!n.charms.includes(n.charm))n.charm='none';n.relays=Array.isArray(s.relays)?s.relays.filter(k=>/^relay-[0-2]-[0-1]$/.test(k)):[];n.loadoutChosen=!!s.loadoutChosen;n.hp=clamp(Math.floor(s.hp||5),1,5+(n.stamps.includes('heart')?1:0)+(n.charm==='tide'?1:0));n.version=3;return n;};
+const baseReset=resetBody;
+resetBody=function(point){baseReset(point);ext.stamina=100;ext.dash=0;ext.dashCD=0;ext.guard=false;ext.guardAge=9;ext.safe=0;ext.shots=[];ext.marks=[];};
+const baseFoe=foe;
+foe=function(kind,x,floorY,span,key){const mapped={spitter:'shell',charger:'hop',wisp:'moth',sentinel:'shell'}[kind]||kind;const f=baseFoe(mapped,x,floorY,span,key);f.kind=kind;f.hp=f.max=({drift:2,hop:2,moth:2,shell:3,spitter:3,charger:3,wisp:2,sentinel:4}[kind]||7);f.attack=2+noise(x)*1.3;f.wind=0;f.rush=0;return f;};
+function makeBoss(index,x,key){const d=bossDefs[index],f=foe('boss',x,430,40,key);Object.assign(f,{bossType:d.id,bossIndex:index,w:d.id==='crab'?85:67,h:d.id==='queen'?61:72,hp:d.hp,max:d.hp,attack:2.2,cycle:0,aim:0,open:0,wind:0,rush:0,gate:x+220});f.y=f.floor-f.h;return f;}
+const baseMainWorld=mainWorld;
+mainWorld=function(i){
+ const d=baseMainWorld(i),old=d.width;d.width=old+3600;d.foes=d.foes.filter(f=>f.kind!=='boss');
+ // The supplied three chapters remain intact; two new delivery sectors follow each.
+ d.solids.push(floor(old-120,600));
+ for(let zone=0;zone<2;zone++){
+  const s=old+480+zone*1350;
+  d.solids.push(floor(s,450),floor(s+545,355),floor(s+995,355));
+  for(const [off,y,w] of [[160,360,150],[345,295,160],[605,360,155],[785,295,160],[1030,360,160]])d.solids.push(ledge(s+off,y,w,i===1?'wood':'iron'));
+  const relayX=s+(zone?855:415);d.entities.push({type:'relay',x:relayX,y:273,id:'relay-'+i+'-'+zone});
+  d.entities.push({type:'checkpoint',x:s+1040,y:430});
+  const types=i===0?['drift','spitter','hop','charger']:i===1?['moth','wisp','shell','spitter']:['charger','sentinel','wisp','spitter'];
+  for(let j=0;j<4;j++){const x=s+[80,600,1080,1210][j],kind=types[(j+zone)%types.length];d.foes.push(foe(kind,x,kind==='moth'||kind==='wisp'?370:430,kind==='spitter'?10:24,'ext-'+i+'-'+zone+'-'+j));}
+  if(i>0)d.vents.push({x:s+1120,w:38+i*4,offset:zone*1.6});
+  for(let j=0;j<3;j++)d.sparks.push({x:s+190+j*390,y:326,id:'extspark-'+i+'-'+zone+'-'+j});
+ }
+ const arena=d.width-600;d.solids.push(floor(old+3100,500));
+ d.entities.forEach(e=>{if(e.type==='exit'||e.type==='keeper')e.x=d.width-105;});
+ d.entities.push({type:'checkpoint',x:old-200,y:430},{type:'checkpoint',x:arena-100,y:430});
+ d.foes.push(makeBoss(i*2,old+30,'boss-'+(i*2)),makeBoss(i*2+1,arena+170,'boss-'+(i*2+1)));
+ const reward=['feather','copper','moss'][i];d.entities.push({type:'charm',x:old+310,y:402,charm:reward});
+ if(i===2)d.entities.push({type:'charm',x:old+3400,y:402,charm:'wax'});
+ d.gates=[{x:old+270,key:'boss-'+(i*2)},{x:d.width-210,key:'boss-'+(i*2+1)}];
+ return d;
+};
+const baseSetScene=setScene;
+setScene=function(point){baseSetScene(point);ext.shots=[];ext.marks=[];ext.effect=0;ext.melee=0;};
+function doDodge(){const cost=eq('feather')?20:28;if(mode!=='play'||ext.dashCD>0||ext.stamina<cost)return;ext.stamina-=cost;ext.dash=.27;ext.dashCD=.85;ext.dashDir=player.face;player.invincible=Math.max(player.invincible,.3);metric('dodge');burst(player.x+10,player.y+18,12,'#a0dbce');}
+function switchWeapon(key){if(!weapons[key])return;run.weapon=key;player.shotTimer=Math.max(player.shotTimer,.12);metric('weapon-'+key);saveGame();hudCache='';}
+const baseDamage=damage;
+damage=function(x,kind='contact'){
+ if(!player||player.invincible>0||ext.dash>0)return;
+ const frontal=!Number.isFinite(x)||(x-player.x-10)*player.face>=-8;
+ if(kind!=='hazard'&&ext.guard&&frontal&&ext.stamina>=12){
+  const perfect=ext.guardAge<=(eq('copper')?.32:.21);ext.stamina=Math.max(0,ext.stamina-(perfect?6:eq('wax')?15:20));player.invincible=perfect?.3:.18;ext.parry=perfect?.4:.15;
+  metric(perfect?'parry':'guard');burst(player.x+10+player.face*16,player.y+16,perfect?20:8,perfect?'#fff1b5':'#9adac9');
+  if(perfect){for(const f of world.foes)if(f.hp>0&&Math.abs(f.x-player.x)<150){f.open=Math.max(f.open,2);f.attack=Math.max(f.attack,1.1);hitFoe(f,1.5,true);}toast(tr('精准格挡 · 反击窗口','ジャストガード · 反撃のチャンス'));}
+  return;
+ }
+ ext.safe=0;baseDamage(x);metric('damage');
+};
+hitFoe=function(f,amount,stomp=false){
+ if(f.hp<=0||f.hurt>0)return;
+ if(f.kind==='sentinel'&&f.wind<=0&&!stomp&&(player.x-f.x)*f.dir>0)amount*=.45;
+ if(f.kind==='boss'&&['crab','bell'].includes(f.bossType)&&f.open<=0&&!stomp)amount*=.38;
+ f.hp=Math.max(0,f.hp-amount);if(f.hp<.05)f.hp=0;f.hurt=.1;burst(f.x+f.w/2,f.y+f.h/2,f.hp?6:22,f.kind==='boss'?'#efbc8c':'#a9ddc9');
+ if(stomp)metric('stomp');
+ if(!f.hp){defeated.add(f.key);metric(f.kind==='boss'?'boss-'+f.bossType:'enemy-'+f.kind);if(f.kind==='boss'){run.hp=maxHp();ext.stamina=100;ext.shots=[];waves=[];ext.marks=[];toast(T(bossDefs[f.bossIndex].name)+tr(' · 黑雾散去，邮路重开',' · 霧が晴れ、道が開いた'));chime('core');}else if((has('mend')&&defeated.size%3===0)||defeated.size%5===0)run.hp=Math.min(maxHp(),run.hp+1);saveGame();}
+ hudCache='';updateHud();
+};
+shoot=function(){
+ if(!player||player.shotTimer>0||ext.guard||ext.dash>0)return;
+ const w=weapons[run.weapon]||weapons.lantern;player.shotTimer=w.cool*(has('quick')?.76:1);player.shotFlash=.16;metric('weapon-'+run.weapon);
+ const power=w.power*(flags.robot?1.35:1); // Lens is helpful, never a prerequisite.
+ if(run.weapon==='staff'){
+  ext.melee=.22;
+  for(const f of world.foes)if(f.hp>0&&(f.x+f.w-player.x)*player.face>-12&&(f.x-player.x)*player.face<128&&Math.abs(f.y+f.h/2-player.y-16)<69){hitFoe(f,power);if(f.kind!=='boss')f.x=clamp(f.x+player.face*18,f.baseX-f.span,f.baseX+f.span);}
+ }
+ const add=(dir,vy=0)=>bolts.push({x:player.x+10+dir*15,y:player.y+17,dir,vy,speed:w.speed,left:w.range*(has('long')?1.35:1),power:run.weapon==='staff'?0:power,pierce:run.weapon==='bow'?3:flags.robot?2:1,hit:new Set(),weapon:run.weapon});
+ if(run.weapon==='fan'){add(player.face,-100);add(player.face);add(player.face,100);}else add(player.face);
+ if(has('echo'))add(-player.face);tone(run.weapon==='staff'?196:523,.1,.025,'triangle');
+};
+function activateRelay(e){if(run.relays.includes(e.id))return;run.relays.push(e.id);burst(e.x,e.y,20,'#e9cc83');metric('relay');chime('core');saveGame();hudCache='';toast(tr('中继路灯已点亮','中継灯をともした')+' '+run.relays.filter(k=>k.startsWith('relay-'+levelIndex)).length+'/2');}
+stepBolts=function(dt){
+ for(const b of bolts){const travel=(b.speed||407)*dt;b.x+=b.dir*travel;b.y+=(b.vy||0)*dt;b.left-=travel;
+  for(const f of world.foes){if(b.power<=0||f.hp<=0||b.hit.has(f.key)||b.x<f.x-6||b.x>f.x+f.w+6||b.y<f.y-6||b.y>f.y+f.h+6)continue;b.hit.add(f.key);hitFoe(f,b.power);if(--b.pierce<=0){b.left=0;break;}}
+  if(b.left>0&&roomKey&&roomKey!=='letter')for(const t of world.targets)if(!run.tasks[roomKey].includes(t.id)&&Math.abs(t.x-b.x)<20&&Math.abs(t.y-b.y)<25){lightTarget(t);b.left=0;metric('mechanism');break;}
+  if(b.left>0&&!roomKey)for(const e of world.entities)if(e.type==='relay'&&!run.relays.includes(e.id)&&Math.hypot(e.x-b.x,e.y-b.y)<28){activateRelay(e);b.left=0;break;}
+ }bolts=bolts.filter(b=>b.left>0);
+};
+function enemyShot(x,y,vx,vy=0,color='#d5a0af'){ext.shots.push({x,y,vx,vy,life:4,color});}
+function bossAttack(f){
+ const d=bossDefs[f.bossIndex],phase=f.hp<f.max*.5?2:1,dir=player.x<f.x?-1:1;
+ f.open=2.05;f.cycle++;metric('pattern-'+f.bossType);
+ if(f.bossType==='warden'){f.rush=.58;f.rushDir=dir;}
+ if(f.bossType==='crab'||f.bossType==='bell'){waves.push({x:f.x+f.w/2,y:427,dir,life:3,speed:170+phase*12});if(phase===2)enemyShot(f.x+30,381,dir*150,0);}
+ if(f.bossType==='queen'){for(const vy of [-55,0,55])enemyShot(f.x+30,f.y+28,dir*155,vy,'#c9a4db');}
+ if(f.bossType==='pump'){ext.marks.push({x:f.aim,y:430,w:64,t:.8,life:1.35});if(phase===2)ext.marks.push({x:f.aim+120*dir,y:430,w:52,t:1.15,life:1.7});}
+ if(f.bossType==='scribe'){for(const vy of [-35,0,35])enemyShot(f.x+28,390,dir*170,vy);if(phase===2)waves.push({x:f.x+30,y:427,dir,life:3,speed:170});}
+ f.attack=d.wait-(phase===2?.28:0);
+}
+stepFoes=function(dt,oldBottom,fallSpeed){
+ for(const f of world.foes){if(f.hp<=0)continue;f.hurt=Math.max(0,f.hurt-dt);if(Math.abs(player.x-f.x)>680)continue;f.age+=dt;
+  if(f.kind==='boss'){
+   const d=bossDefs[f.bossIndex];f.active=Math.abs(player.x-f.x)<560;f.open=Math.max(0,f.open-dt);
+   if(f.active){
+    if(f.wind>0){f.wind-=dt;if(f.wind<=0)bossAttack(f);}
+    else {f.attack-=dt;if(f.attack<=0){f.wind=d.wind;f.aim=player.x+10;}}
+   }
+   if(f.rush>0){f.rush-=dt;f.x=clamp(f.x+f.rushDir*255*dt,f.baseX-230,f.baseX+80);}else if(f.wind<=0)f.x+=(f.baseX-f.x)*dt*.7;
+   f.y=f.floor-f.h-(f.bossType==='queen'?28+Math.sin(f.age*1.5)*35:0);
+  }else{
+   f.attack-=dt;f.wind=Math.max(0,f.wind-dt);const dir=player.x<f.x?-1:1;
+   if(['spitter','wisp'].includes(f.kind)&&f.attack<=0){f.wind=.65;f.attack=3.2;f.fired=false;}
+   if(['spitter','wisp'].includes(f.kind)&&f.wind>0&&f.wind<.08&&!f.fired){enemyShot(f.x+f.w/2,f.y+15,dir*148,(player.y+16-f.y)*.25);f.fired=true;}
+   if(f.kind==='charger'&&f.attack<=0){f.wind=.85;f.attack=3.4;f.rush=0;f.rushDir=dir;}
+   if(f.kind==='charger'&&f.wind>0&&f.wind<.05)f.rush=.4;
+   if(f.rush>0){f.rush-=dt;f.x=clamp(f.x+f.rushDir*190*dt,f.baseX-f.span-55,f.baseX+f.span+55);}
+   else if(f.wind<=0){f.x+=f.dir*f.speed*dt;if(f.x>=f.baseX+f.span){f.x=f.baseX+f.span;f.dir=-1;}if(f.x<=f.baseX-f.span){f.x=f.baseX-f.span;f.dir=1;}}
+   if(f.kind==='sentinel')f.dir=dir;
+   const rise=f.kind==='hop'?Math.max(0,Math.sin(f.age*3+f.phase))*36:['moth','wisp'].includes(f.kind)?18+Math.sin(f.age*2+f.phase)*22:0;f.y=f.floor-f.h-rise;
+  }
+  if(player.x+player.w<=f.x+2||player.x>=f.x+f.w-2||player.y>=f.y+f.h||player.y+player.h<f.y)continue;
+  if(fallSpeed>5&&oldBottom<=f.y+Math.max(8,fallSpeed*dt+3)){
+   player.y=f.y-player.h;player.vy=has('bounce')?-490:-356;player.onGround=false;player.standing=null;player.extraJump=true;coyote=0;hitFoe(f,has('bounce')?2.2:1.4,true);
+  }else damage(f.x+f.w/2,'contact');
+ }
+ for(const w of waves){w.x+=w.dir*(w.speed||194)*dt;w.life-=dt;if(w.life>0&&player.x+20>w.x-12&&player.x<w.x+12&&player.y+32>w.y-17&&player.y<w.y+4)damage(w.x,'wave');}waves=waves.filter(w=>w.life>0);
+ for(const b of ext.shots){b.x+=b.vx*dt;b.y+=b.vy*dt;b.life-=dt;if(Math.hypot(b.x-player.x-10,b.y-player.y-16)<22){const perfect=player.invincible<=0&&ext.dash<=0&&ext.guard&&ext.stamina>=12&&(b.x-player.x-10)*player.face>=-8&&ext.guardAge<=(eq('copper')?.32:.21);damage(b.x,'projectile');if(perfect){bolts.push({x:b.x,y:b.y,dir:Math.sign(-b.vx),vy:0,speed:480,left:500,power:2.5,pierce:1,hit:new Set(),weapon:'bow'});metric('reflection');}b.life=0;}}
+ ext.shots=ext.shots.filter(b=>b.life>0);
+ for(const m of ext.marks){m.t-=dt;m.life-=dt;if(m.t<=0&&m.life>0&&player.x+20>m.x-m.w/2&&player.x<m.x+m.w/2&&player.y+32>355)damage(m.x,'hazard');}ext.marks=ext.marks.filter(m=>m.life>0);
+};
+const baseRetry=retry;
+retry=function(){for(const f of world.foes)if(f.kind==='boss'&&f.hp>0){f.hp=f.max;f.attack=2.3;f.wind=0;f.rush=0;f.x=f.baseX;}baseRetry();};
+const baseScan=scanObjects;
+scanObjects=function(){baseScan();if(!roomKey)for(const e of world.entities){if(e.type==='charm'&&!run.charms.includes(e.charm)&&Math.hypot(player.x+10-e.x,player.y+16-e.y)<32){run.charms.push(e.charm);metric('charm');saveGame();toast(T(charms[e.charm].name)+tr('已入袋 · I 装备','を入手 · I で装備'));}}};
+const baseInteract=interact;
+interact=function(){if(mode!=='play'||!nearby)return;const e=nearby;
+ if(e.type==='relay'){activateRelay(e);return;}
+ if(e.type==='charm'){openModal('equipment');return;}
+ if(['exit','keeper'].includes(e.type)){
+  if(world.foes.some(f=>f.kind==='boss'&&f.hp>0)){toast(tr('邮路仍有守关黑雾，先完成本章两场首领战。','道を守る霧が残っている。この章の二体のボスをはらおう。'));return;}
+  if(run.relays.filter(k=>k.startsWith('relay-'+levelIndex)).length<2){toast(tr('还有中继路灯没点亮：沿高台寻找两座灯台。','中継灯がまだある。高い足場の二つの灯を探そう。'));return;}
+ }baseInteract();};
+const baseTakeStamp=takeStamp;
+takeStamp=function(i){const k=deck?.key;baseTakeStamp(i);if(k==='letter'&&flags.letter&&!run.charms.includes('wax'))run.charms.push('wax');metric('stamp');saveGame();};
+const baseUpdate=update;
+update=function(dt){
+ if(mode==='play'){
+  ext.dashCD=Math.max(0,ext.dashCD-dt);ext.dash=Math.max(0,ext.dash-dt);ext.parry=Math.max(0,ext.parry-dt);ext.melee=Math.max(0,ext.melee-dt);ext.safe+=dt;
+  const guarding=keys.has('KeyC')&&ext.stamina>0&&ext.dash<=0;
+  if(guarding&&!ext.guard)ext.guardAge=0;else ext.guardAge+=dt;ext.guard=guarding;
+  ext.stamina=clamp(ext.stamina+(guarding?-5:24)*dt,0,100);
+  if(eq('moss')&&ext.safe>18){run.hp=Math.min(maxHp(),run.hp+1);ext.safe=0;}
+ }
+ baseUpdate(dt);
+ if(mode==='play'){
+  if(ext.dash>0){player.x=clamp(player.x+ext.dashDir*365*dt,0,world.width-player.w);metric('dodge');}
+  if(world.gates)for(const g of world.gates)if(!defeated.has(g.key)&&player.x+player.w>g.x)player.x=g.x-player.w;
+  updateCombatHud();
+ }
+};
+// Additional status stays inside the game frame, without replacing the user's UI.
+const combatPanel=document.createElement('div');combatPanel.id='combatPanel';combatPanel.className='combat-panel';combatPanel.hidden=true;
+combatPanel.innerHTML='<button id="weaponDisplay"></button><button id="charmDisplay"></button><span id="staminaLabel"></span><i class="stamina-track"><b id="staminaMeter"></b></i><span id="defenseState"></span>';$('gameFrame').append(combatPanel);
+function updateCombatHud(){if(!run||!player)return;$('weaponDisplay').textContent='Q · '+T(weapons[run.weapon].name);$('charmDisplay').textContent='I · '+T(charms[run.charm].name);$('staminaLabel').textContent=tr('精力','気力')+' '+Math.round(ext.stamina);$('staminaMeter').style.width=ext.stamina+'%';$('defenseState').textContent=ext.dash>0?tr('闪避中','回避中'):ext.guard?tr('格挡中','ガード中'):tr('Z 闪避 · C 格挡','Z 回避 · C ガード');}
+$('weaponDisplay').onclick=()=>{if(!auto)openModal('weapons');};$('charmDisplay').onclick=()=>{if(!auto)openModal('equipment');};
+const baseShow=showPlaying;
+showPlaying=function(){baseShow();combatPanel.hidden=!run||!['play','dialog'].includes(mode);if(run&&player)updateCombatHud();};
+const baseHud=updateHud;
+updateHud=function(){if(!world||!run)return;baseHud();const f=world.foes.find(f=>f.kind==='boss'&&f.hp>0&&f.active);$('bossHud').hidden=!f;
+ if(f){const d=bossDefs[f.bossIndex];$('bossName').textContent=T(d.name)+(f.hp<f.max*.5?tr(' · 第二阶段',' · 第2段階'):'');$('bossMeter').style.width=(f.hp/f.max*100)+'%';$('bossValue').textContent=Math.ceil(f.hp)+' / '+f.max;}
+ if(!roomKey){const r=run.relays.filter(k=>k.startsWith('relay-'+levelIndex)).length,b=world.foes.filter(f=>f.kind==='boss'&&f.hp<=0).length+defeated.size; // displayed count is keyed, never inferred from kills.
+ $('objectiveText').textContent=(cores[levelIndex]?'✦':'◇')+tr('灯芯','芯')+'  · '+tr('中继灯','中継灯')+' '+r+'/2  · '+tr('首领','ボス')+' '+[iBoss(levelIndex*2),iBoss(levelIndex*2+1)].filter(Boolean).length+'/2';}
+};
+function iBoss(n){return defeated.has('boss-'+n);}
+const baseLocalize=localize;
+localize=function(){baseLocalize();$('journeyMeta').textContent=tr('完整旅程约 20 分钟 · 6 位守关者 · 演示 4:00','本編約20分 · 6体のボス · デモ4:00');$('controlLegend').innerHTML=[['← →',tr('移动','移動')],['Space',tr('跳 / 踩','跳ぶ・踏む')],['X',tr('攻击','攻撃')],['Z / C',tr('闪避 / 格挡','回避・ガード')],['Q / I',tr('换武器 / 护符','武器・お守り')],['E',tr('互动','調べる')]].map(([k,l])=>'<span><kbd>'+k+'</kbd>'+l+'</span>').join('');$('assistKey').textContent=tr('攻击','攻撃');if(run&&player)updateCombatHud();};
+const baseModal=renderModal;
+renderModal=function(){
+ if(['weapons','equipment','loadout'].includes(modalKind)){
+  const box=$('modalContent');box.replaceChildren();$('modalEyebrow').textContent='NIGHT DELIVERY / EQUIPMENT';$('modalTitle').textContent=modalKind==='equipment'?tr('随身护符','旅のお守り'):tr('选择你的起始武器','最初の武器を選ぶ');
+  paragraph(box,modalKind==='equipment'?tr('一次装备一枚。全部属于可选增益；不装备也能通关。','装備は一つ。すべて任意の補助効果。装備なしでもクリアできます。'):tr('四种武器都能完成主线。旅途中按 Q 随时轮换，X 攻击。','どの武器でも本編をクリア可能。旅の途中は Q で切り替え、X で攻撃。'));
+  const grid=document.createElement('div');grid.className='equipment-grid';
+  if(modalKind==='equipment')for(const k of Object.keys(charms)){
+   const c=charms[k],available=k==='none'||run.charms.includes(k),b=button('',()=>{run.charm=k;run.hp=Math.min(run.hp,maxHp());metric('equip');saveGame();renderModal();updateCombatHud();});b.className='equipment-card'+(run.charm===k?' chosen':'');b.disabled=!available;b.innerHTML=iconSvg(c.icon)+'<strong>'+T(c.name)+(run.charm===k?' ✓':'')+'</strong><small>'+T(c.desc)+(available?'':tr(' · 尚未找到',' · 未入手'))+'</small>';grid.append(b);
+  }else for(const k of weaponKeys){const w=weapons[k],b=button('',()=>{switchWeapon(k);run.loadoutChosen=true;saveGame();closeModal();});b.className='equipment-card'+(run.weapon===k?' chosen':'');b.innerHTML=iconSvg(w.icon,w.tone)+'<strong>'+T(w.name)+'</strong><small>'+T(w.desc)+'</small>';grid.append(b);}
+  box.append(grid);return;
+ }
+ if(modalKind==='class'){
+  const box=$('modalContent');box.replaceChildren();$('modalTitle').textContent=tr('4 分钟课堂演示','4分間の授業デモ');paragraph(box,tr('自动节选按 4:00 排程：主线剧情、四种武器、跳踩、闪避、格挡与反击、三处支线、邮戳、护符、机关，以及随机三位 Boss。暂停时计时也暂停。','4:00の自動ハイライト：物語、4種の武器、踏みつけ、回避、ガードと反撃、三つの寄り道、消印、お守り、仕掛け、ランダムな3体のボス。停止中は時計も止まります。'));
+  const list=document.createElement('div');list.className='menu-stack';list.append(button(tr('▶ 开始自动演示 · 4:00','▶ 自動デモを開始 · 4:00'),()=>startRun('class',true)),button(tr('自行游玩演示关卡（不限时）','自分でデモを遊ぶ（時間制限なし）'),()=>startRun('class',false)));box.append(list);paragraph(box,tr('这是按章节切换的玩法节选，不是完整流程录像。使用独立进度，不覆盖正式存档。','章ごとに切り替わる操作例で、本編全体の通し映像ではありません。本編の記録とは別です。'),'modal-note');return;
+ }
+ baseModal();
+ if(modalKind==='help')paragraph($('modalContent'),tr('Z / Shift：闪避（消耗 28 精力）；按住 C：面向敌人格挡。受击前约 0.21 秒按下 C 可精准格挡并反弹光弹。Q：轮换四种武器；I：更换护符。精力会自动恢复。落水、地面黑雾和蒸汽不能格挡。','Z / Shift：回避（気力28）。C 長押し：正面をガード。攻撃の約0.21秒前に C を押すとジャストガードで弾を反射。Q：4種の武器を切替。I：お守り。気力は自動回復。落下・地面の霧・蒸気はガードできません。'),'modal-note');
+ if(modalKind==='journal'){
+  paragraph($('modalContent'),tr('难度阶梯：小镇学习单个预警；森林组合飞行与远程；灯塔加入两阶段首领。每章两个 Boss、两盏中继灯。支线的鞋、镜片与封蜡均非必需。','難易度：町で一つの前兆を学び、森で飛行と遠距離を組み合わせ、灯台で2段階のボスに挑む。各章にボス2体・中継灯2個。寄り道のくつ・レンズ・封ろうは必須ではありません。'),'modal-note');
+  for(const d of bossDefs)paragraph($('modalContent'),T(d.name)+'：'+T(d.hint),'journal-intro');
+ }
+};
+const baseStartRun=startRun;
+startRun=function(kind,automatic=false){ext.metrics=new Set();if(automatic){startShowcase();return;}baseStartRun(kind,false);ext.weaponChoice=true;openModal('loadout');};
+const basePress=press;
+press=function(code,repeat=false){
+ if(mode==='play'){
+  if(!repeat&&['KeyZ','ShiftLeft','ShiftRight'].includes(code)){doDodge();return;}
+  if(code==='KeyC'){keys.add(code);if(!ext.guard)ext.guardAge=0;return;}
+  if(!repeat&&code==='KeyQ'){switchWeapon(weaponKeys[(weaponKeys.indexOf(run.weapon)+1)%weaponKeys.length]);return;}
+  if(!repeat&&code==='KeyI'){openModal('equipment');return;}
+ }basePress(code,repeat);
+};
+const baseDrawFoe=drawFoe;
+drawFoe=function(f,t){
+ if(f.kind!=='boss'&&!['spitter','charger','wisp','sentinel'].includes(f.kind)){baseDrawFoe(f,t);return;}if(!f.hp)return;
+ if(f.kind==='boss'){
+  const d=bossDefs[f.bossIndex],x=f.x+f.w/2,y=f.y,c=f.hurt>0?'#fff1cf':d.color;
+  glow(x,y+35,60,f.wind>0?'#f7ad5d44':'#b2d6bc11');
+  if(f.bossType==='bell'){baseDrawFoe(f,t);return;}
+  if(f.bossType==='queen'){for(const dir of [-1,1])poly([[x,y+26],[x+dir*65,y-5+Math.sin(t*8)*7],[x+dir*48,y+56],[x+dir*18,y+45]],c);rect(x-14,y+9,28,48,'#394152');}
+  else if(f.bossType==='crab'){rect(x-37,y+20,74,32,c);for(const dir of [-1,1]){rect(x+dir*44-8,y+15-(f.wind>0?18:0),16,25,c);rect(x+dir*27-6,y+50,12,21,'#526c66');}rect(x-25,y+7,50,19,'#718e82');}
+  else if(f.bossType==='pump'){rect(x-31,y+8,62,58,c);drawCog(x,y+34,19,t*2,'#3e5f60','#caad77','#a7d1b0');rect(x-43,y+21,12,36,'#688e89');rect(x+31,y+21,12,36,'#688e89');}
+  else if(f.bossType==='scribe'){poly([[x,y],[x-32,y+67],[x+32,y+67]],c);envelope(x,y+31,1.4,'#ece0ba');rect(x+37,y+10,5,58,'#c29d71');}
+  else{rect(x-22,y+18,44,48,c);rect(x-16,y,32,22,'#5b7165');rect(x+31,y+19,5,49,'#b8b083');lantern(x+34,y+16,true,1.25);}
+  rect(x-10,y+19,5,5,'#ffedac');rect(x+6,y+19,5,5,'#ffedac');
+  if(f.active)tag(x,y-22,f.wind>0?tr('预警 · 准备防御','予兆 · 防御の準備'):f.open>0?tr('反击窗口','反撃のチャンス'):T(d.name),f.wind>0?'#ffd096':'#d2dfbb');return;
+ }
+ const old=f.kind;f.kind={spitter:'shell',charger:'hop',wisp:'moth',sentinel:'shell'}[old];baseDrawFoe(f,t);f.kind=old;
+ if(old==='spitter')rect(f.x+(player.x<f.x?-6:f.w),f.y+13,8,8,'#ca96ae');
+ if(old==='charger')poly([[f.x+8,f.y+8],[f.x+16,f.y-13],[f.x+22,f.y+10]],'#d3b584');
+ if(old==='sentinel'){const sx=f.x+(f.dir>0?f.w:-6);rect(sx,f.y+1,7,28,'#b3c6b4');rect(sx+2,f.y+7,3,13,'#e8cd87');}
+ if(old==='wisp')glow(f.x+14,f.y+14,31,'#89c9dc44');if(f.wind>0)tag(f.x+14,f.y-16,'!','#f3bd7b');
+};
+const baseCombatArt=combatArt;
+combatArt=function(t){baseCombatArt(t);
+ for(const b of ext.shots){glow(b.x,b.y,16,b.color+'55');rect(b.x-4,b.y-4,8,8,b.color);}
+ for(const m of ext.marks){rect(m.x-m.w/2,425,m.w,4,m.t>0?'#e99d7999':'#ffd6aa');if(m.t<=0){rect(m.x-m.w/2,365,m.w,65,'#c6e3d26b');}else tag(m.x,402,'!','#ffbd89');}
+ if(ext.guard||ext.parry>0){ctx.strokeStyle=ext.parry>0?'#fff1ad':'#8acbb8';ctx.lineWidth=ext.parry>0?4:2;ctx.beginPath();ctx.arc(player.x+10,player.y+16,25,player.face>0?-1.3:1.8,player.face>0?1.3:4.5);ctx.stroke();}
+ if(ext.dash>0)for(let n=1;n<4;n++){ctx.globalAlpha=.12*(4-n);rect(player.x-ext.dashDir*n*11,player.y+7,19,25,'#a8d8bf');}ctx.globalAlpha=1;
+ if(ext.melee>0){ctx.strokeStyle='#efc9a1';ctx.lineWidth=5;ctx.beginPath();ctx.arc(player.x+10,player.y+16,102,player.face>0?-1:2.14,player.face>0?1:4.14);ctx.stroke();}
+ if(!roomKey)for(const e of world.entities){if(e.type==='relay'){largeLantern(e.x,e.y,1.05,run.relays.includes(e.id));tag(e.x,e.y-37,run.relays.includes(e.id)?tr('中继已亮','点灯済み'):tr('E / X · 中继灯','E / X · 中継灯'));}if(e.type==='charm'&&!run.charms.includes(e.charm)){glow(e.x,e.y,25,'#bfd6ad44');poly([[e.x,e.y-12],[e.x+9,e.y],[e.x,e.y+12],[e.x-9,e.y]],'#c0d4ac');tag(e.x,e.y-30,T(charms[e.charm].name));}}
+ if(world.gates)for(const g of world.gates)if(!defeated.has(g.key)){for(let j=0;j<6;j++)rect(g.x,340+j*15,4,9,'#e7c88c99');}
+};
+const baseEnding=renderEnding;
+renderEnding=function(){baseEnding();if(run?.kind==='regular')$('endingBuild').textContent=T(weapons[run.weapon].name)+' · '+T(charms[run.charm].name)+' · '+tr('守关者 ','ボス ')+bossDefs.filter((d,i)=>iBoss(i)).length+'/6';if(auto?.showcase){$('endingEyebrow').textContent='CLASSROOM DELIVERY / 04:00';$('endingStats').textContent=tr('4 分钟演示完成 · 玩法节选 · 正式存档未改动','4分デモ完了 · 操作ハイライト · 本編の記録は変更なし');}};
+// The four-minute director uses explicit, labelled chapter excerpts. It issues
+// normal controls in a compact stage; it never saves to the regular-run slot.
+const demoStages=[
+ {id:'intro',end:12,caption:['风暴熄灭灯塔。澪带着三枚灯芯的使命，把镇民的信送给青。','嵐で灯台が消えた。ミオは三つの芯を集め、町の手紙をアオへ届ける。']},
+ {id:'basics',end:30,caption:['移动、跳跃、跳踩；收集灯芯与萤光，点亮中继灯和存档灯柱。','移動・ジャンプ・踏みつけ。芯と光を集め、中継灯と記録の街灯をともす。']},
+ {id:'weapons',end:46,caption:['Q 切换：邮灯连射、星弓贯穿、钟杖近战、风铃扇散射。','Qで切替：ランタン連射、星弓の貫通、杖の近接、扇の拡散。']},
+ {id:'defense',end:66,caption:['Z 闪避 / C 格挡。刚好挡住会反击、反弹；护符只提供可选增益。','Zで回避、Cでガード。直前なら反撃・反射。お守りは任意の補助効果。']},
+ {id:'fox',end:88,caption:['支线①：为琥珀点亮三盏门灯。谢礼是二段跳；不做支线也能通关。','寄り道①：コハクのために三つの灯をともす。お礼は二段ジャンプ。寄り道なしでもクリア可能。']},
+ {id:'reward',end:100,caption:['选择邮戳，组合本局能力；完成的邮戳会进入集邮册，支持再次游玩。','消印を選んで能力を組み合わせる。集めた消印は次の配達にも持っていける。']},
+ {id:'boss0',end:128,caption:['首领节选①：观察预警 → 防御或闪避 → 抓住反击窗口。','ボス抜粋①：予兆を見る → 防御か回避 → 反撃の機会をつかむ。']},
+ {id:'robot',end:150,caption:['支线②：拾取齿轮、启动飞轮、躲开蒸汽。洛可升级灯镜并修桥。','寄り道②：ギアを拾い、はずみ車を動かし、蒸気を避ける。ロコはレンズと橋を直す。']},
+ {id:'boss1',end:175,caption:['首领节选②：半血后改变招式组合，预警依然清晰；基础武器也有效。','ボス抜粋②：半分以下で技の組み合わせが変化。予兆は明確で、基本武器も有効。']},
+ {id:'letter',end:197,caption:['支线③：乘移动书架收集信页。青不是不想求助，而是不敢寄出这封信。','寄り道③：動く書棚で手紙を集める。アオは助けを求める手紙を出せずにいた。']},
+ {id:'boss2',end:224,caption:['首领节选③：六位守关者中随机展示三位。完整旅程含支线约 20 分钟。','ボス抜粋③：6体から3体をランダム上映。本編は寄り道込みで約20分。']},
+ {id:'story',end:240,caption:['信里写着：“灯可以一起修。等天亮了，下来一起吃早饭吧。”灯塔亮起，我们回家。','手紙には「灯りはみんなで直そう。朝になったら一緒にごはんを」。灯台がともり、帰路へ。']}
+];
+function compactWorld(){return {width:1250,solids:[floor(0,1250)],entities:[],foes:[],targets:[],hazards:[],sparks:[],vents:[],lifts:[],gates:[]};}
+function startShowcase(){
+ auto=null;dialog=null;deck=null;modalKind=null;hidePanels();bindRun(buildRun('class',(Math.random()*0xffffffff)>>>0));
+ auto={...makeProjection(),showcase:true,bosses:shuffled([0,1,2,3,4,5],run.seed,77).slice(0,3),stageIndex:-1,pathIndex:0,pathStep:null};ext.metrics=new Set();ext.demoIndex=-1;run.hp=5;
+ setScene({x:90,y:430});setupDemo(0);showPlaying();
+}
+function setupDemo(index){
+ const a=auto;auto.stageIndex=index;auto.pathIndex=0;auto.pathStep=null;auto.stageStart=index?demoStages[index-1].end:0;auto.caption=demoStages[index].caption;keys.clear();jumpBuffer=0;dialog=null;deck=null;$('dialogOverlay').hidden=true;$('rewardOverlay').hidden=true;
+ const id=demoStages[index].id;run.level=['robot','boss1'].includes(id)?1:['letter','boss2','story'].includes(id)?2:0;levelIndex=run.level;roomKey=questKeys.includes(id)?id:null;run.room=roomKey;world=compactWorld();
+ mode='play';sceneTime=0;particles=[];bolts=[];waves=[];resetBody({x:90,y:430});run.hp=maxHp();labelTime=0;$('locationLabel').hidden=true;camera=0;hudCache='';auto=a;
+ auto.caption=demoStages[index].caption;auto.demoFired={};
+ const core=(x,y)=>world.entities.push({type:'core',x,y});
+ if(id==='intro')openDialog([line('post','风暴熄灭了灯塔。澪，请把镇民的信交给青。','嵐で灯台が消えた。ミオ、町のみんなの手紙をアオへ。'),line('mio','路上有六位被黑雾缠住的守关者。我会让邮路重新亮起来。','道には霧に包まれた6体の番人。もう一度、灯りをともしてみせる。'),line('post','你可以选一件武器。记住，借来的帮助是礼物，不是出发的条件。','武器を一つ選んでおいで。助けは贈り物。でも、なくても旅はできるよ。')]);
+ if(id==='basics'){
+  world.foes=[foe('drift',245,430,10,'demo-stomp')];world.solids.push(ledge(420,360,290,'wood'));core(570,335);world.sparks=[{x:480,y:335,id:'demo-light'}];world.entities.push({type:'relay',x:760,y:405,id:'relay-0-0'},{type:'checkpoint',x:950,y:430});
+  auto.path=[{kind:'stomp'},walk(380,false),jump(540,360,false,false),walk(570,false),walk(746,false),{kind:'use',type:'relay'},walk(940,false)];
+ }
+ if(id==='weapons'){player.x=330;world.foes=[foe('spitter',540,430,3,'demo-target')];world.foes[0].hp=world.foes[0].max=999;world.foes[0].attack=99;auto.lastWeapon=-1;}
+ if(id==='defense'){player.x=340;world.entities.push({type:'charm',x:350,y:410,charm:'copper'});world.foes=[foe('sentinel',670,430,3,'demo-reflect')];world.foes[0].attack=99;}
+ if(id==='fox'){
+  run.tasks.fox=[];world.solids.push(ledge(420,360,320,'wood'));world.targets=[{id:0,x:240,y:405},{id:1,x:390,y:405},{id:2,x:610,y:337}];world.foes=[foe('hop',880,430,20,'demo-fox')];world.entities=[{type:'back',x:40,y:430},{type:'chest',x:1060,y:430}];
+  auto.path=[walk(160),aimAt(0),walk(310),aimAt(1),walk(380),jump(500,360),aimAt(2),walk(1028)];
+ }
+ if(id==='reward'){roomKey='fox';run.room='fox';run.origin={x:880,y:430};openDeck('fox');}
+ if(id.startsWith('boss')){
+  const n=Number(id.slice(-1)),b=makeBoss(auto.bosses[n],710,'demo-boss-'+n);b.max=b.hp=Math.ceil(b.max*.43);b.attack=.8;world.foes=[b];player.x=485;run.weapon=['lantern','bow','staff'][n];metric('boss-shown-'+b.bossType);world.entities.push({type:'checkpoint',x:200,y:430});core(1040,405);
+ }
+ if(id==='robot'){
+  run.tasks.robot=[];world.solids.push(ledge(290,360,500,'iron'));world.targets=[{id:0,x:420,y:337},{id:1,x:690,y:337}];world.vents=[{x:550,w:45,offset:0}];world.entities=[{type:'gear',x:200,y:405},{type:'core',x:980,y:405},{type:'chest',x:1080,y:430}];world.foes=[foe('shell',750,360,15,'robot-2')];world.foes[0].guard=true;run.weapon='lantern';
+  auto.path=[walk(210),walk(250),jump(340,360),aimAt(0),walk(590),aimAt(1),walk(815),{kind:'down',y:430},walk(1060),readAt('chest')];
+ }
+ if(id==='letter'){
+  run.tasks.letter=[];world.solids.push(ledge(210,360,180,'shelf'),ledge(410,300,180,'float'),ledge(620,240,180,'shelf'));const lift=world.solids[2];lift.baseX=lift.x;world.lifts=[lift];world.targets=[{id:0,x:300,y:337},{id:1,x:500,y:277},{id:2,x:710,y:217}];world.entities=[{type:'core',x:980,y:405},{type:'chest',x:1080,y:430}];world.foes=[foe('wisp',1050,310,12,'demo-wisp')];run.weapon='fan';
+  auto.path=[walk(175),jump(290,360),walk(360),jump(490,300,true),walk(560),jump(700,240,true),walk(1010),{kind:'down',y:430},walk(1060),readAt('chest')];
+ }
+ if(id==='story'){
+  world.entities=[{type:'keeper',x:550,y:430}];player.x=505;run.level=2;levelIndex=2;
+  openDialog([line('keeper','我以为灯塔坏了，大家就不会再原谅我。','灯台を壊してしまった。もう許してもらえないと思っていた。'),line('letter','青：灯可以一起修，日子也可以一起过。等天亮了，下来一起吃早饭吧。——大家','アオへ。灯りも暮らしも、みんなで直そう。朝になったら一緒にごはんを食べよう。――町のみんな'),line('mio','这不是一个人的灯塔。信已送达，我们回家吧。','これは一人だけの灯台じゃない。配達、完了。帰ろう。')]);
+ }
+ showPlaying();updateHud();
+}
+function followDemoPath(dt){
+ const action=auto.path?.[auto.pathIndex];if(!action){keys.clear();return;}
+ if(!auto.pathStep)auto.pathStep={age:0,launched:false,mid:false};const s=auto.pathStep;s.age+=dt;
+ if(action.fire)keys.add('KeyX');else keys.delete('KeyX');
+ const next=()=>{keys.clear();jumpBuffer=0;auto.pathIndex++;auto.pathStep=null;};
+ if(action.kind==='walk'){if(towards(action.x))next();return;}
+ if(action.kind==='stomp'){const f=world.foes.find(v=>v.key==='demo-stomp'&&v.hp>0);if(!f){next();return;}towards(f.x+f.w/2-10);if(player.onGround)press('Space');return;}
+ if(action.kind==='jump'){
+  const at=towards(action.x),feet=player.y+32;if(s.launched&&at&&player.onGround&&Math.abs(feet-action.y)<5){next();return;}
+  if(at&&player.onGround&&feet<action.y-5){press('ArrowDown');return;}
+  if(player.onGround&&(!s.launched||s.age>(s.last||0)+.55)){press('Space');s.launched=true;s.mid=false;s.last=s.age;}
+  else if(action.extra&&!s.mid&&flags.fox&&!player.onGround&&player.vy>-60&&player.extraJump){press('Space');s.mid=true;}return;
+ }
+ if(action.kind==='aim'){
+  if(run.tasks[roomKey].includes(action.id)){next();return;}const t=world.targets[action.id];guideDirection(0);player.face=Math.sign(t.x-player.x-10)||1;keys.add('KeyX');return;
+ }
+ if(action.kind==='down'){guideDirection(0);if(player.onGround&&Math.abs(player.y+32-action.y)<4){next();return;}if(player.onGround)press('ArrowDown');return;}
+ if(action.kind==='use'){guideDirection(0);if(nearby?.type===action.type){next();press('KeyE');}return;}
+}
+const oldProjection=tickProjection;
+tickProjection=function(dt){
+ if(!auto?.showcase){oldProjection(dt);return;}
+ if(run.elapsed>=240){run.elapsed=240;run.complete=true;renderEnding();return;}
+ const index=demoStages.findIndex(s=>run.elapsed<s.end);if(index!==auto.stageIndex)setupDemo(index);
+ updateDirector();const id=demoStages[index].id,age=run.elapsed-auto.stageStart;
+ if(mode==='dialog'){
+  dialog.age+=dt;const interval=id==='intro'?3.1:id==='story'?4.3:.75;if(dialog.age>=interval){if(dialog.choices&&dialog.index===dialog.lines.length-1)chooseDialog(0);else advanceDialog();}return;
+ }
+ if(mode==='draft'){deck.age+=dt;if(deck.age>(id==='reward'?4.5:1.1))takeStamp(0);return;}
+ if(mode!=='play')return;
+ if(['intro','story'].includes(id)){guideDirection(0);return;}
+ if(['basics','fox','robot','letter'].includes(id)){followDemoPath(dt);return;}
+ if(id==='reward'){
+  if(age>6&&age<6.08)press('Space');if(age>6.3&&age<6.4&&!player.onGround){press('Space');metric('double-jump');}
+  if(age>8){run.charm='tide';metric('equip');}return;
+ }
+ if(id==='weapons'){
+  const n=Math.min(3,Math.floor(age/4));if(n!==auto.lastWeapon){switchWeapon(weaponKeys[n]);auto.lastWeapon=n;world.foes[0].kind=['spitter','charger','sentinel','wisp'][n];world.foes[0].attack=99;world.foes[0].floor=430;}
+  player.face=1;guideDirection(0);player.x=n===2?435:330;keys.add('KeyX');return;
+ }
+ if(id==='defense'){
+  guideDirection(0);keys.delete('KeyX');player.face=1;
+  if(age<5){if(age>1&&!auto.demoFired.dodge){enemyShot(player.x+80,player.y+16,-170);doDodge();auto.demoFired.dodge=true;}}
+  else if(age<10){press('KeyC');if(age>6.1&&!auto.demoFired.guard){enemyShot(player.x+38,player.y+16,-170);auto.demoFired.guard=true;}}
+  else if(age<15){keys.delete('KeyC');if(age>11&&!auto.demoFired.parry){press('KeyC');ext.guard=true;ext.guardAge=0;enemyShot(player.x+31,player.y+16,-170);auto.demoFired.parry=true;}if(age<11.2&&auto.demoFired.parry)keys.add('KeyC');}
+  else{keys.delete('KeyC');run.charm='copper';metric('equip');}
+  return;
+ }
+ if(id.startsWith('boss')){
+  const f=world.foes.find(f=>f.kind==='boss'&&f.hp>0);if(!f){keys.clear();if(player.x<1030)guideDirection(1);return;}
+  const target=clamp(f.x-(run.weapon==='staff'?80:175),200,900);towards(target);player.face=f.x>player.x?1:-1;keys.add('KeyX');keys.delete('KeyC');
+  const incoming=ext.shots.find(b=>Math.abs(b.y-player.y-16)<28&&(b.x-player.x)*player.face>0&&Math.abs(b.x-player.x)<80);
+  if(incoming)press('KeyC');
+  if(player.onGround&&waves.some(w=>Math.abs(w.x-player.x)<115&&(w.x-player.x)*w.dir<0))press('Space');
+  if(f.bossType==='queen'&&player.onGround&&player.shotTimer<.1)press('Space');
+  if(f.bossType==='warden'&&f.wind>0&&f.wind<.24)doDodge();
+  if(ext.marks.some(m=>m.t<.4&&m.t>0&&Math.abs(m.x-player.x)<65))doDodge();
+  return;
+ }
+};
+const oldDirector=updateDirector;
+updateDirector=function(){if(!auto?.showcase){oldDirector();return;}$('demoTime').textContent=fmtTime(Math.min(240,run.elapsed))+' / 4:00';$('demoCue').textContent=T(auto.caption||demoStages[auto.stageIndex].caption);};
+
+// input
+const movements=['ArrowLeft','ArrowRight','ArrowDown','ArrowUp','KeyA','KeyD','KeyS','KeyW','Space','KeyX','KeyZ','KeyC','KeyQ','KeyI','ShiftLeft','ShiftRight'];
+function press(code,repeat=false) {
+  if(mode==='play'){
+    if(movements.includes(code))keys.add(code);
+    if(!repeat&&['Space','ArrowUp','KeyW'].includes(code))jumpBuffer=.145;
+    if(['ArrowDown','KeyS'].includes(code)&&player.onGround&&player.standing&&!player.standing.ground){
+      player.dropTimer=.20;player.y+=4;player.vy=82;player.onGround=false;player.standing=null;coyote=0;
+    }
+    if(!repeat&&['KeyE','Enter'].includes(code))interact();
+  }else if(mode==='dialog'&&!repeat){
+    if(/^Digit[1-3]$/.test(code))chooseDialog(Number(code.slice(5))-1);
+    else if(['Space','Enter','KeyE'].includes(code))advanceDialog();
+  }else if(mode==='draft'&&!repeat&&/^Digit[1-6]$/.test(code))takeStamp(Number(code.slice(5))-1);
+}
+function release(code) {
+  keys.delete(code);
+  if(mode==='play'&&['Space','ArrowUp','KeyW'].includes(code)&&player?.vy< -184)player.vy=-184;
+}
+document.querySelectorAll('[data-lang]').forEach(b=>b.onclick=()=>{lang=b.dataset.lang;writeData(PREF_KEY,{lang});localize();if(['play','dialog','draft'].includes(mode))canvas.focus({preventScroll:true});});
+$('startBtn').onclick=startRegular;$('demoBtn').onclick=()=>openModal('class');$('continueBtn').onclick=continueRun;
+$('pauseBtn').onclick=()=>openModal('pause');$('demoPause').onclick=()=>openModal('pause');$('helpBtn').onclick=()=>openModal('help');$('journalBtn').onclick=()=>openModal('journal');
+$('closeModal').onclick=closeModal;$('endingHome').onclick=title;$('endingNext').onclick=()=>{title();startRegular();};
+$('homeLogo').onclick=e=>{e.preventDefault();if(mode==='ending')title();else if(run&&mode!=='modal')openModal('pause');};
+$('soundBtn').onclick=()=>{sound=!sound;if(sound){initAudio();chime('spark');}else if(audioCtx)audioCtx.suspend().catch(()=>{});
+  $('soundBtn').setAttribute('aria-pressed',String(sound));$('soundWaves').setAttribute('d',sound?'M15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14':'m16 9 6 6m0-6-6 6');localize();if(['play','dialog','draft'].includes(mode))canvas.focus({preventScroll:true});};
+window.addEventListener('keydown',e=>{
+  const code=e.code,nativeButton=e.target?.tagName==='BUTTON';
+  if(['Escape','KeyP'].includes(code)&&!e.repeat){
+    if(mode==='modal')closeModal();else if(run&&mode!=='ending')openModal('pause');e.preventDefault();return;
+  }
+  if(code==='KeyJ'&&!e.repeat){if(mode==='modal'&&modalKind==='journal')closeModal();else if(mode!=='modal')openModal('journal');e.preventDefault();return;}
+  if(nativeButton&&['Space','Enter'].includes(code))return;
+  if(!['play','dialog','draft'].includes(mode))return;
+  if(movements.includes(code)||['KeyE','Enter'].includes(code)||/^Digit[1-6]$/.test(code))e.preventDefault();
+  if(!auto)press(code,e.repeat);
+});
+window.addEventListener('keyup',e=>{if(!auto)release(e.code);});
+document.querySelectorAll('[data-key]').forEach(b=>{
+  b.addEventListener('pointerdown',e=>{e.preventDefault();if(!auto){b.setPointerCapture(e.pointerId);press(b.dataset.key);}});
+  for(const event of ['pointerup','pointercancel','lostpointercapture'])b.addEventListener(event,e=>{e.preventDefault();if(!auto)release(b.dataset.key);});
+});
+function suspend(){keys.clear();jumpBuffer=0;if(run)saveGame();if(['play','dialog','draft'].includes(mode))openModal('pause');}
+window.addEventListener('blur',suspend);document.addEventListener('visibilitychange',()=>{if(document.hidden)suspend();last=0;buffer=0;});
+window.addEventListener('beforeunload',saveGame);
+let last=0,buffer=0;
+function frame(ms) {
+  if(!document.hidden){
+    const elapsed=last?Math.min((ms-last)/1000,.18):0;buffer+=elapsed;
+    while(buffer>=STEP){update(STEP);buffer-=STEP;}
+    draw(runTime);ambient();
+  }
+  last=ms;requestAnimationFrame(frame);
+}
+lang=readData(PREF_KEY)?.lang==='zh'?'zh':'ja';book=loadBook();saved=loadStoredRun();localize();requestAnimationFrame(frame);
+
+})();
+
+</script>
+</body>
+</html>
