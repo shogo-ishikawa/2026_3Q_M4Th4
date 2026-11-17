@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-11-17T11:48:22.312Z",
+  "parks": [
+    {
+      "schemaVersion": 1,
+      "method": "ridge-regression",
+      "parkId": "land",
+      "status": "insufficient-data",
+      "usable": false,
+      "trainedAt": "2026-11-17T11:48:22.313Z",
+      "beforeDate": "2026-11-17",
+      "samples": 0,
+      "days": 0,
+      "firstDate": null,
+      "lastDate": null,
+      "minDays": 7,
+      "minSamples": 100,
+      "activityIds": [],
+      "coefficients": [],
+      "validation": null
+    },
+    {
+      "schemaVersion": 1,
+      "method": "ridge-regression",
+      "parkId": "sea",
+      "status": "insufficient-data",
+      "usable": false,
+      "trainedAt": "2026-11-17T11:48:22.314Z",
+      "beforeDate": "2026-11-17",
+      "samples": 0,
+      "days": 0,
+      "firstDate": null,
+      "lastDate": null,
+      "minDays": 7,
+      "minSamples": 100,
+      "activityIds": [],
+      "coefficients": [],
+      "validation": null
+    }
+  ]
+}
