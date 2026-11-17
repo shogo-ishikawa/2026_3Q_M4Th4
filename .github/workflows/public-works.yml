@@ -8,9 +8,11 @@ on:
       - 'projects/vocal-fluctuation-lab/**'
       - 'projects/coastal-wind-chaos/**'
       - 'projects/swing-motion-lab/**'
+      - 'projects/reynolds-pipe-lab/**'
       - 'scripts/build_public_site.py'
       - 'scripts/tests/test_coastal_public_build.py'
       - 'scripts/tests/test_swing_public_build.py'
+      - 'scripts/tests/test_pipe_public_build.py'
       - 'web/**'
       - '.github/workflows/public-works.yml'
   pull_request:
@@ -19,9 +21,11 @@ on:
       - 'projects/vocal-fluctuation-lab/**'
       - 'projects/coastal-wind-chaos/**'
       - 'projects/swing-motion-lab/**'
+      - 'projects/reynolds-pipe-lab/**'
       - 'scripts/build_public_site.py'
       - 'scripts/tests/test_coastal_public_build.py'
       - 'scripts/tests/test_swing_public_build.py'
+      - 'scripts/tests/test_pipe_public_build.py'
       - 'web/**'
       - '.github/workflows/public-works.yml'
   workflow_dispatch:
@@ -94,6 +98,10 @@ jobs:
           node --check projects/swing-motion-lab/web/video-input.js
           node --test projects/swing-motion-lab/tests/*.test.js
           python -m unittest discover -s scripts/tests -p 'test_swing_public_build.py'
+      - name: Check pipe flow models and public build
+        run: |
+          node --test projects/reynolds-pipe-lab/tests/*.test.mjs
+          python -m unittest discover -s scripts/tests -p 'test_pipe_public_build.py'
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

@@ -12,6 +12,7 @@ Pythonの基礎を学んだ学生が、AIや教員の支援を受けながら制
 | [Park Itinerary Lab](projects/park-itinerary-lab/) | 架空のテーマパークでの一日の予定を数理最適化で計算（PuLP入門、CP-SATによる日程最適化、短縮利用の配分の比較実験） | v0.1.0 初版。ローカルでテストとNotebookの実行を確認。Colab上での実行は未確認 |
 | [海岸の風速・風向予報ラボ](projects/coastal-wind-chaos/) | Webで風と予報・誤差の読み方を学び、Colabで取得・学習・検証する教材 | v1.1.0。操作できるWeb教材と保存結果ビューア、Colabによる過去検証・将来予測・誤差解析。Web入力はブラウザ内で処理 |
 | [Motion Analysis Lab](projects/swing-motion-lab/) | 身体の動きを動画から読み取り、肩・腰の向き、肘・膝の角度、体幹の傾きを比較するブラウザアプリ | v1.1.0。動画ファイル・URL入力、12点の姿勢推定と手動補正、映像とグラフの同期、座標保存と再解析 |
+| [Reynolds Flow Lab](projects/reynolds-pipe-lab/) | 管内流れと摩擦を学び、SPH・固定格子・適応格子・移動格子を比べるブラウザ教材 | v3.2.0。3つの観察実験、理論解との誤差比較、条件と記録の保存・再開、図とCSVの保存 |
 
 実行できるNotebookやコマンドは、各作品のREADMEに掲載しています。
 
