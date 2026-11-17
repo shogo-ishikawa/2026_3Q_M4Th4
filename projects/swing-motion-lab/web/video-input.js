@@ -65,10 +65,19 @@
       let timer, settled = false;
       const entry = { cancel };
       const events = ['loadedmetadata', 'loadeddata', 'canplay'];
+      function report(phase) {
+        if (settled || activeLoads.get(video) !== entry) return;
+        if (typeof options.onProgress === 'function') options.onProgress(phase);
+      }
+      function buffering() { report('buffering'); if (video.readyState >= 2) ready(); }
+      function stalled() { report('stalled'); }
       function clean() {
         clearTimeout(timer);
         for (const name of events) video.removeEventListener(name, ready);
         video.removeEventListener('error', failed);
+        video.removeEventListener('progress', buffering);
+        video.removeEventListener('waiting', buffering);
+        video.removeEventListener('stalled', stalled);
         signal?.removeEventListener('abort', cancel);
         if (activeLoads.get(video) === entry) activeLoads.delete(video);
       }
@@ -94,6 +103,7 @@
       function ready() {
         if (settled || activeLoads.get(video) !== entry) return;
         if (video.readyState < 1) return;
+        report('metadata');
         if (!Number.isFinite(video.duration) || video.duration <= 0
             || !Number.isFinite(video.videoWidth) || video.videoWidth <= 0
             || !Number.isFinite(video.videoHeight) || video.videoHeight <= 0) {
@@ -107,9 +117,15 @@
       activeLoads.set(video, entry);
       for (const name of events) video.addEventListener(name, ready);
       video.addEventListener('error', failed);
+      video.addEventListener('progress', buffering);
+      video.addEventListener('waiting', buffering);
+      video.addEventListener('stalled', stalled);
       signal?.addEventListener('abort', cancel, { once: true });
       timer = setTimeout(() => finish(new Error('動画の読み込みに時間がかかっています。別のURLを指定するか、ローカルの動画を選んでください。')), timeoutMs);
       try {
+        report('connecting');
+        // 利用者が開いた動画は、情報だけでなく最初の映像も取得する。
+        video.preload = 'auto';
         if (objectURL) video.removeAttribute('crossorigin');
         else video.crossOrigin = 'anonymous';
         video.src = url;

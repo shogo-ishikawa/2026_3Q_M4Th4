@@ -13,7 +13,7 @@ PROJECT = ROOT / 'projects' / 'world-definition'
 VERSION = 'v1.3.0'
 PUBLIC_FILES = ('index.html', 'guide.html', 'style.css', 'mystery.js', 'engine.js', 'progress.js', 'renderer.js', 'session.js', 'app.js')
 COASTAL_WEB_FILES = ('index.html', 'style.css', 'learning.js', 'results-core.js', 'results-viewer.js', 'demo-data.js')
-SWING_WEB_FILES = ('index.html', 'style.css', 'app.js', 'motion-core.js', 'demo-data.js', 'video-input.js')
+SWING_WEB_FILES = ('index.html', 'style.css', 'app.js', 'motion-core.js', 'demo-data.js', 'demo-renderer.js', 'video-input.js', 'time-input.js')
 
 
 def build_swing_site(output=OUTPUT):

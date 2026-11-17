@@ -7,3 +7,37 @@
 /* 動画の入力と観察する部位 */
 .url-panel{padding:18px 22px;background:#fff;border-bottom:1px solid var(--line)}.url-panel label{display:block;font-size:11px;font-weight:650;margin-bottom:8px}.url-fields{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px}.url-fields input{width:100%;min-width:0;border:1px solid #d6dfeb;padding:9px 12px;font-size:12px;color:var(--ink)}.url-panel p{font-size:10px;color:var(--muted);line-height:1.8;margin-top:9px}.view-settings>label{display:block;font-size:10px;color:var(--muted);margin-top:12px}.view-settings>label:first-child{margin-top:0}.view-settings select{width:100%;min-width:0;background:white;border:1px solid #d6dfeb;padding:8px;font-size:11px;color:var(--ink);min-height:36px}.view-settings>#metric-group{margin-top:6px}.demo-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;margin-top:6px}.demo-row .secondary{padding:7px 11px;min-height:36px;font-size:10px}.view-settings label.check-label{display:flex;align-items:center;gap:7px;font-size:10px;color:var(--ink);margin-top:12px}.check-label input{accent-color:var(--blue);margin:0;width:13px;height:13px}.point-section{font-weight:650;color:var(--ink)!important;margin-top:12px!important}.point-buttons{grid-template-columns:repeat(3,minmax(0,1fr));margin-top:6px}.point-buttons button{min-height:31px}.frame-readout{grid-template-columns:repeat(auto-fit,minmax(100px,1fr))}.measurement-note{font-size:11px;line-height:1.8;color:var(--muted);margin-top:-10px;margin-bottom:20px}.summary-grid strong.range-value{font-size:clamp(18px,1.8vw,26px);line-height:1.7;overflow-wrap:anywhere}.footer{gap:20px;flex-wrap:wrap}.footer a{white-space:nowrap}
 @media(max-width:600px){.url-panel{padding:15px}.url-fields{grid-template-columns:1fr}.url-fields .primary{justify-self:start}.frame-readout{grid-template-columns:repeat(auto-fit,minmax(86px,1fr))}.summary-grid strong.range-value{font-size:20px}.view-settings>label{font-size:10px}.view-settings select{font-size:12px}.measurement-note{font-size:10px;margin-bottom:16px}.footer{gap:14px}}
+
+/* 読み込みの経過は、操作した場所の近くで確かめられるようにする。 */
+.source-feedback { display:flex; align-items:center; gap:12px; flex-wrap:wrap; padding:13px 22px; background:#edf2ff; border-bottom:1px solid var(--line); }
+.source-feedback p { flex:1; min-width:180px; font-size:12px; line-height:1.7; color:#34445b; }
+.source-state { font-size:11px; font-weight:750; padding:4px 9px; border-radius:20px; background:#dce6ff; color:#274baa; white-space:nowrap; }
+.source-feedback progress { width:90px; height:5px; accent-color:var(--blue); }
+.source-feedback .secondary { min-height:33px; padding:7px 11px; font-size:11px; }
+.source-feedback[data-state="ready"] { background:#edf8f2; }
+.source-feedback[data-state="ready"] .source-state { background:#d4eede; color:#246344; }
+.source-feedback[data-state="error"] { background:#fff1ed; }
+.source-feedback[data-state="error"] .source-state { background:#f9d9d0; color:#9b382b; }
+.source-feedback[data-state="error"] p { color:#8b382e; }
+.source-feedback[data-state="cancelled"] { background:#f1f3f6; }
+#open-url[aria-expanded="true"] { border-color:var(--blue); color:var(--blue); background:#edf2ff; }
+#video-url[aria-invalid="true"] { border-color:#b24532; }
+
+/* 手入力の精度と、上下の移動量を分ける。ネイティブの二重操作は隠す。 */
+.range-fields .time-field label { display:block; position:static; font-size:11px; }
+.time-number { position:relative; display:flex; align-items:center; margin-top:6px; border:1px solid #d5dfeb; border-radius:7px; background:white; }
+.range-fields .time-number input { appearance:textfield; -moz-appearance:textfield; min-width:0; margin:0; padding:9px 20px 9px 9px; border:0; border-radius:7px 0 0 7px; }
+.time-number input::-webkit-inner-spin-button, .time-number input::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+.time-unit { position:absolute; right:33px; font-size:10px; color:var(--muted); pointer-events:none; }
+.time-arrows { display:flex; flex-direction:column; flex:none; width:28px; border-left:1px solid var(--line); }
+.time-arrows button { display:grid; place-items:center; min-height:22px; padding:0; border:0; border-radius:0; font-size:9px; line-height:1; color:var(--ink); background:#f1f5fb; }
+.time-arrows button:first-child { border-bottom:1px solid var(--line); border-radius:0 6px 0 0; }
+.time-arrows button:last-child { border-radius:0 0 6px 0; }
+.time-arrows button:hover { background:#dfe8ff; }
+@media(max-width:600px) {
+  .source-feedback { padding:12px 15px; gap:8px; }
+  .source-feedback p { min-width:160px; font-size:11px; }
+  .time-arrows { width:32px; }
+  .time-arrows button { min-height:26px; }
+  .time-unit { right:37px; }
+}

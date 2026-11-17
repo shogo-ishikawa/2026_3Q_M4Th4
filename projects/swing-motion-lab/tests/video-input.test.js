@@ -57,6 +57,7 @@ test('CORS is set before src, listeners exist before load, and metadata alone do
   video.onLoad = () => { assert.ok(video.listenerCount > 0); video.metadata(); };
   const result = loadVideoSource(video, { url: remote }).then(value => { resolved = true; return value; });
   await Promise.resolve(); assert.equal(resolved, false);
+  assert.equal(video.preload, 'auto');
   assert.deepEqual(video.operations.slice(0, 2), [['crossOrigin', 'anonymous'], ['src', remote]]);
   video.decoded();
   assert.deepEqual(await result, { duration: 2.5, width: 640, height: 360 });
@@ -67,6 +68,29 @@ test('a synchronously cached first frame is accepted and leaves no listeners', a
   const video = new FakeVideo();
   video.onLoad = () => { video.metadata(); video.decoded(); };
   assert.equal((await loadVideoSource(video, { url: remote })).width, 640);
+  assert.equal(video.listenerCount, 0);
+});
+
+test('reports connection, metadata and stalled reception, then stops reporting after completion', async () => {
+  const video = new FakeVideo(), phases = [];
+  const result = loadVideoSource(video, { url: remote, onProgress: phase => phases.push(phase) });
+  assert.deepEqual(phases, ['connecting']);
+  video.metadata(); video.dispatchEvent(new Event('progress')); video.dispatchEvent(new Event('stalled'));
+  assert.deepEqual(phases, ['connecting', 'metadata', 'buffering', 'stalled']);
+  video.decoded(); await result;
+  const completed = phases.slice();
+  video.dispatchEvent(new Event('progress')); video.dispatchEvent(new Event('stalled'));
+  assert.deepEqual(phases, completed);
+  assert.equal(video.listenerCount, 0);
+});
+
+test('cancelled request cannot send later loading feedback into a replacement', async () => {
+  const video = new FakeVideo(), phases = [], controller = new AbortController();
+  const first = loadVideoSource(video, { url: remote, signal: controller.signal, onProgress: phase => phases.push(phase) });
+  controller.abort(); await assert.rejects(first, { name: 'AbortError' });
+  const old = phases.slice();
+  video.dispatchEvent(new Event('progress')); video.metadata(); video.decoded();
+  assert.deepEqual(phases, old);
   assert.equal(video.listenerCount, 0);
 });
 

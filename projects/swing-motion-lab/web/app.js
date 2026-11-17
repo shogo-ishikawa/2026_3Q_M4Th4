@@ -20,6 +20,20 @@
     poseDetection: 'https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js'
   };
   const numericSettings = ['demo-select', 'open-demo', 'metric-group', 'show-trails', 'start-time', 'end-time', 'video-fps', 'sample-rate', 'slow-factor', 'confidence-threshold', 'min-span', 'smoothing'];
+  const timeInputs = ['start', 'end'].map(name => window.MotionTimeInput.bindTimeInput($(name + '-time'), {
+    decreaseButton: $(name + '-down'), increaseButton: $(name + '-up'),
+    getMaximum: () => timeLimits()[1]
+  }));
+
+  function sourceFeedback(kind, message) {
+    const labels = { idle: 'デモ', input: 'URLを入力', loading: '読み込み中', ready: '読み込み完了', error: '読み込み失敗', cancelled: '中止', results: '座標データ' };
+    $('source-feedback').dataset.state = kind;
+    $('video-stage').setAttribute('aria-busy', String(kind === 'loading'));
+    $('source-state').textContent = labels[kind];
+    $('source-message').textContent = message;
+    $('source-progress').hidden = kind !== 'loading';
+    $('cancel-source').hidden = kind !== 'loading';
+  }
 
   function status(message, error = false) {
     $('status').textContent = message;
@@ -59,11 +73,14 @@
     state.working = value;
     $('cancel-analysis').textContent = state.loadingSource ? '読み込みを中止' : '解析を中止';
     for (const id of numericSettings) $(id).disabled = value;
+    timeInputs.forEach(input => input.setDisabled(value));
+    $('load-url').disabled = value && !state.loadingSource;
+    $('load-url').textContent = state.loadingSource ? 'このURLで読み直す' : '動画URLを読み込む';
     for (const id of ['range-reset', 'select-roi', 'clear-roi', 'save-points', 'clear-points', 'previous-frame', 'next-frame', 'play-video', 'time-position']) $(id).disabled = value;
     document.querySelectorAll('[data-point]').forEach(button => { button.disabled = value; });
     $('analyse-video').disabled = value || !state.videoReady;
     $('cancel-analysis').hidden = !value;
-    $('analysis-progress').hidden = !value;
+    $('analysis-progress').hidden = !value || state.loadingSource;
   }
   function releaseVideo() {
     pause(); state.videoReady = false;
@@ -72,12 +89,19 @@
     state.videoUrl = null;
   }
   function stopOldWork() {
+    const wasLoading = state.loadingSource;
     ++state.token; ++state.seekToken;
     state.loadController?.abort(); state.loadController = null; state.loadingSource = false;
     setBusy(false); pause();
     state.selectedPoint = null; state.roiMode = false; state.roiStart = null;
     $('select-roi').setAttribute('aria-pressed', 'false');
     $('video-stage').classList.remove('is-drawing', 'is-manual');
+    if (wasLoading) {
+      releaseVideo();
+      sourceFeedback('cancelled', '動画の読み込みを中止しました。別のURLや動画ファイルで再度お試しください。');
+      $('stage-label').textContent='VIDEO / 読み込みを中止';
+      $('stage-guide').textContent='動画ファイルかURLを選んでください';
+    }
   }
   function updatePointButtons() {
     document.querySelectorAll('[data-point]').forEach(button => {
@@ -175,6 +199,11 @@
     const w = state.width, h = state.height;
     context.fillStyle = '#112438'; context.fillRect(0, 0, w, h);
     if (state.videoReady && video.readyState >= 2) { context.drawImage(video, 0, 0, w, h); return; }
+    if (state.sourceKind === 'demo' && state.demoId && window.MotionDemoRenderer) {
+      const frame = state.frames[nearestIndex(state.currentTime)];
+      window.MotionDemoRenderer.draw(context, { width: w, height: h, points: state.points, demoId: state.demoId, time: frame?.time ?? state.currentTime });
+      return;
+    }
     const gradient = context.createLinearGradient(0, 0, w, h); gradient.addColorStop(0, '#193449'); gradient.addColorStop(1, '#0b1a2a');
     context.fillStyle = gradient; context.fillRect(0, 0, w, h);
     context.strokeStyle = '#ffffff08'; context.lineWidth = 1;
@@ -226,7 +255,7 @@
         context.save(); context.strokeStyle = '#ffffff66'; context.lineWidth = 1.5 * scale; context.setLineDash([6 * scale,5 * scale]);
         context.beginPath(); context.moveTo(hip.x,hip.y); context.lineTo(hip.x,hip.y-Math.hypot(shoulder.x-hip.x,shoulder.y-hip.y)); context.stroke(); context.restore();
       }
-      if (!state.videoReady) {
+      if (!state.videoReady && !(state.sourceKind === 'demo' && state.demoId && window.MotionDemoRenderer)) {
         const bodyLength = Math.hypot(shoulder.x-hip.x,shoulder.y-hip.y);
         const norm = bodyLength || 1, head = {x:shoulder.x+(shoulder.x-hip.x)/norm*40*scale,y:shoulder.y+(shoulder.y-hip.y)/norm*40*scale};
         context.save(); context.fillStyle='#9fc2dc2b'; context.strokeStyle='#b5c7d97a';context.lineWidth=2*scale;
@@ -366,8 +395,9 @@
     state.demoId=demo.id||key;$('demo-select').value=state.demoId;
     state.metricGroup=demo.metricGroup||'axes';state.frames=structuredClone(demo.frames);state.sourceKind='demo';state.label=demo.label||'デモ';
     setCanvasSize(demo.width||960,demo.height||540);applyOptions(demo.options||{confidenceThreshold:0.5,minSpanPx:12,smoothingWindow:3,timeScale:1});
-    state.currentTime=state.frames[0]?.time||0;$('start-time').removeAttribute('max');$('end-time').removeAttribute('max');$('start-time').value=state.currentTime;$('end-time').value=state.frames.at(-1)?.time||1;
+    state.currentTime=state.frames[0]?.time||0;$('start-time').removeAttribute('max');$('end-time').removeAttribute('max');timeInputs[0].setValue(state.currentTime);timeInputs[1].setValue(state.frames.at(-1)?.time||1);
     $('source-kind').textContent='デモ';$('stage-label').textContent='DEMO / '+state.label.replace(/^デモ[：:]?/,'');$('stage-guide').textContent='関節の位置と線を確認';
+    sourceFeedback('idle', '人体の動きを再現したアニメーションです。実際の撮影・計測データではありません。');
     resetROI();updateTimeControls();recompute('デモの解析結果です。時刻のバーとグラフで動くタイミングを比べてみましょう。');setBusy(false);
   }
   async function openSource(url,objectURL=false) {
@@ -375,28 +405,40 @@
     state.frames=[];state.result=null;state.points={};state.sourceKind='video';state.label='動画の解析結果';state.videoUrl=objectURL?url:null;
     resetROI();renderResults();setBusy(true);
     $('source-kind').textContent=objectURL?'動画':'URL動画';$('stage-label').textContent='VIDEO / 読み込み中';$('stage-guide').textContent='映像を読み込んでいます';status('動画を読み込んでいます…');
+    sourceFeedback('loading', '動画に接続しています… 最初の映像が表示されるまでお待ちください。');
     try{
-      const loaded=await window.MotionVideoInput.loadVideoSource(video,{url,objectURL,signal:controller.signal,timeoutMs:20000});
+      const loaded=await window.MotionVideoInput.loadVideoSource(video,{url,objectURL,signal:controller.signal,timeoutMs:20000,onProgress:phase=>{
+        if(token!==state.token)return;
+        const messages={connecting:'動画に接続しています…',metadata:'動画の情報を取得しました。最初の映像を読み込んでいます…',buffering:'動画のデータを受信しています…',stalled:'配信元の応答を待っています… 20秒以内に読み込めなければお知らせします。'};
+        sourceFeedback('loading',messages[phase]||messages.buffering);
+      }});
       if(token!==state.token)return;
       state.videoReady=true;state.loadingSource=false;setCanvasSize(loaded.width,loaded.height);state.currentTime=0;
-      $('start-time').max=loaded.duration;$('end-time').max=loaded.duration;$('start-time').value=0;$('end-time').value=Math.min(loaded.duration,3).toFixed(6);
+      $('start-time').max=loaded.duration;$('end-time').max=loaded.duration;timeInputs[0].setValue(0);timeInputs[1].setValue(Math.min(loaded.duration,3));
       $('stage-label').textContent='VIDEO / 動きをとらえる';$('stage-guide').textContent=`${state.width} × ${state.height} / ${format(loaded.duration,2)} 秒`;
       resetROI();setBusy(false);await showTime(0);
-      if(token===state.token)status('動画を開きました。人物の範囲と開始・終了秒を決めて解析します。関節の位置は手動でも指定できます。');
+      if(token===state.token){
+        sourceFeedback('ready', `動画を開きました：${format(loaded.duration,2)}秒 / ${loaded.width} × ${loaded.height}。再生やコマ送りで確認できます。`);
+        status('動画を開きました。人物の範囲と開始・終了秒を決めて解析します。関節の位置は手動でも指定できます。');
+      }
     }catch(error){
       if(token!==state.token)return;
       state.loadingSource=false;releaseVideo();setBusy(false);$('stage-label').textContent='VIDEO / 読み込めませんでした';$('stage-guide').textContent='動画ファイルか別のURLを選んでください';paint();status(error.message,true);
+      sourceFeedback('error',error.message);
     }finally{if(token===state.token)state.loadController=null;}
   }
   async function loadVideo(file) {
-    if(!file)return;if(!file.size){status('空の動画ファイルです。別のファイルを選んでください。',true);return;}
+    if(!file)return;if(!file.size){if(state.loadingSource)stopOldWork();const message='空の動画ファイルです。別のファイルを選んでください。';sourceFeedback('error',message);status(message,true);return;}
     await openSource(URL.createObjectURL(file),true);
   }
   async function loadURL() {
     try{
       const url=window.MotionVideoInput.normaliseVideoURL($('video-url').value,{pageURL:location.href});
-      $('url-panel').hidden=true;$('open-url').setAttribute('aria-expanded','false');await openSource(url,false);
-    }catch(error){status(error.message,true);}
+      $('video-url').removeAttribute('aria-invalid');await openSource(url,false);
+    }catch(error){
+      if(state.loadingSource)stopOldWork();
+      $('video-url').setAttribute('aria-invalid','true');sourceFeedback('error',error.message);status(error.message,true);
+    }
   }
   const scriptPromises = new Map();
   function loadScript(url) {
@@ -585,13 +627,14 @@
     stopOldWork(); const token = state.token;
     try {
       const imported = core.readJSON(await file.text()); if (token !== state.token) return;
-      releaseVideo(); state.metricGroup=imported.metricGroup||'axes'; state.frames = imported.frames; state.sourceKind = imported.sourceKind || 'results'; state.label = imported.label || '読み込んだ解析結果';
+      releaseVideo(); state.demoId=null; state.metricGroup=imported.metricGroup||'axes'; state.frames = imported.frames; state.sourceKind = imported.sourceKind || 'results'; state.label = imported.label || '読み込んだ解析結果';
       const values = state.frames.flatMap(frame => Object.values(frame.points || {}));
       const width = imported.width || values.reduce((maximum, point) => point && finite(point.x) ? Math.max(maximum, point.x + 60) : maximum, 960);
       const height = imported.height || values.reduce((maximum, point) => point && finite(point.y) ? Math.max(maximum, point.y + 60) : maximum, 540);
       setCanvasSize(width, height); applyOptions(imported.options);
-      state.currentTime = state.frames[0]?.time || 0; $('start-time').removeAttribute('max'); $('end-time').removeAttribute('max'); $('start-time').value = state.currentTime; $('end-time').value = state.frames.at(-1)?.time || state.currentTime + 1;
+      state.currentTime = state.frames[0]?.time || 0; $('start-time').removeAttribute('max'); $('end-time').removeAttribute('max'); timeInputs[0].setValue(state.currentTime); timeInputs[1].setValue(state.frames.at(-1)?.time || state.currentTime + 1);
       $('source-kind').textContent = state.sourceKind === 'demo' ? 'デモ' : '保存した座標'; $('stage-label').textContent = state.sourceKind === 'demo' ? 'DEMO / 保存した動き' : 'RESULT / 保存した関節'; $('stage-guide').textContent = '関節の位置と線を確認';
+      sourceFeedback('results','保存した座標を読み込みました。元の映像は含まれていません。');
       resetROI(); updateTimeControls(); recompute('保存した座標と条件を読み込みました。閾値や平滑化を変えて再解析できます。'); setBusy(false);
     } catch (error) { if (token === state.token) status(error.message, true); }
   }
@@ -600,7 +643,13 @@
   $('open-demo').addEventListener('click',()=>loadDemo());
   $('metric-group').addEventListener('change',()=>{state.metricGroup=$('metric-group').value;renderResults();paint();status('表示する動きを切り替えました。座標はそのまま使います。');});
   $('show-trails').addEventListener('change',paint);
-  $('open-url').addEventListener('click',()=>{const panel=$('url-panel');panel.hidden=!panel.hidden;$('open-url').setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)$('video-url').focus();});
+  $('open-url').addEventListener('click',()=>{
+    const panel=$('url-panel');panel.hidden=!panel.hidden;$('open-url').setAttribute('aria-expanded',String(!panel.hidden));
+    if(!panel.hidden){
+      if(!state.loadingSource)sourceFeedback('input','動画ファイルのURLを入力し、「動画URLを読み込む」を押してください。');
+      $('video-url').focus({preventScroll:true});panel.scrollIntoView({block:'nearest',behavior:'smooth'});
+    }
+  });
   $('url-form').addEventListener('submit',event=>{event.preventDefault();void loadURL();});
   $('upload-video').addEventListener('click', () => $('video-file').click());
   $('open-result').addEventListener('click', () => $('result-file').click());
@@ -610,7 +659,7 @@
   $('previous-frame').addEventListener('click', () => { pause(); void showTime(state.currentTime - 1 / Number($('video-fps').value || 30)); });
   $('next-frame').addEventListener('click', () => { pause(); void showTime(state.currentTime + 1 / Number($('video-fps').value || 30)); });
   $('play-video').addEventListener('click', () => { void togglePlay(); });
-  $('range-reset').addEventListener('click', () => { const [start, end] = timeLimits(); $('start-time').value = start; $('end-time').value = end.toFixed(6); status('開始・終了を映像全体の秒数に戻しました。'); });
+  $('range-reset').addEventListener('click', () => { const [start, end] = timeLimits(); timeInputs[0].setValue(start); timeInputs[1].setValue(end); status('開始・終了を映像全体の秒数に戻しました。'); });
   $('select-roi').addEventListener('click', () => {
     if (!state.videoReady) { status('「ファイルから開く」か「URLから開く」で映像を選んでください。'); return; }
     pause(); state.selectedPoint = null; state.roiMode = !state.roiMode; state.roiStart = null; updatePointButtons();
@@ -625,7 +674,13 @@
   $('save-points').addEventListener('click', saveCurrentPoints);
   $('clear-points').addEventListener('click', () => { state.points={};state.selectedPoint=activeGroup().pointNames[0];updatePointButtons();paint();$('manual-note').textContent='観察する関節の位置を指定してください。'; $('video-stage').classList.add('is-manual'); });
   $('analyse-video').addEventListener('click', () => { void analyseVideo(); });
-  $('cancel-analysis').addEventListener('click', () => { stopOldWork(); state.points = {}; paint(); status('処理を中止しました。動画や条件を選んで再度解析できます。'); });
+  function cancelWork() {
+    const loading=state.loadingSource;stopOldWork();state.points={};
+    if(loading){releaseVideo();sourceFeedback('cancelled','動画の読み込みを中止しました。別のURLや動画ファイルで再度お試しください。');$('stage-label').textContent='VIDEO / 読み込みを中止';$('stage-guide').textContent='動画ファイルかURLを選んでください';}
+    paint();status('処理を中止しました。動画や条件を選んで再度解析できます。');
+  }
+  $('cancel-analysis').addEventListener('click',cancelWork);
+  $('cancel-source').addEventListener('click',cancelWork);
   for (const id of ['confidence-threshold', 'min-span', 'smoothing', 'slow-factor']) $(id).addEventListener('change', () => { $('confidence-value').textContent = Number($('confidence-threshold').value).toFixed(2); recompute('条件を変えてグラフを更新しました。'); });
   $('confidence-threshold').addEventListener('input', () => { $('confidence-value').textContent = Number($('confidence-threshold').value).toFixed(2); });
   $('download-csv').addEventListener('click', () => { if (state.result) download('MotionAnalysis_values.csv', core.exportCSV(state.result), 'text/csv;charset=utf-8'); });
