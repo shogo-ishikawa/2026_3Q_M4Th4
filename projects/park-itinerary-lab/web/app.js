@@ -41,7 +41,7 @@ export function initialiseApp() {
     if(worker){worker.terminate();worker=null;}
     clearInterval(progressTimer);progressTimer=null;
     $('solveButton').disabled=false;$('cancelSearch').hidden=true;$('searchProgress').hidden=true;
-    if(keepBest && latestPreview){state.result=latestPreview;renderResult();renderMap();}
+    if(keepBest && latestPreview){state.result=latestPreview;state.resultDirty=false;renderResult();renderMap();}
   }
   function markResultStale(){if(worker){stopSearch();setStatus('条件を変更したため探索を止めました。新しい条件でプランを考えてください。');}if(state.result){state.resultDirty=true;renderResult();}}
   function rememberOwnedPurchase(selection){
