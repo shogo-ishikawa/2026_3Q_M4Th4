@@ -1,10 +1,34 @@
-/** Illustrated orientation map with a separate, approximate walkway graph. */
+/** Offline geographic/illustrated maps and walking paths. */
 const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
 const categories = {attraction:'アトラクション', show:'ショー', parade:'パレード', restaurant:'レストラン', cafe:'カフェ', snack:'スナック', popcorn:'ポップコーン', greeting:'グリーティング', shop:'ショップ'};
 const colours = {attraction:'#2759a2', show:'#8545a5', parade:'#8545a5', restaurant:'#b65025', cafe:'#b65025', snack:'#b65025', popcorn:'#b65025', greeting:'#b52e6b', shop:'#147969'};
 const views = new WeakMap();
 let renderNumber = 0;
 const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+/** Expand graph edges in the direction travelled; never bridge a missing edge. */
+export function routeCoordinates(park, path) {
+  const nodes = new Map(park.nodes.map(node => [node.id, node]));
+  const edges = new Map();
+  for (const edge of park.edges || []) {
+    edges.set(`${edge.from}\0${edge.to}`, {edge, reverse:false});
+    edges.set(`${edge.to}\0${edge.from}`, {edge, reverse:true});
+  }
+  const result = [];
+  for (let index = 1; index < path.length; index++) {
+    const segment = edges.get(`${path[index-1]}\0${path[index]}`);
+    if (!segment) return [];
+    const {edge, reverse} = segment;
+    const from = nodes.get(path[index-1]), to = nodes.get(path[index]);
+    if (!from || !to) return [];
+    const geometry = Array.isArray(edge.geometry) ? edge.geometry : [[nodes.get(edge.from).x,nodes.get(edge.from).y],[nodes.get(edge.to).x,nodes.get(edge.to).y]];
+    const oriented = reverse ? [...geometry].reverse() : geometry;
+    if (oriented.length < 2 || oriented.some(point => !Array.isArray(point) || point.length !== 2 || point.some(value => !Number.isFinite(value)))) return [];
+    if (Math.hypot(oriented[0][0]-from.x, oriented[0][1]-from.y) > .01 || Math.hypot(oriented.at(-1)[0]-to.x, oriented.at(-1)[1]-to.y) > .01) return [];
+    result.push(...(result.length ? oriented.slice(1) : oriented));
+  }
+  return result;
+}
 
 /** Keep zoom centred inside the drawing. Values are independent of screen size. */
 export function mapViewBox(scale = 1, x = 500, y = 500) {
@@ -25,12 +49,19 @@ export function renderParkMap(container, park, {plan = null, selectedIds = [], o
   if(visits.length && !view.filterSetByUser)view.onlySelected=true;
   views.set(container, view);
   const sea = park.id === 'sea', unique = `park-map-${++renderNumber}`;
-  const point = node => `${Number(node.x)},${Number(node.y)}`;
+  const point = coordinates => coordinates.map(Number).join(',');
   // A faint full graph shows connections without competing with the illustration.
-  const paths = (park.edges || []).filter(edge => nodeMap.has(edge.from) && nodeMap.has(edge.to)).map(edge => `<line x1="${Number(nodeMap.get(edge.from).x)}" y1="${Number(nodeMap.get(edge.from).y)}" x2="${Number(nodeMap.get(edge.to).x)}" y2="${Number(nodeMap.get(edge.to).y)}" stroke="#fff" stroke-width="7" stroke-linecap="round"/><line x1="${Number(nodeMap.get(edge.from).x)}" y1="${Number(nodeMap.get(edge.from).y)}" x2="${Number(nodeMap.get(edge.to).x)}" y2="${Number(nodeMap.get(edge.to).y)}" stroke="#536b75" stroke-width="1.4" stroke-linecap="round"/>`).join('');
+  const geographic = Boolean(park.geographicMap);
+  const paths = (park.edges || []).filter(edge => nodeMap.has(edge.from) && nodeMap.has(edge.to)).map(edge => {
+    const coordinates = routeCoordinates(park, [edge.from,edge.to]).map(point).join(' ');
+    return `<polyline points="${coordinates}" fill="none" stroke="#fff" stroke-width="${geographic ? 4 : 7}" stroke-linejoin="round" stroke-linecap="round"/><polyline points="${coordinates}" fill="none" stroke="#536b75" stroke-width="${geographic ? .8 : 1.4}" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }).join('');
   const routeRows = (plan?.rows || []).filter(row => (row.kind || row.type) === 'walk' && Array.isArray(row.path));
   const routes = routeRows.map(row => {
-    const points = row.path.map(id => nodeMap.get(id)).filter(Boolean);
+    // Old saved plans retain recorded distances in the schedule. Their former
+    // schematic paths must not be drawn on the new geographic background.
+    if (geographic && row.routeSource !== park.routeGraphVersion) return '';
+    const points = routeCoordinates(park,row.path);
     if (points.length < 2) return '';
     const coordinates = points.map(point).join(' ');
     return `<g><polyline points="${coordinates}" fill="none" stroke="white" stroke-width="13" stroke-linejoin="round" stroke-linecap="round"/><polyline points="${coordinates}" fill="none" stroke="${sea ? '#005b9a' : '#b42e43'}" stroke-width="7" stroke-linejoin="round" stroke-linecap="round"><title>${escape(row.name)} · 約${escape(Math.round(row.metres || 0))}m</title></polyline></g>`;
@@ -83,10 +114,14 @@ export function renderParkMap(container, park, {plan = null, selectedIds = [], o
     const number = visitNumbers.get(activity.id), colour = colours[activity.category] || '#2759a2';
     return `<button type="button" class="park-location" data-focus-activity="${escape(activity.id)}"><span style="background:${colour}">${number || '✓'}</span><span>${escape(activity.name)}</span><small>${number ? '予定' + number : '希望'} · ${escape(activity.area || '')}</small></button>`;
   }).join('');
+  const mapAsset = geographic ? park.geographicMap.asset : `assets/${sea ? 'sea' : 'land'}-map.webp`;
+  const caption = geographic
+    ? `OpenStreetMapの地理データに沿う徒歩ルートです。施設は付近の公開通路上の点で表しています。建物内や待ち列の移動は含みません。入退園の基準点はプラザ付近です。通行規制は現地の案内をご確認ください。<br><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a> · <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener noreferrer">ODbL</a> · 地図データ取得：${escape(park.geographicMap.asOf)}`
+    : 'エリアの位置関係をつかむためのイラスト地図です。徒歩ルートと距離は目安です。現地の移動には公式の園内マップをご利用ください。';
   container.innerHTML = `<style>
 .park-map-tools{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin:0 0 10px}.park-map-tools button{border:1px solid #cfdae6;border-radius:9px;background:white;color:#173450;padding:7px 11px;min-height:42px;font-size:14px;font-weight:650}.park-map-tools label{font-size:13px;display:flex;align-items:center;gap:6px;margin-left:auto}.park-map-tools input{width:17px;height:17px}.park-map-scale{font-size:12px;color:#536579;min-width:40px;text-align:center}.park-map-stage{overflow:hidden;border:1px solid #d6e1e8;border-radius:17px;background:${sea ? '#c1e4ee' : '#eaf0d8'}}
 .park-route-map{display:block;width:100%;height:auto;max-height:75vh;min-height:280px;touch-action:pan-y}.park-route-map[data-zoomed=true]{touch-action:none;cursor:grab}.park-route-map .park-pin{cursor:pointer;outline:none}.park-route-map .park-pin:focus>circle:not(.park-hit){stroke:#e08022;stroke-width:6}.park-route-map .park-tooltip{display:none}.park-route-map .park-pin:hover .park-tooltip,.park-route-map .park-pin:focus .park-tooltip{display:block}.park-route-map .park-area{fill:#213b4c;font:750 17px system-ui,sans-serif;text-anchor:middle;paint-order:stroke;stroke:#fffffff0;stroke-width:6;stroke-linejoin:round}.park-route-map[data-only-selected=true] .park-pin:not(.park-chosen){display:none}.park-map-legend{display:flex;flex-wrap:wrap;gap:5px 13px;margin:10px 0;font-size:12px;color:#425368}.park-map-legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px}.park-map-locations{display:flex;gap:8px;overflow:auto;padding:3px 2px 9px;scroll-snap-type:x proximity}.park-location{display:grid;grid-template-columns:24px minmax(0,1fr);gap:0 8px;align-items:center;flex:0 0 205px;text-align:left;background:white;border:1px solid #d8e1e9;border-radius:10px;padding:10px;color:#22364b;font-size:13px;line-height:1.6;scroll-snap-align:start}.park-location>span:first-child{grid-row:span 2;width:24px;height:24px;border-radius:50%;color:white;text-align:center;line-height:24px;font-weight:800}.park-location small{font-size:11px;color:#5b6f7f}.park-map-caption{font-size:12px;line-height:1.8;color:#526878;margin:8px 0 0}.park-map-helper{font-size:12px;color:#526878;margin:0 0 8px}.park-map-pan{display:flex;gap:4px}.park-map-pan[hidden]{display:none}@media(max-width:500px){.park-map-tools label{width:100%;margin-left:0}.park-map-tools button{padding:7px 10px}.park-route-map{min-height:0}.park-map-caption{font-size:12px}}
-</style><div class="park-map-tools" role="group" aria-label="地図の表示"><button type="button" data-map-action="out" aria-label="地図を縮小">−</button><span class="park-map-scale" aria-live="polite">${Math.round(view.scale * 100)}%</span><button type="button" data-map-action="in" aria-label="地図を拡大">＋</button><button type="button" data-map-action="reset">全体を見る</button><label><input type="checkbox" data-map-selected${view.onlySelected ? ' checked' : ''}>希望・予定の場所だけ</label><div class="park-map-pan"${view.scale === 1 ? ' hidden' : ''} aria-label="地図を動かす"><button type="button" data-map-action="left" aria-label="地図を左へ">←</button><button type="button" data-map-action="up" aria-label="地図を上へ">↑</button><button type="button" data-map-action="down" aria-label="地図を下へ">↓</button><button type="button" data-map-action="right" aria-label="地図を右へ">→</button></div></div><div class="park-map-stage"><svg class="park-route-map" viewBox="${mapViewBox(view.scale, view.x, view.y).join(' ')}" data-only-selected="${view.onlySelected}" data-zoomed="${view.scale > 1}" role="group" tabindex="0" aria-label="${escape(park.name)}のイラスト地図と徒歩ルート。施設を選ぶと希望に追加します。拡大後はドラッグか矢印キーで移動できます。" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="${unique}" x2="1" y2="1"><stop stop-color="${sea ? '#c5e8f8' : '#e5eddc'}"/><stop offset="1" stop-color="${sea ? '#91c9e4' : '#d7e3d2'}"/></linearGradient></defs><rect width="1000" height="1000" fill="url(#${unique})"/><image class="park-map-art" href="assets/${sea ? 'sea' : 'land'}-map.webp" x="0" y="0" width="1000" height="1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true"/><g aria-hidden="true" opacity=".42">${paths}</g><g aria-hidden="true">${areaLabels}${routes}${gates}${breaks}</g>${markers}</svg></div><div class="park-map-legend" aria-label="施設の色"><span><i style="background:#2759a2"></i>アトラクション</span><span><i style="background:#8545a5"></i>ショー・パレード</span><span><i style="background:#b65025"></i>フード</span><span><i style="background:#b52e6b"></i>グリーティング</span><span><i style="background:#147969"></i>ショップ・休憩</span></div>${listed.length ? `<p class="park-map-helper">下の場所を選ぶと地図で拡大します。番号は予定の順序です。</p><div class="park-map-locations" aria-label="${visits.length ? '予定の順番' : '希望に追加した場所'}">${list}</div>` : ''}<p class="park-map-caption">エリアの位置関係をつかむためのイラスト地図です。徒歩ルートと距離は目安です。現地の移動には公式の園内マップをご利用ください。</p>`;
+</style><div class="park-map-tools" role="group" aria-label="地図の表示"><button type="button" data-map-action="out" aria-label="地図を縮小">−</button><span class="park-map-scale" aria-live="polite">${Math.round(view.scale * 100)}%</span><button type="button" data-map-action="in" aria-label="地図を拡大">＋</button><button type="button" data-map-action="reset">全体を見る</button><label><input type="checkbox" data-map-selected${view.onlySelected ? ' checked' : ''}>希望・予定の場所だけ</label><div class="park-map-pan"${view.scale === 1 ? ' hidden' : ''} aria-label="地図を動かす"><button type="button" data-map-action="left" aria-label="地図を左へ">←</button><button type="button" data-map-action="up" aria-label="地図を上へ">↑</button><button type="button" data-map-action="down" aria-label="地図を下へ">↓</button><button type="button" data-map-action="right" aria-label="地図を右へ">→</button></div></div><div class="park-map-stage"><svg class="park-route-map" viewBox="${mapViewBox(view.scale, view.x, view.y).join(' ')}" data-only-selected="${view.onlySelected}" data-zoomed="${view.scale > 1}" role="group" tabindex="0" aria-label="${escape(park.name)}の${geographic ? '地理地図' : 'イラスト地図'}と徒歩ルート。施設を選ぶと希望に追加します。拡大後はドラッグか矢印キーで移動できます。" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="${unique}" x2="1" y2="1"><stop stop-color="${sea ? '#c5e8f8' : '#e5eddc'}"/><stop offset="1" stop-color="${sea ? '#91c9e4' : '#d7e3d2'}"/></linearGradient></defs><rect width="1000" height="1000" fill="url(#${unique})"/><image class="park-map-art" href="${escape(mapAsset)}" x="0" y="0" width="1000" height="1000" preserveAspectRatio="xMidYMid slice" aria-hidden="true"/><g aria-hidden="true" opacity=".42">${paths}</g><g aria-hidden="true">${areaLabels}${routes}${gates}${breaks}</g>${markers}</svg></div><div class="park-map-legend" aria-label="施設の色"><span><i style="background:#2759a2"></i>アトラクション</span><span><i style="background:#8545a5"></i>ショー・パレード</span><span><i style="background:#b65025"></i>フード</span><span><i style="background:#b52e6b"></i>グリーティング</span><span><i style="background:#147969"></i>ショップ・休憩</span></div>${listed.length ? `<p class="park-map-helper">下の場所を選ぶと地図で拡大します。番号は予定の順序です。</p><div class="park-map-locations" aria-label="${visits.length ? '予定の順番' : '希望に追加した場所'}">${list}</div>` : ''}<p class="park-map-caption">${caption}</p>`;
   let draggedUntil = 0;
   if (typeof onSelect === 'function') for (const marker of container.querySelectorAll('[data-activity-id]')) {
     marker.addEventListener('click', () => {if (Date.now() >= draggedUntil) onSelect(marker.dataset.activityId);});

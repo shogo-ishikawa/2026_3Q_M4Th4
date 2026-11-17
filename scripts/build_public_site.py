@@ -23,9 +23,10 @@ ILLUSION_WEB_FILES = ('index.html', 'style.css', 'app.js', 'core.js', 'renderer.
 
 
 PARK_WEB_FILES = ('index.html', 'style.css', 'app.js', 'planner.js', 'planner-worker.js',
-                  'map-view.js', 'storage.js', 'guide.html', 'data/parks.json',
+                  'map-view.js', 'storage.js', 'weather.js', 'time-input.js', 'operation-windows.js', 'guide.html', 'data/parks.json',
                   'wait-data.js', 'wait-model.js', 'calendar-features.js', 'data/calendar.json', 'data/live-waits.json', 'data/wait-model.json',
-                  'assets/land-map.webp', 'assets/sea-map.webp', 'assets/land-hero.webp', 'assets/sea-hero.webp')
+                  'assets/land-map.webp', 'assets/sea-map.webp', 'assets/land-hero.webp', 'assets/sea-hero.webp',
+                  'data/sea-geography.json', 'data/sea-geography-LICENCE.md', 'assets/sea-geographic-map.svg')
 
 
 def build_park_site(output=OUTPUT):

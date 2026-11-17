@@ -1,10 +1,11 @@
 import { weatherAtMinute } from './calendar-features.js';
 import {trainWaitModel, validateWaitModel} from './wait-model.js';
 import {validateCatalogue} from './storage.js';
+import {prepareWeatherForVisit,forecastSourceLabel,forecastCacheLabel} from './weather.js';
+export {fetchWeather,prepareWeatherForVisit} from './weather.js';
 
 const REMOTE='https://raw.githubusercontent.com/shogo-ishikawa/2026_3Q_M4Th4/park-wait-data/';
 const QUEUE_URL='https://queue-times.com/';
-const WEATHER_URL='https://open-meteo.com/';
 const THEMEPARKS_IDS={land:'3cc919f1-d16d-43e0-8c3f-1dd269bd1a42',sea:'67b290d5-3478-4f23-b601-2f8fb71ba803'};
 const dateOf=value=>new Date(new Date(value).getTime()+9*3600000).toISOString().slice(0,10);
 const minuteOf=value=>{const date=new Date(new Date(value).getTime()+9*3600000);return date.getUTCHours()*60+date.getUTCMinutes();};
@@ -141,37 +142,6 @@ export function mergeObservations(existing,incoming) {
     rows.set([row.date,row.activityId,width,Math.floor(time/width)].join('|'),row);
   }return [...rows.values()].slice(-50000);
 }
-function weatherFromCode(code){return code===0?'sun':code<=3||code===45||code===48?'cloud':'rain';}
-export async function fetchWeather(date,{signal,fetchImpl=fetch,now=Date.now(),timeoutMs=15000}={}) {
-  const today=dateOf(now), last=dateOf(new Date(now).getTime()+15*86400000);
-  if(date<today||date>last)throw new RangeError('天気予報は今日から15日先まで取得できます。それ以外の日は天気を選んでください。');
-  const url='https://api.open-meteo.com/v1/forecast?latitude=35.632&longitude=139.883&hourly=temperature_2m,precipitation,precipitation_probability,weather_code&forecast_days=16&timezone=Asia%2FTokyo';
-  const data=await readJson(url,signal,fetchImpl,timeoutMs), hourly=data.hourly;
-  if(!Array.isArray(hourly?.time))throw new Error('天気予報の形式を確認してください。');
-  const hours=hourly.time.map((time,i)=>({time,minute:Number(time.slice(11,13))*60,weather:weatherFromCode(hourly.weather_code?.[i]),temperature:hourly.temperature_2m?.[i],precipitation:hourly.precipitation?.[i]??null,precipitationProbability:hourly.precipitation_probability?.[i]??null})).filter((row,i)=>row.time.startsWith(date)&&Number.isFinite(row.temperature)&&Number.isFinite(hourly.weather_code?.[i]));
-  const visit=hours.filter(row=>row.minute>=9*60&&row.minute<=21*60);if(!visit.length)throw new Error('指定した日の天気予報がありません。');
-  const weather=visit.some(row=>row.weather==='rain')?'rain':visit.some(row=>row.weather==='cloud')?'cloud':'sun';
-  return {date,weather,label:{sun:'晴れ',cloud:'曇り',rain:'雨・雪の可能性'}[weather],temperatureMin:Math.min(...visit.map(row=>row.temperature)),temperatureMax:Math.max(...visit.map(row=>row.temperature)),precipitationProbability:Math.max(...visit.map(row=>row.precipitationProbability??0)),hours,provider:'open-meteo',sourceUrl:WEATHER_URL,fetchedAt:new Date(now).toISOString()};
-}
-export async function prepareWeatherForVisit(settings, park, {signal,fetchWeatherImpl=fetchWeather}={}) {
-  const clean={...settings,weatherForecast:null};
-  if(settings.weatherMode==='manual')return {...clean,weatherMode:'manual',weatherNotice:'天気は手動の設定を使います。'};
-  try {
-    const forecast=await fetchWeatherImpl(settings.date,{signal,park});
-    const duringVisit=forecast.hours.filter(hour=>hour.minute>=Math.floor(settings.entry/60)*60&&hour.minute<settings.exit);
-    if(!duringVisit.length)throw new Error('滞在時間帯の予報がありません。');
-    const weather=duringVisit.some(hour=>hour.weather==='rain')?'rain':duringVisit.some(hour=>hour.weather==='cloud')?'cloud':'sun';
-    const temperatures=duringVisit.map(hour=>hour.temperature).filter(Number.isFinite);
-    if(!temperatures.length)throw new Error('気温を含む予報を取得できませんでした。');
-    const chances=duringVisit.map(hour=>hour.precipitationProbability).filter(Number.isFinite);
-    const profile={...forecast,weather,label:{sun:'晴れ',cloud:'曇り',rain:'雨・雪の可能性'}[weather],temperatureMin:Math.min(...temperatures),temperatureMax:Math.max(...temperatures),precipitationProbability:chances.length?Math.max(...chances):null};
-    return {...clean,weatherMode:'auto',weather,weatherForecast:profile,weatherNotice:`${settings.date}のパーク周辺の予報を取得しました。滞在中の時間ごとの天気を計画に使います。`};
-  } catch(error) {
-    if(signal?.aborted||error.name==='AbortError')throw error;
-    return {...clean,weatherMode:'auto',weatherNotice:`天気予報を取得できませんでした（${error.message}）。今回は選択中の「${{sun:'晴れ',cloud:'くもり',rain:'雨'}[settings.weather]||'天気'}」で計画します。`};
-  }
-}
-
 export async function fetchPublishedModel(park,{signal,fetchImpl=fetch,timeoutMs=15000}={}) {
   const candidates=await Promise.all([REMOTE+'wait-model.json',new URL('./data/wait-model.json',import.meta.url).href].map(async url=>{
     try{const data=await readJson(url,signal,fetchImpl,timeoutMs),model=data.parks?.find(item=>item.parkId===park.id);return validateWaitModel(model)?model:null;}catch(error){if(error.name==='AbortError')throw error;return null;}
@@ -265,7 +235,8 @@ export function initialiseExternalData({container,getContext,onUpdate,beforeActi
     activity.innerHTML=park.activities.filter(item=>['attraction','greeting','restaurant','cafe'].includes(item.category)).map(item=>`<option value="${escape(item.id)}">${escape(item.name)}</option>`).join('');if([...activity.options].some(option=>option.value===selected))activity.value=selected;
     if(!element('time').value){const minute=minuteOf(Date.now());element('time').value=String(Math.floor(minute/60)).padStart(2,'0')+':'+String(minute%60).padStart(2,'0');}
     const shownWeather=forecastForSettings(settings);
-    element('weatherResult').innerHTML=shownWeather?`${escape(shownWeather.date)}：${escape(shownWeather.label)} ${shownWeather.temperatureMin}〜${shownWeather.temperatureMax}℃${Number.isFinite(shownWeather.precipitationProbability)?` · 降水確率最大${shownWeather.precipitationProbability}%`:''} · <a href="${WEATHER_URL}" target="_blank" rel="noopener">Weather data by Open-Meteo.com</a> · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>（時間ごとの予報を計画に反映）`:'';
+    const summaryTemperature=shownWeather&&Number.isFinite(shownWeather.temperatureMin)&&Number.isFinite(shownWeather.temperatureMax)?`${shownWeather.temperatureMin}〜${shownWeather.temperatureMax}℃`:'未提供';
+    element('weatherResult').innerHTML=shownWeather?`${escape(shownWeather.date)}：${escape(shownWeather.label)} · 気温 ${escape(summaryTemperature)}（${shownWeather.provider==='jma'?'参考範囲・地点と時刻は予定表に表示':'滞在中の最低〜最高'}） · 降水確率 ${Number.isFinite(shownWeather.precipitationProbability)?`最大${shownWeather.precipitationProbability}%`:'未提供'} · ${shownWeather.provider==='jma'?'降水量は未提供':'1時間ごとの降水量は予定表に表示'} · <a href="${escape(safeSourceUrl(shownWeather.sourceUrl))}" target="_blank" rel="noopener">${escape(forecastSourceLabel(shownWeather))}</a>${shownWeather.provider==='open-meteo'?' · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>':''} · 取得 ${escape(stamp(shownWeather.fetchedAt))}${shownWeather.issuedAt?` · 発表 ${escape(stamp(shownWeather.issuedAt))}`:''} · ${escape(forecastCacheLabel(shownWeather))}`:'';
   }
   function cancel(){const wasBusy=busy;generation++;modelRequest++;pendingController?.abort();pendingController=null;busy=false;for(const button of container.querySelectorAll('button'))button.disabled=false;if(wasBusy)status('取得を中止しました。');}
   async function perform(action) {

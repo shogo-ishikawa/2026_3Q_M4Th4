@@ -43,11 +43,11 @@ test('missing forecast values are not converted into an apparently valid weather
  const result=await prepareWeatherForPlan(settings,park,{fetchWeatherImpl:async()=>({...forecast,hours:[{minute:1020,weather:'sun',temperature:null}]})});
  assert.equal(result.weatherForecast,null);assert.match(result.weatherNotice,/取得できません/);
 });
-test('weather includes measured precipitation and ignores hours with missing weather codes',async()=>{
+test('weather uses the containing hour precipitation even when the following instant weather code is missing',async()=>{
  const result=await fetchWeather('2026-11-17',{now:Date.parse('2026-11-17T00:00Z'),fetchImpl:async(url)=>{
   assert.ok(url.includes('precipitation,'));return {ok:true,json:async()=>({hourly:{time:['2026-11-17T09:00','2026-11-17T10:00'],temperature_2m:[15,16],weather_code:[61,null],precipitation:[3,0],precipitation_probability:[75,0]}})};
  }});
- assert.equal(result.hours.length,1);assert.equal(result.hours[0].precipitation,3);assert.equal(result.weather,'rain');
+ assert.equal(result.hours.length,1);assert.equal(result.hours[0].precipitation,0);assert.equal(result.hours[0].precipitationProbability,0);assert.equal(result.weather,'rain');
 });
 test('restaurant and cafe selection is separated from quick snacks and popcorn',()=>{
  assert.equal(genreOf('restaurant'),'dining');assert.equal(genreOf('cafe'),'dining');assert.equal(genreOf('snack'),'snacks');assert.equal(genreOf('popcorn'),'snacks');
