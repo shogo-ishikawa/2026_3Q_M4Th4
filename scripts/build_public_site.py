@@ -19,7 +19,7 @@ PIPE_WEB_FILES = ('index.html', 'style.css', 'app.js', 'physics.js', 'sph.js',
                   'radial-reference.js', 'wall-measurement.js', 'learning-content.js',
                   'learning-tools.js', 'methods.html', 'methods.css', 'methods.js',
                   'experiment-state.js')
-ILLUSION_WEB_FILES = ('index.html', 'style.css', 'app.js', 'core.js', 'renderer.js', 'guide.html')
+ILLUSION_WEB_FILES = ('index.html', 'style.css', 'app.js', 'core.js', 'renderer.js', 'guide.html', 'lessons.js', 'lesson-view.js', 'guide.js', 'lessons.css')
 
 
 def build_illusion_site(output=OUTPUT):

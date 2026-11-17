@@ -1,5 +1,6 @@
 import { CATALOGUE, makeScene, makeQuiz, normaliseSeed } from './core.js';
 import { renderScene } from './renderer.js';
+import { lessonMarkup } from './lesson-view.js';
 
 const DIFFICULTIES = ['easy', 'standard', 'hard'];
 const COUNTS = [5, 10, 15, 20, 30];
@@ -192,11 +193,13 @@ export function initialiseApp() {
     if (lab.reveal) {
       $('labAnswer').textContent = lab.scene.answerText;
       $('labExplanation').textContent = lab.scene.explanation;
+      $('labLesson').innerHTML = lessonMarkup(lab.id);
       showMeasurements('labMeasurements', lab.scene.measurements);
     } else {
       $('labAnswer').textContent = '';
       $('labExplanation').textContent = '';
       $('labMeasurements').replaceChildren();
+      $('labLesson').replaceChildren();
     }
     for (const button of $('catalogue').querySelectorAll('button')) button.setAttribute('aria-pressed', String(button.dataset.id === lab.id));
   }
@@ -314,9 +317,10 @@ export function initialiseApp() {
       $('quizVerdict').textContent = response.correct ? '✓ 正解' : 'もう一度見てみよう';
       $('quizCorrectAnswer').textContent = scene.answerText;
       $('quizExplanation').textContent = scene.explanation;
+      $('quizLesson').innerHTML = lessonMarkup(scene.id);
       showMeasurements('quizMeasurements', scene.measurements);
     } else {
-      $('quizVerdict').textContent = ''; $('quizCorrectAnswer').textContent = ''; $('quizExplanation').textContent = ''; $('quizMeasurements').replaceChildren();
+      $('quizVerdict').textContent = ''; $('quizCorrectAnswer').textContent = ''; $('quizExplanation').textContent = ''; $('quizMeasurements').replaceChildren(); $('quizLesson').replaceChildren();
     }
   }
   function startQuiz(options = readQuizOptions()) {
@@ -369,6 +373,7 @@ export function initialiseApp() {
     $('reviewGraphic').innerHTML = renderScene(scene, { reveal: true, contextOpacity, overlay: $('reviewOverlay').checked });
     $('reviewContextValue').textContent = Math.round(contextOpacity * 100) + '%';
     $('reviewAnswer').textContent = scene.answerText; $('reviewExplanation').textContent = scene.explanation;
+    $('reviewLesson').innerHTML = lessonMarkup(scene.id);
     showMeasurements('reviewMeasurements', scene.measurements);
   }
   function showReview(index) {

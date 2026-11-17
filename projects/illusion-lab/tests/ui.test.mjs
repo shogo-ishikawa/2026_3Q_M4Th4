@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
 import { CATALOGUE, makeQuiz, makeScene, normaliseSeed } from '../web/core.js';
+import { lessonMarkup } from '../web/lesson-view.js';
 import { QuizSession, parseSettings, challengeUrl, proofOptions, categoryResults, resultsCsv } from '../web/app.js';
 
 const sample = () => makeQuiz({ seed: 8451, count: 5, difficulty: 'standard' });
@@ -80,7 +81,7 @@ class Element {
     const classes = new Set(); this.classList = { add: (...names) => names.forEach(name => classes.add(name)), remove: (...names) => names.forEach(name => classes.delete(name)), toggle: (name, force) => { const next = force ?? !classes.has(name); if (next) classes.add(name); else classes.delete(name); return next; }, contains: name => classes.has(name) };
   }
   append(...nodes) { for (const node of nodes) { node.parentElement = this; this.children.push(node); } }
-  replaceChildren(...nodes) { this.children = []; this.append(...nodes); }
+  replaceChildren(...nodes) { this.children = []; this.innerHTML = this.textContent = ''; this.append(...nodes); }
   addEventListener(name, callback) { (this.listeners[name] ||= []).push(callback); }
   setAttribute(name, value) { this.attributes[name] = String(value); }
   getAttribute(name) { return this.attributes[name] ?? null; }
@@ -103,7 +104,7 @@ function appHarness(url = 'https://example.test/illusion-lab/') {
   for (const category of ['all', 'length', 'size', 'direction', 'brightness']) { const option = new Element('option'); option.value = category; nodes.quizCategory.append(option); }
   let address = new URL(url); const draws = [];
   const context = {
-    CATALOGUE, makeQuiz, makeScene, normaliseSeed,
+    CATALOGUE, makeQuiz, makeScene, normaliseSeed, lessonMarkup,
     renderScene(scene, options = {}) { draws.push({ scene, options }); return `<svg data-id="${scene.id}" data-seed="${scene.seed}" data-reveal="${!!options.reveal}" data-context="${options.contextOpacity ?? 1}" data-overlay="${!!options.overlay}"></svg>`; },
     document: { getElementById: id => nodes[id] ?? null, createElement: tag => new Element(tag), body: new Element('body') },
     location: { get href() { return address.href; }, get search() { return address.search; }, get hash() { return address.hash; } },
@@ -123,12 +124,12 @@ function appHarness(url = 'https://example.test/illusion-lab/') {
 
 test('実HTMLの操作で図の再生成は検証状態をリセットする', async () => {
   const app = appHarness(); const { nodes, fire } = app;
-  assert.equal(nodes.catalogue.children.length, 18); assert.equal(nodes.labProof.hidden, true);
-  await fire('revealLab'); assert.equal(nodes.labProof.hidden, false); assert.match(nodes.labGraphic.innerHTML, /data-reveal="true"/);
+  assert.equal(nodes.catalogue.children.length, 18); assert.equal(nodes.labProof.hidden, true); assert.equal(nodes.labLesson.innerHTML, '');
+  await fire('revealLab'); assert.equal(nodes.labProof.hidden, false); assert.match(nodes.labLesson.innerHTML, /なぜそう見える/); assert.match(nodes.labGraphic.innerHTML, /data-reveal="true"/);
   nodes.labContext.value = '0'; await fire('labContext', 'input');
   nodes.labOverlay.checked = true; await fire('labOverlay', 'change');
   assert.match(nodes.labGraphic.innerHTML, /data-context="0"/); assert.match(nodes.labGraphic.innerHTML, /data-overlay="true"/);
-  await fire('randomLab'); assert.equal(nodes.labProof.hidden, true); assert.equal(nodes.labSeed.value, '931');
+  await fire('randomLab'); assert.equal(nodes.labProof.hidden, true); assert.equal(nodes.labLesson.innerHTML, ''); assert.equal(nodes.labSeed.value, '931');
   assert.match(nodes.labGraphic.innerHTML, /data-reveal="false"/); assert.match(nodes.labGraphic.innerHTML, /data-context="1"/); assert.match(nodes.labGraphic.innerHTML, /data-overlay="false"/);
   nodes.labType.value = 'kanizsa'; await fire('labType', 'change'); assert.equal(nodes.labOverlay.parentElement.hidden, true);
 });
@@ -137,20 +138,20 @@ test('実HTMLのクイズを回答・見直し・再挑戦まで進められる'
   const { nodes, fire } = appHarness('https://example.test/illusion-lab/?mode=quiz&seed=8451&count=5&category=direction#quiz');
   assert.equal(nodes.quiz.hidden, false); assert.equal(nodes.quizCount.value, '5');
   await fire('quizForm', 'submit'); const original = nodes.quizGraphic.innerHTML;
-  assert.equal(nodes.quizFeedback.hidden, true); assert.equal(nodes.quizNext.hidden, true);
+  assert.equal(nodes.quizFeedback.hidden, true); assert.equal(nodes.quizNext.hidden, true); assert.equal(nodes.quizLesson.innerHTML, '');
   assert.equal(nodes.quizContext.disabled, true); assert.match(original, /data-reveal="false"/);
   for (let i = 0; i < 5; i += 1) {
     const choice = nodes.quizChoices.children[0]; await fire(choice);
-    assert.equal(nodes.quizFeedback.hidden, false); assert.equal(nodes.quizNext.hidden, false); assert.match(nodes.quizGraphic.innerHTML, /data-reveal="true"/);
+    assert.equal(nodes.quizFeedback.hidden, false); assert.equal(nodes.quizNext.hidden, false); assert.match(nodes.quizLesson.innerHTML, /図を操作して確かめる/); assert.match(nodes.quizGraphic.innerHTML, /data-reveal="true"/);
     nodes.quizContext.value = '0'; await fire('quizContext', 'input');
     nodes.quizOverlay.checked = true; await fire('quizOverlay', 'change');
     assert.match(nodes.quizGraphic.innerHTML, /data-context="0"/);
     await fire('quizNext');
-    if (i < 4) { assert.equal(nodes.quizFeedback.hidden, true); assert.equal(nodes.quizNext.hidden, true); assert.match(nodes.quizGraphic.innerHTML, /data-reveal="false"/); assert.match(nodes.quizGraphic.innerHTML, /data-context="1"/); }
+    if (i < 4) { assert.equal(nodes.quizLesson.innerHTML, ''); assert.equal(nodes.quizFeedback.hidden, true); assert.equal(nodes.quizNext.hidden, true); assert.match(nodes.quizGraphic.innerHTML, /data-reveal="false"/); assert.match(nodes.quizGraphic.innerHTML, /data-context="1"/); }
   }
   assert.equal(nodes.quizResults.hidden, false); assert.equal(nodes.resultList.children.length, 5);
   const score = nodes.resultScore.textContent;
-  await fire(nodes.resultList.children[0]); assert.equal(nodes.reviewPanel.hidden, false); assert.match(nodes.reviewGraphic.innerHTML, /data-reveal="true"/);
+  await fire(nodes.resultList.children[0]); assert.equal(nodes.reviewPanel.hidden, false); assert.match(nodes.reviewLesson.innerHTML, /もう一歩/); assert.match(nodes.reviewGraphic.innerHTML, /data-reveal="true"/);
   nodes.reviewContext.value = '0'; await fire('reviewContext', 'input'); assert.equal(nodes.resultScore.textContent, score);
   await fire('replayQuiz'); assert.equal(nodes.quizResults.hidden, true); assert.equal(nodes.quizFeedback.hidden, true); assert.equal(nodes.quizGraphic.innerHTML, original);
   assert.equal(nodes.quizChoices.children.every(button => !button.disabled), true);
