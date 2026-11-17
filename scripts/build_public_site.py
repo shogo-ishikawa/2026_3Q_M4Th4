@@ -19,6 +19,27 @@ PIPE_WEB_FILES = ('index.html', 'style.css', 'app.js', 'physics.js', 'sph.js',
                   'radial-reference.js', 'wall-measurement.js', 'learning-content.js',
                   'learning-tools.js', 'methods.html', 'methods.css', 'methods.js',
                   'experiment-state.js')
+ILLUSION_WEB_FILES = ('index.html', 'style.css', 'app.js', 'core.js', 'renderer.js', 'guide.html')
+
+
+def build_illusion_site(output=OUTPUT):
+    project = ROOT / 'projects' / 'illusion-lab'
+    destination = Path(output) / 'illusion-lab'
+    destination.mkdir(parents=True, exist_ok=True)
+    for name in ILLUSION_WEB_FILES:
+        shutil.copy2(project / 'web' / name, destination / name)
+    version = 'v' + json.loads((project / 'version.json').read_text(encoding='utf-8'))['version']
+    downloads = destination / 'downloads'
+    downloads.mkdir(exist_ok=True)
+    archive = downloads / f'IllusionLab_{version}.zip'
+    tracked = subprocess.check_output(['git', 'ls-files', '-z', '--', str(project.relative_to(ROOT))], cwd=ROOT).decode().split('\0')
+    with ZipFile(archive, 'w', ZIP_DEFLATED) as bundle:
+        for name in sorted(filter(None, tracked)):
+            path = ROOT / name
+            if path.is_file():
+                bundle.write(path, Path(version) / path.relative_to(project))
+    print(f'Built illusion-lab with {archive.stat().st_size:,}-byte distribution ZIP')
+    return archive
 
 
 def build_lantern_site(output=OUTPUT):
@@ -155,6 +176,7 @@ def main():
     build_swing_site()
     build_pipe_site()
     build_lantern_site()
+    build_illusion_site()
     print(f'Built {OUTPUT.relative_to(ROOT)} with {archive.stat().st_size:,}-byte distribution ZIP')
 
 
