@@ -97,4 +97,5 @@ python3 scripts/train_wait_model.py --observations outputs/waits/observations.js
 - [ThemeParks.wiki](https://www.themeparks.wiki/api)：許可された直近履歴から予測モデルを作ります。利用条件に従い元の履歴を一括配布しません。画面に「Powered by ThemeParks.wiki」のリンクを表示します。
 - [内閣府の祝日CSV](https://www8.cao.go.jp/chosei/shukujitsu/gaiyou.html)：祝日・振替休日・祝日前後の判定に使います。
 - [Open-Meteo](https://open-meteo.com/en/docs)：パーク周辺の天気を取得します。[非商用・教育利用の条件](https://open-meteo.com/en/terms)と[CC BY 4.0](https://open-meteo.com/en/license)に従い、天気の表示に出典リンクを付けます。
+- [気象庁](https://www.jma.go.jp/bosai/forecast/)：千葉県北西部の天気と千葉・銚子地点の気温を予報の区切りとともに表示します。提供されない降水量は補完しません。Open-Meteoと気象庁の予報を `weather-forecast.json` へ保存し、日中は約1時間、夜間は3時間ごとに更新を試みます。取得失敗時は前回の取得・発表日時を維持します。
 - Yosocal、Queue-Timesの混雑カレンダー、ディズニーリアルは画面から開ける比較用リンクです。各ページの予想や過去履歴を自動収集する機能はありません。

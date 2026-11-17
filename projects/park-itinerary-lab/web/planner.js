@@ -1,3 +1,4 @@
+import {operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js';
 import { weatherAtMinute, calendarContext } from './calendar-features.js';
 import { predictModelWait } from './wait-model.js';
 import { liveWaitFor, currentRideStatus } from './wait-data.js';
@@ -33,26 +34,39 @@ function dateValid(value) {
 export function graphDistances(park) {
   if (!Array.isArray(park?.nodes) || !Array.isArray(park?.edges)) throw new TypeError('歩行経路データがありません。');
   const ids = park.nodes.map(node => node.id);
-  if (new Set(ids).size !== ids.length || !ids.length || ids.length > 400 || ids.some(id => typeof id !== 'string' || !id || id.length > 120) || park.edges.length > 5000) throw new RangeError('地図の地点IDを確認してください。');
+  if (new Set(ids).size !== ids.length || !ids.length || ids.length > 1000 || ids.some(id => typeof id !== 'string' || !id || id.length > 120) || park.edges.length > 5000) throw new RangeError('地図の地点IDを確認してください。');
   const distances = Object.create(null), paths = Object.create(null);
-  for (const from of ids) {
-    distances[from] = Object.create(null); paths[from] = Object.create(null);
-    for (const to of ids) { distances[from][to] = from === to ? 0 : Infinity; paths[from][to] = from === to ? [from] : []; }
-  }
+  const adjacency = new Map(ids.map(id => [id, new Map()]));
   for (const edge of park.edges) {
     const from = edge.from ?? edge.a, to = edge.to ?? edge.b, metres = Number(edge.metres);
-    if (!distances[from] || !distances[to] || !Number.isFinite(metres) || metres < 0 || metres > 20000) throw new RangeError('歩行経路の距離を確認してください。');
-    if (metres < distances[from][to]) {
-      distances[from][to] = distances[to][from] = metres;
-      paths[from][to] = [from, to]; paths[to][from] = [to, from];
+    if (!adjacency.has(from) || !adjacency.has(to) || !Number.isFinite(metres) || metres < 0 || metres > 20000) throw new RangeError('歩行経路の距離を確認してください。');
+    if (metres < (adjacency.get(from).get(to) ?? Infinity)) {
+      adjacency.get(from).set(to, metres); adjacency.get(to).set(from, metres);
     }
   }
-  for (const via of ids) for (const from of ids) for (const to of ids) {
-    const candidate = distances[from][via] + distances[via][to];
-    if (candidate + 1e-8 < distances[from][to]) {
-      distances[from][to] = candidate;
-      paths[from][to] = paths[from][via].concat(paths[via][to].slice(1));
+  // Sources and target paths are lazy: full route arrays would be too large on phones.
+  const sources=new Map(),idSet=new Set(ids);
+  function source(from) {
+    if(sources.has(from))return sources.get(from);
+    const distance = Object.fromEntries(ids.map(id => [id, Infinity])), prior = new Map(), heap = [];
+    const push = item => { let i = heap.length; heap.push(item); while(i) { const parent=(i-1)>>1; if(heap[parent][0]<=item[0])break; heap[i]=heap[parent]; i=parent; } heap[i]=item; };
+    const pop = () => { const first=heap[0], last=heap.pop(); if(heap.length) { let i=0; while(i*2+1<heap.length) { let child=i*2+1; if(child+1<heap.length&&heap[child+1][0]<heap[child][0])child++; if(last[0]<=heap[child][0])break; heap[i]=heap[child];i=child; } heap[i]=last; } return first; };
+    distance[from]=0;push([0,from]);
+    while(heap.length) {
+      const [metres,node]=pop();if(metres>distance[node]+1e-8)continue;
+      for(const [next,length] of adjacency.get(node)) { const candidate=metres+length; if(candidate+1e-8<distance[next]) { distance[next]=candidate;prior.set(next,node);push([candidate,next]); } }
     }
+    const targetPaths=Object.create(null);
+    const path=new Proxy(targetPaths,{get(target,to) {
+      if(!idSet.has(to))return undefined;
+      if(!(to in target)) { const result=[]; if(Number.isFinite(distance[to])) { let node=to; while(node!==undefined) { result.push(node);if(node===from)break;node=prior.get(node); } result.reverse(); } target[to]=result; }
+      return target[to];
+    }});
+    const result={distance,path};sources.set(from,result);return result;
+  }
+  for(const from of ids) {
+    Object.defineProperty(distances,from,{enumerable:true,get:()=>source(from).distance});
+    Object.defineProperty(paths,from,{enumerable:true,get:()=>source(from).path});
   }
   return { distances, paths };
 }
@@ -71,8 +85,8 @@ export function walkingFactor(start,settings={}) {
 export function walkingMinutes(metres,start,settings={}) {
   return Math.ceil(metres/Number(settings.speed??65)*walkingFactor(start,settings));
 }
-function walkingFields(start,settings) {
-  return {walkSpeed:Number(settings.speed??65),...(settings.walkCrowdMode==='estimate'?{walkingFactor:walkingFactor(start,settings),walkingSource:'congestion-estimate'}:{})};
+function walkingFields(start,settings,park) {
+  return {...(park?.routeGraphVersion?{routeSource:park.routeGraphVersion}:{}),walkSpeed:Number(settings.speed??65),...(settings.walkCrowdMode==='estimate'?{walkingFactor:walkingFactor(start,settings),walkingSource:'congestion-estimate'}:{})};
 }
 
 function historicalWait(activity, start, settings, history) {
@@ -161,6 +175,8 @@ function normalise(park, settings) {
       if (result[key] % 100) throw new RangeError('予算は100円単位で指定してください。');
     }
   }
+  if(settings.gondolaAvoidHarbourShows!==undefined&&typeof settings.gondolaAvoidHarbourShows!=='boolean')throw new RangeError('ゴンドラのショー回避設定を確認してください。');
+  result.gondolaAvoidHarbourShows=settings.gondolaAvoidHarbourShows!==false;
   result.restEvery = numberIn(settings.restEvery ?? 120, '休憩の間隔', 0, 600, true);
   result.restMinutes = numberIn(settings.restMinutes ?? 10, '休憩の長さ', 0, 120, true);
   result.walkCrowdMode=settings.walkCrowdMode??'off';
@@ -211,6 +227,8 @@ function normalise(park, settings) {
       if (selection.dpaStart >= selection.dpaEnd) throw new RangeError('取得済みDPAの時間帯を確認してください。');
       selection.required = true;
     }
+    if(item.timeWindowLinked!==undefined&&typeof item.timeWindowLinked!=='boolean')throw new RangeError('時間枠の連動設定を確認してください。');
+    selection.pauseWindows=normalisePauseWindows(item.pauseWindows||[]);
     for (const key of ['showTimes', 'normalShowTimes', 'dpaAvailableWindows', 'windows']) {
       if (item[key] !== undefined && !Array.isArray(item[key])) throw new RangeError('施設の時間設定を確認してください。');
     }
@@ -261,6 +279,33 @@ function row(kind, start, end, name, extra = {}) {
   return { kind, type: kind, start, end, duration: end - start, name, cost: 0, dpa: false, ...extra };
 }
 
+function prefixSourceRows(initialPlan,settings) {
+  const cutoff=toMinutes(settings.replanFrom),priorRows=initialPlan?.rows||[];
+  const startedVisitIds=new Set(priorRows.filter(item=>item.start<cutoff&&['queue','activity'].includes(item.kind)).map(item=>item.activityId));
+  return priorRows.filter(item=>item.kind!=='exit'&&(item.start<cutoff||(startedVisitIds.has(item.activityId)&&['queue','activity'].includes(item.kind))));
+}
+function preservedPrefix(initialPlan,settings) {
+  const cutoff=toMinutes(settings.replanFrom);
+  return prefixSourceRows(initialPlan,settings).map(item=>{
+    const end=['wait','rest'].includes(item.kind)&&!item.fixedBreakId?Math.min(item.end,cutoff):item.end;
+    return {...copy(item),end,duration:end-item.start,preserved:true,...(item.kind==='walk'?{walkSpeed:item.walkSpeed??initialPlan?.settings?.speed??settings.speed}:{})};
+  });
+}
+const rowSignature=value=>JSON.stringify(value,(_,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);
+function historicalBounds(park,settings,source) {
+  const current={date:settings.date,parkId:park.id,entry:toMinutes(settings.entry),exit:toMinutes(settings.exit)};
+  if(settings.replanFrom===undefined||settings.replanFrom===''||source?.settings?.date!==settings.date||(source.parkId&&source.parkId!==park.id))return current;
+  const originalEntry=source.settings.entry,originalExit=source.settings.exit,inherited=source.historicalVisitBounds;
+  if(!Number.isInteger(originalEntry)||!Number.isInteger(originalExit))return current;
+  const inheritedValid=inherited?.date===settings.date&&inherited.parkId===park.id&&Number.isInteger(inherited.entry)&&Number.isInteger(inherited.exit)&&inherited.entry>=0&&inherited.entry<=originalEntry&&inherited.exit>=originalExit&&inherited.exit<=1440;
+  const sourceRows=prefixSourceRows(source,settings);
+  if(!sourceRows.every(item=>(item.start>=originalEntry&&item.end<=originalExit)||(item.preserved&&inheritedValid&&item.start>=inherited.entry&&item.end<=inherited.exit)))return current;
+  // Bounds come from the exact recorded prefix, never from an arbitrary expanded metadata value.
+  const rows=preservedPrefix(source,settings);
+  return {...current,entry:Math.min(current.entry,...rows.map(item=>item.start)),exit:Math.max(current.exit,...rows.map(item=>item.end))};
+}
+
+
 function contextFor(park, settings, initialPlan) {
   const graph = graphDistances(park);
   const map = new Map(park.activities.map(activity => [activity.id, activity]));
@@ -270,13 +315,7 @@ function contextFor(park, settings, initialPlan) {
   if (settings.replanFrom !== undefined && settings.replanFrom !== '') {
     const cutoff = toMinutes(settings.replanFrom);
     if (cutoff < settings.entry || cutoff >= settings.exit) throw new RangeError('組み替える時刻は滞在時間内にしてください。');
-    const priorRows = initialPlan?.rows || [];
-    const startedVisitIds = new Set(priorRows.filter(item => item.start < cutoff && ['queue', 'activity'].includes(item.kind)).map(item => item.activityId));
-    prefix = priorRows.filter(item => item.kind !== 'exit' &&
-      (item.start < cutoff || (startedVisitIds.has(item.activityId) && ['queue', 'activity'].includes(item.kind)))).map(item => {
-        const end = ['wait', 'rest'].includes(item.kind) && !item.fixedBreakId ? Math.min(item.end, cutoff) : item.end;
-        return { ...copy(item), end, duration: end - item.start, preserved: true,...(item.kind==='walk'?{walkSpeed:item.walkSpeed??initialPlan?.settings?.speed??settings.speed}:{}) };
-      });
+    prefix=preservedPrefix(initialPlan,settings);
     if (prefix.length) {
       beginning = Math.max(cutoff, ...prefix.map(item => item.end));
       const prefixEnd = prefix[prefix.length - 1];
@@ -320,13 +359,14 @@ function contextFor(park, settings, initialPlan) {
     if (!historyById.has(id)) historyById.set(id, []);
     historyById.get(id).push(record);
   }
-  return { park, settings, map, graph, selected, completed, completedSelections, initial, historyById, waitCache: new Map(), rankCache: new WeakMap() };
+  return { park, settings, map, graph, selected, completed, completedSelections, initial, historicalVisitBounds:prefix.length?historicalBounds(park,settings,initialPlan):null, historyById, waitCache: new Map(), rankCache: new WeakMap() };
 }
 
-function activityWindows(activity, selection, settings) {
+function activityWindows(activity, selection, settings, park) {
   const windows = selection.windows || activity.dailySchedules?.[settings.date]?.windows || activity.windows || [[settings.entry, settings.exit]];
   if (!Array.isArray(windows) || windows.length > 100 || windows.some(window => !Array.isArray(window) || window.length !== 2)) throw new RangeError('施設の営業時間を確認してください。');
-  return windows.map(window => window.map(toMinutes)).filter(window => window[0] < window[1]);
+  const open=windows.map(window => window.map(toMinutes)).filter(window => window[0] < window[1]);
+  return subtractPauseWindows(open,operationPauseInfo(park,activity,selection,settings).windows);
 }
 
 function showTimes(activity, selection, settings) {
@@ -380,7 +420,7 @@ function scheduledOptions(state, baseActivity, selection, context) {
   if (!activityAvailable(baseActivity, context.settings.date)||currentRideStatus(baseActivity,context.settings,{now:context.settings.waitAsOf})?.isOpen===false) return [];
   const settings = context.settings, graph = context.graph;
   const methods = [];
-  if (selection.dpaMode !== 'owned') methods.push({ method: 'normal', windows: activityWindows(baseActivity, selection, settings), price: 0 });
+  if (selection.dpaMode !== 'owned') methods.push({ method: 'normal', windows: activityWindows(baseActivity, selection, settings, context.park), price: 0 });
   if (dpaAvailable(baseActivity, settings.date) && selection.dpaMode === 'owned' &&
     (baseActivity.category !== 'parade' || (selection.nodeOverride && selection.showTimes?.length))) methods.push({
     method: 'dpa', windows: [[selection.dpaStart, selection.dpaEnd]], price: 0, owned: true,
@@ -410,7 +450,7 @@ function scheduledOptions(state, baseActivity, selection, context) {
   const arrival = departure + walkMinutes;
   if (walkMinutes) rows.push(row('walk', departure, arrival, activity.name + 'へ移動', {
     from: state.node, to: activity.node, node: activity.node, metres,
-    path: graph.paths[state.node][activity.node], activityId: activity.id,...walkingFields(departure,settings),
+    path: graph.paths[state.node][activity.node], activityId: activity.id,...walkingFields(departure,settings,context.park),
   }));
     if (!accessAllowed(activity, selection, method.method) || !budgetAllowed(state, activity, selection.cost, method.price, context)) continue;
     const windows = method.windows;
@@ -418,7 +458,7 @@ function scheduledOptions(state, baseActivity, selection, context) {
     const latest = Math.min(settings.exit, selection.latest ?? settings.exit);
     const fixed = FIXED.has(activity.category);
     const timeSelection = activity.category === 'parade' && method.method !== 'dpa' && selection.nodeOverride ? { ...selection, showTimes: selection.normalShowTimes } : selection;
-    const starts = fixed ? showTimes(activity, timeSelection, settings) : [earliest];
+    const starts = fixed ? showTimes(activity, timeSelection, settings) : [earliest,...activityWindows(activity,selection,settings,context.park).map(window=>window[0])];
     if (!fixed && method.method === 'normal' && settings.crowdMode !== 'manual' && finite(activity.baseWait) > 15) {
       for (let minute = Math.ceil(earliest / 60) * 60; minute <= Math.min(earliest + 120, latest); minute += 60) starts.push(minute);
     }
@@ -443,7 +483,7 @@ function scheduledOptions(state, baseActivity, selection, context) {
       if (method.method === 'dpa' && queueStart >= window[1]) continue;
       const end = start + selection.duration;
       if (end > latest || (method.method === 'normal' && end > window[1])) continue;
-      if (!activityWindows(activity, selection, settings).some(open => queueStart >= open[0] && end <= open[1])) continue;
+      if (!activityWindows(activity, selection, settings, context.park).some(open => queueStart >= open[0] && end <= open[1])) continue;
       const endNode = activity.endNode || activity.node;
       const exitMetres = graph.distances[endNode]?.[context.park.exitNode] ?? Infinity;
       if (end + walkingMinutes(exitMetres,end,settings) > settings.exit) continue;
@@ -517,7 +557,7 @@ function nextFixedBreak(state, context) {
   const rows = state.rows.slice();
   if (arrival > state.time) rows.push(row('walk', state.time, arrival, reservation.label + 'の場所へ移動', {
     from: state.node, to: reservation.node, node: reservation.node, metres,
-    path: context.graph.paths[state.node][reservation.node],...walkingFields(state.time,context.settings),
+    path: context.graph.paths[state.node][reservation.node],...walkingFields(state.time,context.settings,context.park),
   }));
   if (arrival < reservation.start) rows.push(row('wait', arrival, reservation.start, '休憩までの自由時間', { node: reservation.node }));
   const end = reservation.start + reservation.duration;
@@ -537,7 +577,7 @@ function finishRows(state, context) {
   const minutes = walkingMinutes(metres,state.time,context.settings), end = state.time + minutes;
   if (minutes) rows.push(row('walk', state.time, end, '出口へ移動', {
     from: state.node, to: context.park.exitNode, node: context.park.exitNode, metres,
-    path: context.graph.paths[state.node][context.park.exitNode],...walkingFields(state.time,context.settings),
+    path: context.graph.paths[state.node][context.park.exitNode],...walkingFields(state.time,context.settings,context.park),
   }));
   rows.push(row('exit', end, end, '退園', { node: context.park.exitNode }));
   return rows;
@@ -574,6 +614,7 @@ function resultFrom(state, context, diagnostics, quick = false) {
   } : omissionFor(selection, context, state));
   return {
     status: state ? 'feasible' : 'no-plan', parkId: context.park.id, settings: copy({ ...context.settings, history: [], historySampleCount: context.settings.history.length }),
+    ...(context.historicalVisitBounds?{historicalVisitBounds:copy(context.historicalVisitBounds)}:{}),
     rows, visits: state?.visits || context.initial.visits, purchases: state?.purchases || context.initial.purchases,
     totals: {
       cost: money, foodCost: state?.foodCost ?? context.initial.foodCost,
@@ -738,13 +779,14 @@ export function solveItinerary(park, rawSettings, options = {}) {
     '重要度の合計を優先し、同点では待ち時間・移動・待機の合計を短くする案を比べます。予算上限を守り、徒歩距離だけで訪問順を決めません。最適性の証明は行いません。',
     '待ち時間は手動指定、当日の新しい外部データ、検証で改善した学習モデル、履歴、傾向モデルの順に使います。施設ごとの出典は予定表に表示します。',
     settings.walkCrowdMode==='estimate'?'移動時間は歩く速さに混雑の想定・時間帯・休日・天気・イベントの影響を加えた目安です。通路の距離は変えません。':'移動時間は設定した歩く速さと通路の距離から計算しています。',
+    ...(settings.selections.some(item=>item.id==='sea-attraction-230')?[settings.gondolaAvoidHarbourShows?'ゴンドラは指定した休止枠と、日付を確認できたハーバーショーの上演中を避けます。前後の準備・再開時刻は当日の稼働状況で確認します。':'ゴンドラは指定した休止枠を避けます。ショー上演中を避ける目安は使用していません。']:[]),
     'DPAの購入案は入力した空き枠と購入履歴から計算しています。在庫は公式アプリで確認してください。',
   ];
   if (!tracker.best) diagnostics.notes.unshift('必須条件と追加した休憩をすべて満たす案は見つかりませんでした。指定した時刻・場所・予算を見直してください。実行不可能と証明した結果ではありません。');
   context.deadline = null;
   const result = resultFrom(tracker.best, context, diagnostics);
   if (tracker.best) {
-    const verification = validatePlan(park, settings, result);
+    const verification = validatePlan(park, settings, result, {initialPlan:options.initialPlan});
     if (!verification.valid) throw new Error('予定の検証で問題が見つかりました：' + verification.errors.join(' / '));
   }
   options.onProgress?.({ elapsedMs: diagnostics.elapsedMs, bestScore: result.totals.score, visits: result.visits.length, expanded: diagnostics.expanded });
@@ -752,17 +794,29 @@ export function solveItinerary(park, rawSettings, options = {}) {
 }
 
 /** Independently recompute chronological, geometric, window and money checks. */
-export function validatePlan(park, settings, result) {
+export function validatePlan(park, settings, result, options = {}) {
   const errors = [], graph = graphDistances(park), activities = new Map(park.activities.map(activity => [activity.id, activity]));
+  const edgeLengths=new Map();
+  for(const edge of park.edges){const from=edge.from??edge.a,to=edge.to??edge.b,metres=Number(edge.metres);for(const key of [from+'\0'+to,to+'\0'+from])edgeLengths.set(key,Math.min(edgeLengths.get(key)??Infinity,metres));}
   const selectionMap = new Map((settings.selections || []).map(item => [item.id, item]));
   const entry = toMinutes(settings.entry), exit = toMinutes(settings.exit), speed = Number(settings.speed ?? 65);
   const walkingSettings={...settings,activeEvents:(park.events||[]).filter(event=>event.startDate<=settings.date&&settings.date<=event.endDate)};
   const rows = result.rows || [];
-  let previous = entry, node = settings.replanFrom !== undefined && rows.some(item => item.preserved) ? park.entryNode : (settings.currentNode || park.entryNode);
+  const cutoff=settings.replanFrom===undefined||settings.replanFrom===''?null:toMinutes(settings.replanFrom);
+  const sourcePlan=options.initialPlan;
+  const datedSource=sourcePlan?.settings?.date===settings.date&&(!sourcePlan.parkId||sourcePlan.parkId===park.id);
+  const sourceRows=cutoff===null?[]:preservedPrefix(sourcePlan,settings);
+  const sourceSignatures=new Set(sourceRows.map(rowSignature));
+  const expectedBounds=historicalBounds(park,settings,sourcePlan);
+  const originalEntry=expectedBounds.entry,originalExit=expectedBounds.exit;
+  if(result.historicalVisitBounds!==undefined&&rowSignature(result.historicalVisitBounds)!==rowSignature(expectedBounds))errors.push('保持した予定の元の滞在時間が一致しません。');
+  let previous = Math.min(entry,originalEntry), node = settings.replanFrom !== undefined && rows.some(item => item.preserved) ? park.entryNode : (settings.currentNode || park.entryNode);
   const visited = new Set(settings.completedIds || []);
   for (const item of rows) {
     if (!Number.isFinite(item.start) || !Number.isFinite(item.end) || item.start < previous || item.end < item.start) errors.push('予定の時刻が前後しています。');
-    if (item.start < entry || item.end > exit) errors.push('滞在時間の外に予定があります。');
+    const verifiedPreserved=item.preserved&&sourceSignatures.has(rowSignature(item));
+    const historicalBoundary=verifiedPreserved&&datedSource;
+    if (item.start < (historicalBoundary?originalEntry:entry) || item.end > (historicalBoundary?originalExit:exit)) errors.push('滞在時間の外に予定があります。');
     if (item.preserved) {
       const cutoff=settings.replanFrom === undefined || settings.replanFrom === '' ? null : toMinutes(settings.replanFrom);
       const ongoing=cutoff!==null&&item.kind==='activity'&&rows.some(prior=>prior.preserved&&prior.kind==='queue'&&prior.activityId===item.activityId&&prior.start<cutoff);
@@ -770,8 +824,18 @@ export function validatePlan(park, settings, result) {
     }
     if (item.kind === 'walk') {
       if (item.from !== node) errors.push('移動の出発地点がつながっていません。');
-      const distance = graph.distances[item.from]?.[item.to];
+      let distance = graph.distances[item.from]?.[item.to];
+      const reference = verifiedPreserved;
+      // Completed legs belong to the source plan's graph, never to a newly inferred route.
+      if(reference)distance=Number(item.metres);
       if (!Number.isFinite(distance) || Math.abs(distance - Number(item.metres)) > 0.01) errors.push('移動距離が歩行経路と一致しません。');
+      if(!item.preserved&&park.routeGraphVersion&&item.routeSource!==park.routeGraphVersion)errors.push('移動経路の版が地図と一致しません。');
+      if(!item.preserved){
+        const path=item.path;
+        let pathLength=0;
+        if(Array.isArray(path))for(let i=1;i<path.length;i++)pathLength+=edgeLengths.get(path[i-1]+'\0'+path[i])??Infinity;
+        if(!Array.isArray(path)||path[0]!==item.from||path.at(-1)!==item.to||Math.abs(pathLength-distance)>.01)errors.push('徒歩ルートが通路上の最短経路と一致しません。');
+      }
       const recordedSpeed=Number(item.walkSpeed);
       if(item.preserved&&(!Number.isFinite(recordedSpeed)||recordedSpeed<10||recordedSpeed>150))errors.push('保持した移動の元の歩く速さがありません。');
       const minimum=item.preserved?Math.ceil(distance/recordedSpeed*(item.walkingFactor??1)):walkingMinutes(distance,item.start,walkingSettings);
@@ -804,13 +868,13 @@ export function validatePlan(park, settings, result) {
         if (fixed && !showTimes(activity, timeSelection, settings).includes(item.start)) errors.push('開演時刻と一致しません。');
         const queue = rows.find(candidate => candidate.kind === 'queue' && candidate.activityId === item.activityId);
         const admission = queue?.start ?? item.start;
-        if (!activityWindows(activity, selection, settings).some(window => admission >= window[0] && item.end <= window[1])) errors.push('施設の営業時間の外です。');
+        if (!activityWindows(activity, selection, settings, park).some(window => admission >= window[0] && item.end <= window[1])) errors.push('施設の営業時間の外です。');
         if (item.dpa) {
           if (!dpaAvailable(activity, settings.date)) errors.push('この日にはDPAを利用できません。');
           if (activity.category === 'parade' && (!selection.nodeOverride || !selection.showTimes?.length)) errors.push('パレードDPAの鑑賞地点・時刻が未確認です。');
           const purchase = (result.purchases || []).find(candidate => candidate.id === item.activityId);
           if (!purchase || admission < purchase.start || admission >= purchase.end) errors.push('DPAの利用枠の外です。');
-        } else if (!activityWindows(activity, selection, settings).some(window => admission >= window[0] && item.end <= window[1])) errors.push('施設の営業時間の外です。');
+        } else if (!activityWindows(activity, selection, settings, park).some(window => admission >= window[0] && item.end <= window[1])) errors.push('施設の営業時間の外です。');
       }
       node = activity.endNode || item.node;
       if ((item.endNode || item.node) !== node) errors.push('体験後の地点が一致しません。');

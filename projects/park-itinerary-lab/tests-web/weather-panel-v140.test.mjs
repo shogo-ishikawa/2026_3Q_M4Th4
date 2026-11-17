@@ -11,7 +11,8 @@ function panel(){const controls=new Map();return {controls,innerHTML:'',querySel
 const moment=Date.parse('2026-11-17T01:00:00Z');
 const park={id:'land',activities:[{id:'land-a',name:'A',category:'attraction',baseWait:10}],events:[]};
 const hourly={time:['2026-11-17T09:00','2026-11-17T17:00'],temperature_2m:[15,18],weather_code:[61,2],precipitation:[2,0],precipitation_probability:[90,20]};
-const settle=async()=>{for(let i=0;i<8;i++)await Promise.resolve();};
+// Wait for an event-loop turn: forecast retrieval may race a direct API and cache.
+const settle=()=>new Promise(resolve=>setImmediate(resolve));
 async function withEnvironment(run){
  const saved={document:globalThis.document,fetch:globalThis.fetch,now:Date.now};globalThis.document=new EventTarget();Date.now=()=>moment;
  try{await run();}finally{globalThis.document=saved.document;globalThis.fetch=saved.fetch;Date.now=saved.now;}
