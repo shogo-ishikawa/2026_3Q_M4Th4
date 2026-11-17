@@ -1,0 +1,77 @@
+{
+  "date": "2026-11-17",
+  "status": "failed",
+  "checkedAt": "2026-11-17T13:26:08.554165Z",
+  "lastKnownCatalogueUsed": true,
+  "changed": [],
+  "newFacilities": [],
+  "dpaReview": [],
+  "sourceErrors": [
+    {
+      "url": "https://www.tokyodisneyresort.jp/tdl/show/",
+      "message": "The read operation timed out"
+    },
+    {
+      "url": "https://www.tokyodisneyresort.jp/tdl/attraction/",
+      "message": "The read operation timed out"
+    },
+    {
+      "url": "https://www.tokyodisneyresort.jp/tdl/restaurant/list/",
+      "message": "The read operation timed out"
+    },
+    {
+      "url": "https://www.tokyodisneyresort.jp/tdl/monthly/stop/",
+      "message": "The read operation timed out"
+    },
+    {
+      "url": "https://www.tokyodisneyresort.jp/tdl/shop/list/",
+      "message": "The read operation timed out"
+    },
+    {
+      "url": "https://www.tokyodisneyresort.jp/tdl/greeting/",
+      "message": "The read operation timed out"
+    },
+    {
+      "url": "https://www.tokyodisneyresort.jp/tdl/event.html",
+      "message": "The read operation timed out"
+    },
+    {
+      "url": "https://www.tokyodisneyresort.jp/tds/show/",
+      "message": "The read operation timed out"
+    },
+    {
+      "url": "https://www.tokyodisneyresort.jp/tdl/monthly/calendar.html",
+      "message": "The read operation timed out"
+    },
+    {
+      "url": "https://www.tokyodisneyresort.jp/tds/restaurant/list/",
+      "message": "The read operation timed out"
+    },
+    {
+      "url": "https://www.tokyodisneyresort.jp/tds/attraction/",
+      "message": "The read operation timed out"
+    },
+    {
+      "url": "https://www.tokyodisneyresort.jp/tds/greeting/",
+      "message": "The read operation timed out"
+    },
+    {
+      "url": "https://www.tokyodisneyresort.jp/tds/monthly/stop/",
+      "message": "The read operation timed out"
+    },
+    {
+      "url": "https://www.tokyodisneyresort.jp/tds/monthly/calendar.html",
+      "message": "The read operation timed out"
+    },
+    {
+      "url": "https://www.tokyodisneyresort.jp/tds/shop/list/",
+      "message": "The read operation timed out"
+    },
+    {
+      "url": "https://www.tokyodisneyresort.jp/tds/event.html",
+      "message": "The read operation timed out"
+    }
+  ],
+  "message": "公式情報を取得できなかったため確認済みの情報を保持しています。",
+  "lastSuccessfulFetchedAt": "2026-11-17T12:53:35.568830Z"
+}
