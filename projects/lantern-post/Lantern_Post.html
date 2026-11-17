@@ -64,13 +64,17 @@ html[lang=ja] .title-copy h1{font-size:clamp(32px,4.35vw,64px);letter-spacing:.0
 @media(max-width:580px){.combat-panel{left:1%;right:1%;bottom:16%;font-size:7px;gap:4px}.combat-panel button{font-size:8px}.equipment-grid{gap:5px}.equipment-card{padding:6px}.equipment-card small{font-size:8px}.modal:has(.equipment-grid){padding:16px}.touch-controls button{width:28px;height:30px;font-size:12px}.director{font-size:8px;bottom:29%!important}.hp{font-size:9px}.hud-right{gap:4px}.boss-hud{width:35%!important}.control-legend{gap:5px}}
 
 .release-guide{font-size:12px;color:#496354;text-decoration:underline;text-underline-offset:4px;white-space:nowrap}footer{flex-wrap:wrap;gap:14px}
+.gallery-link{font-size:12px;color:#425e50;text-decoration:none;border-bottom:1px solid #adbba8;padding:6px 0;white-space:nowrap}.gallery-link:hover{color:#183b32;border-bottom-color:currentColor}
+@media(max-width:580px){.topbar{height:auto;min-height:76px;gap:10px;padding-block:10px}.top-actions{flex:1;min-width:134px;justify-content:flex-end;flex-wrap:wrap;gap:5px 10px}.gallery-link{flex-basis:100%;text-align:right;border-bottom:0;padding:0;font-size:11px}}
+@media(max-height:520px) and (min-aspect-ratio:3/2) and (min-width:581px){.topbar{gap:12px}.top-actions{gap:10px}.gallery-link{font-size:10px}}
 </style>
 </head>
 <body>
 <div class="app">
   <header class="topbar">
     <a class="wordmark" href="#" id="homeLogo" aria-label="标题画面 / タイトル画面"><svg width="28" height="34" viewBox="0 0 28 34" fill="none" aria-hidden="true"><path d="M9 8V5a5 5 0 0 1 10 0v3M6 10h16l2 19H4L6 10Z" stroke="currentColor" stroke-width="1.5"/><path d="M8 14h12v11H8zM2 32h24" stroke="currentColor"/><path d="m14 15 3 6-3 3-3-3 3-6Z" fill="currentColor"/></svg><span>LANTERN POST<small id="brandSub">一场关于光与相遇的旅程</small></span></a>
-    <nav class="top-actions" aria-label="设置 / 設定">
+    <nav class="top-actions" aria-label="导航与设置 / 案内と設定">
+      <a class="gallery-link" id="galleryLabel" href="https://shogo-ishikawa.github.io/2026_3Q_M4Th4/">作品集へ戻る ↗</a>
       <div class="language" aria-label="Language"><button data-lang="zh" class="selected" aria-pressed="true">中文</button><span>/</span><button data-lang="ja" aria-pressed="false">日本語</button></div>
       <span class="separator"></span>
       <button class="icon-button" id="soundBtn" title="声音 / サウンド" aria-label="声音 / サウンド" aria-pressed="false"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M11 4 5 9H2v6h3l6 5V4Z"/><path id="soundWaves" d="m16 9 6 6m0-6-6 6"/></svg></button>
@@ -1003,6 +1007,7 @@ function iconSvg(key,color='#ad774a') {
 }
 const copy = {
   manualLabel:['操作指南','遊び方・操作ガイド'],
+  galleryLabel:['返回作品集 ↗','作品集へ戻る ↗'],
   brandSub:['海港镇夜间邮局','港町・夜間郵便局'],genre:['横版动作冒险','横スクロールアクション'],
   gameTitle:['灯火邮差','灯りの配達人'],tagline:['风暴熄灭了灯塔。<br>天亮以前，把这封信送到青手里。','嵐で、灯台が消えた。<br>夜が明けるまでに、この手紙をアオへ。'],
   startText:['开始投递','配達をはじめる'],demoText:['课堂演示','授業デモ'],journeyMeta:['三章邮路　·　三处秘境　·　自动存档','三つの章　·　三つの寄り道　·　自動セーブ'],

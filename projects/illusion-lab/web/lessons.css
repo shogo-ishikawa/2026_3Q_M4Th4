@@ -1,0 +1,19 @@
+.lesson-detail{margin:22px 0 0;border:1px solid #d9e1f2;border-radius:12px;background:#fff;overflow:hidden;color:var(--ink,#19243a)}
+.lesson-detail>summary{cursor:pointer;padding:16px 20px;font-size:15px;font-weight:750;line-height:1.8;background:#f0f4ff;color:#294aca}
+.lesson-detail>summary:focus-visible{outline:3px solid #8195ff;outline-offset:-3px}
+.lesson-content{padding:4px 22px 20px;max-width:68em}
+.lesson-section{margin-top:23px}
+.lesson-section h4{font-size:15px;line-height:1.8;margin:0 0 9px;color:#294aca;font-weight:750}
+.lesson-section p,.lesson-section li{font-size:14px;line-height:2.05;color:#46546d;letter-spacing:.015em}
+.lesson-section p{margin:0 0 12px}
+.lesson-section ol,.lesson-section ul{padding-left:23px;margin:8px 0}
+.lesson-section li{padding:3px 0}
+.lesson-experiment{padding:15px 18px;border-radius:9px;background:#f4f8e9;border-left:3px solid #9bb841}
+.lesson-experiment h4{color:#526b20}
+.lesson-sources{padding-top:14px;border-top:1px solid #e1e6f0}
+.lesson-sources h4{font-size:12px;color:#65728b}
+.lesson-sources a{color:#3158cf;text-decoration:underline;text-underline-offset:3px;overflow-wrap:anywhere}
+.lesson-sources li{font-size:12px;line-height:1.9}
+.lesson-index-note{font-size:14px;color:#56617b;line-height:2}
+.lesson-shortcut{font-size:12px;color:#3158cf;text-decoration:underline;text-underline-offset:3px}
+@media(max-width:600px){.lesson-content{padding:2px 17px 17px}.lesson-detail>summary{padding:14px 17px;font-size:14px}.lesson-section{margin-top:19px}.lesson-section h4{font-size:14px}.lesson-section p,.lesson-section li{font-size:14px;line-height:2}.lesson-experiment{padding:13px 14px}.lesson-sources li{font-size:12px}}
