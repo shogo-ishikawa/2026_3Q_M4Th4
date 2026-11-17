@@ -22,6 +22,32 @@ PIPE_WEB_FILES = ('index.html', 'style.css', 'app.js', 'physics.js', 'sph.js',
 ILLUSION_WEB_FILES = ('index.html', 'style.css', 'app.js', 'core.js', 'renderer.js', 'guide.html', 'lessons.js', 'lesson-view.js', 'guide.js', 'lessons.css')
 
 
+PARK_WEB_FILES = ('index.html', 'style.css', 'app.js', 'planner.js', 'planner-worker.js',
+                  'map-view.js', 'storage.js', 'guide.html', 'data/parks.json')
+
+
+def build_park_site(output=OUTPUT):
+    project = ROOT / 'projects' / 'park-itinerary-lab'
+    destination = Path(output) / 'park-itinerary-lab'
+    destination.mkdir(parents=True, exist_ok=True)
+    for name in PARK_WEB_FILES:
+        target = destination / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(project / 'web' / name, target)
+    version = 'v' + json.loads((project / 'version.json').read_text(encoding='utf-8'))['version']
+    downloads = destination / 'downloads'
+    downloads.mkdir(exist_ok=True)
+    archive = downloads / f'ParkItineraryLab_{version}.zip'
+    tracked = subprocess.check_output(['git', 'ls-files', '-z', '--', str(project.relative_to(ROOT))], cwd=ROOT).decode().split('\0')
+    with ZipFile(archive, 'w', ZIP_DEFLATED) as bundle:
+        for name in sorted(filter(None, tracked)):
+            path = ROOT / name
+            if path.is_file():
+                bundle.write(path, Path(version) / path.relative_to(project))
+    print(f'Built park-itinerary-lab with {archive.stat().st_size:,}-byte distribution ZIP')
+    return archive
+
+
 def build_illusion_site(output=OUTPUT):
     project = ROOT / 'projects' / 'illusion-lab'
     destination = Path(output) / 'illusion-lab'
@@ -177,6 +203,7 @@ def main():
     build_pipe_site()
     build_lantern_site()
     build_illusion_site()
+    build_park_site()
     print(f'Built {OUTPUT.relative_to(ROOT)} with {archive.stat().st_size:,}-byte distribution ZIP')
 
 

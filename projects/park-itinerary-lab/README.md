@@ -1,47 +1,83 @@
-# Park Itinerary Lab
+# Park Itinerary Lab — パークの一日をデザイン
 
-テーマパークでの一日の回り方を、数理最適化で計算する Python 学習プロジェクトです。「ディズニーでの一日の回り方を提案したい」という希望を出発点に、特定のパークに依存しない**架空のパーク**のデータで、次の3段階を学びます。
+ブラウザ版 v1.0.0。東京ディズニーランドと東京ディズニーシーの希望を、時間・歩く距離・重要度・予算に合わせて組み立てます。
 
-1. **入門（01）**: PuLP で「どの活動を選ぶか」を決める小さな問題を解く。
-2. **本体（02）**: OR-Tools CP-SAT で、訪問先・順序・並び始める時刻・有料の時間短縮の利用・ショーの公演回を同時に決める。
-3. **研究へ向けた比較実験（02 の後半）**: 「固定時刻の予定があると、どの施設の時間短縮に費用を配分するべきかは、どのように変わるか」を調べる土台。
+[アプリを開く](https://shogo-ishikawa.github.io/2026_3Q_M4Th4/park-itinerary-lab/) ／ [使い方と計画の仕組み](web/guide.html)
 
-新しい問題やアルゴリズムを考案したものではなく、既存の手法で、問題設定・検証・比較・考察を経験するための教材です。
+## 最初の計画
 
-## 実装状況（v0.1.0 初版）
+1. パークと訪問日、入退園時刻を選びます。
+2. 行きたい施設を追加し、重要度を付けます。
+3. 食事や公演の時間帯、DPAの取得枠を確認します。
+4. 予算・歩く速さ・休憩・探索時間を指定します。
+5. 予定と未採用の理由を見比べ、条件を調整します。
 
-| 内容 | 状態 |
+アトラクション・ショー・パレード・レストラン・カフェ・スナック・ポップコーン・グリーティング・お土産を選べます。シーはジュビリーブルーをイメージした背景です。
+
+## 地図・待ち時間・購入条件
+
+- 徒歩ルートは公式地図を参照した通路グラフを使います。各施設の入口と通路を結び、橋や回り道を通る距離を計算します。距離は概算です。
+- 待ち時間は手動指定か履歴CSVからの類似日推定です。初期データに実績履歴は含めません。記録がないときは曜日・時間帯・天気・期間イベントを使う傾向モデルとして表示します。
+- DPAは利用者が公式アプリで確認した購入可能枠・取得済み枠を条件にします。購入時刻と区分別の購入間隔も考慮します。公演参加や予約が必要な体験は取得状況を確認します。
+- 日付付きの公演時刻は確認日の値です。別日の計画では当日の時刻を入力します。
+- 当日の再計画では済んだ予定を保ち、現在地・支出・残り時間・購入できる枠から先を組み替えます。
+
+出典とデータの前提は [データの出典](web/data-sources.md) にあります。
+
+## 保存して持ち歩く
+
+端末内保存・JSONの読み込み・条件の共有リンク・CSV・JSTのカレンダーICS・オフラインで読める予定表HTMLを使えます。共有リンクは条件を開く用途、JSONとHTMLは完成済みの予定を持ち歩く用途です。
+
+## ブラウザ版をパソコンで起動
+
+配布ZIPを展開すると `v1.0.0` フォルダになります。そのフォルダでWindowsは `py run.py`、macOS・Linuxは `python3 run.py` を実行します。Python標準ライブラリだけで起動します。終了は `Ctrl+C` です。
+
+配置例：`/Users/shogo/Dropbox/share_data/open_material/misc/apps/ParkItineraryLab/v1.0.0`
+
+`bash sync_to_github.sh` で既存のクラスリポジトリへHTTPSでアップロードできます。確認後はPagesへ反映します。
+
+## 施設データを更新
+
+`web/data/parks.json` に出典・確認日・施設・イベント・通路をまとめています。画面からJSONを読み込んで差し替えられます。
+
+```sh
+python3 scripts/update_park_data.py --date 2026-11-17
+```
+
+公式の一覧と照合した候補を `outputs/catalogue-update.json` に出力します。新施設やDPAの変更は差分レポートで確認します。位置・料金を確認したら画面でJSONを読み込みます。サイトへ反映するときは `web/data/parks.json` を更新してアップロードします。`--apply` を付けた場合だけ元データを書き換えます。GitHub Actionsの「Check park catalogue」から手動実行することもできます。
+
+## ブラウザ版の探索
+
+通路上の最短距離を計算し、時間窓と費用を守る候補順序を複数残しながら探索します。有望な候補を比較し、指定時間に達した時点の実行可能な案を返します。必須項目は制約として扱い、採用した希望度の合計を優先します。探索結果を厳密な最適解と表示しません。
+
+```sh
+node --test tests-web/*.test.mjs
+python -m unittest discover -s tests-web -p 'test_*.py'
+```
+
+| ファイル | 役割 |
 | --- | --- |
-| 01 PuLP 入門（活動の選択、全列挙との照合、演習3問と解答例） | 実装済み・ローカルで実行確認 |
-| 02 本体モデル（CP-SAT、優先順位つき最適化、5つの状態の表示、事前チェック、検証関数、表・図・保存） | 実装済み・ローカルで実行確認 |
-| 独立な正解器（全時刻の探索）との照合 | 実装済み・テストと Notebook で確認 |
-| 比較実験（方法A/B、予算とショーの条件・すべてのショーを除く基準、CSV保存、乱数の一括実験） | 実装済み（一括実験は任意） |
-| Google Colab 上での実行 | **未確認**（Colab と同じ Python 3.13 と主要ライブラリの版をそろえた環境で、セットアップセルによる GitHub からの取得を含めて、Notebook を上から実行して確認） |
+| `web/planner.js`・`planner-worker.js` | 時間制限付き探索と制約検証 |
+| `web/data/parks.json` | 実在施設・公演・イベント・通路 |
+| `web/app.js` | 条件編集、当日の組み替え、結果表示 |
+| `web/map-view.js` | 通路と予定を結ぶ概略地図 |
+| `web/storage.js` | 保存・共有・CSV・ICS・予定表HTML |
+| `scripts/update_park_data.py` | 公式一覧の照合と更新候補 |
 
-確認した内容と結果は [docs/validation.md](docs/validation.md) にあります。Webサイト・アプリ・API・クラウド公開、実際の購入や公式アプリとの連携は扱いません。
+## Pythonで最適化を学ぶ
 
-## Google Colab での始め方
+併設するPython教材 v0.1.0 は架空の小さなパークを使います。PuLPで活動の選択、OR-Tools CP-SATで順序・時刻・費用の同時最適化を学び、独立な全探索と照合します。ブラウザ版とは別のモデルです。
 
-1. 下の表のリンク、または Colab の「ファイル → ノートブックを開く → GitHub」で、Notebook の GitHub の URL を指定して開きます。
-2. 最初のセル（セットアップ）を実行します。リポジトリを HTTPS で取得し、この作品をインストールし、デモ設定を読み込みます（1〜2分）。Google Drive や認証情報は不要です。
-3. その後は上から順に実行します（「ランタイム → すべてのセルを実行」でも構いません）。GPU は不要です。
+## Python教材をColabで使う
 
-| Notebook | 内容 | 開発中のブランチ（`claude/new-session-cc8kr0`） |
+| Notebook | 内容 | 開く |
 | --- | --- | --- |
-| `notebooks/01_pulp_intro.ipynb` | PuLP 入門 | [GitHub](https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/claude/new-session-cc8kr0/projects/park-itinerary-lab/notebooks/01_pulp_intro.ipynb) |
-| `notebooks/02_day_plan_optimisation.ipynb` | 日程最適化と比較実験 | [GitHub](https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/claude/new-session-cc8kr0/projects/park-itinerary-lab/notebooks/02_day_plan_optimisation.ipynb) |
+| `01_pulp_intro.ipynb` | PuLPで活動を選ぶ。全列挙と比べる。 | [GitHub](https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/park-itinerary-lab/notebooks/01_pulp_intro.ipynb) ／ [Colab](https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/park-itinerary-lab/notebooks/01_pulp_intro.ipynb) |
+| `02_day_plan_optimisation.ipynb` | CP-SATで順序・時刻・費用を最適化する。 | [GitHub](https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/park-itinerary-lab/notebooks/02_day_plan_optimisation.ipynb) ／ [Colab](https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/park-itinerary-lab/notebooks/02_day_plan_optimisation.ipynb) |
 
-Colab で開くURLは `https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/<ブランチ>/projects/park-itinerary-lab/notebooks/<ファイル名>` の形です。ブランチ名に `/` を含む開発中のブランチでは、この形のURLが使えない可能性があるため、上の GitHub のリンクから Colab の「GitHub」タブで開いてください。**Colab で開いて動かすことは、まだ確認していません。**
+セットアップから上のセル順に実行します。CPUで使えます。`REPO_REF = "main"` がGitHubから取得するコードです。再取得するときは `UPDATE_CHECKOUT` を選びます。読み込み済みコードと取得したコードが違う場合はセッションを再起動してから実行します。
 
-### コードの版（`REPO_REF`）について
-
-- セットアップセルの `REPO_REF` が、取得するコードの版です（ブランチ名・タグ名・コミットSHA・`refs/pull/<番号>/head` のどれでも指定できます）。Colab ではセルのコードが折りたたまれ、`REPO_REF`・`UPDATE_CHECKOUT`・`PROJECT_DIR_OVERRIDE` の入力欄だけが表示されます（コードを見るには、セルをダブルクリックします）。
-- **開発中**は、作業ブランチ `claude/new-session-cc8kr0` を指定しています。main へ反映した後は、別の変更（プルリクエスト）で `REPO_REF = "main"`（または `park-itinerary-lab-v0.1.0` のような作品名付きのタグ）と、この README のリンクを一緒に更新します。
-- Colab で PR や別のブランチの Notebook を開いても、セットアップが自動的にその PR のコードを取得するわけではありません。取得するのは `REPO_REF` の版です。PR の内容を試す場合は、`REPO_REF` に `refs/pull/<番号>/head` を指定します。
-- 指定した版を取得できない場合や、その版にこの作品がない場合（例: main へ反映する前に `"main"` を指定した）は、main に切り替えずに理由を表示して止まります。
-- 2回目以降の実行では、前回取得したコミットをそのまま使います。最新にしたいときは `UPDATE_CHECKOUT` にチェックを入れます。セットアップセルが作ったチェックアウト以外のフォルダや、保存されていない変更があるチェックアウトは、書き換えません（保存されていない変更があるまま使う場合は、注意を表示し、保存する結果にも記録します）。
-- セットアップセルは、そのランタイムで読み込んだ作品のコードが変わったこと（`REPO_REF` の変更、作品のコードの編集・追加・削除）を見つけると、古い関数のまま計算しないように `RestartRequired` で止まります。そのときは「ランタイム → セッションを再起動する」の後、セットアップセルから実行し直します。
-- 配布 zip を Colab で展開して使う場合は、セットアップセルの `PROJECT_DIR_OVERRIDE` に展開したフォルダ（例: `/content/v0.1.0`）を指定します。自分で `git clone` したチェックアウトを使う場合も、その中の作品フォルダ（例: `/content/2026_3Q_M4Th4/projects/park-itinerary-lab`）を指定します。指定すると `REPO_REF` は使いません。
+自分のチェックアウトや展開したPython教材を使う場合は `PROJECT_DIR_OVERRIDE` に作品フォルダを指定できます。取得元の変更時に保存されていない編集を上書きしません。
 
 ## ローカルでの実行
 

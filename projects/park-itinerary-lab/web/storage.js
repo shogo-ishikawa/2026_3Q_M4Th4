@@ -1,0 +1,288 @@
+/** Portable schedules: the shared link contains preferences, never a browser's saved history. */
+const STORAGE_KEY = 'park-itinerary-lab:v1';
+const MAX_SHARED_LENGTH = 14000;
+const MAX_FILE_LENGTH = 4_000_000;
+const MAX_ACTIVITIES = 400;
+const CATEGORIES = new Set(['attraction', 'show', 'parade', 'restaurant', 'cafe', 'snack', 'popcorn', 'greeting', 'shop']);
+const ROW_TYPES = new Set(['walk', 'wait', 'queue', 'activity', 'rest', 'exit', 'location']);
+
+const fail = message => { throw new TypeError(message); };
+const plain = value => value && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
+const finite = (value, min, max) => typeof value === 'number' && Number.isFinite(value) && value >= min && value <= max;
+const integer = (value, min, max) => Number.isInteger(value) && finite(value, min, max);
+const text = (value, max = 300) => typeof value === 'string' && value.length <= max;
+const id = value => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,99}$/.test(value);
+const optionalNumber = (object, key, min, max, whole = false) => object[key] === undefined || (whole ? integer : finite)(object[key], min, max);
+const validTime = value => integer(value, 0, 1440);
+const validWindow = pair => Array.isArray(pair) && pair.length === 2 && validTime(pair[0]) && validTime(pair[1]) && pair[0] < pair[1];
+
+function safeTree(value, depth = 0) {
+  if (depth > 16) fail('データの入れ子が深すぎます。');
+  if (Array.isArray(value)) {
+    if (value.length > 50000) fail('データの件数が多すぎます。');
+    value.forEach(item => safeTree(item, depth + 1));
+  } else if (value && typeof value === 'object') {
+    if (!plain(value)) fail('データの形式を確認してください。');
+    for (const [key, item] of Object.entries(value)) {
+      if (['__proto__', 'prototype', 'constructor'].includes(key)) fail('このキーはデータに使えません。');
+      safeTree(item, depth + 1);
+    }
+  } else if (typeof value === 'number' && !Number.isFinite(value)) fail('数値は有限の値で指定してください。');
+  else if (!['string', 'number', 'boolean', 'undefined'].includes(typeof value) && value !== null) fail('保存できない値があります。');
+}
+
+function validDate(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || '')) return false;
+  const date = new Date(value + 'T00:00:00Z');
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
+}
+function webUrl(value) {
+  if (!text(value, 2000)) return false;
+  try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password; } catch { return false; }
+}
+
+/** Validate an imported catalogue before it can replace the current park data. */
+export function validateCatalogue(data) {
+  safeTree(data);
+  if (!plain(data) || !text(data.version, 40) || !validDate(data.updatedAt) || !Array.isArray(data.parks) || data.parks.length !== 2) fail('カタログの版・確認日・2パークの情報を確認してください。');
+  if (data.sources !== undefined && (!Array.isArray(data.sources) || data.sources.some(source => !plain(source) || !text(source.label) || !webUrl(source.url)))) fail('出典の名前とURLを確認してください。');
+  const parkIds = new Set();
+  for (const park of data.parks) {
+    if (!plain(park) || !['land', 'sea'].includes(park.id) || parkIds.has(park.id) || !text(park.name) || !webUrl(park.officialUrl) || !webUrl(park.mapUrl)) fail('パーク名または公式ページのURLを確認してください。');
+    parkIds.add(park.id);
+    if (!Array.isArray(park.nodes) || park.nodes.length < 2 || park.nodes.length > 1000 || !Array.isArray(park.edges) || park.edges.length > 4000 || !Array.isArray(park.activities) || park.activities.length > MAX_ACTIVITIES) fail('地点・通路・施設の件数を確認してください。');
+    const nodes = new Set();
+    for (const node of park.nodes) {
+      if (!plain(node) || !id(node.id) || nodes.has(node.id) || !finite(node.x, 0, 1000) || !finite(node.y, 0, 1000) || (node.lat !== null && !optionalNumber(node, 'lat', -90, 90)) || (node.lon !== null && !optionalNumber(node, 'lon', -180, 180))) fail('地図の地点IDと座標を確認してください。');
+      nodes.add(node.id);
+    }
+    if (!nodes.has(park.entryNode) || !nodes.has(park.exitNode)) fail('入園・退園地点を通路の地点として登録してください。');
+    const adjacency = new Map([...nodes].map(key => [key, []]));
+    for (const edge of park.edges) {
+      if (!plain(edge) || !nodes.has(edge.from) || !nodes.has(edge.to) || edge.from === edge.to || !finite(edge.metres, 1, 10000)) fail('通路の地点と徒歩距離を確認してください。');
+      adjacency.get(edge.from).push(edge.to); adjacency.get(edge.to).push(edge.from);
+    }
+    const reachable = new Set([park.entryNode]), queue = [park.entryNode];
+    for (let i = 0; i < queue.length; i++) for (const next of adjacency.get(queue[i])) if (!reachable.has(next)) { reachable.add(next); queue.push(next); }
+    if (reachable.size !== nodes.size) fail('すべての地点を入口からつながる通路で結んでください。');
+    const activities = new Set();
+    for (const activity of park.activities) {
+      if (!plain(activity) || !id(activity.id) || activities.has(activity.id) || !text(activity.name) || !CATEGORIES.has(activity.category) || !nodes.has(activity.node) || !integer(activity.duration, 1, 600) || !finite(activity.baseWait, 0, 600) || !integer(activity.cost, 0, 1000000) || !webUrl(activity.sourceUrl)) fail('施設のID・種類・地点・時間・費用・出典を確認してください。');
+      activities.add(activity.id);
+      if (activity.endNode !== undefined && !nodes.has(activity.endNode)) fail('移動施設の降車地点を確認してください。');
+      if (!Array.isArray(activity.windows) || activity.windows.length === 0 || activity.windows.length > 30 || activity.windows.some(pair => !validWindow(pair))) fail('施設の利用時間帯を確認してください。');
+      if (activity.showTimes !== undefined && (!Array.isArray(activity.showTimes) || activity.showTimes.length > 30 || activity.showTimes.some(value => !validTime(value)))) fail('公演時刻を0時からの整数分で指定してください。');
+      if (activity.showTimesDate !== undefined && !validDate(activity.showTimesDate)) fail('公演時刻の確認日を確認してください。');
+      if (activity.dpa !== undefined && activity.dpa !== null) {
+        const dpa = activity.dpa;
+        if (!plain(dpa) || !integer(dpa.price, 0, 100000) || dpa.price % 100 !== 0 || !integer(dpa.wait, 0, 180) || !['attraction', 'show'].includes(dpa.kind)) fail('DPAの料金・待ち時間・種類を確認してください。');
+      }
+      if (activity.access !== undefined && !['normal', 'entry', 'reservation'].includes(activity.access)) fail('施設の受付方法を確認してください。');
+    }
+    if (park.events !== undefined && (!Array.isArray(park.events) || park.events.some(event => !plain(event) || !id(event.id) || !text(event.name) || !validDate(event.startDate) || !validDate(event.endDate) || event.startDate > event.endDate || !finite(event.multiplier, 0.1, 5) || !webUrl(event.sourceUrl)))) fail('イベントの期間と出典を確認してください。');
+  }
+  return data;
+}
+
+/** Check portable settings independently of the optimiser. */
+export function validateSavedState(state) {
+  safeTree(state);
+  if (!plain(state) || !['land', 'sea'].includes(state.parkId) || !plain(state.settings)) fail('保存データのパークと条件を確認してください。');
+  const settings = state.settings;
+  if (!validDate(settings.date) || !validTime(settings.entry) || !validTime(settings.exit) || settings.entry >= settings.exit || !finite(settings.speed, 10, 150) || !integer(settings.budget, 0, 10000000) || settings.budget % 100 !== 0) fail('日付・入退園時刻・歩く速さ・100円単位の予算を確認してください。');
+  for (const key of ['foodBudget', 'dpaBudget', 'souvenirReserve', 'spentBudget']) if (!optionalNumber(settings, key, 0, 10000000, true) || (settings[key] !== undefined && settings[key] % 100 !== 0)) fail('費用は100円単位の整数で指定してください。');
+  for (const key of ['restEvery', 'restMinutes']) if (!optionalNumber(settings, key, 0, 600, true)) fail('休憩の間隔と長さを確認してください。');
+  if (!optionalNumber(settings, 'searchSeconds', 0.1, 60) || !optionalNumber(settings, 'replanFrom', settings.entry, settings.exit, true)) fail('探索時間と組み替え開始時刻を確認してください。');
+  for (const [key, options] of Object.entries({crowdMode:['estimate', 'manual'], crowdLevel:['quiet', 'normal', 'busy'], weather:['sun', 'cloud', 'rain'], budgetPreference:['balanced', 'food', 'dpa']})) if (settings[key] !== undefined && !options.includes(settings[key])) fail('混雑や予算の条件を選び直してください。');
+  if (!Array.isArray(settings.selections) || settings.selections.length > MAX_ACTIVITIES) fail('希望の一覧を確認してください。');
+  const ids = new Set();
+  for (const selection of settings.selections) {
+    if (!plain(selection) || !id(selection.id) || ids.has(selection.id) || !integer(selection.weight, 1, 5)) fail('希望のIDと重要度1〜5を確認してください。');
+    ids.add(selection.id);
+    if (selection.nodeOverride !== undefined && !id(selection.nodeOverride)) fail('鑑賞・集合地点のIDを確認してください。');
+    for (const key of ['earliest', 'latest', 'dpaStart', 'dpaEnd', 'dpaPurchasedAt']) if (!optionalNumber(selection, key, 0, 1440, true)) fail('希望する時間帯を確認してください。');
+    if (selection.earliest !== undefined && selection.latest !== undefined && selection.earliest >= selection.latest) fail('希望時間帯の終了を開始より後にしてください。');
+    if (selection.dpaStart !== undefined && selection.dpaEnd !== undefined && selection.dpaStart >= selection.dpaEnd) fail('DPA枠の終了を開始より後にしてください。');
+    for (const key of ['duration', 'manualWait']) if (!optionalNumber(selection, key, key === 'duration' ? 1 : 0, 600, true)) fail('所要時間と待ち時間を確認してください。');
+    if (!optionalNumber(selection, 'cost', 0, 1000000, true) || (selection.cost !== undefined && selection.cost % 100 !== 0)) fail('施設の予算は100円単位で指定してください。');
+    for (const key of ['required', 'confirmedAccess']) if (selection[key] !== undefined && typeof selection[key] !== 'boolean') fail('希望の確認欄の形式を確認してください。');
+    if (selection.dpaMode !== undefined && !['none', 'consider', 'owned', 'unavailable'].includes(selection.dpaMode)) fail('DPAの希望を選び直してください。');
+    if (selection.showTimes !== undefined && (!Array.isArray(selection.showTimes) || selection.showTimes.length > 30 || selection.showTimes.some(value => !validTime(value)))) fail('公演時刻を確認してください。');
+    if (selection.dpaAvailableWindows !== undefined && (!Array.isArray(selection.dpaAvailableWindows) || selection.dpaAvailableWindows.length > 30 || selection.dpaAvailableWindows.some(value => !validWindow(value)))) fail('DPAの販売枠を確認してください。');
+  }
+  if (settings.currentNode !== undefined && !id(settings.currentNode)) fail('現在地の地点を確認してください。');
+  if (settings.completedIds !== undefined && (!Array.isArray(settings.completedIds) || settings.completedIds.length > MAX_ACTIVITIES || settings.completedIds.some(value => !id(value)))) fail('体験済みの施設を確認してください。');
+  if (settings.purchases !== undefined && (!Array.isArray(settings.purchases) || settings.purchases.length > MAX_ACTIVITIES || settings.purchases.some(item => !plain(item) || !id(item.id) || !['attraction', 'show'].includes(item.kind) || !validTime(item.purchasedAt) || !validTime(item.start) || !validTime(item.end) || item.start >= item.end || !integer(item.cost, 0, 1000000) || item.cost % 100 !== 0))) fail('購入済みDPAの時刻と費用を確認してください。');
+  if (state.result !== undefined && state.result !== null) {
+    if (!plain(state.result) || !Array.isArray(state.result.rows) || state.result.rows.length > 5000) fail('予定表の行を確認してください。');
+    for (const row of state.result.rows) {
+      if (!plain(row) || !ROW_TYPES.has(row.kind || row.type) || !validTime(row.start) || !validTime(row.end) || row.start > row.end || !text(row.name, 500) || !optionalNumber(row, 'cost', 0, 10000000)) fail('予定表の時刻と内容を確認してください。');
+      for (const key of ['node', 'endNode', 'from', 'to']) if (row[key] !== undefined && !id(row[key])) fail('予定表の地点IDを確認してください。');
+      if (row.path !== undefined && (!Array.isArray(row.path) || row.path.length > 1000 || row.path.some(value => !id(value)))) fail('予定表の徒歩ルートを確認してください。');
+      if ((row.kind || row.type) === 'location' && (row.start !== row.end || !id(row.node))) fail('現在地の変更は同じ時刻の地点として指定してください。');
+    }
+    if (state.result.visits !== undefined && (!Array.isArray(state.result.visits) || state.result.visits.length > MAX_ACTIVITIES || state.result.visits.some(visit => !plain(visit) || !id(visit.activityId || visit.id) || !id(visit.node) || (visit.endNode !== undefined && !id(visit.endNode)) || !validTime(visit.start) || !validTime(visit.end) || visit.start > visit.end))) fail('体験した施設と地点を確認してください。');
+  }
+  if (state.history !== undefined && (!Array.isArray(state.history) || state.history.length > 50000 || state.history.some(row => !validDate(row.date) || !id(row.activityId) || !integer(row.time, 0, 1439) || !finite(row.wait, 0, 600)))) fail('待ち時間の履歴を確認してください。');
+  return state;
+}
+
+export function saveLocal(state) {
+  validateSavedState(state);
+  const encoded = JSON.stringify({format:'park-itinerary-lab', version:1, ...state});
+  if (encoded.length > MAX_FILE_LENGTH) fail('保存するデータが大きすぎます。履歴の期間を短くしてください。');
+  try { localStorage.setItem(STORAGE_KEY, encoded); } catch { throw new Error('この端末へ保存できません。JSONか予定表HTMLで保存してください。'); }
+  return true;
+}
+export function loadLocal() {
+  let raw;
+  try { raw = localStorage.getItem(STORAGE_KEY); } catch { throw new Error('このブラウザでは端末への保存を利用できません。JSONを読み込んでください。'); }
+  if (!raw) return null;
+  try { return parsePlanJson(raw); } catch { throw new Error('端末に保存されたデータを開けません。保存済みのJSONを読み込んでください。'); }
+}
+export function parsePlanJson(raw) {
+  if (!text(raw, MAX_FILE_LENGTH)) fail('JSONファイルが大きすぎます。');
+  let value;
+  try { value = JSON.parse(raw); } catch { fail('JSONの書式を確認してください。'); }
+  if (value.format !== undefined && (value.format !== 'park-itinerary-lab' || value.version !== 1)) fail('この版では開けない保存データです。');
+  return validateSavedState(value);
+}
+
+function encodeBase64(value) {
+  const bytes = new TextEncoder().encode(value);
+  let binary = '';
+  for (const byte of bytes) binary += String.fromCharCode(byte);
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/, '');
+}
+function decodeBase64(value) {
+  if (!/^[a-zA-Z0-9_-]+$/.test(value)) fail('共有リンクの書式を確認してください。');
+  let binary;
+  try { binary = atob(value.replaceAll('-', '+').replaceAll('_', '/')); } catch { fail('共有リンクを最後までコピーしてください。'); }
+  try { return new TextDecoder('utf-8', {fatal:true}).decode(Uint8Array.from(binary, character => character.charCodeAt(0))); } catch { fail('共有リンクの文字コードを確認してください。'); }
+}
+export function createShareUrl(state, baseUrl = location.href) {
+  validateSavedState(state);
+  const url = new URL(baseUrl);
+  if (!['https:', 'http:'].includes(url.protocol)) fail('共有用のWebページを開いてください。');
+  const {history, initialPlan, ...portableSettings} = state.settings;
+  const encoded = encodeBase64(JSON.stringify({v:1, parkId:state.parkId, settings:portableSettings}));
+  if (encoded.length > MAX_SHARED_LENGTH) fail('希望が多いためリンクが長くなります。JSONで共有してください。');
+  url.hash = `plan=${encoded}`;
+  return url.href;
+}
+export function readSharedState(hash = location.hash) {
+  if (!hash || !hash.startsWith('#plan=')) return null;
+  const encoded = hash.slice(6);
+  if (encoded.length > MAX_SHARED_LENGTH) fail('共有リンクが長すぎます。JSONで読み込んでください。');
+  const value = JSON.parse(decodeBase64(encoded));
+  if (value.v !== 1) fail('共有リンクの版を確認してください。');
+  return validateSavedState({parkId:value.parkId, settings:value.settings});
+}
+
+function csvRecords(raw) {
+  if (!text(raw, MAX_FILE_LENGTH)) fail('CSVが大きすぎます。期間を分けて読み込んでください。');
+  const records = []; let row = [], field = '', quoted = false, afterQuote = false;
+  raw = raw.replace(/^\uFEFF/, '');
+  for (let i = 0; i < raw.length; i++) {
+    const char = raw[i];
+    if (quoted) {
+      if (char === '"' && raw[i + 1] === '"') { field += '"'; i++; }
+      else if (char === '"') { quoted = false; afterQuote = true; }
+      else field += char;
+    } else if (char === '"') {
+      if (field || afterQuote) fail('CSVの引用符の位置を確認してください。');
+      quoted = true;
+    } else if (char === ',' || char === '\n' || char === '\r') {
+      row.push(field); field = ''; afterQuote = false;
+      if (char !== ',') {
+        if (char === '\r' && raw[i + 1] === '\n') i++;
+        if (row.some(value => value.trim() !== '')) records.push(row);
+        row = [];
+      }
+    } else {
+      if (afterQuote) fail('CSVの引用符の後にはカンマか改行を置いてください。');
+      field += char;
+    }
+  }
+  if (quoted) fail('CSVの引用符が閉じられていません。');
+  if (field || row.length) { row.push(field); if (row.some(value => value.trim() !== '')) records.push(row); }
+  return records;
+}
+export function parseHistoryCsv(raw) {
+  const records = csvRecords(raw);
+  if (records.length < 2 || records.length > 50001) fail('CSVには見出しと1〜50000件の履歴を入れてください。');
+  const headers = records.shift().map(value => value.trim());
+  if (new Set(headers).size !== headers.length || !['date', 'activityId', 'time', 'wait'].every(key => headers.includes(key))) fail('CSVの見出しにはdate,activityId,time,waitが必要です。');
+  return records.map((cells, index) => {
+    if (cells.length !== headers.length) fail(`CSVの${index + 2}行目の列数を確認してください。`);
+    const row = Object.fromEntries(headers.map((key, column) => [key, cells[column].trim()]));
+    const timeMatch = /^(\d{1,2}):(\d{2})$/.exec(row.time);
+    const time = timeMatch && Number(timeMatch[1]) <= 23 && Number(timeMatch[2]) < 60 ? Number(timeMatch[1]) * 60 + Number(timeMatch[2]) : /^\d{1,4}$/.test(row.time) ? Number(row.time) : NaN;
+    const wait = /^(?:\d+(?:\.\d+)?|\.\d+)$/.test(row.wait) ? Number(row.wait) : NaN;
+    if (!validDate(row.date) || !id(row.activityId) || !integer(time, 0, 1439) || !finite(wait, 0, 600) || (row.weather && !['sun', 'cloud', 'rain'].includes(row.weather)) || !text(row.event || '', 300)) fail(`CSVの${index + 2}行目の日付・時刻・待ち時間を確認してください。`);
+    return {date:row.date, activityId:row.activityId, time, wait, weather:row.weather || '', event:row.event || ''};
+  });
+}
+
+export const formatTime = value => `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
+const yen = value => `${Math.round(Number(value) || 0).toLocaleString('ja-JP')}円`;
+const html = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
+const csvCell = value => {
+  let string = String(value ?? '');
+  if (/^[\s]*[=+\-@\t\r]/.test(string)) string = "'" + string;
+  return '"' + string.replaceAll('"', '""') + '"';
+};
+function checkedRows(plan) {
+  if (!plan || !Array.isArray(plan.rows) || plan.rows.length > 5000) fail('保存する予定表を先に作成してください。');
+  for (const row of plan.rows) if (!validTime(row.start) || !validTime(row.end) || row.start > row.end || !text(row.name, 500)) fail('予定表の時刻と名前を確認してください。');
+  return plan.rows;
+}
+function downloadBlob(contents, type, filename) {
+  const blob = new Blob([contents], {type});
+  const url = URL.createObjectURL(blob), anchor = document.createElement('a');
+  anchor.href = url; anchor.download = filename; document.body.append(anchor); anchor.click(); anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+export function buildPlanJson(state) { validateSavedState(state); return JSON.stringify({format:'park-itinerary-lab', version:1, ...state}, null, 2); }
+export function downloadPlanJson(state) { downloadBlob(buildPlanJson(state), 'application/json;charset=utf-8', `ParkItinerary_${state.parkId}_${state.settings.date}.json`); }
+export function buildScheduleCsv(plan) {
+  const rows = checkedRows(plan);
+  return '\uFEFF' + [['開始', '終了', '種類', '予定', '所要分', '徒歩m', '費用円', 'DPA'], ...rows.map(row => [formatTime(row.start), formatTime(row.end), row.kind || row.type || '', row.name, row.end - row.start, row.metres || 0, row.cost || 0, row.dpa ? '利用' : ''])].map(row => row.map(csvCell).join(',')).join('\r\n');
+}
+export function downloadScheduleCsv(plan, park) { downloadBlob(buildScheduleCsv(plan), 'text/csv;charset=utf-8', `ParkItinerary_${park.id}.csv`); }
+function icalText(value) { return String(value ?? '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replaceAll(';', '\\;').replaceAll(',', '\\,'); }
+function foldIcal(line) {
+  const chunks = []; let chunk = '', bytes = 0;
+  for (const char of line) {
+    const width = new TextEncoder().encode(char).length;
+    if (bytes + width > 73) { chunks.push(chunk); chunk = ' '; bytes = 1; }
+    chunk += char; bytes += width;
+  }
+  chunks.push(chunk); return chunks.join('\r\n');
+}
+function calendarStamp(date, minutes) {
+  const moment = new Date(`${date}T00:00:00+09:00`);
+  moment.setTime(moment.getTime() + minutes * 60_000);
+  return moment.toISOString().replaceAll('-', '').replaceAll(':', '').replace('.000', '');
+}
+export function buildCalendar(plan, park, settings) {
+  const rows = checkedRows(plan); if (!validDate(settings.date)) fail('訪問日を確認してください。');
+  const stamp = new Date().toISOString().replaceAll('-', '').replaceAll(':', '').replace(/\.\d+/, '');
+  const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Park Itinerary Lab//Day Plan//JA', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', `X-WR-CALNAME:${icalText(park.name)}`];
+  rows.forEach((row, index) => {
+    if (row.start === row.end) return;
+    lines.push('BEGIN:VEVENT', `UID:${settings.date}-${park.id}-${index}-${row.start}@park-itinerary-lab`, `DTSTAMP:${stamp}`, `DTSTART:${calendarStamp(settings.date, row.start)}`, `DTEND:${calendarStamp(settings.date, row.end)}`, `SUMMARY:${icalText(row.name)}`, `DESCRIPTION:${icalText(`${row.dpa ? 'DPA利用。' : ''}費用 ${yen(row.cost)}${row.metres ? `。徒歩 約${Math.round(row.metres)}m` : ''}`)}`, `LOCATION:${icalText(park.name)}`, 'END:VEVENT');
+  });
+  lines.push('END:VCALENDAR'); return lines.map(foldIcal).join('\r\n') + '\r\n';
+}
+export function downloadCalendar(plan, park, settings) { downloadBlob(buildCalendar(plan, park, settings), 'text/calendar;charset=utf-8', `ParkItinerary_${park.id}_${settings.date}.ics`); }
+export function buildOfflineHtml(plan, park, settings) {
+  const rows = checkedRows(plan); if (!validDate(settings.date)) fail('訪問日を確認してください。');
+  const total = plan.totals || {};
+  const breakdown = [['フード', total.foodCost], ['DPA', total.dpaCost], ['お買い物', total.shoppingCost], ['残り予算', total.budgetRemaining], ['お土産に使える額', total.souvenirAllocation]].filter(([, value]) => finite(value, 0, 10000000)).map(([label, value]) => `<span>${html(label)} ${html(yen(value))}</span>`).join(' · ');
+  const paidNote = settings.spentBudget > 0 || (settings.purchases || []).length > 0 ? '（支払済みを含む）' : '';
+  const cards = rows.map((row, index) => `<article class="row ${row.kind === 'activity' ? 'visit' : ''}"><div class="time">${html(formatTime(row.start))}<small>${html(formatTime(row.end))}</small></div><div><h2>${html(row.name)}</h2><p>${html(row.end - row.start)}分${row.metres ? ` · 徒歩 約${html(Math.round(row.metres))}m` : ''}${row.dpa ? ' · DPA利用' : ''}${row.cost ? ` · ${html(yen(row.cost))}` : ''}</p><label><input type="checkbox" data-row="${index}">済み</label></div></article>`).join('');
+  const safeMap = webUrl(park.mapUrl) ? `<a href="${html(park.mapUrl)}" target="_blank" rel="noopener noreferrer">公式の園内マップを開く ↗</a>` : '';
+  return `<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${html(park.name)} · ${html(settings.date)} の予定</title><style>*{box-sizing:border-box}body{margin:0;background:${park.id === 'sea' ? '#e8f5ff' : '#eff4ee'};color:#183047;font-family:system-ui,"Yu Gothic",sans-serif;line-height:1.7}.wrap{max-width:720px;margin:auto;padding:26px 18px}header{margin-bottom:24px}h1{font-size:25px;margin:8px 0}h2{font-size:16px;margin:0}p{margin:5px 0;color:#536579;font-size:13px}.kicker{letter-spacing:.13em;font-size:10px;font-weight:800}.row{display:grid;grid-template-columns:68px 1fr;gap:14px;background:#ffffffad;border:1px solid #d2dde6;border-radius:14px;padding:17px;margin:9px 0}.visit{border-left:4px solid #308bc9;background:white}.time{font-weight:800;font-size:17px}.time small{display:block;font-size:12px;font-weight:500;color:#64758b}label{font-size:12px;display:inline-flex;align-items:center;gap:5px}input:checked{accent-color:#268769}a{color:#22689e}footer{margin:25px 0;font-size:12px}button{padding:9px 15px;border-radius:9px;border:1px solid #bdd0df;background:white;color:#183047;font:inherit}@media print{body{background:white}.wrap{max-width:none}.row{break-inside:avoid}button,label{display:none}}</style><div class="wrap"><header><div class="kicker">PARK ITINERARY / MY DAY</div><h1>${html(park.name)}</h1><p>${html(settings.date)} · ${html(formatTime(settings.entry))}〜${html(formatTime(settings.exit))}</p><p>合計 ${html(yen(total.cost ?? total.spend ?? rows.reduce((sum,row)=>sum+(Number(row.cost)||0),0)))}${paidNote} · 予算 ${html(yen(settings.budget))}</p><p>${breakdown}</p><button onclick="window.print()">印刷・PDFに保存</button></header><main>${cards}</main><footer>${safeMap}<p>この予定表は通信がない場所でも開けます。チェックはこの画面を開いている間だけ保持されます。</p></footer></div></html>`;
+}
+export function downloadOfflineHtml(plan, park, settings) { downloadBlob(buildOfflineHtml(plan, park, settings), 'text/html;charset=utf-8', `ParkItinerary_${park.id}_${settings.date}.html`); }

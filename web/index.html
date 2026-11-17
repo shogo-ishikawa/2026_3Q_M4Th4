@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f8fb">
-  <meta name="description" content="学生のアイデアをもとに、教員が公開用に整理・改良した7つのアプリと教材。言葉で仕掛けを解くパズル、音と1/fゆらぎ、海岸の風と予報、身体の動作、管内の流れ、灯りを届ける冒険、錯視をブラウザやColabで試せます。">
+  <meta name="description" content="学生のアイデアをもとに、教員が公開用に整理・改良した8つのアプリと教材。言葉で仕掛けを解くパズル、音と1/fゆらぎ、海岸の風と予報、身体の動作、パークの経路計画、管内の流れ、灯りを届ける冒険、錯視をブラウザやColabで試せます。">
   <title>プログラム作品ギャラリー | 計算科学基礎 2026年度3Q 月4木4</title>
   <style>
     :root{color-scheme:light;--bg:#f7f8fb;--ink:#151923;--muted:#667080;--line:#e1e5ec;--blue:#315bff;--lime:#d5f46b;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Kaku Gothic ProN","Hiragino Sans","Yu Gothic",Meiryo,sans-serif;color:var(--ink);background:var(--bg);font-synthesis:none}
@@ -35,7 +35,7 @@
       <section class="hero" aria-labelledby="hero-title">
         <div class="hero-copy">
           <p class="eyebrow mono">COMPUTATIONAL SCIENCE / 2026</p>
-          <h1 id="hero-title">アイデアを動かす、<br><span>7つの実験室。</span></h1>
+          <h1 id="hero-title">アイデアを動かす、<br><span>8つの実験室。</span></h1>
           <p class="hero-description">学生のアイデアをもとに、教員が公開用にアップデートしたアプリと教材です。気になる作品をひとつ、動かしてみてください。</p>
           <div class="hero-actions"><a class="primary-button" href="#projects">作品を選ぶ <span class="arrow" aria-hidden="true">↓</span></a><span class="runtime-note mono">IN YOUR BROWSER<br>OR GOOGLE COLAB</span></div>
         </div>
@@ -60,18 +60,19 @@
       </section>
 
       <section class="collection" id="projects" aria-labelledby="collection-title">
-        <div class="collection-heading"><div><p class="section-kicker mono">THE COLLECTION</p><h2 id="collection-title">気になるテーマから。</h2></div><p class="result-count mono" id="result-count" role="status" aria-live="polite">7作品を表示</p></div>
+        <div class="collection-heading"><div><p class="section-kicker mono">THE COLLECTION</p><h2 id="collection-title">気になるテーマから。</h2></div><p class="result-count mono" id="result-count" role="status" aria-live="polite">8作品を表示</p></div>
         <div class="filters" id="filters" role="group" aria-label="ジャンルで作品を絞り込む" hidden>
-          <button type="button" class="filter" data-filter="all" aria-pressed="true">すべて<span class="filter-count" aria-hidden="true">7</span></button>
+          <button type="button" class="filter" data-filter="all" aria-pressed="true">すべて<span class="filter-count" aria-hidden="true">8</span></button>
           <button type="button" class="filter" data-filter="game" aria-pressed="false">ゲーム<span class="filter-count" aria-hidden="true">2</span></button>
           <button type="button" class="filter" data-filter="sound" aria-pressed="false">音楽・音<span class="filter-count" aria-hidden="true">1</span></button>
           <button type="button" class="filter" data-filter="science" aria-pressed="false">自然・科学<span class="filter-count" aria-hidden="true">3</span></button>
+          <button type="button" class="filter" data-filter="travel" aria-pressed="false">お出かけ<span class="filter-count" aria-hidden="true">1</span></button>
           <button type="button" class="filter" data-filter="sport" aria-pressed="false">スポーツ・動作<span class="filter-count" aria-hidden="true">1</span></button>
         </div>
         <noscript><p class="no-js">すべての作品を表示しています。</p></noscript>
         <div class="works" id="works">
           <article class="project puzzle" data-category="game" aria-labelledby="world-title">
-            <div class="project-visual" aria-hidden="true"><div class="visual-meta mono"><span>WORDS &amp; PUZZLES</span><span class="visual-no">01 / 07</span></div><svg viewBox="0 0 400 190" fill="none" focusable="false">
+            <div class="project-visual" aria-hidden="true"><div class="visual-meta mono"><span>WORDS &amp; PUZZLES</span><span class="visual-no">01 / 08</span></div><svg viewBox="0 0 400 190" fill="none" focusable="false">
               <path d="M50 57h300M50 89h300M50 121h300M50 153h300M68 40v113M101 40v113M134 40v113M167 40v113M200 40v113M233 40v113M266 40v113M299 40v113M332 40v113" stroke="#315bff" stroke-opacity=".11"/>
               <path d="M52 123h294v24H52z" fill="#c5d4fb"/><path d="M168 123h100v24H168z" fill="#315bff" fill-opacity=".28"/><path d="M170 132q8-8 16 0t16 0t16 0t16 0t16 0t16 0" stroke="#315bff" stroke-width="1.5"/>
               <rect x="81" y="87" width="27" height="32" rx="5" fill="#315bff"/><circle cx="89" cy="99" r="2" fill="white"/><circle cx="100" cy="99" r="2" fill="white"/>
@@ -85,7 +86,7 @@
             <div class="project-content"><p class="project-kind mono">WORDS CHANGE THE WORLD</p><h3 id="world-title">WORLD DEFINITION</h3><p class="project-description">言葉を組み合わせて、世界のルールを変える。水を固め、光と影や重さを読み解く探索パズルです。定義を付ける・外す順序を考え、広い遺跡の仕掛けを解き明かします。</p><div class="project-tags"><span>ブラウザ</span><span>謎解き4面＋練習9面</span><span>v1.3.0</span></div><div class="project-actions"><a class="launch" href="world-definition/">ゲームで遊ぶ<span class="arrow" aria-hidden="true">↗</span></a><a class="manual" href="world-definition/guide.html">遊び方</a></div><div class="project-resources"><a href="world-definition/downloads/WORLD_DEFINITION_v1.3.0.zip" download>まとめてダウンロード<span aria-hidden="true"> ↓</span></a></div></div>
           </article>
           <article class="project sound" data-category="sound" aria-labelledby="vocal-title">
-            <div class="project-visual" aria-hidden="true"><div class="visual-meta mono"><span>SOUND &amp; WAVES</span><span class="visual-no">02 / 07</span></div><svg viewBox="0 0 400 190" fill="none" focusable="false">
+            <div class="project-visual" aria-hidden="true"><div class="visual-meta mono"><span>SOUND &amp; WAVES</span><span class="visual-no">02 / 08</span></div><svg viewBox="0 0 400 190" fill="none" focusable="false">
               <path d="M47 98h306M47 61h306M47 135h306M79 40v115M139 40v115M199 40v115M259 40v115M319 40v115" stroke="#315bff" stroke-opacity=".1"/>
               <path d="M49 98c12 0 12-33 24-33s12 66 24 66 12-66 24-66 12 66 24 66 12-66 24-66 12 66 24 66 12-66 24-66 12 66 24 66 12-66 24-66 12 66 24 66 12-66 24-66 12 33 24 33" stroke="#315bff" stroke-width="2.4"/>
               <path d="M49 98c20-24 32-32 50-7s30 35 49 5 35-36 51-7 33 38 50 9 32-36 50-10 34 32 50 10" stroke="#0c9ca4" stroke-width="1.5" stroke-opacity=".7"/>
@@ -96,7 +97,7 @@
             <div class="project-content"><p class="project-kind mono">THE SCIENCE OF A VOICE</p><h3 id="vocal-title">Vocal Fluctuation Lab</h3><p class="project-description">音と波の基本から、スペクトル、1/fゆらぎへ。Webでは図を動かして仕組みを学び、Colabでは歌声を抽出して音量の変動を解析します。参照DBの数値とも比較できます。</p><div class="project-tags"><span>ブラウザ＋Colab</span><span>歌声・1/fゆらぎ</span><span>v1.7.2</span></div><div class="project-actions"><a class="launch" href="vocal-fluctuation-lab/">音と波から学ぶ<span class="arrow" aria-hidden="true">↗</span></a><a class="manual" href="https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/vocal-fluctuation-lab/docs/user-guide.md" target="_blank" rel="noopener noreferrer">使い方</a></div><div class="project-resources"><a href="https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/vocal-fluctuation-lab/notebooks/vocal_fluctuation_lab_v1.7.2.ipynb" target="_blank" rel="noopener noreferrer">Colabで解析<span aria-hidden="true"> ↗</span></a><a href="vocal-fluctuation-lab/downloads/VOCAL_FLUCTUATION_LAB_v1.7.2.zip" download>ダウンロード<span aria-hidden="true"> ↓</span></a></div></div>
           </article>
           <article class="project weather" data-category="science" aria-labelledby="wind-title">
-            <div class="project-visual" aria-hidden="true"><div class="visual-meta mono"><span>WIND &amp; FORECASTS</span><span class="visual-no">03 / 07</span></div><svg viewBox="0 0 400 190" fill="none" focusable="false">
+            <div class="project-visual" aria-hidden="true"><div class="visual-meta mono"><span>WIND &amp; FORECASTS</span><span class="visual-no">03 / 08</span></div><svg viewBox="0 0 400 190" fill="none" focusable="false">
               <path d="M42 137h316" stroke="#168273" stroke-opacity=".25"/>
               <path d="M48 124q15-7 30 0t30 0t30 0t30 0t30 0" stroke="#168273" stroke-opacity=".35" stroke-width="1.5"/>
               <path d="M49 89h127q22 0 22-16t-26-8M49 105h163q18 0 18 15t-26 8M79 54h58q20 0 20-13t-23-8" stroke="#168273" stroke-width="2.4" stroke-linecap="round"/>
@@ -109,7 +110,7 @@
             <div class="project-content"><p class="project-kind mono">HOW FAR CAN WE PREDICT?</p><h3 id="wind-title">海岸の風速・風向<br>予報ラボ</h3><p class="project-description">風は、どこまで読める？ 風速と風向、予報の違い、誤差の読み方を図を動かして学びます。Colabでデータを解析し、保存した結果をブラウザで見比べられます。</p><div class="project-tags"><span>ブラウザ＋Colab</span><span>予報と誤差解析</span><span>v1.1.0</span></div><div class="project-actions"><a class="launch" href="coastal-wind-chaos/">風と予報を学ぶ<span class="arrow" aria-hidden="true">↗</span></a><a class="manual" href="https://github.com/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/coastal-wind-chaos/docs/web-user-guide.md" target="_blank" rel="noopener noreferrer">使い方</a></div><div class="project-resources"><a href="https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/coastal-wind-chaos/notebooks/coastal_wind_forecast_lab.ipynb" target="_blank" rel="noopener noreferrer">Colabで解析<span aria-hidden="true"> ↗</span></a><a href="coastal-wind-chaos/downloads/CoastalWindLab_v1.1.0.zip" download>ダウンロード<span aria-hidden="true"> ↓</span></a></div></div>
           </article>
           <article class="project sport" data-category="sport" aria-labelledby="swing-title">
-            <div class="project-visual" aria-hidden="true"><div class="visual-meta mono"><span>SWING &amp; MOTION</span><span class="visual-no">04 / 07</span></div><svg viewBox="0 0 400 190" fill="none" focusable="false">
+            <div class="project-visual" aria-hidden="true"><div class="visual-meta mono"><span>SWING &amp; MOTION</span><span class="visual-no">04 / 08</span></div><svg viewBox="0 0 400 190" fill="none" focusable="false">
               <path d="M39 149h322M39 99h322M39 49h322M79 36v113M139 36v113M199 36v113M259 36v113M319 36v113" stroke="#ba5938" stroke-opacity=".1"/>
               <path d="M105 126q42-66 89-40t102-36" stroke="#315bff" stroke-width="2.5"/><path d="M105 133q55-19 87-38t104-10" stroke="#df7953" stroke-width="2.5"/>
               <circle cx="203" cy="61" r="14" fill="#17283c"/><path d="m190 82 30 23-31 25m4-48-25 33m32 0 35 26m-17-38 28-19" stroke="#17283c" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -120,13 +121,18 @@
             </svg></div>
             <div class="project-content"><p class="project-kind mono">READ THE MOVEMENT</p><h3 id="swing-title">Motion Analysis Lab</h3><p class="project-description">身体の動きを、線と数字で読む。動画ファイルやURLから姿勢をとらえ、肩と腰の向き、肘や膝の曲がり、体幹の傾きを調べます。スイングやスクワットなど、さまざまな動きを見比べられます。</p><div class="project-tags"><span>ブラウザ</span><span>姿勢推定・動作解析</span><span>v1.1.1</span></div><div class="project-actions"><a class="launch" href="swing-motion-lab/">動きを解析する<span class="arrow" aria-hidden="true">↗</span></a><a class="manual" href="swing-motion-lab/#how-to">使い方</a></div><div class="project-resources"><a href="swing-motion-lab/downloads/MotionAnalysisLab_v1.1.1.zip" download>まとめてダウンロード<span aria-hidden="true"> ↓</span></a></div></div>
           </article>
+          <article class="project park" data-category="travel" aria-labelledby="park-title">
+            <div class="project-visual" aria-hidden="true" style="background:#e8edff"><div class="visual-meta mono"><span>TIME / ROUTE / PRIORITY</span><span class="visual-no">05 / 08</span></div><svg viewBox="0 0 400 190" fill="none" focusable="false"><path d="M45 135C110 135 68 55 160 55S235 148 305 120L349 60" stroke="#fff" stroke-width="25" stroke-linecap="round"/><path d="M45 135C110 135 68 55 160 55S235 148 305 120L349 60" stroke="#5752d8" stroke-width="3" stroke-linecap="round" stroke-dasharray="6 6"/><circle cx="70" cy="119" r="18" fill="#5752d8"/><circle cx="174" cy="58" r="18" fill="#82cde8"/><circle cx="294" cy="124" r="18" fill="#d5f46b"/><text x="70" y="124" text-anchor="middle" fill="white" font-family="monospace" font-size="12">01</text><text x="174" y="63" text-anchor="middle" fill="#17222f" font-family="monospace" font-size="12">02</text><text x="294" y="129" text-anchor="middle" fill="#17222f" font-family="monospace" font-size="12">03</text><path d="M332 45v37m0-37h27l-7 9 7 9h-27" stroke="#5752d8" stroke-width="2"/><text x="100" y="176" fill="#5752d8" font-family="monospace" font-size="9" letter-spacing="1.5">PLAN / WALK / MAKE MEMORIES</text></svg></div>
+            <div class="project-content"><p class="project-kind mono">A DAY THAT FITS YOU</p><h3 id="park-title">Park Itinerary Lab</h3><p class="project-description">ランドもシーも、行きたい場所をいい順番に。体験の重要度、食事の時間帯、徒歩距離と予算を合わせて一日を計画します。DPAの予定や当日の変更も、持ち歩けるしおりへまとめます。</p><div class="project-tags"><span>ブラウザ＋Colab</span><span>経路・時間・予算</span><span>v1.0.0</span></div><div class="project-actions"><a class="launch" href="park-itinerary-lab/">一日を計画する<span class="arrow" aria-hidden="true">↗</span></a><a class="manual" href="park-itinerary-lab/guide.html">使い方</a></div><div class="project-resources"><a href="https://colab.research.google.com/github/shogo-ishikawa/2026_3Q_M4Th4/blob/main/projects/park-itinerary-lab/notebooks/02_day_plan_optimisation.ipynb" target="_blank" rel="noopener noreferrer">Colabで最適化<span aria-hidden="true"> ↗</span></a><a href="park-itinerary-lab/downloads/ParkItineraryLab_v1.0.0.zip" download>まとめてダウンロード<span aria-hidden="true"> ↓</span></a></div></div>
+          </article>
+
           <article class="project flow" data-category="science" aria-labelledby="pipe-title">
-            <div class="project-visual"><div class="visual-meta mono"><span>FLOW / FRICTION / METHOD</span><span class="visual-no">05 / 07</span></div><svg viewBox="0 0 400 190" aria-hidden="true"><g fill="none" stroke-linecap="round"><path d="M48 58h304M48 140h304" stroke="#163c4a" stroke-width="6"/><path d="M50 75h300M50 99h300M50 123h300" stroke="#007b83" stroke-width="2" opacity=".22"/><path d="m90 75h45m-6-5 7 5-7 5m-39 19h120m-6-5 7 5-7 5m-114 19h45m-6-5 7 5-7 5" stroke="#007b83" stroke-width="3"/><path d="M255 66q37 33 0 66" stroke="#e88b50" stroke-width="3"/></g><g fill="#007b83"><circle cx="92" cy="75" r="5"/><circle cx="113" cy="99" r="6"/><circle cx="92" cy="123" r="5"/></g><text x="228" y="164" fill="#007b83" font-family="monospace" font-size="11">Re = UD / ν</text></svg></div>
+            <div class="project-visual"><div class="visual-meta mono"><span>FLOW / FRICTION / METHOD</span><span class="visual-no">06 / 08</span></div><svg viewBox="0 0 400 190" aria-hidden="true"><g fill="none" stroke-linecap="round"><path d="M48 58h304M48 140h304" stroke="#163c4a" stroke-width="6"/><path d="M50 75h300M50 99h300M50 123h300" stroke="#007b83" stroke-width="2" opacity=".22"/><path d="m90 75h45m-6-5 7 5-7 5m-39 19h120m-6-5 7 5-7 5m-114 19h45m-6-5 7 5-7 5" stroke="#007b83" stroke-width="3"/><path d="M255 66q37 33 0 66" stroke="#e88b50" stroke-width="3"/></g><g fill="#007b83"><circle cx="92" cy="75" r="5"/><circle cx="113" cy="99" r="6"/><circle cx="92" cy="123" r="5"/></g><text x="228" y="164" fill="#007b83" font-family="monospace" font-size="11">Re = UD / ν</text></svg></div>
             <div class="project-content"><p class="project-kind mono">READ THE FLOW</p><h3 id="pipe-title">Reynolds Flow Lab</h3><p class="project-description">管の中の水を動かして、速さと圧力損失の関係を調べます。層流の粒子計算から混合のデモへ進み、SPH・固定格子・適応格子・移動格子の計算法も見比べられます。</p><div class="project-tags"><span>ブラウザ</span><span>流体・数値計算</span><span>v3.2.0</span></div><div class="project-actions"><a class="launch" href="reynolds-pipe-lab/">流れを観察する<span class="arrow" aria-hidden="true">↗</span></a><a class="manual" href="reynolds-pipe-lab/#learningGuide">解説・使い方</a></div><div class="project-resources"><a href="reynolds-pipe-lab/methods.html">計算法を比べる ↗</a><a href="reynolds-pipe-lab/downloads/ReynoldsFlowLab_v3.2.0.zip" download>まとめてダウンロード ↓</a></div></div>
           </article>
 
           <article class="project lantern" data-category="game" aria-labelledby="lantern-title">
-            <div class="project-visual" aria-hidden="true"><div class="visual-meta mono"><span>A LETTER BEFORE DAWN</span><span class="visual-no">06 / 07</span></div><svg viewBox="0 0 400 190" fill="none" focusable="false">
+            <div class="project-visual" aria-hidden="true"><div class="visual-meta mono"><span>A LETTER BEFORE DAWN</span><span class="visual-no">07 / 08</span></div><svg viewBox="0 0 400 190" fill="none" focusable="false">
               <circle cx="319" cy="61" r="23" fill="#eabe76" fill-opacity=".13"/><path d="M323 42a20 20 0 1 0 11 35 21 21 0 0 1-11-35Z" fill="#eabe76"/>
               <path d="M38 144h325M53 144v-50l24-18 24 18v50m11 0V81l27-19 27 19v63m18 0v-37l20-15 20 15v37m41 0V95l16-12 16 12v49" stroke="#83aba3" stroke-opacity=".5" stroke-width="1.5"/>
               <path d="M64 108h12v15H64zm63-17h13v18h-13zm64 22h11v13h-11z" fill="#eabe76" fill-opacity=".65"/>
@@ -141,7 +147,7 @@
           </article>
 
           <article class="project illusion" data-category="science" aria-labelledby="illusion-title">
-            <div class="project-visual" aria-hidden="true"><div class="visual-meta mono"><span>SEE / QUESTION / VERIFY</span><span class="visual-no">07 / 07</span></div><svg viewBox="0 0 400 190" fill="none" focusable="false">
+            <div class="project-visual" aria-hidden="true"><div class="visual-meta mono"><span>SEE / QUESTION / VERIFY</span><span class="visual-no">08 / 08</span></div><svg viewBox="0 0 400 190" fill="none" focusable="false">
               <path d="M42 146h316" stroke="#315bff" stroke-opacity=".16"/>
               <g fill="#315bff" fill-opacity=".14" stroke="#315bff" stroke-opacity=".28"><circle cx="112" cy="52" r="22"/><circle cx="151" cy="74" r="22"/><circle cx="151" cy="118" r="22"/><circle cx="112" cy="140" r="22"/><circle cx="73" cy="118" r="22"/><circle cx="73" cy="74" r="22"/></g>
               <g fill="#315bff"><circle cx="288" cy="68" r="7"/><circle cx="308" cy="76" r="7"/><circle cx="316" cy="96" r="7"/><circle cx="308" cy="116" r="7"/><circle cx="288" cy="124" r="7"/><circle cx="268" cy="116" r="7"/><circle cx="260" cy="96" r="7"/><circle cx="268" cy="76" r="7"/></g>
