@@ -299,6 +299,13 @@ def fetch_document(url):
     return raw.decode('utf-8')
 
 
+class CatalogueRefreshError(RuntimeError):
+    def __init__(self,message,source_errors=()):
+        super().__init__(message)
+        self.source_errors=list(source_errors)
+
+
+
 def fetch_official_updates(selected_date, fixture_dir=None):
     """Bounded parallel requests; failures retain the last verified values."""
     requests = []
@@ -354,7 +361,7 @@ def fetch_official_updates(selected_date, fixture_dir=None):
                     sources.append({'url':url,'fetchedAt':datetime.now(timezone.utc).isoformat().replace('+00:00','Z')})
                 except (OSError,ValueError,RuntimeError) as error:errors.append({'url':url,'message':str(error)[:300]})
     if not records:
-        raise RuntimeError('No official facility lists could be retrieved; previous catalogue retained')
+        raise CatalogueRefreshError('No official facility lists could be retrieved; previous catalogue retained',errors)
     return {'records':records,'stops':stops,'events':events,'calendars':calendars,'sourcesChecked':sources,'errors':errors}
 
 
@@ -417,6 +424,53 @@ def seed_dynamic_catalogue(base, previous):
     return result
 
 
+def validated_cached_catalogue(value):
+    """Reject incomplete or unrelated JSON before it can be a fallback catalogue."""
+    if not isinstance(value,dict) or not isinstance(value.get('version'),str):raise ValueError('Catalogue version is missing')
+    date.fromisoformat(value.get('updatedAt',''))
+    parks=value.get('parks')
+    if not isinstance(parks,list) or len(parks)!=2 or {park.get('id') for park in parks if isinstance(park,dict)}!={'land','sea'}:raise ValueError('Both park catalogues are required')
+    for park in parks:
+        nodes=park.get('nodes');activities=park.get('activities');edges=park.get('edges')
+        if not isinstance(nodes,list) or not nodes or not isinstance(activities,list) or not activities or not isinstance(edges,list):raise ValueError('Catalogue graph and facilities are missing')
+        identifiers={node.get('id') for node in nodes if isinstance(node,dict)}
+        if len(identifiers)!=len(nodes) or not all(isinstance(identifier,str) and identifier for identifier in identifiers) or park.get('entryNode') not in identifiers or park.get('exitNode') not in identifiers:raise ValueError('Catalogue graph identifiers are invalid')
+        activity_ids=set()
+        for activity in activities:
+            if not isinstance(activity,dict) or not isinstance(activity.get('id'),str) or activity['id'] in activity_ids or activity.get('node') not in identifiers or not isinstance(activity.get('sourceUrl'),str):raise ValueError('Catalogue facilities are invalid')
+            activity_ids.add(activity['id'])
+        if any(not isinstance(edge,dict) or edge.get('from') not in identifiers or edge.get('to') not in identifiers for edge in edges):raise ValueError('Catalogue paths are invalid')
+    return value
+
+
+def load_known_catalogue(bundled_path,published_path=None):
+    bundled=validated_cached_catalogue(json.loads(Path(bundled_path).read_text(encoding='utf-8')))
+    if published_path and Path(published_path).exists():
+        try:
+            previous=validated_cached_catalogue(json.loads(Path(published_path).read_text(encoding='utf-8')))
+            def freshness(value):
+                text=value.get('fetchedAt') or value['updatedAt']
+                try:stamp=datetime.fromisoformat(text.replace('Z','+00:00'))
+                except (ValueError,AttributeError):stamp=datetime.fromisoformat(value['updatedAt'])
+                return stamp.replace(tzinfo=stamp.tzinfo or timezone.utc).timestamp()
+            if freshness(previous)>=freshness(bundled):return bundled,previous,'published'
+            return bundled,copy.deepcopy(bundled),'bundled-newer'
+        except (OSError,ValueError,TypeError):
+            print('Published catalogue is unreadable; retaining the validated bundled facts.',flush=True)
+    return bundled,copy.deepcopy(bundled),'bundled'
+
+
+def failed_refresh(catalogue,selected_date,error,checked_at=None):
+    """Record an attempted retrieval without changing any verified fact dates."""
+    checked_at=checked_at or datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
+    updated=copy.deepcopy(catalogue)
+    errors=getattr(error,'source_errors',[]) or [{'message':str(error)[:300]}]
+    attempt={'checkedAt':checked_at,'status':'failed','sourceErrors':errors,'message':'公式情報を取得できなかったため確認済みの情報を保持しています。','lastSuccessfulFetchedAt':catalogue.get('fetchedAt')}
+    updated['updateStatus']='failed';updated['refreshAttempt']=attempt
+    report={'date':selected_date,'status':'failed','checkedAt':checked_at,'lastKnownCatalogueUsed':True,'changed':[],'newFacilities':[],'dpaReview':[],'sourceErrors':errors,'message':attempt['message'],'lastSuccessfulFetchedAt':catalogue.get('fetchedAt')}
+    return updated,report
+
+
 def atomic_json(path,data):
     path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
     temporary=path.with_suffix(path.suffix+'.tmp')
@@ -432,17 +486,34 @@ def main():
     parser.add_argument('--fixture-dir',type=Path)
     parser.add_argument('--previous-catalogue',type=Path,help='Retain verified date facts from the previous published catalogue')
     parser.add_argument('--apply',action='store_true')
+    parser.add_argument('--seed-only',action='store_true',help='Prepare validated cached facts without requesting official pages')
     args = parser.parse_args()
     date.fromisoformat(args.date)
-    original=json.loads(args.catalogue.read_text(encoding='utf-8'))
-    if args.previous_catalogue and args.previous_catalogue.exists():original=seed_dynamic_catalogue(original,json.loads(args.previous_catalogue.read_text(encoding='utf-8')))
-    updated,report=apply_official_updates(original,fetch_official_updates(args.date,args.fixture_dir),args.date)
+    bundled,previous,origin=load_known_catalogue(args.catalogue,args.previous_catalogue)
+    checked_at=datetime.now(timezone.utc).isoformat().replace('+00:00','Z')
+    if args.seed_only:
+        atomic_json(args.output,previous)
+        report_path=args.output.with_name(args.output.stem+'-report.json')
+        atomic_json(report_path,{'date':args.date,'status':'seeded','checkedAt':checked_at,'origin':origin,'lastKnownCatalogueUsed':True,'sourceErrors':[]})
+        print(f'Prepared validated {origin} catalogue without changing its verification dates.')
+        return 0
+    original=seed_dynamic_catalogue(bundled,previous) if origin=='published' else bundled
+    failure=False
+    try:
+        updated,report=apply_official_updates(original,fetch_official_updates(args.date,args.fixture_dir),args.date)
+        updated['refreshAttempt']={'checkedAt':checked_at,'status':updated['updateStatus'],'sourceErrors':report.get('sourceErrors',[])}
+        report.update({'checkedAt':checked_at,'status':updated['updateStatus'],'lastKnownCatalogueUsed':False})
+    except (OSError,ValueError,RuntimeError) as error:
+        updated,report=failed_refresh(previous,args.date,error,checked_at)
+        failure=True
+        print(f'Official retrieval failed; preserved confirmed facts: {error}',flush=True)
     atomic_json(args.output,updated)
     report_path=args.output.with_name(args.output.stem+'-report.json');atomic_json(report_path,report)
     if args.apply:atomic_json(args.catalogue,updated)
     print(f'Updated catalogue: {args.output}\nChange report: {report_path}')
     print('New facilities and changed DPA eligibility require verified graph positions and prices before addition.')
+    return 1 if failure else 0
 
 
 if __name__ == '__main__':
-    main()
+    raise SystemExit(main())
