@@ -266,17 +266,19 @@ test('a JSON prototype key cannot affect result options or JavaScript prototypes
   assert.deepEqual(result.inputFrames[0].points, Object.fromEntries(core.POINT_NAMES.map(name => [name, null])));
 });
 
-test('the geometric demo is marked as a demo and has finite measurements at every timestamp', () => {
+test('the synthetic demo has finite projected measurements with upright body rotation', () => {
   const demo = require('../web/demo-data.js');
   assert.equal(demo.sourceKind, 'demo'); assert.match(demo.label, /デモ/);
   assert.equal(demo.width, 960); assert.equal(demo.height, 540);
   const r = core.analyse(demo.frames, demo.options);
   assert.equal(r.summary.frameCount, 121); assert.equal(r.summary.pairedValidCount, 121);
   close(r.summary.durationSeconds, 4);
-  close(r.frames[0].shoulderAngle, -38); close(r.frames.at(-1).shoulderAngle, 97);
-  close(r.frames[0].hipAngle, -15); close(r.frames.at(-1).hipAngle, 80);
-  assert.ok(r.summary.shoulderPeakAbsVelocity > 250);
-  assert.ok(r.summary.shoulderPeakAbsVelocity < 350);
+  assert.match(demo.description, /合成/);
+  assert.ok(Math.abs(r.frames.at(-1).shoulderAngle - r.frames[0].shoulderAngle) > 15);
+  assert.ok(Math.abs(r.frames.at(-1).hipAngle - r.frames[0].hipAngle) > 8);
+  assert.ok(r.frames.every(row => Math.abs(row.shoulderAngle) < 35 && Math.abs(row.hipAngle) < 25));
+  assert.ok(r.summary.shoulderPeakAbsVelocity > 20);
+  assert.ok(r.summary.shoulderPeakAbsVelocity < 100);
   const saved = core.readJSON(core.exportJSON(r, demo));
   assert.equal(saved.sourceKind, 'demo'); assert.match(saved.label, /デモ/);
 });

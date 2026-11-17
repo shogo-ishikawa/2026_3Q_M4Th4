@@ -9,7 +9,9 @@
   <link rel="stylesheet" href="style.css">
   <script defer src="motion-core.js"></script>
   <script defer src="demo-data.js"></script>
+  <script defer src="demo-renderer.js"></script>
   <script defer src="video-input.js"></script>
+  <script defer src="time-input.js"></script>
   <script defer src="app.js"></script>
 </head>
 <body>
@@ -26,7 +28,8 @@
 
   <section class="workspace shell" id="workspace" aria-label="動作解析の操作画面">
     <div class="workspace-head"><div class="workspace-label"><span class="live-dot" aria-hidden="true"></span><h2>動きを読む</h2><span id="source-kind" class="source-badge">デモ</span></div><div class="toolbar"><button id="upload-video" class="primary" type="button">ファイルから開く <span aria-hidden="true">＋</span></button><button id="open-url" class="secondary" type="button" aria-expanded="false" aria-controls="url-panel">URLから開く</button><button id="open-result" class="secondary" type="button">結果を読み込む</button><input id="video-file" type="file" accept="video/*" hidden><input id="result-file" type="file" accept=".json,application/json" hidden></div></div>
-    <div id="url-panel" class="url-panel" hidden><form id="url-form"><label for="video-url">MP4・WebMなどの動画ファイルのURL</label><div class="url-fields"><input id="video-url" type="url" inputmode="url" placeholder="https://example.com/video.mp4" autocomplete="off"><button type="submit" id="load-url" class="primary">動画URLを読み込む</button></div><p>外部からの読み込みを許可した配信元に対応します。YouTubeの視聴ページを使う場合は、動画ファイルを選んで開きます。</p></form></div>
+    <div id="url-panel" class="url-panel" hidden><form id="url-form" novalidate><label for="video-url">MP4・WebMなどの動画ファイルのURL</label><div class="url-fields"><input id="video-url" type="url" inputmode="url" placeholder="https://example.com/video.mp4" autocomplete="off" aria-describedby="url-help source-message"><button type="submit" id="load-url" class="primary">動画URLを読み込む</button></div><p id="url-help">外部からの読み込みを許可した配信元に対応します。YouTubeの視聴ページには対応していません。手元に動画がある場合は「ファイルから開く」を使います。</p></form></div>
+    <div id="source-feedback" class="source-feedback" data-state="idle"><span id="source-state" class="source-state">デモ</span><p id="source-message" role="status" aria-live="polite" aria-atomic="true">デモを表示しています。動画ファイルやURLから自分の映像を開けます。</p><progress id="source-progress" aria-label="動画を読み込み中" hidden></progress><button id="cancel-source" type="button" class="secondary" hidden>読み込みを中止</button></div>
     <div class="work-grid">
       <div class="view-column">
         <div class="video-stage" id="video-stage"><canvas id="motion-canvas" width="960" height="540" aria-label="映像と関節の位置">映像と解析した位置を表示します。</canvas><span class="stage-label" id="stage-label">DEMO / 動きの観察</span><span class="stage-guide" id="stage-guide">関節の位置と線を確認</span><video id="source-video" playsinline preload="metadata" hidden></video></div>
@@ -37,7 +40,11 @@
       <aside class="control-panel" aria-label="解析の設定">
         <div class="view-settings"><label for="demo-select">デモで試す</label><div class="demo-row"><select id="demo-select"><option value="swing">スイング</option><option value="squat">スクワット</option><option value="arm">腕の曲げ伸ばし</option></select><button id="open-demo" class="secondary" type="button">開く</button></div><label for="metric-group">グラフで見る動き</label><select id="metric-group"><option value="axes">肩・腰の線の向き</option><option value="elbows">左右の肘の曲がり</option><option value="knees">左右の膝の曲がり</option><option value="trunk">体幹の傾き</option></select><p id="metric-description" class="control-note"></p><label class="check-label"><input id="show-trails" type="checkbox">手首・足首の軌跡を重ねる</label></div><div class="panel-divider"></div>
         <div class="panel-top"><span class="eyebrow">SET THE SCENE</span><span class="step-number">01</span></div>
-        <h3>見る範囲を決める</h3><div class="range-fields"><label>開始<input id="start-time" type="number" min="0" step="0.01" value="0"><span>秒</span></label><label>終了<input id="end-time" type="number" min="0" step="0.01" value="1"><span>秒</span></label></div><button type="button" id="range-reset" class="text-button">秒数をリセット</button>
+        <h3>見る範囲を決める</h3>
+        <div class="range-fields">
+          <div class="time-field"><label for="start-time">開始</label><div class="time-number"><input id="start-time" type="number" inputmode="decimal" min="0" step="0.1" value="0" aria-describedby="range-help"><span class="time-unit">秒</span><div class="time-arrows"><button id="start-up" type="button" aria-label="開始を1秒進める">▲</button><button id="start-down" type="button" aria-label="開始を1秒戻す">▼</button></div></div></div>
+          <div class="time-field"><label for="end-time">終了</label><div class="time-number"><input id="end-time" type="number" inputmode="decimal" min="0" step="0.1" value="1" aria-describedby="range-help"><span class="time-unit">秒</span><div class="time-arrows"><button id="end-up" type="button" aria-label="終了を1秒進める">▲</button><button id="end-down" type="button" aria-label="終了を1秒戻す">▼</button></div></div></div>
+        </div><p id="range-help" class="control-note">直接入力は0.1秒単位、上下ボタン・↑↓キーは1秒ずつ。</p><button type="button" id="range-reset" class="text-button">秒数をリセット</button>
         <div class="roi-tools"><button id="select-roi" type="button" class="secondary" aria-pressed="false">人物の範囲を囲む</button><button id="clear-roi" type="button" class="text-button">解除</button></div><p class="control-note" id="roi-note">動画を開いたら、解析したい人物を囲みます。</p>
         <div class="panel-divider"></div><div class="panel-top"><span class="eyebrow">FIND THE MOVEMENT</span><span class="step-number">02</span></div><h3>姿勢をとらえる</h3>
         <div class="setting-pair"><label>解析する頻度<select id="sample-rate"><option value="10">1秒に10点</option><option value="15" selected>1秒に15点</option><option value="30">1秒に30点</option><option value="60">1秒に60点</option></select></label><label>スロー倍率<select id="slow-factor"><option value="1">通常の速さ</option><option value="2">2倍スロー</option><option value="4">4倍スロー</option><option value="8">8倍スロー</option></select></label></div>
@@ -58,5 +65,5 @@
 
   <section class="how-to shell" id="how-to" aria-labelledby="how-title"><div><p class="eyebrow">HOW TO USE</p><h2 id="how-title">映像から、動きの違いへ。</h2><p>観察する場所を変えると、同じ映像から違う動きが見えてきます。</p></div><div class="how-content"><details open><summary>1. デモで動きとグラフをつかむ</summary><p>スイング、スクワット、腕の曲げ伸ばしからデモを選びます。時刻のバーを動かすと、関節の位置とグラフの線が一緒に変わります。「グラフで見る動き」を切り替えて、肩・腰、肘、膝、体幹を見比べましょう。</p></details><details><summary>2. 動画ファイルかURLを開く</summary><p>「ファイルから開く」でパソコンやスマートフォンの動画を選びます。MP4・WebMの直接リンクがある場合は「URLから開く」に入力します。開始・終了秒を指定し、「人物の範囲を囲む」で対象を選んでから「AIで動きを解析」を押します。人物の全身が入り、ほかの人をなるべく含まない範囲にします。</p></details><details><summary>3. 関節の位置を確かめて直す</summary><p>コマ送りで関節の点を確かめます。直したい時刻で「関節を手動で指定・修正する」を開き、関節名のボタンを押して映像上の位置をクリックします。「指定した点を保存」でその時刻の座標を更新します。肘の曲がりには同じ側の肩・肘・手首、膝には腰・膝・足首が必要です。複数の時刻を手動で入力することもできます。</p></details><details><summary>4. 角度と変化の速さを読む</summary><p>肘・膝は、伸びきった姿勢が180°で、曲げるほど角度が小さくなります。体幹は画像の垂直が0°で、画面の右へ傾くと正です。肩・腰の線は画面の右を0°とし、反時計回りを正にします。角速度は角度が変わる速さを度/秒で表します。</p><p>角度は画像の平面に投影された位置から求めます。動作を比べるときは撮影方向とスロー倍率をそろえます。横から撮った動画は肘・膝の曲がり、正面からの動画は左右差の観察に使えます。</p></details><details><summary>5. 保存した座標を再解析する</summary><p>CSVにはすべての関節の解析値を保存します。JSONには座標・解析条件・選んだグラフを保存します。「結果を読み込む」で開くと、動画がなくても表示する角度や信頼度、平滑化を変えて解析し直せます。以前保存した肩・腰の座標も読み込めます。</p></details></div></section>
 </main>
-<footer class="footer shell"><span class="brand-name">MOTION ANALYSIS LAB <small>v1.1.0</small></span><a href="./downloads/MotionAnalysisLab_v1.1.0.zip" download>コードをダウンロード ↓</a><a href="../">プログラム作品集へ ↗</a></footer>
+<footer class="footer shell"><span class="brand-name">MOTION ANALYSIS LAB <small>v1.1.1</small></span><a href="./downloads/MotionAnalysisLab_v1.1.1.zip" download>コードをダウンロード ↓</a><a href="../">プログラム作品集へ ↗</a></footer>
 </body></html>
