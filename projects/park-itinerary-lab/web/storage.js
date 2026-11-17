@@ -71,6 +71,17 @@ export function validateCatalogue(data) {
     for (const activity of park.activities) {
       if (!plain(activity) || !id(activity.id) || activities.has(activity.id) || !text(activity.name) || !CATEGORIES.has(activity.category) || !nodes.has(activity.node) || !integer(activity.duration, 1, 600) || !finite(activity.baseWait, 0, 600) || !integer(activity.cost, 0, 1000000) || !webUrl(activity.sourceUrl)) fail('施設のID・種類・地点・時間・費用・出典を確認してください。');
       activities.add(activity.id);
+      for (const key of ['menuUrl','menuSourceUrl']) if (activity[key] !== undefined && !webUrl(activity[key])) fail('店舗・メニューのリンクを確認してください。');
+      if (activity.menuItems !== undefined && (!Array.isArray(activity.menuItems) || activity.menuItems.length > 20 || activity.menuItems.some(item => !plain(item) || !text(item.name,300) || (item.url !== undefined && !webUrl(item.url))))) fail('メニューの名前とリンクを確認してください。');
+      if (activity.dailySchedules !== undefined) {
+        if (!plain(activity.dailySchedules) || Object.keys(activity.dailySchedules).length > 400) fail('施設の日付別営業時間を確認してください。');
+        for (const [date,schedule] of Object.entries(activity.dailySchedules)) {
+          if (!validDate(date) || !plain(schedule) || typeof schedule.closed !== 'boolean' || (schedule.sourceUrl !== undefined && !webUrl(schedule.sourceUrl))) fail('施設の日付別の運営情報を確認してください。');
+          if (schedule.windows !== undefined && (!Array.isArray(schedule.windows) || schedule.windows.length > 30 || schedule.windows.some(pair=>!validWindow(pair)))) fail('日付別の営業時間を確認してください。');
+          if (schedule.showTimes !== undefined && (!Array.isArray(schedule.showTimes) || schedule.showTimes.length > 30 || schedule.showTimes.some(value=>!validTime(value)))) fail('日付別の公演時刻を確認してください。');
+        }
+      }
+      if (activity.closedPeriods !== undefined && (!Array.isArray(activity.closedPeriods) || activity.closedPeriods.length > 100 || activity.closedPeriods.some(period => !plain(period) || !validDate(period.startDate) || (period.endDate !== null && period.endDate !== undefined && (!validDate(period.endDate) || period.endDate < period.startDate)) || (period.sourceUrl !== undefined && !webUrl(period.sourceUrl))))) fail('施設の休止期間を確認してください。');
       if (activity.endNode !== undefined && !nodes.has(activity.endNode)) fail('移動施設の降車地点を確認してください。');
       if (!Array.isArray(activity.windows) || activity.windows.length === 0 || activity.windows.length > 30 || activity.windows.some(pair => !validWindow(pair))) fail('施設の利用時間帯を確認してください。');
       if (activity.showTimes !== undefined && (!Array.isArray(activity.showTimes) || activity.showTimes.length > 30 || activity.showTimes.some(value => !validTime(value)))) fail('公演時刻を0時からの整数分で指定してください。');
@@ -96,6 +107,25 @@ export function validateSavedState(state) {
   for (const key of ['restEvery', 'restMinutes']) if (!optionalNumber(settings, key, 0, 600, true)) fail('休憩の間隔と長さを確認してください。');
   if (!optionalNumber(settings, 'searchSeconds', 0.1, 120) || !optionalNumber(settings, 'replanFrom', settings.entry, settings.exit, true)) fail('探索時間と組み替え開始時刻を確認してください。');
   if (settings.searchMethod !== undefined && !['beam', 'multistart', 'portfolio'].includes(settings.searchMethod)) fail('探索方法を選び直してください。');
+  if (settings.weatherMode !== undefined && !['auto', 'manual'].includes(settings.weatherMode)) fail('天気の取得方法を選び直してください。');
+  if (settings.weatherNotice !== undefined && !text(settings.weatherNotice, 1000)) fail('天気の取得結果を確認してください。');
+  if (settings.weatherForecast !== undefined && settings.weatherForecast !== null) {
+    const forecast = settings.weatherForecast;
+    if (!plain(forecast) || !validDate(forecast.date) || !['sun','cloud','rain'].includes(forecast.weather) || !Array.isArray(forecast.hours) || forecast.hours.length > 400) fail('天気予報の日付と時間帯を確認してください。');
+    for (const hour of forecast.hours) {
+      if (!plain(hour) || !integer(hour.minute,0,1439) || !['sun','cloud','rain'].includes(hour.weather)) fail('時間帯別の天気を確認してください。');
+      for (const [key,min,max] of [['temperature',-90,70],['precipitation',0,500],['precipitationProbability',0,100]]) if (hour[key] !== undefined && hour[key] !== null && !finite(hour[key],min,max)) fail('気温と雨の予報値を確認してください。');
+    }
+  }
+  if (settings.calendarData !== undefined && settings.calendarData !== null) {
+    const calendar = settings.calendarData;
+    if (!plain(calendar) || calendar.schemaVersion !== 1 || !webUrl(calendar.sourceUrl) || !plain(calendar.coverage) || !validDate(calendar.coverage.startDate) || !validDate(calendar.coverage.endDate) || calendar.coverage.startDate > calendar.coverage.endDate || !Array.isArray(calendar.holidays) || calendar.holidays.length > 3000) fail('祝日カレンダーの期間と出典を確認してください。');
+    const dates = new Set();
+    for (const holiday of calendar.holidays) {
+      if (!plain(holiday) || !validDate(holiday.date) || !text(holiday.name,100) || dates.has(holiday.date)) fail('祝日の日付と名前を確認してください。');
+      dates.add(holiday.date);
+    }
+  }
   if (settings.liveMode !== undefined && !['auto', 'off'].includes(settings.liveMode)) fail('当日の待ち時間の利用方法を選び直してください。');
   if (settings.liveData !== undefined && settings.liveData !== null) {
     const live = settings.liveData;
@@ -109,9 +139,9 @@ export function validateSavedState(state) {
   }
   if (settings.waitModel !== undefined && settings.waitModel !== null) {
     const model = settings.waitModel;
-    if (!validateWaitModel(model) || !plain(model) || model.schemaVersion !== 1 || model.method !== 'ridge-regression' || model.parkId !== state.parkId || !['trained', 'insufficient-data'].includes(model.status) || typeof model.usable !== 'boolean' || !Array.isArray(model.activityIds) || model.activityIds.length > MAX_ACTIVITIES || new Set(model.activityIds).size !== model.activityIds.length || model.activityIds.some(value => !id(value)) || !Array.isArray(model.coefficients) || model.coefficients.length > MAX_ACTIVITIES + 7 || model.coefficients.some(value => !finite(value, -Number.MAX_VALUE, Number.MAX_VALUE))) fail('待ち時間の予測モデルの形式を確認してください。');
+    if (!validateWaitModel(model) || !plain(model) || ![1, 2].includes(model.schemaVersion) || model.method !== 'ridge-regression' || model.parkId !== state.parkId || !['trained', 'insufficient-data'].includes(model.status) || typeof model.usable !== 'boolean' || !Array.isArray(model.activityIds) || model.activityIds.length > MAX_ACTIVITIES || new Set(model.activityIds).size !== model.activityIds.length || model.activityIds.some(value => !id(value)) || !Array.isArray(model.coefficients) || model.coefficients.length > MAX_ACTIVITIES + 100 || model.coefficients.some(value => !finite(value, -Number.MAX_VALUE, Number.MAX_VALUE))) fail('待ち時間の予測モデルの形式を確認してください。');
     if (!integer(model.samples, 0, 50000) || !integer(model.days, 0, 50000) || !validTimestamp(model.trainedAt) || !validDate(model.beforeDate)) fail('予測モデルの学習期間と件数を確認してください。');
-    if (model.status === 'trained' && (model.coefficients.length !== model.activityIds.length + 7 || !validDate(model.firstDate) || !validDate(model.lastDate))) fail('学習済みモデルの係数と対象期間を確認してください。');
+    if (model.status === 'trained' && (model.coefficients.length !== model.activityIds.length + (model.schemaVersion === 2 ? model.featureNames.length : 7) || !validDate(model.firstDate) || !validDate(model.lastDate))) fail('学習済みモデルの係数と対象期間を確認してください。');
   }
   if (settings.fixedBreaks !== undefined) {
     if (!Array.isArray(settings.fixedBreaks) || settings.fixedBreaks.length > 30) fail('指定する休憩は30件までにしてください。');
@@ -193,7 +223,7 @@ export function createShareUrl(state, baseUrl = location.href) {
   validateSavedState(state);
   const url = new URL(baseUrl);
   if (!['https:', 'http:'].includes(url.protocol)) fail('共有用のWebページを開いてください。');
-  const {history, initialPlan, waitModel, liveData, liveSnapshot, ...portableSettings} = state.settings;
+  const {history, initialPlan, waitModel, liveData, liveSnapshot, calendarData, weatherForecast, weatherNotice, ...portableSettings} = state.settings;
   const encoded = encodeBase64(JSON.stringify({v:1, parkId:state.parkId, settings:portableSettings}));
   if (encoded.length > MAX_SHARED_LENGTH) fail('希望が多いためリンクが長くなります。JSONで共有してください。');
   url.hash = `plan=${encoded}`;
@@ -249,7 +279,14 @@ export function parseHistoryCsv(raw) {
     const time = timeMatch && Number(timeMatch[1]) <= 23 && Number(timeMatch[2]) < 60 ? Number(timeMatch[1]) * 60 + Number(timeMatch[2]) : /^\d{1,4}$/.test(row.time) ? Number(row.time) : NaN;
     const wait = /^(?:\d+(?:\.\d+)?|\.\d+)$/.test(row.wait) ? Number(row.wait) : NaN;
     if (!validDate(row.date) || !id(row.activityId) || !integer(time, 0, 1439) || !finite(wait, 0, 600) || (row.weather && !['sun', 'cloud', 'rain'].includes(row.weather)) || !text(row.event || '', 300)) fail(`CSVの${index + 2}行目の日付・時刻・待ち時間を確認してください。`);
-    return {date:row.date, activityId:row.activityId, time, wait, weather:row.weather || '', event:row.event || ''};
+    const extra={};
+    for(const [key,min,max] of [['temperature',-90,70],['precipitation',0,500]])if(row[key]!==undefined&&row[key]!==''){
+      if(!/^[-+]?\d+(?:\.\d+)?$/.test(row[key])||!finite(Number(row[key]),min,max))fail(`CSVの${index+2}行目の気温・降水量を確認してください。`);
+      extra[key]=Number(row[key]);
+    }
+    if(row.openingMinute!==undefined&&row.openingMinute!==''){if(!/^\d{1,4}$/.test(row.openingMinute)||!integer(Number(row.openingMinute),0,1439))fail('CSVの開園時刻を確認してください。');extra.openingMinute=Number(row.openingMinute);}
+    for(const key of ['weatherSource','source'])if(row[key]){if(!text(row[key],100))fail('CSVの出典を確認してください。');extra[key]=row[key];}
+    return {date:row.date, activityId:row.activityId, time, wait, weather:row.weather || '', event:row.event || '',...extra};
   });
 }
 

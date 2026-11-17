@@ -1,3 +1,4 @@
+import { weatherAtMinute, calendarContext } from './calendar-features.js';
 import { predictModelWait } from './wait-model.js';
 import { liveWaitFor } from './wait-data.js';
 /* Browser itinerary search. Every returned plan is checked; the search does not claim global optimality. */
@@ -57,7 +58,9 @@ export function graphDistances(park) {
 }
 
 function historicalWait(activity, start, settings, history) {
-  const targetWeekday = new Date(settings.date + 'T12:00:00Z').getUTCDay();
+  const targetCalendar = calendarContext(settings.date, settings.calendarData);
+  const targetWeather = weatherAtMinute(settings.date, start, settings).weather;
+  const targetWeekday = targetCalendar.weekday;
   const targetWeekend = targetWeekday === 0 || targetWeekday === 6;
   const samples = [];
   for (const row of Array.isArray(history) ? history : []) {
@@ -68,12 +71,18 @@ function historicalWait(activity, start, settings, history) {
     if (!Number.isFinite(wait) || wait < 0 || wait > 600 || Math.abs(time - start) > 120 || (row.date === settings.date && time > start)) continue;
     const weekday = new Date(row.date + 'T12:00:00Z').getUTCDay();
     const weekend = weekday === 0 || weekday === 6;
-    let weight = 1 / (1 + Math.abs(time - start) / 30);
+    const bandwidth = 15; // A fixed clock kernel avoids creating a wait drop at a bandwidth boundary.
+    let weight = Math.exp(-0.5 * ((time - start) / bandwidth) ** 2);
+    if (weight < 0.001) continue;
     if (weekend === targetWeekend) weight *= 2;
     if (weekday === targetWeekday) weight *= 1.5;
-    if (row.weather && row.weather === settings.weather) weight *= 1.5;
+    if (row.weather && row.weather === targetWeather) weight *= 1.5;
+    const observedCalendar = calendarContext(row.date, settings.calendarData);
+    if (targetCalendar.holidayKnown && observedCalendar.holidayKnown && targetCalendar.isHoliday === observedCalendar.isHoliday) weight *= 1.4;
+    const monthDifference = Math.abs(targetCalendar.month - observedCalendar.month);
+    weight /= 1 + Math.min(monthDifference, 12 - monthDifference) * 0.2;
     const eventIds = (settings.activeEvents || []).map(event => typeof event === 'string' ? event : event.id);
-    if (row.event && eventIds.includes(row.event)) weight *= 1.5;
+    if (row.event && String(row.event).split('|').some(value => eventIds.includes(value))) weight *= 1.5;
     samples.push({ wait, weight });
   }
   if (!samples.length) return null;
@@ -90,19 +99,32 @@ export function estimateWait(activity, start, settings, history = []) {
   };
   const live = liveWaitFor(activity, start, settings, { now: settings.waitAsOf ?? Date.now() });
   if (live?.isOpen) return live;
-  const prediction = predictModelWait(activity, start, settings, settings.waitModel);
+  const predictionActivity = activity.dailySchedules?.[settings.date]?.windows ? {...activity,windows:activity.dailySchedules[settings.date].windows} : activity;
+  const prediction = predictModelWait(predictionActivity, start, settings, settings.waitModel);
   if (prediction) return prediction;
   const measured = historicalWait(activity, start, settings, history);
   if (measured) return measured;
-  const weekday = dateValid(settings.date) ? new Date(settings.date + 'T12:00:00Z').getUTCDay() : 2;
+  const calendar = calendarContext(settings.date, settings.calendarData);
+  const weekday = calendar.weekday;
   const weekend = weekday === 0 || weekday === 6;
   const level = { quiet: 0.7, normal: 1, busy: 1.35 }[settings.crowdLevel] ?? 1;
-  const weather = settings.weather === 'rain' ? 0.84 : settings.weather === 'cloud' ? 0.97 : 1;
+  const weatherCondition = weatherAtMinute(settings.date, start, settings).weather;
+  const weather = weatherCondition === 'rain' ? 0.84 : weatherCondition === 'cloud' ? 0.97 : 1;
   const hour = start / 60;
-  const timeFactor = hour < 10 ? 0.8 : hour < 12 ? 1.12 : hour < 16 ? 1.2 : hour < 18 ? 1.03 : 0.82;
+  const opening = Math.min(...(activity.dailySchedules?.[settings.date]?.windows || activity.windows || [[540,1260]]).map(window => window[0]));
+  const sinceOpening = Math.max(0, start - opening);
+  const openingFactor = 0.65 - 0.4 * Math.min(1, finite(activity.baseWait) / 60);
+  const points = [[0,.82],[8,.82],[10,1],[12,1.2],[15,1.2],[18,1],[21,.75],[24,.75]];
+  const right = points.findIndex(point => point[0] >= hour);
+  const [x1,y1] = points[Math.max(0,right-1)], [x2,y2] = points[Math.max(0,right)];
+  const regularFactor = x1 === x2 ? y2 : y1 + (y2-y1)*(hour-x1)/(x2-x1);
+  const openingBlend = Math.min(1, sinceOpening / 120);
+  const timeFactor = ['attraction', 'greeting'].includes(activity.category)
+    ? openingFactor * (1-openingBlend) + regularFactor * openingBlend : regularFactor;
+  const calendarFactor = calendar.isHoliday ? 1.25 : weekend ? 1.18 : calendar.beforeHoliday ? 1.08 : 1;
   const eventFactor = (settings.activeEvents || []).reduce((factor, event) => factor *
     Math.max(0.5, Math.min(1.8, finite(typeof event === 'object' ? event.multiplier : 1, 1))), 1);
-  return { minutes: Math.max(0, Math.round(finite(activity.baseWait) * level * (weekend ? 1.18 : 1) *
+  return { minutes: Math.max(0, Math.round(finite(activity.baseWait) * level * calendarFactor *
     weather * timeFactor * Math.min(1.6, eventFactor))), source: 'trend', samples: 0 };
 }
 
@@ -276,16 +298,18 @@ function contextFor(park, settings, initialPlan) {
     if (!historyById.has(id)) historyById.set(id, []);
     historyById.get(id).push(record);
   }
-  return { park, settings, map, graph, selected, completed, completedSelections, initial, historyById, waitCache: new Map() };
+  return { park, settings, map, graph, selected, completed, completedSelections, initial, historyById, waitCache: new Map(), rankCache: new WeakMap() };
 }
 
 function activityWindows(activity, selection, settings) {
-  const windows = selection.windows || activity.windows || [[settings.entry, settings.exit]];
+  const windows = selection.windows || activity.dailySchedules?.[settings.date]?.windows || activity.windows || [[settings.entry, settings.exit]];
   if (!Array.isArray(windows) || windows.length > 100 || windows.some(window => !Array.isArray(window) || window.length !== 2)) throw new RangeError('施設の営業時間を確認してください。');
   return windows.map(window => window.map(toMinutes)).filter(window => window[0] < window[1]);
 }
 
 function showTimes(activity, selection, settings) {
+  if (selection.showTimes?.length) return selection.showTimes;
+  if (activity.dailySchedules?.[settings.date]?.showTimes) return activity.dailySchedules[settings.date].showTimes.map(toMinutes);
   if (selection.showTimes) return selection.showTimes;
   if (activity.showTimesDate && activity.showTimesDate !== settings.date) return [];
   return (activity.showTimes || []).map(toMinutes);
@@ -317,6 +341,8 @@ function budgetAllowed(state, activity, price, dpaPrice, context) {
 }
 
 function activityAvailable(activity, date) {
+  if (activity.dailySchedules?.[date]?.closed === true) return false;
+  if ((activity.closedPeriods || []).some(period => period.startDate <= date && (!period.endDate || date <= period.endDate))) return false;
   if ((activity.closedDates || []).includes(date)) return false;
   if (activity.startDate && date < activity.startDate) return false;
   if (activity.endDate && date > activity.endDate) return false;
@@ -373,7 +399,10 @@ function scheduledOptions(state, baseActivity, selection, context) {
     if (!fixed && method.method === 'normal' && settings.crowdMode !== 'manual' && finite(activity.baseWait) > 15) {
       for (let minute = Math.ceil(earliest / 60) * 60; minute <= Math.min(earliest + 120, latest); minute += 60) starts.push(minute);
     }
-    for (const window of windows) for (const proposed of starts) {
+    if (!fixed && method.method === 'normal' && settings.crowdMode !== 'manual') {
+      for (let minute = Math.ceil(earliest / 15) * 15; minute <= Math.min(earliest + 90, latest); minute += 15) starts.push(minute);
+    }
+    for (const window of windows) for (const proposed of [...new Set(starts)]) {
       if (context.deadline && now() >= context.deadline) return options;
       let queueStart = Math.max(earliest, window[0], proposed);
       if (liveWaitFor(activity, fixed ? proposed : queueStart, settings, { now: settings.waitAsOf })?.isOpen === false) continue;
@@ -431,10 +460,18 @@ function scheduledOptions(state, baseActivity, selection, context) {
 }
 
 function tieValue(state, context) {
+  if (context.rankCache.has(state)) return context.rankCache.get(state);
   const preference = context.settings.budgetPreference;
   const preferenceScore = preference === 'food' ? state.visits.filter(visit => FOOD.has(visit.category)).length :
     preference === 'dpa' ? state.visits.filter(visit => visit.method === 'dpa').length : 0;
-  return [state.score, preferenceScore, -state.cost, -state.walk, -state.time];
+  const exitMetres = context.graph.distances[state.node]?.[context.park.exitNode] ?? Infinity;
+  const exitMinutes = Math.ceil(exitMetres / context.settings.speed);
+  const burden = state.rows.filter(item => ['walk', 'queue', 'wait'].includes(item.kind))
+    .reduce((sum, item) => sum + item.end - item.start, 0) + exitMinutes;
+  // Time spent queueing, walking and waiting comes before distance alone.
+  const value = [state.score, preferenceScore, -burden, -(state.time + exitMinutes), -state.cost, -(state.walk + exitMetres)];
+  context.rankCache.set(state, value);
+  return value;
 }
 
 function compare(a, b, context) {
@@ -519,6 +556,7 @@ function resultFrom(state, context, diagnostics, quick = false) {
       dpaCost: state?.dpaCost ?? context.initial.dpaCost, shoppingCost: state?.shoppingCost ?? context.initial.shoppingCost,
       walkingMetres: walk, walkMinutes: sumMinutes('walk'), queueMinutes: sumMinutes('queue'),
       waitMinutes: sumMinutes('queue') + sumMinutes('wait'), restMinutes: sumMinutes('rest'),
+      burdenMinutes: sumMinutes('walk') + sumMinutes('queue') + sumMinutes('wait'),
       score: weight, finish: rows.length ? rows[rows.length - 1].end : context.initial.time,
       visitCount: selections.filter(item => visited.has(item.id)).length,
       budgetRemaining: Math.max(0, context.settings.budget - money),
@@ -673,7 +711,7 @@ export function solveItinerary(park, rawSettings, options = {}) {
   const diagnostics = tracker.diagnostics(false);
   delete diagnostics.running;
   diagnostics.notes = [
-    '重要度の合計を優先し、同点では支出・歩行距離を比べた探索中の最良案です。最適性の証明は行いません。',
+    '重要度の合計を優先し、同点では待ち時間・移動・待機の合計を短くする案を比べます。予算上限を守り、徒歩距離だけで訪問順を決めません。最適性の証明は行いません。',
     '待ち時間は手動指定、当日の新しい外部データ、検証で改善した学習モデル、履歴、傾向モデルの順に使います。施設ごとの出典は予定表に表示します。',
     'DPAの購入案は入力した空き枠と購入履歴から計算しています。在庫は公式アプリで確認してください。',
   ];
@@ -699,6 +737,11 @@ export function validatePlan(park, settings, result) {
   for (const item of rows) {
     if (!Number.isFinite(item.start) || !Number.isFinite(item.end) || item.start < previous || item.end < item.start) errors.push('予定の時刻が前後しています。');
     if (item.start < entry || item.end > exit) errors.push('滞在時間の外に予定があります。');
+    if (item.preserved) {
+      const cutoff=settings.replanFrom === undefined || settings.replanFrom === '' ? null : toMinutes(settings.replanFrom);
+      const ongoing=cutoff!==null&&item.kind==='activity'&&rows.some(prior=>prior.preserved&&prior.kind==='queue'&&prior.activityId===item.activityId&&prior.start<cutoff);
+      if(cutoff===null||(item.kind!=='location'&&item.start>=cutoff&&!ongoing))errors.push('保持した予定が組み替え開始より前につながっていません。');
+    }
     if (item.kind === 'walk') {
       if (item.from !== node) errors.push('移動の出発地点がつながっていません。');
       const distance = graph.distances[item.from]?.[item.to];
@@ -719,8 +762,8 @@ export function validatePlan(park, settings, result) {
       visited.add(activity.id);
       if (item.node !== (item.dpa ? (selection?.nodeOverride || activity.node) : activity.node)) errors.push('体験地点が施設の地点と一致しません。');
       if (item.node !== node) errors.push('施設までの移動がありません。');
-      if (!activityAvailable(activity, settings.date)) errors.push('休止日の施設が含まれています。');
-      if (selection) {
+      if (!item.preserved && !activityAvailable(activity, settings.date)) errors.push('休止日の施設が含まれています。');
+      if (selection && !item.preserved) {
         if (item.end - item.start !== Number(selection.duration ?? activity.duration ?? 10)) errors.push('体験の所要時間が設定と一致しません。');
         if (selection.earliest !== undefined && item.start < toMinutes(selection.earliest)) errors.push('希望時間帯より前です。');
         if (selection.latest !== undefined && item.end > toMinutes(selection.latest)) errors.push('希望時間帯より後です。');

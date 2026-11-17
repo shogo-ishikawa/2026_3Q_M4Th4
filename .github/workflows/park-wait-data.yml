@@ -6,25 +6,29 @@ on:
     paths:
       - '.github/workflows/park-wait-data.yml'
       - 'projects/park-itinerary-lab/scripts/collect_wait_data.py'
+      - 'projects/park-itinerary-lab/scripts/archive_wait_history.py'
+      - 'projects/park-itinerary-lab/scripts/seed_wait_model.py'
+      - 'projects/park-itinerary-lab/scripts/bootstrap_wait_history.py'
       - 'projects/park-itinerary-lab/scripts/train_wait_model.py'
       - 'projects/park-itinerary-lab/web/wait-model.js'
       - 'projects/park-itinerary-lab/web/data/queue-times-map.json'
+      - 'projects/park-itinerary-lab/web/data/wait-model.json'
   workflow_dispatch:
   schedule:
-    # 08:07–21:52 JST. Queue-Times publishes every five minutes; collect at 15-minute intervals.
-    - cron: '7,22,37,52 23,0-12 * * *'
+    - cron: '7,22,37,52 23,0-12 * * *' # 08:07–21:52 JST
+    - cron: '55 12 * * *' # 21:55 JST: archive and retrain after closing
 
 permissions:
   contents: write
 
 concurrency:
-  group: park-wait-observations
+  group: park-data-publication
   cancel-in-progress: false
 
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,30 +40,55 @@ jobs:
         with:
           node-version: '22'
       - name: Prepare the separate observations branch
+        id: prepare
         run: |
           if git fetch origin park-wait-data; then
             git worktree add -b park-wait-data data-publish FETCH_HEAD
           else
             git worktree add -b park-wait-data data-publish HEAD
           fi
+      - name: Seed validated fallback models
+        id: seed
+        run: python projects/park-itinerary-lab/scripts/seed_wait_model.py --published data-publish/wait-model.json --output data-publish/wait-model.json
       - name: Collect documented current waits
+        id: collect
         run: python projects/park-itinerary-lab/scripts/collect_wait_data.py --output-dir data-publish
-      - name: Retrain after a new calendar day
+      - name: Archive public observations and prepare private training input
+        if: steps.collect.outcome == 'success' && (github.event_name != 'schedule' || github.event.schedule == '55 12 * * *')
         run: |
+          python projects/park-itinerary-lab/scripts/archive_wait_history.py --data-dir data-publish
           python - <<'PY'
-          import datetime as dt,json,pathlib,subprocess
-          output=pathlib.Path('data-publish/wait-model.json')
-          today=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat()
-          current=json.loads(output.read_text()) if output.exists() else {}
-          if not current.get('parks') or any(park.get('beforeDate')!=today for park in current['parks']):
-              subprocess.run(['python','projects/park-itinerary-lab/scripts/train_wait_model.py','--observations','data-publish/observations.json','--output',str(output),'--before-date',today],check=True)
+          import json,os,pathlib,re,shutil
+          target=pathlib.Path(os.environ['RUNNER_TEMP'])/'park-training';target.mkdir(exist_ok=True)
+          data=pathlib.Path('data-publish')
+          records=[]
+          for source in sorted((data/'history').glob('????-??.json')):
+              if source.is_symlink() or not re.fullmatch(r"\d{4}-(?:0[1-9]|1[0-2])\.json",source.name):continue
+              records.extend(row for row in json.loads(source.read_text()) if row.get('source')=='queue-times')
+          (target/'queue-observations.json').write_text(json.dumps(records,ensure_ascii=False))
+          shutil.copyfile(data/'wait-model.json',target/'fallback-model.json')
+          for filename in ['catalogue.json','calendar.json']:
+              bundled=pathlib.Path('projects/park-itinerary-lab/web/data')/('parks.json' if filename=='catalogue.json' else filename)
+              if not (data/filename).exists():shutil.copyfile(bundled,data/filename)
           PY
+      - name: Learn from permitted history without publishing private raw data
+        if: steps.collect.outcome == 'success' && (github.event_name != 'schedule' || github.event.schedule == '55 12 * * *')
+        run: |
+          python projects/park-itinerary-lab/scripts/bootstrap_wait_history.py --catalogue data-publish/catalogue.json --calendar data-publish/calendar.json --existing-observations "$RUNNER_TEMP/park-training/queue-observations.json" --output-model data-publish/wait-model.json --fallback-model "$RUNNER_TEMP/park-training/fallback-model.json" --private-dir "$RUNNER_TEMP/park-training/private"
+      - name: Remove private training files
+        if: always()
+        run: python -c 'import os,pathlib,shutil; shutil.rmtree(pathlib.Path(os.environ["RUNNER_TEMP"])/"park-training",ignore_errors=True)'
       - name: Publish data without rebuilding the application
+        if: always() && steps.prepare.outcome == 'success' && steps.seed.outcome == 'success' && steps.collect.outcome == 'success'
         working-directory: data-publish
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add live-waits.json observations.json wait-model.json
+          git add live-waits.json observations.json
+          for name in wait-model.json history-index.json; do
+            if [ -f "$name" ]; then git add "$name"; fi
+          done
+          if [ -d history ]; then git add history; fi
           if ! git diff --cached --quiet; then
             git commit -m 'Update observed park waits and prediction model'
             git push origin HEAD:park-wait-data

@@ -58,3 +58,11 @@ JSONを入れ替えるとブラウザの候補一覧へ反映できます。新�
 - [混雑予想カレンダー](https://yosocal.com/)、[Queue-Timesのカレンダー](https://queue-times.com/ja/parks/274/calendar)、[ディズニーリアル](https://disneyreal.asumirai.info/realtime/disneyland-wait-today.html)は比較用のリンクです。公開ページの予測値や履歴を学習データへ取り込む機能はありません。
 
 待ち時間と体験時間は別の値です。外部情報で更新するのは待ち時間と稼働状況です。乗車時間は公式の所要時間、食事・買い物などは自分で指定した滞在時間を使います。
+
+## 過去履歴・気象・カレンダーによる学習
+
+v1.3.0初期モデルはThemeParks.wikiの匿名で利用できる直近7日分の履歴から作成しました。公開するのは学習係数・検証誤差・十分な件数の集計です。元の履歴を再配布しません。[Powered by ThemeParks.wiki](https://www.themeparks.wiki/) ／ [API](https://www.themeparks.wiki/api) ／ [利用条件](https://www.themeparks.wiki/terms)。
+
+過去の天気・気温・降水量は[Open-Meteo Historical Forecast API](https://open-meteo.com/en/docs/historical-forecast-api)の気象モデル予報です。予測時も並び始める時間帯の気象予報を使います。祝日・振替休日は[内閣府「国民の祝日」CSV](https://www8.cao.go.jp/chosei/shukujitsu/gaiyou.html)を加工したカレンダーです。
+
+学習期間が7日間の初期段階では、別の季節や祝日・異なるイベントの比較には十分な記録がありません。曜日・天気・イベント別の件数と日数を表示し、比較できない条件は記録不足として扱います。

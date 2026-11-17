@@ -3,12 +3,14 @@
 python scripts/update_park_data.py --date 2026-11-17 --output outputs/catalogue-update.json
 The original catalogue is preserved unless --apply is supplied.
 """
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from zoneinfo import ZoneInfo
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit, parse_qs
 from urllib.request import Request, urlopen
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import hashlib
 import argparse
 import copy
 import json
@@ -63,12 +65,23 @@ class TreeParser(HTMLParser):
         self.stack[-1].children.append(value)
 
 
+def valid_times(value):
+    return sorted({int(h) * 60 + int(m) for h, m in re.findall(r'\b(\d{1,2}):(\d{2})\b', value or '') if int(h) <= 24 and int(m) < 60 and (int(h) < 24 or int(m) == 0)})
+
+
+def daily_schedule(node):
+    value = node.text()
+    windows = sorted({(int(h1)*60+int(m1), int(h2)*60+int(m2)) for h1,m1,h2,m2 in re.findall(r'\b(\d{1,2}):(\d{2})\s*[-–〜～]\s*(\d{1,2}):(\d{2})\b', value) if int(h1)<24 and int(h2)<=24 and int(m1)<60 and int(m2)<60 and (int(h2)<24 or int(m2)==0) and int(h1)*60+int(m1)<int(h2)*60+int(m2)})
+    times = valid_times(value)
+    explicitly_closed = bool(re.search(r'終日(?:運営|公演|中止)|本日の運営はありません|休止|休演|運営中止|公演中止', value))
+    return {'times': times, 'windows': [list(pair) for pair in windows], 'isRange': bool(windows), 'closed': explicitly_closed, 'published': bool(times) or explicitly_closed}
+
+
 def parse_list(html, selected_date, park_id):
-    """Parse names, official links and date-specific operating/show times."""
+    """Parse all published dates once, retaining the selected day's legacy fields."""
     parser = TreeParser()
     parser.feed(html)
     records = []
-    date_class = 'date-' + selected_date.replace('-', '')
     for node in parser.root.walk():
         if node.tag != 'li' or 'data-categorize' not in node.attrs:
             continue
@@ -82,22 +95,129 @@ def parse_list(html, selected_date, park_id):
         if urlsplit(link).hostname not in {'www.tokyodisneyresort.jp', 'www.tokyodisneyresort.co.jp'}:
             continue
         area = next((n.text().strip() for n in descendants if n.has_class('area')), '')
-        daily = next((n for n in descendants if n.has_class(date_class)), None)
-        time_text = daily.text() if daily else None
-        times = sorted({int(h) * 60 + int(m) for h, m in re.findall(r'\b(\d{1,2}):(\d{2})\b', time_text or '')})
-        is_range = bool(time_text and re.search(r'\d:\d{2}\s*[-–〜～]\s*\d', time_text))
+        schedules = {}
+        for daily in descendants:
+            for class_name in daily.attrs.get('class', '').split():
+                match = re.fullmatch(r'date-(\d{4})(\d{2})(\d{2})', class_name)
+                if match:
+                    try:
+                        day = date(*map(int, match.groups())).isoformat()
+                    except ValueError:
+                        continue
+                    schedules[day] = daily_schedule(daily)
+        selected = schedules.get(selected_date, {})
         records.append({'parkId': park_id, 'name': name, 'sourceUrl': link, 'area': area,
-                        'hasDailySchedule': daily is not None, 'times': times,
-                        'isRange': is_range, 'dpaListed': 'プレミアアクセス対象' in node.text()})
+                        'hasDailySchedule': selected_date in schedules, 'hasConfirmedSchedule': selected.get('published',False), 'times': selected.get('times', []),
+                        'windows': selected.get('windows', []), 'isRange': selected.get('isRange', False),
+                        'dailySchedules': schedules, 'dpaListed': 'プレミアアクセス対象' in node.text()})
     return records
+
+
+def parse_stops(html, park_id, source_url):
+    """Official closure periods include single-day and open-ended closures."""
+    parser = TreeParser(); parser.feed(html)
+    records = []
+    for node in parser.root.walk():
+        if node.tag != 'li':
+            continue
+        children = list(node.walk())
+        heading = next((n for n in children if n.has_class('heading3')), None)
+        anchor = next((n for n in children if n.tag == 'a' and n.attrs.get('href')), None)
+        if not heading or not anchor:
+            continue
+        dates = re.findall(r'(\d{4})/(\d{1,2})/(\d{1,2})', node.text())
+        if not dates:
+            continue
+        try:
+            start = date(*map(int, dates[0])).isoformat()
+            end = date(*map(int, dates[1])).isoformat() if len(dates) > 1 else None if '未定' in node.text() else start
+        except ValueError:
+            continue
+        if end is not None and end < start:
+            continue
+        link = urljoin(ORIGIN, anchor.attrs['href'])
+        if urlsplit(link).hostname != 'www.tokyodisneyresort.jp':
+            continue
+        records.append({'parkId':park_id,'name':heading.text().strip(),'sourceUrl':link,'startDate':start,'endDate':end,'periodSourceUrl':source_url})
+    return records
+
+
+def japanese_range(value):
+    start = re.search(r'(\d{4})年\s*(\d{1,2})月\s*(\d{1,2})日', value)
+    if not start:
+        return None
+    remainder = value[start.end():]
+    end = re.search(r'[～〜-]\s*(?:(\d{4})年)?\s*(\d{1,2})月\s*(\d{1,2})日', remainder)
+    if not end:
+        return None
+    try:
+        first = date(*map(int, start.groups()))
+        year = int(end[1]) if end[1] else first.year + (int(end[2]) < first.month)
+        last = date(year, int(end[2]), int(end[3]))
+    except ValueError:
+        return None
+    return (first.isoformat(), last.isoformat()) if first <= last else None
+
+
+def node_lines(node):
+    return ''.join(node_lines(child) if isinstance(child, Node) else child for child in node.children) if node.tag != 'br' else '\n'
+
+
+def parse_events(html, park_id, source_url):
+    parser = TreeParser(); parser.feed(html)
+    events = []
+    for node in parser.root.walk():
+        if node.tag == 'a' and node.attrs.get('href'):
+            heading = next((n for n in node.walk() if n.tag == 'h3' and n.has_class('heading3')), None)
+            period = japanese_range(node.text())
+            if heading and period:
+                link = urljoin(ORIGIN, node.attrs['href'])
+                if urlsplit(link).hostname == 'www.tokyodisneyresort.jp':
+                    events.append({'parkId':park_id,'name':heading.text().strip(),'startDate':period[0],'endDate':period[1],'sourceUrl':link})
+        if node.tag == 'p' and node.has_class('text'):
+            lines = [re.sub(r'\s+', ' ', line).strip() for line in node_lines(node).splitlines() if line.strip()]
+            for index, title in enumerate(lines[:-1]):
+                if 'スペシャルイベント' not in title:
+                    continue
+                period = japanese_range(lines[index+1])
+                if period:
+                    events.append({'parkId':park_id,'name':re.sub(r'^スペシャルイベント[「『](.*)[」』]$',r'\1',title),'startDate':period[0],'endDate':period[1],'sourceUrl':source_url})
+    result = {}
+    for item in events:
+        result[(item['name'],item['startDate'])] = item
+    return list(result.values())
+
+
+def parse_opening_calendar(html, park_id):
+    parser = TreeParser(); parser.feed(html)
+    result = {}
+    slug = 'tdl' if park_id == 'land' else 'tds'
+    for node in parser.root.walk():
+        if node.tag != 'a':
+            continue
+        match = re.search('/'+slug+r'/daily/calendar/(\d{4})(\d{2})(\d{2})/', node.attrs.get('href',''))
+        if not match:
+            continue
+        opening = next((n for n in node.walk() if n.has_class('openTime')), None)
+        if not opening:
+            continue
+        try:
+            day = date(*map(int,match.groups())).isoformat()
+        except ValueError:
+            continue
+        schedule = daily_schedule(opening)
+        if schedule['windows']:
+            result[day] = {'windows':schedule['windows'],'sourceUrl':urljoin(ORIGIN,node.attrs['href'])}
+    return result
 
 
 def url_key(url):
     return urlsplit(url).path.rstrip('/')
 
 
-def refresh_catalogue(catalogue, records, selected_date):
+def refresh_catalogue(catalogue, records, selected_date, checked_on=None):
     """Keep positional data; update only facts matched to an existing official URL."""
+    checked_on = checked_on or datetime.now(ZoneInfo('Asia/Tokyo')).date().isoformat()
     updated = copy.deepcopy(catalogue)
     report = {'date': selected_date, 'changed': [], 'newFacilities': [], 'dpaReview': []}
     for park in updated['parks']:
@@ -113,15 +233,30 @@ def refresh_catalogue(catalogue, records, selected_date):
                 continue
             before = copy.deepcopy(activity)
             activity['name'], activity['area'] = record['name'], record['area']
-            activity['checkedOn'] = selected_date
-            if record['hasDailySchedule']:
+            activity['checkedOn'] = checked_on
+            for day, schedule in record.get('dailySchedules', {}).items():
+                if not schedule.get('published',True):
+                    old = activity.get('dailySchedules',{}).get(day,{})
+                    if old.get('closed') and old.get('closureSource')!='explicit':activity['dailySchedules'].pop(day,None)
+                    continue
+                daily = {'closed':schedule['closed']}
+                if schedule['closed']:daily['closureSource']='explicit'
+                if schedule['isRange']: daily['windows'] = schedule['windows']
+                elif activity['category'] in {'show','parade'}: daily['showTimes'] = schedule['times']
+                activity.setdefault('dailySchedules', {})[day] = daily
+                activity['dailyScheduleSourceUrl'] = record['sourceUrl']
+                activity['dailyScheduleCheckedOn'] = checked_on
+            cutoff = date.fromisoformat(checked_on).toordinal() - 35
+            if 'dailySchedules' in activity:
+                activity['dailySchedules'] = {day:value for day,value in activity['dailySchedules'].items() if date.fromisoformat(day).toordinal() >= cutoff}
+            if record['hasDailySchedule'] and record.get('hasConfirmedSchedule',True):
                 closed = set(activity.get('closedDates', []))
                 if not record['times']:
                     closed.add(selected_date)
                 else:
                     closed.discard(selected_date)
                     if record['isRange'] and len(record['times']) >= 2:
-                        activity['windows'] = [[record['times'][0], record['times'][-1]]]
+                        activity['windows'] = record.get('windows') or [[record['times'][0], record['times'][-1]]]
                         activity['operatingDate'] = selected_date
                     elif activity['category'] in {'show', 'parade'}:
                         activity['showTimes'] = record['times']
@@ -133,44 +268,180 @@ def refresh_catalogue(catalogue, records, selected_date):
             if activity != before:
                 report['changed'].append({'id': activity['id'], 'name': activity['name'],
                                            'fields': [k for k in activity if activity.get(k) != before.get(k)]})
-    updated['updatedAt'] = selected_date
+    updated['updatedAt'] = checked_on
     return updated, report
 
 
+def calendar_links(html,park_id):
+    parser=TreeParser();parser.feed(html)
+    slug='tdl' if park_id=='land' else 'tds'
+    result=set()
+    for node in parser.root.walk():
+        if node.tag!='a':continue
+        url=urljoin(ORIGIN,node.attrs.get('href',''));parts=urlsplit(url);query=parse_qs(parts.query)
+        if parts.hostname!='www.tokyodisneyresort.jp':continue
+        path_match=re.fullmatch('/'+slug+r'/monthly/calendar/(\d{4})(\d{2})/',parts.path)
+        try:
+            if path_match:date(*map(int,path_match.groups()),1)
+            elif parts.path=='/'+slug+'/monthly/calendar.html':date(int(query['year'][0]),int(query['month'][0]),1)
+            else:continue
+        except (ValueError,KeyError,IndexError):continue
+        result.add(url)
+    return sorted(result)[:7]
+
+
+def fetch_document(url):
+    request = Request(url, headers={'User-Agent':'ParkItineraryLab/1.3 (educational official catalogue update)'})
+    with urlopen(request, timeout=20) as response:
+        raw = response.read(8_000_001)
+    if len(raw) > 8_000_000:
+        raise ValueError('Official page is larger than the supported limit')
+    return raw.decode('utf-8')
+
+
+def fetch_official_updates(selected_date, fixture_dir=None):
+    """Bounded parallel requests; failures retain the last verified values."""
+    requests = []
+    for park_id,slug in [('land','tdl'),('sea','tds')]:
+        for kind in ['attraction','show','greeting','restaurant/list','shop/list','monthly/stop','event.html','monthly/calendar.html']:
+            requests.append((park_id,slug,kind,f'{ORIGIN}/{slug}/{kind}'+('' if kind.endswith('.html') else '/')))
+    records,stops,events,calendars,sources,errors = [],[],[],{},[],[]
+    additional_calendars=[]
+    def load(item):
+        park_id,slug,kind,url=item
+        html = (Path(fixture_dir)/(slug+'-'+kind.replace('/','-')+'.html')).read_text() if fixture_dir else fetch_document(url)
+        return item,html
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        futures = {pool.submit(load,item):item for item in requests}
+        for future in as_completed(futures):
+            item = futures[future]
+            park_id,slug,kind,url = item
+            try:
+                _,html = future.result()
+                if kind == 'monthly/stop':
+                    found = parse_stops(html,park_id,url)
+                    if not found and '休止を予定しているものはありません' not in html: raise ValueError('Closure list could not be parsed')
+                    stops.append({'parkId':park_id,'sourceUrl':url,'records':found})
+                elif kind == 'event.html':
+                    found = parse_events(html,park_id,url)
+                    if not found: raise ValueError('No dated event found')
+                    events.extend(found)
+                elif kind == 'monthly/calendar.html':
+                    found = parse_opening_calendar(html,park_id)
+                    if not found: raise ValueError('Opening calendar could not be parsed')
+                    calendars[park_id] = found
+                    if not fixture_dir:additional_calendars.extend((park_id,url) for url in calendar_links(html,park_id))
+                else:
+                    found = parse_list(html,selected_date,park_id)
+                    if not found: raise ValueError('Facility list could not be parsed')
+                    records.extend(found)
+                sources.append({'url':url,'fetchedAt':datetime.now(timezone.utc).isoformat().replace('+00:00','Z')})
+                print(f'{slug}/{kind}: parsed',flush=True)
+            except (OSError,ValueError,RuntimeError) as error:
+                errors.append({'url':url,'message':str(error)[:300]})
+                print(f'{slug}/{kind}: retained previous data ({error})',flush=True)
+    if additional_calendars:
+        with ThreadPoolExecutor(max_workers=6) as pool:
+            tasks={pool.submit(fetch_document,url):(park_id,url) for park_id,url in additional_calendars}
+            for future in as_completed(tasks):
+                park_id,url=tasks[future]
+                try:
+                    found=parse_opening_calendar(future.result(),park_id)
+                    if not found:
+                        sources.append({'url':url,'fetchedAt':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),'status':'no-published-opening-times'})
+                        continue
+                    calendars.setdefault(park_id,{}).update(found)
+                    sources.append({'url':url,'fetchedAt':datetime.now(timezone.utc).isoformat().replace('+00:00','Z')})
+                except (OSError,ValueError,RuntimeError) as error:errors.append({'url':url,'message':str(error)[:300]})
+    if not records:
+        raise RuntimeError('No official facility lists could be retrieved; previous catalogue retained')
+    return {'records':records,'stops':stops,'events':events,'calendars':calendars,'sourcesChecked':sources,'errors':errors}
+
+
 def fetch_lists(selected_date):
-    records = []
-    for park_id, slug in [('land', 'tdl'), ('sea', 'tds')]:
-        for kind in ['attraction', 'show', 'greeting', 'restaurant/list', 'shop/list']:
-            url = f'{ORIGIN}/{slug}/{kind}/'
-            request = Request(url, headers={'User-Agent': 'ParkItineraryLab/1.0 (public catalogue update)'})
-            with urlopen(request, timeout=30) as response:
-                html = response.read(8_000_000).decode('utf-8')
-            found = parse_list(html, selected_date, park_id)
-            if not found:
-                raise RuntimeError(f'施設一覧を読み取れませんでした。元のデータは変更しません: {url}')
-            print(f'{slug}/{kind}: {len(found)} facilities', flush=True)
-            records.extend(found)
-    return records
+    return fetch_official_updates(selected_date)['records']
+
+
+def apply_official_updates(catalogue, bundle, selected_date, checked_on=None):
+    checked_on = checked_on or datetime.now(ZoneInfo('Asia/Tokyo')).date().isoformat()
+    updated,report = refresh_catalogue(catalogue,bundle['records'],selected_date,checked_on)
+    report.update({'closures':[],'events':[],'sourceErrors':bundle.get('errors',[])})
+    for park in updated['parks']:
+        closure = next((item for item in bundle.get('stops',[]) if item['parkId']==park['id']),None)
+        if closure is not None:
+            for activity in park['activities']:
+                periods = [{'startDate':item['startDate'],'endDate':item['endDate'],'sourceUrl':closure['sourceUrl'],'checkedOn':checked_on,'origin':'official'} for item in closure['records'] if url_key(item['sourceUrl'])==url_key(activity['sourceUrl'])]
+                preserved = [item for item in activity.get('closedPeriods',[]) if item.get('origin')!='official']
+                activity['closedPeriods'] = preserved+periods
+            park['closuresCheckedOn'] = checked_on
+            report['closures'].append({'parkId':park['id'],'periods':len(closure['records'])})
+        existing = park.setdefault('events',[])
+        for event in (item for item in bundle.get('events',[]) if item['parkId']==park['id']):
+            current = next((item for item in existing if item['name']==event['name'] and item['startDate']==event['startDate']),None)
+            if current is None:
+                current = {'id':park['id']+'-event-'+hashlib.sha1((event['sourceUrl']+'|'+event['startDate']).encode()).hexdigest()[:12],'multiplier':1,'multiplierSource':'neutral-until-observed'}
+                existing.append(current)
+            current.update({key:event[key] for key in ['name','startDate','endDate','sourceUrl']})
+            current['checkedOn']=checked_on
+            report['events'].append({'parkId':park['id'],'id':current['id'],'name':current['name']})
+        if park['id'] in bundle.get('calendars',{}):
+            park.setdefault('operatingCalendar',{}).update(bundle['calendars'][park['id']])
+            park['calendarCheckedOn']=checked_on
+    days = sorted({day for park in updated['parks'] for activity in park['activities'] for day in activity.get('dailySchedules',{})})
+    updated.update({'pipelineVersion':2,'fetchedAt':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),'sourcesChecked':bundle.get('sourcesChecked',[]),'scheduleCoverage':{'startDate':days[0] if days else None,'endDate':days[-1] if days else None},'updateStatus':'partial' if bundle.get('errors') else 'complete'})
+    return updated,report
+
+
+def seed_dynamic_catalogue(base, previous):
+    """Reviewed source owns graph/costs; keep published date facts between refreshes."""
+    result=copy.deepcopy(base)
+    dynamic={'dailySchedules','dailyScheduleSourceUrl','dailyScheduleCheckedOn','closedDates','closedPeriods','windows','operatingDate','showTimes','showTimesDate','checkedOn','menuUrl','menuItems','menuCheckedOn','menuSourceUrl','menuStatus'}
+    for park in result['parks']:
+        old_park=next((item for item in previous.get('parks',[]) if item.get('id')==park['id']),{})
+        old_activities={item['id']:item for item in old_park.get('activities',[])}
+        for activity in park['activities']:
+            old=old_activities.get(activity['id'],{})
+            if old.get('sourceUrl')!=activity.get('sourceUrl'):continue
+            for key in dynamic:
+                if key.startswith('menu') and old.get('menuCheckedOn','')<activity.get('menuCheckedOn',''):continue
+                if key in old:activity[key]=copy.deepcopy(old[key])
+        for key in ['operatingCalendar','closuresCheckedOn','calendarCheckedOn']:
+            if key in old_park:park[key]=copy.deepcopy(old_park[key])
+        events=park.setdefault('events',[])
+        for old in old_park.get('events',[]):
+            current=next((item for item in events if item['id']==old['id'] or (item['name']==old['name'] and item['startDate']==old['startDate'])),None)
+            if current is None:events.append(copy.deepcopy(old))
+            else:
+                for key in ['name','startDate','endDate','sourceUrl','checkedOn']:
+                    if key in old:current[key]=copy.deepcopy(old[key])
+    return result
+
+
+def atomic_json(path,data):
+    path=Path(path);path.parent.mkdir(parents=True,exist_ok=True)
+    temporary=path.with_suffix(path.suffix+'.tmp')
+    temporary.write_text(json.dumps(data,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
+    temporary.replace(path)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--date', default=datetime.now(ZoneInfo('Asia/Tokyo')).date().isoformat())
-    parser.add_argument('--catalogue', type=Path, default=ROOT / 'web/data/parks.json')
-    parser.add_argument('--output', type=Path, default=ROOT / 'outputs/catalogue-update.json')
-    parser.add_argument('--apply', action='store_true')
+    parser.add_argument('--date',default=datetime.now(ZoneInfo('Asia/Tokyo')).date().isoformat())
+    parser.add_argument('--catalogue',type=Path,default=ROOT/'web/data/parks.json')
+    parser.add_argument('--output',type=Path,default=ROOT/'outputs/catalogue-update.json')
+    parser.add_argument('--fixture-dir',type=Path)
+    parser.add_argument('--previous-catalogue',type=Path,help='Retain verified date facts from the previous published catalogue')
+    parser.add_argument('--apply',action='store_true')
     args = parser.parse_args()
     date.fromisoformat(args.date)
-    original = json.loads(args.catalogue.read_text(encoding='utf-8'))
-    updated, report = refresh_catalogue(original, fetch_lists(args.date), args.date)
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(updated, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-    report_path = args.output.with_name(args.output.stem + '-report.json')
-    report_path.write_text(json.dumps(report, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
-    if args.apply:
-        args.catalogue.write_text(json.dumps(updated, ensure_ascii=False, indent=2) + '\n', encoding='utf-8')
+    original=json.loads(args.catalogue.read_text(encoding='utf-8'))
+    if args.previous_catalogue and args.previous_catalogue.exists():original=seed_dynamic_catalogue(original,json.loads(args.previous_catalogue.read_text(encoding='utf-8')))
+    updated,report=apply_official_updates(original,fetch_official_updates(args.date,args.fixture_dir),args.date)
+    atomic_json(args.output,updated)
+    report_path=args.output.with_name(args.output.stem+'-report.json');atomic_json(report_path,report)
+    if args.apply:atomic_json(args.catalogue,updated)
     print(f'Updated catalogue: {args.output}\nChange report: {report_path}')
-    print('新施設の位置・DPA対象変更・料金はレポートの公式リンクで確認してください。')
+    print('New facilities and changed DPA eligibility require verified graph positions and prices before addition.')
 
 
 if __name__ == '__main__':
