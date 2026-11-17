@@ -1,3 +1,4 @@
+import {validateWaitModel} from './wait-model.js';
 /** Portable schedules: the shared link contains preferences, never a browser's saved history. */
 const STORAGE_KEY = 'park-itinerary-lab:v1';
 const MAX_SHARED_LENGTH = 14000;
@@ -36,6 +37,7 @@ function validDate(value) {
   const date = new Date(value + 'T00:00:00Z');
   return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
+const validTimestamp = value => text(value, 80) && /^\d{4}-\d{2}-\d{2}T/.test(value) && Number.isFinite(Date.parse(value));
 function webUrl(value) {
   if (!text(value, 2000)) return false;
   try { const url = new URL(value); return ['https:', 'http:'].includes(url.protocol) && !url.username && !url.password; } catch { return false; }
@@ -92,7 +94,33 @@ export function validateSavedState(state) {
   if (!validDate(settings.date) || !validTime(settings.entry) || !validTime(settings.exit) || settings.entry >= settings.exit || !finite(settings.speed, 10, 150) || !integer(settings.budget, 0, 10000000) || settings.budget % 100 !== 0) fail('日付・入退園時刻・歩く速さ・100円単位の予算を確認してください。');
   for (const key of ['foodBudget', 'dpaBudget', 'souvenirReserve', 'spentBudget']) if (!optionalNumber(settings, key, 0, 10000000, true) || (settings[key] !== undefined && settings[key] % 100 !== 0)) fail('費用は100円単位の整数で指定してください。');
   for (const key of ['restEvery', 'restMinutes']) if (!optionalNumber(settings, key, 0, 600, true)) fail('休憩の間隔と長さを確認してください。');
-  if (!optionalNumber(settings, 'searchSeconds', 0.1, 60) || !optionalNumber(settings, 'replanFrom', settings.entry, settings.exit, true)) fail('探索時間と組み替え開始時刻を確認してください。');
+  if (!optionalNumber(settings, 'searchSeconds', 0.1, 120) || !optionalNumber(settings, 'replanFrom', settings.entry, settings.exit, true)) fail('探索時間と組み替え開始時刻を確認してください。');
+  if (settings.searchMethod !== undefined && !['beam', 'multistart', 'portfolio'].includes(settings.searchMethod)) fail('探索方法を選び直してください。');
+  if (settings.liveMode !== undefined && !['auto', 'off'].includes(settings.liveMode)) fail('当日の待ち時間の利用方法を選び直してください。');
+  if (settings.liveData !== undefined && settings.liveData !== null) {
+    const live = settings.liveData;
+    if (!plain(live) || live.schemaVersion !== 1 || live.parkId !== state.parkId || live.provider !== 'queue-times' || !validTimestamp(live.fetchedAt) || !Array.isArray(live.rides) || live.rides.length > MAX_ACTIVITIES || !Array.isArray(live.unmatched) || live.unmatched.length > MAX_ACTIVITIES) fail('当日の待ち時間データの形式と取得時刻を確認してください。');
+    const rideIds = new Set();
+    for (const ride of live.rides) {
+      if (!plain(ride) || !id(ride.activityId) || rideIds.has(ride.activityId) || !integer(ride.providerId, 0, 2147483647) || !text(ride.name) || !finite(ride.wait, 0, 600) || typeof ride.isOpen !== 'boolean' || !validTimestamp(ride.updatedAt)) fail('取得した施設名・待ち時間・更新時刻を確認してください。');
+      rideIds.add(ride.activityId);
+    }
+    if (live.unmatched.some(ride => !plain(ride) || !integer(ride.providerId, 0, 2147483647) || !text(ride.name))) fail('施設を対応付けられなかった待ち時間データを確認してください。');
+  }
+  if (settings.waitModel !== undefined && settings.waitModel !== null) {
+    const model = settings.waitModel;
+    if (!validateWaitModel(model) || !plain(model) || model.schemaVersion !== 1 || model.method !== 'ridge-regression' || model.parkId !== state.parkId || !['trained', 'insufficient-data'].includes(model.status) || typeof model.usable !== 'boolean' || !Array.isArray(model.activityIds) || model.activityIds.length > MAX_ACTIVITIES || new Set(model.activityIds).size !== model.activityIds.length || model.activityIds.some(value => !id(value)) || !Array.isArray(model.coefficients) || model.coefficients.length > MAX_ACTIVITIES + 7 || model.coefficients.some(value => !finite(value, -Number.MAX_VALUE, Number.MAX_VALUE))) fail('待ち時間の予測モデルの形式を確認してください。');
+    if (!integer(model.samples, 0, 50000) || !integer(model.days, 0, 50000) || !validTimestamp(model.trainedAt) || !validDate(model.beforeDate)) fail('予測モデルの学習期間と件数を確認してください。');
+    if (model.status === 'trained' && (model.coefficients.length !== model.activityIds.length + 7 || !validDate(model.firstDate) || !validDate(model.lastDate))) fail('学習済みモデルの係数と対象期間を確認してください。');
+  }
+  if (settings.fixedBreaks !== undefined) {
+    if (!Array.isArray(settings.fixedBreaks) || settings.fixedBreaks.length > 30) fail('指定する休憩は30件までにしてください。');
+    const breakIds = new Set();
+    for (const rest of settings.fixedBreaks) {
+      if (!plain(rest) || !id(rest.id) || breakIds.has(rest.id) || !id(rest.node) || !text(rest.label, 100) || !validTime(rest.start) || !integer(rest.duration, 1, 180) || rest.start + rest.duration > 1440) fail('休憩のID・地点・名前・開始時刻・長さを確認してください。');
+      breakIds.add(rest.id);
+    }
+  }
   for (const [key, options] of Object.entries({crowdMode:['estimate', 'manual'], crowdLevel:['quiet', 'normal', 'busy'], weather:['sun', 'cloud', 'rain'], budgetPreference:['balanced', 'food', 'dpa']})) if (settings[key] !== undefined && !options.includes(settings[key])) fail('混雑や予算の条件を選び直してください。');
   if (!Array.isArray(settings.selections) || settings.selections.length > MAX_ACTIVITIES) fail('希望の一覧を確認してください。');
   const ids = new Set();
@@ -120,6 +148,7 @@ export function validateSavedState(state) {
       for (const key of ['node', 'endNode', 'from', 'to']) if (row[key] !== undefined && !id(row[key])) fail('予定表の地点IDを確認してください。');
       if (row.path !== undefined && (!Array.isArray(row.path) || row.path.length > 1000 || row.path.some(value => !id(value)))) fail('予定表の徒歩ルートを確認してください。');
       if ((row.kind || row.type) === 'location' && (row.start !== row.end || !id(row.node))) fail('現在地の変更は同じ時刻の地点として指定してください。');
+      if (row.fixedBreakId !== undefined && (!id(row.fixedBreakId) || (row.kind || row.type) !== 'rest' || !id(row.node))) fail('指定した休憩のIDと地点を確認してください。');
     }
     if (state.result.visits !== undefined && (!Array.isArray(state.result.visits) || state.result.visits.length > MAX_ACTIVITIES || state.result.visits.some(visit => !plain(visit) || !id(visit.activityId || visit.id) || !id(visit.node) || (visit.endNode !== undefined && !id(visit.endNode)) || !validTime(visit.start) || !validTime(visit.end) || visit.start > visit.end))) fail('体験した施設と地点を確認してください。');
   }
@@ -164,7 +193,7 @@ export function createShareUrl(state, baseUrl = location.href) {
   validateSavedState(state);
   const url = new URL(baseUrl);
   if (!['https:', 'http:'].includes(url.protocol)) fail('共有用のWebページを開いてください。');
-  const {history, initialPlan, ...portableSettings} = state.settings;
+  const {history, initialPlan, waitModel, liveData, liveSnapshot, ...portableSettings} = state.settings;
   const encoded = encodeBase64(JSON.stringify({v:1, parkId:state.parkId, settings:portableSettings}));
   if (encoded.length > MAX_SHARED_LENGTH) fail('希望が多いためリンクが長くなります。JSONで共有してください。');
   url.hash = `plan=${encoded}`;
@@ -227,6 +256,10 @@ export function parseHistoryCsv(raw) {
 export const formatTime = value => `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
 const yen = value => `${Math.round(Number(value) || 0).toLocaleString('ja-JP')}円`;
 const html = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
+const rowKind = row => row.kind || row.type || '';
+const rowTitle = row => rowKind(row) === 'rest' && !row.name.includes('休憩') ? `休憩 · ${row.name}` : row.name;
+const rowLocation = (row, park) => park?.nodes?.find(node => node.id === (row.node || row.to))?.name || '';
+const rowCategory = row => ({walk:'徒歩', wait:'時間調整', queue:'待ち時間', activity:'体験', rest:'休憩', exit:'退園', location:'現在地'})[rowKind(row)] || rowKind(row);
 const csvCell = value => {
   let string = String(value ?? '');
   if (/^[\s]*[=+\-@\t\r]/.test(string)) string = "'" + string;
@@ -245,11 +278,11 @@ function downloadBlob(contents, type, filename) {
 }
 export function buildPlanJson(state) { validateSavedState(state); return JSON.stringify({format:'park-itinerary-lab', version:1, ...state}, null, 2); }
 export function downloadPlanJson(state) { downloadBlob(buildPlanJson(state), 'application/json;charset=utf-8', `ParkItinerary_${state.parkId}_${state.settings.date}.json`); }
-export function buildScheduleCsv(plan) {
+export function buildScheduleCsv(plan, park) {
   const rows = checkedRows(plan);
-  return '\uFEFF' + [['開始', '終了', '種類', '予定', '所要分', '徒歩m', '費用円', 'DPA'], ...rows.map(row => [formatTime(row.start), formatTime(row.end), row.kind || row.type || '', row.name, row.end - row.start, row.metres || 0, row.cost || 0, row.dpa ? '利用' : ''])].map(row => row.map(csvCell).join(',')).join('\r\n');
+  return '\uFEFF' + [['開始', '終了', '種類', '予定', '所要分', '徒歩m', '費用円', 'DPA', '地点'], ...rows.map(row => [formatTime(row.start), formatTime(row.end), rowCategory(row), rowTitle(row), row.end - row.start, row.metres || 0, row.cost || 0, row.dpa ? '利用' : '', rowLocation(row, park)])].map(row => row.map(csvCell).join(',')).join('\r\n');
 }
-export function downloadScheduleCsv(plan, park) { downloadBlob(buildScheduleCsv(plan), 'text/csv;charset=utf-8', `ParkItinerary_${park.id}.csv`); }
+export function downloadScheduleCsv(plan, park) { downloadBlob(buildScheduleCsv(plan, park), 'text/csv;charset=utf-8', `ParkItinerary_${park.id}.csv`); }
 function icalText(value) { return String(value ?? '').replace(/\\/g, '\\\\').replace(/\r?\n/g, '\\n').replaceAll(';', '\\;').replaceAll(',', '\\,'); }
 function foldIcal(line) {
   const chunks = []; let chunk = '', bytes = 0;
@@ -271,7 +304,8 @@ export function buildCalendar(plan, park, settings) {
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Park Itinerary Lab//Day Plan//JA', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', `X-WR-CALNAME:${icalText(park.name)}`];
   rows.forEach((row, index) => {
     if (row.start === row.end) return;
-    lines.push('BEGIN:VEVENT', `UID:${settings.date}-${park.id}-${index}-${row.start}@park-itinerary-lab`, `DTSTAMP:${stamp}`, `DTSTART:${calendarStamp(settings.date, row.start)}`, `DTEND:${calendarStamp(settings.date, row.end)}`, `SUMMARY:${icalText(row.name)}`, `DESCRIPTION:${icalText(`${row.dpa ? 'DPA利用。' : ''}費用 ${yen(row.cost)}${row.metres ? `。徒歩 約${Math.round(row.metres)}m` : ''}`)}`, `LOCATION:${icalText(park.name)}`, 'END:VEVENT');
+    const place = rowLocation(row, park);
+    lines.push('BEGIN:VEVENT', `UID:${settings.date}-${park.id}-${index}-${row.start}@park-itinerary-lab`, `DTSTAMP:${stamp}`, `DTSTART:${calendarStamp(settings.date, row.start)}`, `DTEND:${calendarStamp(settings.date, row.end)}`, `SUMMARY:${icalText(rowTitle(row))}`, `DESCRIPTION:${icalText(`${row.fixedBreakId ? '指定した時刻と地点で休憩。' : ''}${row.dpa ? 'DPA利用。' : ''}費用 ${yen(row.cost)}${row.metres ? `。徒歩 約${Math.round(row.metres)}m` : ''}`)}`, `LOCATION:${icalText(place ? `${park.name} · ${place}` : park.name)}`, 'END:VEVENT');
   });
   lines.push('END:VCALENDAR'); return lines.map(foldIcal).join('\r\n') + '\r\n';
 }
@@ -281,8 +315,8 @@ export function buildOfflineHtml(plan, park, settings) {
   const total = plan.totals || {};
   const breakdown = [['フード', total.foodCost], ['DPA', total.dpaCost], ['お買い物', total.shoppingCost], ['残り予算', total.budgetRemaining], ['お土産に使える額', total.souvenirAllocation]].filter(([, value]) => finite(value, 0, 10000000)).map(([label, value]) => `<span>${html(label)} ${html(yen(value))}</span>`).join(' · ');
   const paidNote = settings.spentBudget > 0 || (settings.purchases || []).length > 0 ? '（支払済みを含む）' : '';
-  const cards = rows.map((row, index) => `<article class="row ${row.kind === 'activity' ? 'visit' : ''}"><div class="time">${html(formatTime(row.start))}<small>${html(formatTime(row.end))}</small></div><div><h2>${html(row.name)}</h2><p>${html(row.end - row.start)}分${row.metres ? ` · 徒歩 約${html(Math.round(row.metres))}m` : ''}${row.dpa ? ' · DPA利用' : ''}${row.cost ? ` · ${html(yen(row.cost))}` : ''}</p><label><input type="checkbox" data-row="${index}">済み</label></div></article>`).join('');
+  const cards = rows.map((row, index) => `<article class="row ${rowKind(row) === 'activity' ? 'visit' : rowKind(row) === 'rest' ? 'rest' : ''}"><div class="time">${html(formatTime(row.start))}<small>${html(formatTime(row.end))}</small></div><div><h2>${html(rowTitle(row))}</h2><p>${rowLocation(row, park) ? `${html(rowLocation(row, park))} · ` : ''}${html(row.end - row.start)}分${row.metres ? ` · 徒歩 約${html(Math.round(row.metres))}m` : ''}${row.dpa ? ' · DPA利用' : ''}${row.cost ? ` · ${html(yen(row.cost))}` : ''}</p><label><input type="checkbox" data-row="${index}">済み</label></div></article>`).join('');
   const safeMap = webUrl(park.mapUrl) ? `<a href="${html(park.mapUrl)}" target="_blank" rel="noopener noreferrer">公式の園内マップを開く ↗</a>` : '';
-  return `<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${html(park.name)} · ${html(settings.date)} の予定</title><style>*{box-sizing:border-box}body{margin:0;background:${park.id === 'sea' ? '#e8f5ff' : '#eff4ee'};color:#183047;font-family:system-ui,"Yu Gothic",sans-serif;line-height:1.7}.wrap{max-width:720px;margin:auto;padding:26px 18px}header{margin-bottom:24px}h1{font-size:25px;margin:8px 0}h2{font-size:16px;margin:0}p{margin:5px 0;color:#536579;font-size:13px}.kicker{letter-spacing:.13em;font-size:10px;font-weight:800}.row{display:grid;grid-template-columns:68px 1fr;gap:14px;background:#ffffffad;border:1px solid #d2dde6;border-radius:14px;padding:17px;margin:9px 0}.visit{border-left:4px solid #308bc9;background:white}.time{font-weight:800;font-size:17px}.time small{display:block;font-size:12px;font-weight:500;color:#64758b}label{font-size:12px;display:inline-flex;align-items:center;gap:5px}input:checked{accent-color:#268769}a{color:#22689e}footer{margin:25px 0;font-size:12px}button{padding:9px 15px;border-radius:9px;border:1px solid #bdd0df;background:white;color:#183047;font:inherit}@media print{body{background:white}.wrap{max-width:none}.row{break-inside:avoid}button,label{display:none}}</style><div class="wrap"><header><div class="kicker">PARK ITINERARY / MY DAY</div><h1>${html(park.name)}</h1><p>${html(settings.date)} · ${html(formatTime(settings.entry))}〜${html(formatTime(settings.exit))}</p><p>合計 ${html(yen(total.cost ?? total.spend ?? rows.reduce((sum,row)=>sum+(Number(row.cost)||0),0)))}${paidNote} · 予算 ${html(yen(settings.budget))}</p><p>${breakdown}</p><button onclick="window.print()">印刷・PDFに保存</button></header><main>${cards}</main><footer>${safeMap}<p>この予定表は通信がない場所でも開けます。チェックはこの画面を開いている間だけ保持されます。</p></footer></div></html>`;
+  return `<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${html(park.name)} · ${html(settings.date)} の予定</title><style>*{box-sizing:border-box}body{margin:0;background:${park.id === 'sea' ? '#e8f5ff' : '#f4f6ff'};color:#183047;font-family:system-ui,"Yu Gothic",sans-serif;line-height:1.7}.wrap{max-width:720px;margin:auto;padding:26px 18px}header{margin-bottom:24px}h1{font-size:25px;margin:8px 0}h2{font-size:16px;margin:0}p{margin:5px 0;color:#536579;font-size:13px}.kicker{letter-spacing:.13em;font-size:10px;font-weight:800}.row{display:grid;grid-template-columns:68px 1fr;gap:14px;background:#ffffffad;border:1px solid #d2dde6;border-radius:14px;padding:17px;margin:9px 0}.visit{border-left:4px solid #308bc9;background:white}.rest{border-left:4px solid #99701c;background:#fff9e9}.time{font-weight:800;font-size:17px}.time small{display:block;font-size:12px;font-weight:500;color:#64758b}label{font-size:12px;display:inline-flex;align-items:center;gap:5px}input:checked{accent-color:#268769}a{color:#22689e}footer{margin:25px 0;font-size:12px}button{padding:9px 15px;border-radius:9px;border:1px solid #bdd0df;background:white;color:#183047;font:inherit}@media print{body{background:white}.wrap{max-width:none}.row{break-inside:avoid}button,label{display:none}}</style><div class="wrap"><header><div class="kicker">PARK ITINERARY / MY DAY</div><h1>${html(park.name)}</h1><p>${html(settings.date)} · ${html(formatTime(settings.entry))}〜${html(formatTime(settings.exit))}</p><p>合計 ${html(yen(total.cost ?? total.spend ?? rows.reduce((sum,row)=>sum+(Number(row.cost)||0),0)))}${paidNote} · 予算 ${html(yen(settings.budget))}</p><p>${breakdown}</p><button onclick="window.print()">印刷・PDFに保存</button></header><main>${cards}</main><footer>${safeMap}<p>この予定表は通信がない場所でも開けます。チェックはこの画面を開いている間だけ保持されます。</p></footer></div></html>`;
 }
 export function downloadOfflineHtml(plan, park, settings) { downloadBlob(buildOfflineHtml(plan, park, settings), 'text/html;charset=utf-8', `ParkItinerary_${park.id}_${settings.date}.html`); }

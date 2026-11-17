@@ -1,9 +1,15 @@
+import { initialiseExternalData } from './wait-data.js';
 import { renderParkMap } from './map-view.js';
 import { saveLocal, loadLocal, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js';
 
 const CATEGORY = {attraction:'アトラクション',show:'ショー',parade:'パレード',restaurant:'レストラン',cafe:'カフェ',snack:'スナック',popcorn:'ポップコーン',greeting:'グリーティング',shop:'お土産'};
 const FOOD = new Set(['restaurant','cafe','snack','popcorn']);
 const ENTERTAINMENT = new Set(['show','parade']);
+const GENRES = [{id:'all',label:'すべて'},{id:'attraction',label:'アトラクション'},{id:'entertainment',label:'ショー・パレード'},{id:'food',label:'フード'},{id:'greeting',label:'グリーティング'},{id:'shop',label:'お土産'}];
+const genreOf = category => FOOD.has(category)?'food':ENTERTAINMENT.has(category)?'entertainment':category;
+const WEIGHT_LABELS = {1:'気軽に',2:'できれば',3:'行きたい',4:'かなり行きたい',5:'最優先'};
+const WAIT_LABELS = {manual:'手動の待ち時間',live:'当日の公開待ち時間',ml:'学習モデルの予測',history:'履歴からの推定',trend:'傾向モデル',dpa:'DPAの入場準備'};
+const SEARCH_LABELS = {beam:'ビーム探索',multistart:'多点スタート探索',portfolio:'組合せ探索'};
 const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money = n => `${Math.round(Number(n) || 0).toLocaleString('ja-JP')}円`;
 const minute = text => { if (!/^\d{2}:\d{2}$/.test(text)) throw Error('時刻を入力してください。'); const [h,m] = text.split(':').map(Number); if(h>23||m>59)throw Error('時刻を確認してください。'); return h*60+m; };
@@ -11,7 +17,7 @@ const timeText = value => Number.isFinite(Number(value)) ? `${String(Math.floor(
 const safeLink = url => { try {const u = new URL(url);return ['https:','http:'].includes(u.protocol)?escapeHtml(u.href):'#';}catch{return '#';} };
 const $ = id => document.getElementById(id);
 const defaultDate = () => { const now = new Date();return new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(now); };
-export const defaultSettings = () => ({date:defaultDate(),entry:540,exit:1260,speed:60,budget:12000,foodBudget:5000,dpaBudget:5000,souvenirReserve:2000,souvenirMode:'reserve',budgetPreference:'balanced',crowdMode:'estimate',crowdLevel:'normal',weather:'sun',selections:[],restEvery:90,restMinutes:10,searchSeconds:5,spentBudget:0,purchases:[],history:[]});
+export const defaultSettings = () => ({date:defaultDate(),entry:540,exit:1260,speed:70,budget:12000,foodBudget:5000,dpaBudget:5000,souvenirReserve:2000,souvenirMode:'reserve',budgetPreference:'balanced',crowdMode:'estimate',crowdLevel:'normal',weather:'sun',selections:[],restEvery:90,restMinutes:10,searchSeconds:15,searchMethod:'portfolio',fixedBreaks:[],spentBudget:0,purchases:[],history:[]});
 
 /** A different visit date starts a fresh day; DPA purchases belong to one day. */
 export function resetForNewVisitDay(state) {
@@ -26,7 +32,7 @@ export function resetForNewVisitDay(state) {
 }
 
 export function initialiseApp() {
-  let catalogue, worker = null, requestId = 0, searchStarted = 0, progressTimer = null, latestPreview = null;
+  let catalogue, externalPanel, worker = null, requestId = 0, searchStarted = 0, progressTimer = null, latestPreview = null, wishlistGenre = 'all', lastBreakSuggestionResult = null;
   let state = {parkId:'land',settings:defaultSettings(),result:null,history:[],parkStates:{}};
   const currentPark = () => catalogue.parks.find(p => p.id === state.parkId) || catalogue.parks[0];
   const activities = () => currentPark().activities;
@@ -51,7 +57,7 @@ export function initialiseApp() {
   }
   function readSettings() {
     for(const selection of state.settings.selections)rememberOwnedPurchase(selection);
-    const settings={...state.settings,date:$('visitDate').value,entry:minute($('entryTime').value),exit:minute($('exitTime').value),weather:$('weather').value,speed:numberInput('walkSpeed',20,150),restEvery:numberInput('restEvery',0,480),restMinutes:numberInput('restMinutes',0,60),searchSeconds:numberInput('searchSeconds',1,30),budget:numberInput('budget',0,1000000,100),foodBudget:numberInput('foodBudget',0,1000000,100),dpaBudget:numberInput('dpaBudget',0,1000000,100),souvenirReserve:numberInput('souvenirReserve',0,1000000,100),souvenirMode:$('souvenirMode').value,budgetPreference:$('budgetPreference').value,crowdMode:$('crowdMode').value,crowdLevel:$('crowdLevel').value,history:state.history || [],spentBudget:numberInput('spentBudget',0,1000000,100)};
+    const settings={...state.settings,date:$('visitDate').value,entry:minute($('entryTime').value),exit:minute($('exitTime').value),weather:$('weather').value,speed:numberInput('walkSpeed',20,150),restEvery:numberInput('restEvery',0,480),restMinutes:numberInput('restMinutes',0,60),searchSeconds:numberInput('searchSeconds',1,120),searchMethod:$('searchMethod').value,budget:numberInput('budget',0,1000000,100),foodBudget:numberInput('foodBudget',0,1000000,100),dpaBudget:numberInput('dpaBudget',0,1000000,100),souvenirReserve:numberInput('souvenirReserve',0,1000000,100),souvenirMode:$('souvenirMode').value,budgetPreference:$('budgetPreference').value,crowdMode:$('crowdMode').value,crowdLevel:$('crowdLevel').value,history:state.history || [],spentBudget:numberInput('spentBudget',0,1000000,100)};
     if(!/^\d{4}-\d{2}-\d{2}$/.test(settings.date))throw Error('訪問日を指定してください。');
     if(settings.entry>=settings.exit)throw Error('退園予定は入園予定より後にしてください。');
     if(settings.souvenirReserve>settings.budget)throw Error('お土産に残す金額が予算を超えています。');
@@ -61,8 +67,10 @@ export function initialiseApp() {
   }
   function writeSettings() {
     const s=state.settings;
-    for(const [id,key] of Object.entries({visitDate:'date',weather:'weather',walkSpeed:'speed',restEvery:'restEvery',restMinutes:'restMinutes',searchSeconds:'searchSeconds',budget:'budget',foodBudget:'foodBudget',dpaBudget:'dpaBudget',souvenirReserve:'souvenirReserve',souvenirMode:'souvenirMode',budgetPreference:'budgetPreference',crowdMode:'crowdMode',crowdLevel:'crowdLevel',spentBudget:'spentBudget'}))$(id).value=String(s[key] ?? defaultSettings()[key]);
-    $('entryTime').value=timeText(s.entry);$('exitTime').value=timeText(s.exit);$('replanEnabled').checked=Number.isInteger(s.replanFrom);$('replanTime').value=timeText(s.replanFrom ?? 840);renderPurchaseHistory();
+    $('walkSpeed').querySelector('[data-custom-speed]')?.remove();if(![50,70,90].includes(Number(s.speed))){const option=document.createElement('option');option.value=s.speed;option.textContent=`指定した速さ（${s.speed} m/分）`;option.dataset.customSpeed='true';$('walkSpeed').append(option);}
+    $('searchSeconds').querySelector('[data-custom-duration]')?.remove();if(![5,15,30,60,120].includes(Number(s.searchSeconds))){const option=document.createElement('option');option.value=s.searchSeconds;option.textContent=`指定した上限（${s.searchSeconds}秒）`;option.dataset.customDuration='true';$('searchSeconds').append(option);}
+    for(const [id,key] of Object.entries({visitDate:'date',weather:'weather',walkSpeed:'speed',restEvery:'restEvery',restMinutes:'restMinutes',searchSeconds:'searchSeconds',searchMethod:'searchMethod',budget:'budget',foodBudget:'foodBudget',dpaBudget:'dpaBudget',souvenirReserve:'souvenirReserve',souvenirMode:'souvenirMode',budgetPreference:'budgetPreference',crowdMode:'crowdMode',crowdLevel:'crowdLevel',spentBudget:'spentBudget'}))$(id).value=String(s[key] ?? defaultSettings()[key]);
+    $('entryTime').value=timeText(s.entry);$('exitTime').value=timeText(s.exit);$('replanEnabled').checked=Number.isInteger(s.replanFrom);$('replanTime').value=timeText(s.replanFrom ?? 840);renderPurchaseHistory();renderFixedBreaks();
   }
   function cleanState(value) {
     if(!value || typeof value!=='object'||!catalogue.parks.some(p=>p.id===value.parkId)||!value.settings || !Array.isArray(value.settings.selections))throw Error('この計画データの形式を確認してください。');
@@ -80,9 +88,13 @@ export function initialiseApp() {
     $('currentNode').replaceChildren();
     for(const node of park.nodes){const option=document.createElement('option');option.value=node.id;option.textContent=node.name || node.id;$('currentNode').append(option);}
     $('currentNode').value=s.currentNode || park.entryNode;
+    const breakNode=$('breakNode').value;$('breakNode').replaceChildren();
+    for(const node of park.nodes){const option=document.createElement('option');option.value=node.id;option.textContent=node.name||node.id;$('breakNode').append(option);}
+    $('breakNode').value=park.nodes.some(n=>n.id===breakNode)?breakNode:park.entryNode;renderFixedBreaks();
     const purchaseId=$('purchaseActivity').value;$('purchaseActivity').replaceChildren();for(const a of park.activities.filter(a=>a.dpa)){const option=document.createElement('option');option.value=a.id;option.textContent=a.name;$('purchaseActivity').append(option);}$('purchaseActivity').value=park.activities.some(a=>a.id===purchaseId&&a.dpa)?purchaseId:park.activities.find(a=>a.dpa)?.id||'';if(byId($('purchaseActivity').value)?.dpa)$('purchaseCost').value=byId($('purchaseActivity').value).dpa.price;renderPurchaseHistory();
     $('dataVersion').textContent=`情報の確認日：${catalogue.updatedAt || park.updatedAt || 'データ内の出典を確認'} / データ版 ${catalogue.version || '—'}。フードの金額と待ち時間は計画用の目安です。`;
     updateCrowd();renderCatalogue();renderWishlist();renderMap();renderResult();
+    document.dispatchEvent(new CustomEvent('park-context-change',{detail:{park,settings:state.settings,history:state.history}}));
   }
   function renderPurchaseHistory(){if(!catalogue)return;const purchases=state.settings.purchases||[];$('purchaseHistory').innerHTML=purchases.length?purchases.map((p,index)=>`<div class="purchase-item"><strong>${escapeHtml(byId(p.id)?.name||p.id)}</strong><p>購入 ${timeText(p.purchasedAt)} · 利用 ${timeText(p.start)}–${timeText(p.end)} · ${money(p.cost)}</p><button type="button" data-remove-purchase="${index}">履歴から外す</button></div>`).join(''):'<p class="field-note">購入履歴はまだありません。</p>';}
   function updateCrowd() {
@@ -90,13 +102,13 @@ export function initialiseApp() {
     $('eventBadges').replaceChildren();
     for(const event of events){const span=document.createElement('span');span.textContent=event.name;$('eventBadges').append(span);}
     const manual=s.crowdMode==='manual';
-    $('crowdExplanation').textContent=manual?'希望ごとの「待ち時間」を使います。当日の表示に合わせて変更できます。':state.history?.length?'読み込んだ実績から条件の近い記録を使います。該当する記録がない施設は曜日・時間帯・天気・開催イベントの傾向モデルで補います。':'実績CSVが未読込のため、曜日・時間帯・天気・開催イベントを考慮した傾向モデルを使います。';
+    $('crowdExplanation').textContent=manual?'希望ごとの「待ち時間」を使います。当日の表示に合わせて変更できます。':'当日の新しい公開待ち時間、検証で改善した学習モデル、履歴の順で使います。記録がない部分は曜日・時間帯・天気・開催イベントの傾向モデルで補います。';
     $('historyStatus').textContent=`待ち時間の実績データ：${state.history?.length ? `${state.history.length}件を読込済み` : '未読込'}`;
   }
   function renderCatalogue() {
     const query=$('catalogueSearch').value.trim().toLocaleLowerCase('ja'),category=$('categoryFilter').value;
     const list=activities().filter(a=>`${a.name} ${a.area}`.toLocaleLowerCase('ja').includes(query)&&(category==='all'||category==='food'&&FOOD.has(a.category)||category==='entertainment'&&ENTERTAINMENT.has(a.category)||a.category===category));
-    $('catalogue').innerHTML=list.length?list.map(a=>`<button class="place-card${selected(a.id)?' selected':''}" type="button" data-add="${escapeHtml(a.id)}" aria-pressed="${!!selected(a.id)}"><span class="place-kind">${escapeHtml(CATEGORY[a.category]||a.category)}</span><strong>${escapeHtml(a.name)}</strong><span class="place-meta"><span>${escapeHtml(a.area||'')}${a.dpa?' / DPA':''}</span><span class="place-plus">${selected(a.id)?'✓':'＋'}</span></span></button>`).join(''):'<p class="empty-message">条件に合う施設がありません。検索条件を変えてみましょう。</p>';
+    $('catalogue').innerHTML=list.length?list.map(a=>`<button class="place-card genre-${genreOf(a.category)}${selected(a.id)?' selected':''}" type="button" data-add="${escapeHtml(a.id)}" aria-pressed="${!!selected(a.id)}"><span class="place-kind">${escapeHtml(CATEGORY[a.category]||a.category)}</span><strong>${escapeHtml(a.name)}</strong><span class="place-meta"><span>${escapeHtml(a.area||'')}${a.dpa?' / DPA':''}</span><span class="place-plus">${selected(a.id)?'✓':'＋'}</span></span></button>`).join(''):'<p class="empty-message">条件に合う施設がありません。検索条件を変えてみましょう。</p>';
     $('selectionCount').textContent=`${state.settings.selections.length}件の希望`;
   }
   function addSelection(id) {
@@ -108,8 +120,8 @@ export function initialiseApp() {
         if(a.category==='snack'||a.category==='popcorn'||a.category==='cafe'){s.earliest=state.settings.entry;s.latest=state.settings.exit;}
       }
       if(ENTERTAINMENT.has(a.category)){s.showTimes=(a.showTimesDate===state.settings.date? a.showTimes || [] : []).slice();s.confirmSchedule=a.showTimesDate===state.settings.date;}
-      state.settings.selections.push(s);markResultStale();renderCatalogue();renderWishlist();renderMap();setStatus(`${a.name}を希望に追加しました。`);
-    }else{ $('wishlist').querySelector(`[data-wish-id="${CSS.escape(id)}"]`)?.scrollIntoView({block:'center',behavior:'smooth'});setStatus('この施設は希望に追加済みです。');}
+      state.settings.selections.push(s);if(wishlistGenre!=='all')wishlistGenre=genreOf(a.category);markResultStale();renderCatalogue();renderWishlist();renderMap();setStatus(`${a.name}を希望に追加しました。`);
+    }else{ wishlistGenre=genreOf(a.category);renderWishlist();$('wishlist').querySelector(`[data-wish-id="${CSS.escape(id)}"]`)?.scrollIntoView({block:'center',behavior:'smooth'});setStatus('この施設は希望に追加済みです。');}
   }
   function suggestedSelection() {
     state.settings.selections=[];
@@ -127,16 +139,20 @@ export function initialiseApp() {
     const date=state.settings.date;
     const available=activities().filter(a=>(!a.access||a.access==='normal')&&!a.closed&&!(a.closedDates||[]).includes(date)&&(!a.startDate||a.startDate<=date)&&(!a.endDate||date<=a.endDate));
     for(const [names,count] of presets){let added=0;for(const name of names){const activity=available.find(a=>a.name.includes(name));if(activity&&!selected(activity.id)){addSelection(activity.id);added++;if(added===count)break;}}}
-    markResultStale();setStatus('人気のアトラクションと食事、おやつ、お土産を組み合わせました。重要度を調整して一日の計画を試してみましょう。');
+    wishlistGenre='all';renderWishlist();markResultStale();setStatus('人気のアトラクションと食事、おやつ、お土産を組み合わせました。重要度を調整して一日の計画を試してみましょう。');
   }
   function renderWishlist() {
-    $('wishlist').innerHTML=state.settings.selections.length?state.settings.selections.map(s=>{
+    const all=state.settings.selections;
+    const list=all.filter(s=>wishlistGenre==='all'||genreOf(byId(s.id)?.category)===wishlistGenre);
+    $('wishlistTabs').innerHTML=GENRES.map(g=>{const count=all.filter(s=>g.id==='all'||genreOf(byId(s.id)?.category)===g.id).length;return `<button type="button" id="wishTab-${g.id}" class="genre-tab genre-${g.id}" role="tab" aria-controls="wishlist" aria-selected="${wishlistGenre===g.id}" tabindex="${wishlistGenre===g.id?0:-1}" data-wish-genre="${g.id}">${g.label}<span>${count}</span></button>`;}).join('');
+    $('wishlist').setAttribute('aria-labelledby',`wishTab-${wishlistGenre}`);
+    $('wishlist').innerHTML=list.length?list.map(s=>{
       const a=byId(s.id);if(!a)return '';
       const timed=FOOD.has(a.category),show=ENTERTAINMENT.has(a.category),greeting=a.category==='greeting',paid=FOOD.has(a.category)||a.category==='shop';
       const scheduleCurrent=a.showTimesDate===state.settings.date;
       const dpa=a.dpa;
-      return `<article class="wish-card" data-wish-id="${escapeHtml(s.id)}"><div class="wish-heading"><div><p class="wish-category">${escapeHtml(CATEGORY[a.category]||a.category)} / ${escapeHtml(a.area||'')}</p><h4>${escapeHtml(a.name)}</h4></div><button class="remove-wish" data-remove="${escapeHtml(s.id)}" type="button" aria-label="${escapeHtml(a.name)}を希望から外す">×</button></div><div class="wish-main-controls"><div class="weight-control"><span>重要度</span><div class="weight-buttons" role="group" aria-label="${escapeHtml(a.name)}の重要度">${[1,2,3,4,5].map(w=>`<button type="button" class="weight-button${Number(s.weight)===w?' active':''}" data-weight="${w}" data-for="${escapeHtml(s.id)}" aria-pressed="${Number(s.weight)===w}">${w}</button>`).join('')}</div></div><label class="check-field"><input type="checkbox" data-field="required"${s.required?' checked':''}>必ず入れる</label></div><div class="wish-fields">${timed?`<label>この時刻から<input type="time" data-field="earliest" value="${timeText(s.earliest ?? state.settings.entry)}"></label><label>この時刻までに終了<input type="time" data-field="latest" value="${timeText(s.latest ?? state.settings.exit)}"></label>`:''}${paid?`<label>${a.category==='shop'?'使いたい金額':'フードの予算'}<input type="number" min="0" max="1000000" step="100" data-field="cost" value="${escapeHtml(s.cost ?? a.cost ?? 0)}" aria-label="${escapeHtml(a.name)}の予算（円）"></label>`:''}<label>滞在・体験する時間<input type="number" min="1" max="360" step="1" data-field="duration" value="${escapeHtml(s.duration ?? a.duration)}" aria-label="${escapeHtml(a.name)}の滞在時間（分）"></label><label>待ち時間（手動時）<input type="number" min="0" max="360" step="5" data-field="manualWait" value="${escapeHtml(s.manualWait ?? a.baseWait)}" aria-label="${escapeHtml(a.name)}の待ち時間（分）"></label></div>${show?`<div class="schedule-note">公演時刻：${scheduleCurrent?`${escapeHtml(a.showTimesDate)}に確認した時刻を表示しています。`:'訪問日の公式情報を確認して入力してください。'}${a.showTimesDate?` 収録データの確認日 ${escapeHtml(a.showTimesDate)}`:''}${a.scheduleNote?` ${escapeHtml(a.scheduleNote)}`:''}</div><label class="full-field">訪問日の開演時刻（例 11:00, 13:30）<input type="text" data-field="showTimes" value="${escapeHtml((s.showTimes||[]).map(timeText).join(', '))}" placeholder="11:00, 13:30"></label><label class="check-field section-gap"><input type="checkbox" data-field="confirmSchedule"${s.confirmSchedule?' checked':''}>この日の公演時刻を確認した</label>`:''}${a.access&&a.access!=='normal'?`<div class="access-note"><label><input type="checkbox" data-field="confirmedAccess"${s.confirmedAccess?' checked':''}>${a.access==='entry'?'エントリー受付の結果・入場条件を確認した':'予約・利用条件を確認した'}</label></div>`:''}${greeting?'<p class="wish-foot">グリーティングの実施時間や対象キャラクターは公式情報で確認できます。</p>':''}${dpa?`<details class="wish-details"${s.dpaMode&&s.dpaMode!=='none'?' open':''}><summary>DPA・時間指定を設定　${money(dpa.price)}</summary><label class="full-field">DPAをどう使う？<select data-field="dpaMode"><option value="none"${s.dpaMode==='none'?' selected':''}>通常の待ち列で利用</option><option value="consider"${s.dpaMode==='consider'?' selected':''}>購入できる枠を候補にする</option><option value="owned"${s.dpaMode==='owned'?' selected':''}>取得済みの枠を使う</option><option value="unavailable"${s.dpaMode==='unavailable'?' selected':''}>利用しない・売り切れ</option></select></label><div class="wish-fields"><label>利用・入場開始<input type="time" data-field="dpaStart" value="${s.dpaStart==null?'':timeText(s.dpaStart)}"></label><label>利用・入場終了<input type="time" data-field="dpaEnd" value="${s.dpaEnd==null?'':timeText(s.dpaEnd)}"></label><label>取得済み：購入した時刻<input type="time" data-field="dpaPurchasedAt" value="${s.dpaPurchasedAt==null?'':timeText(s.dpaPurchasedAt)}"></label></div>${a.category==='parade'?`<label class="full-field">DPAの集合・鑑賞場所<select data-field="nodeOverride"><option value="">公式アプリの場所を選ぶ</option>${currentPark().nodes.map(n=>`<option value="${escapeHtml(n.id)}"${s.nodeOverride===n.id?' selected':''}>${escapeHtml(n.name||n.id)}</option>`).join('')}</select></label>`:''}<p class="wish-foot">公式アプリで確認した取得済み枠・購入可能な枠を入力します。取得済みの予定は必ず含めます。アトラクションとショーの購入間隔を別々に考慮します。</p></details>`:''}<details class="wish-details"><summary>営業時間を調整する</summary><p class="wish-foot">${escapeHtml(a.operatingDate||a.windowsDate||'収録データ')}の営業時間を基準に計算します。訪問日の営業に合わせて変更できます。</p><div class="wish-fields"><label>営業開始<input type="time" data-field="windowStart" value="${timeText(s.windows?.[0]?.[0] ?? a.windows?.[0]?.[0] ?? state.settings.entry)}"></label><label>営業終了<input type="time" data-field="windowEnd" value="${timeText(s.windows?.[0]?.[1] ?? a.windows?.[0]?.[1] ?? state.settings.exit)}"></label></div></details><p class="wish-foot"><a href="${safeLink(a.sourceUrl)}" target="_blank" rel="noopener noreferrer">施設・時間・利用条件を公式情報で確認 ↗</a>${a.operatingDate?` · 営業時間確認 ${escapeHtml(a.operatingDate)}`:''}</p></article>`;
-    }).join(''):'<p class="empty-message">地図や施設カードから行きたい場所を選んでください。</p>';
+      return `<article class="wish-card genre-${genreOf(a.category)}" data-wish-id="${escapeHtml(s.id)}"><div class="wish-heading"><div><p class="wish-category">${escapeHtml(CATEGORY[a.category]||a.category)} / ${escapeHtml(a.area||'')}</p><h4>${escapeHtml(a.name)}</h4></div><button class="remove-wish" data-remove="${escapeHtml(s.id)}" type="button" aria-label="${escapeHtml(a.name)}を希望から外す">×</button></div><div class="wish-main-controls"><div class="weight-control"><span>重要度 <strong>${s.weight} · ${escapeHtml(WEIGHT_LABELS[s.weight]||'行きたい')}</strong></span><div class="weight-buttons" role="group" aria-label="${escapeHtml(a.name)}の重要度">${[1,2,3,4,5].map(w=>`<button type="button" class="weight-button${Number(s.weight)===w?' active':''}" data-weight="${w}" data-for="${escapeHtml(s.id)}" aria-pressed="${Number(s.weight)===w}" aria-label="重要度${w}：${WEIGHT_LABELS[w]}" title="${WEIGHT_LABELS[w]}">${w}</button>`).join('')}</div></div><label class="check-field"><input type="checkbox" data-field="required"${s.required?' checked':''}>必ず入れる</label></div><div class="wish-fields">${timed?`<label>この時刻から<input type="time" data-field="earliest" value="${timeText(s.earliest ?? state.settings.entry)}"></label><label>この時刻までに終了<input type="time" data-field="latest" value="${timeText(s.latest ?? state.settings.exit)}"></label>`:''}${paid?`<label>${a.category==='shop'?'使いたい金額':'フードの予算'}<input type="number" min="0" max="1000000" step="100" data-field="cost" value="${escapeHtml(s.cost ?? a.cost ?? 0)}" aria-label="${escapeHtml(a.name)}の予算（円）"></label>`:''}<label>体験・滞在（待ち時間を除く）<input type="number" min="1" max="360" step="1" data-field="duration" value="${escapeHtml(s.duration ?? a.duration)}" aria-label="${escapeHtml(a.name)}の滞在時間（分）"></label><label>待ち時間（手動時）<input type="number" min="0" max="360" step="5" data-field="manualWait" value="${escapeHtml(s.manualWait ?? a.baseWait)}" aria-label="${escapeHtml(a.name)}の待ち時間（分）"></label></div>${show?`<div class="schedule-note">公演時刻：${scheduleCurrent?`${escapeHtml(a.showTimesDate)}に確認した時刻を表示しています。`:'訪問日の公式情報を確認して入力してください。'}${a.showTimesDate?` 収録データの確認日 ${escapeHtml(a.showTimesDate)}`:''}${a.scheduleNote?` ${escapeHtml(a.scheduleNote)}`:''}</div><label class="full-field">訪問日の開演時刻（例 11:00, 13:30）<input type="text" data-field="showTimes" value="${escapeHtml((s.showTimes||[]).map(timeText).join(', '))}" placeholder="11:00, 13:30"></label><label class="check-field section-gap"><input type="checkbox" data-field="confirmSchedule"${s.confirmSchedule?' checked':''}>この日の公演時刻を確認した</label>`:''}${a.access&&a.access!=='normal'?`<div class="access-note"><label><input type="checkbox" data-field="confirmedAccess"${s.confirmedAccess?' checked':''}>${a.access==='entry'?'エントリー受付の結果・入場条件を確認した':'予約・利用条件を確認した'}</label></div>`:''}${greeting?'<p class="wish-foot">グリーティングの実施時間や対象キャラクターは公式情報で確認できます。</p>':''}${dpa?`<details class="wish-details"${s.dpaMode&&s.dpaMode!=='none'?' open':''}><summary>DPA・時間指定を設定　${money(dpa.price)}</summary><label class="full-field">DPAをどう使う？<select data-field="dpaMode"><option value="none"${s.dpaMode==='none'?' selected':''}>通常の待ち列で利用</option><option value="consider"${s.dpaMode==='consider'?' selected':''}>購入できる枠を候補にする</option><option value="owned"${s.dpaMode==='owned'?' selected':''}>取得済みの枠を使う</option><option value="unavailable"${s.dpaMode==='unavailable'?' selected':''}>利用しない・売り切れ</option></select></label><div class="wish-fields"><label>利用・入場開始<input type="time" data-field="dpaStart" value="${s.dpaStart==null?'':timeText(s.dpaStart)}"></label><label>利用・入場終了<input type="time" data-field="dpaEnd" value="${s.dpaEnd==null?'':timeText(s.dpaEnd)}"></label><label>取得済み：購入した時刻<input type="time" data-field="dpaPurchasedAt" value="${s.dpaPurchasedAt==null?'':timeText(s.dpaPurchasedAt)}"></label></div>${a.category==='parade'?`<label class="full-field">DPAの集合・鑑賞場所<select data-field="nodeOverride"><option value="">公式アプリの場所を選ぶ</option>${currentPark().nodes.map(n=>`<option value="${escapeHtml(n.id)}"${s.nodeOverride===n.id?' selected':''}>${escapeHtml(n.name||n.id)}</option>`).join('')}</select></label>`:''}<p class="wish-foot">公式アプリで確認した取得済み枠・購入可能な枠を入力します。取得済みの予定は必ず含めます。アトラクションとショーの購入間隔を別々に考慮します。</p></details>`:''}<details class="wish-details"><summary>営業時間を調整する</summary><p class="wish-foot">${escapeHtml(a.operatingDate||a.windowsDate||'収録データ')}の営業時間を基準に計算します。訪問日の営業に合わせて変更できます。</p><div class="wish-fields"><label>営業開始<input type="time" data-field="windowStart" value="${timeText(s.windows?.[0]?.[0] ?? a.windows?.[0]?.[0] ?? state.settings.entry)}"></label><label>営業終了<input type="time" data-field="windowEnd" value="${timeText(s.windows?.[0]?.[1] ?? a.windows?.[0]?.[1] ?? state.settings.exit)}"></label></div></details><p class="wish-foot"><a href="${safeLink(a.sourceUrl)}" target="_blank" rel="noopener noreferrer">施設・時間・利用条件を公式情報で確認 ↗</a>${a.operatingDate?` · 営業時間確認 ${escapeHtml(a.operatingDate)}`:''}</p></article>`;
+    }).join(''):all.length?'<p class="empty-message">このジャンルの希望はまだありません。施設カードから追加できます。</p>':'<p class="empty-message">地図や施設カードから行きたい場所を選んでください。</p>';
   }
   function updateSelection(event) {
     const target=event.target,card=target.closest('[data-wish-id]');if(!card||!target.dataset.field)return;
@@ -154,7 +170,7 @@ export function initialiseApp() {
   }
   function renderMap(){ if(catalogue)renderParkMap($('parkMap'),currentPark(),{plan:state.result,selectedIds:state.settings.selections.map(s=>s.id),onSelect:addSelection}); }
   function renderResult() {
-    const result=state.result;$('results').hidden=!result;if(!result)return;
+    const result=state.result;$('results').hidden=!result;if(!result)return;renderFixedBreaks();
     const t=result.totals||{},c=result.coverage||{};
     $('resultState').textContent=state.resultDirty?'前の条件で作った計画':result.status==='feasible'?'見つかった計画':result.status==='no-plan'?'条件を見直そう':'入力を確認';
     const percent=Number(c.percent)||0;
@@ -164,15 +180,42 @@ export function initialiseApp() {
     $('timeline').innerHTML=(result.rows||[]).map(row=>{
       const kind=row.kind||row.type||'activity',a=byId(row.activityId),duration=Number(row.end)-Number(row.start);
       const name=row.name || ({walk:'徒歩で移動',wait:'時間を調整',queue:'待ち列',rest:'ひと休み',exit:'退園へ'}[kind]) || a?.name || '予定';
-      const details=[];if(row.metres)details.push(`${Math.round(row.metres)} m`);if(duration>=0)details.push(`${duration}分`);if(Number(row.cost)>0)details.push(money(row.cost));if(a?.area)details.push(a.area);
+      const details=[];if(row.fixedBreakId)details.push('指定した休憩');if(row.waitSource)details.push(WAIT_LABELS[row.waitSource]||row.waitSource);if(row.metres)details.push(`${Math.round(row.metres)} m`);if(duration>=0)details.push(`${duration}分`);if(Number(row.cost)>0)details.push(money(row.cost));if(a?.area)details.push(a.area);
       return `<article class="timeline-row kind-${escapeHtml(kind)}"><div class="timeline-time">${timeText(row.start)}<small>– ${timeText(row.end)}</small></div><div class="timeline-body"><h4>${escapeHtml(name)}${row.dpa?'<span class="dpa-pill">DPA</span>':''}</h4><p>${escapeHtml(details.join(' · '))}</p>${a?`<a class="row-link" href="${safeLink(a.sourceUrl)}" target="_blank" rel="noopener noreferrer">公式 ↗</a>`:''}</div></article>`;
     }).join('');
     const omissions=result.omissions||[];$('omissionTitle').textContent=`入らなかった希望 · ${omissions.length}件`;
     $('omissionList').innerHTML=omissions.length?omissions.map(o=>`<div class="omission-item"><span>↗</span><div><strong>${escapeHtml(o.name || byId(o.id)?.name || o.id)}${o.required?' · 必須':''}</strong><p>${escapeHtml(o.reason||'時間・予算・利用枠の条件に合わせて他の希望を優先しました。')}</p></div></div>`).join(''):'<p class="field-note">希望をすべて予定に取り入れられました。</p>';
     const d=result.diagnostics||{};
     const notes=Array.isArray(d.notes)?d.notes:[String(d.notes||'')];
-    $('diagnosticList').innerHTML=`<p>探索時間 ${(Number(d.elapsedMs||0)/1000).toFixed(2)}秒 · 調べた状態 ${Number(d.expanded||0).toLocaleString('ja-JP')}件。${d.timedOut?'設定した探索時間で打ち切りました。':'設定した範囲の探索を終えました。'}厳密な最適性の証明は行っていません。</p><p>待ち時間：${escapeHtml(d.waitSource==='history'?'読み込んだ実績データ':d.waitSource==='manual'?'指定した待ち時間':d.waitSource||'傾向モデル')}。移動 ${t.walkMinutes||0}分 · 待ち時間 ${t.waitMinutes||0}分 · 休憩 ${t.restMinutes||0}分。</p><ul>${notes.filter(Boolean).map(n=>`<li>${escapeHtml(typeof n==='object'?JSON.stringify(n):n)}</li>`).join('')}</ul><p>DPAの候補は購入できる枠を入力したものです。購入前に公式アプリの販売状況を確認し、取得後は希望を「取得済み」に更新してください。</p>`;
+    $('diagnosticList').innerHTML=`<p>${escapeHtml(SEARCH_LABELS[planSettings.searchMethod||'beam'])} · 探索時間 ${(Number(d.elapsedMs||0)/1000).toFixed(2)}秒 · 調べた状態 ${Number(d.expanded||0).toLocaleString('ja-JP')}件。${d.timedOut?'設定した探索時間で打ち切りました。':'設定した範囲の探索を終えました。'}厳密な最適性の証明は行っていません。</p><p>待ち時間：${escapeHtml((d.waitSources?.length?d.waitSources:[d.waitSource||'trend']).map(key=>WAIT_LABELS[key]||key).join('・'))}。移動 ${t.walkMinutes||0}分 · 待ち時間 ${t.waitMinutes||0}分 · 休憩 ${t.restMinutes||0}分。</p><ul>${notes.filter(Boolean).map(n=>`<li>${escapeHtml(typeof n==='object'?JSON.stringify(n):n)}</li>`).join('')}</ul><p>DPAの候補は購入できる枠を入力したものです。購入前に公式アプリの販売状況を確認し、取得後は希望を「取得済み」に更新してください。</p>`;
     for(const id of ['exportCsv','exportIcs','exportHtml','printPlan'])$(id).disabled=result.status!=='feasible';
+  }
+  function renderFixedBreaks() {
+    if(!catalogue)return;
+    const breaks=(state.settings.fixedBreaks||[]).slice().sort((a,b)=>a.start-b.start);
+    $('fixedBreakList').innerHTML=breaks.length?breaks.map(b=>`<div class="fixed-break-item"><div><strong>${timeText(b.start)}–${timeText(b.start+b.duration)} · ${escapeHtml(b.label||'ひと休み')}</strong><span>${escapeHtml(currentPark().nodes.find(n=>n.id===b.node)?.name||b.node)} · ${b.duration}分</span></div><button type="button" data-remove-break="${escapeHtml(b.id)}" aria-label="${escapeHtml(b.label||'ひと休み')} ${timeText(b.start)}を外す">外す</button></div>`).join(''):'<p class="field-note">時刻を指定した休憩はまだありません。</p>';
+    $('reoptimiseBreaks').disabled=!state.settings.selections.length;
+  }
+  function suggestBreakLocation() {
+    if(!state.result?.rows?.length)return;
+    const start=minute($('breakStart').value),prior=state.result.rows.filter(row=>row.start<=start).at(-1);
+    const node=prior?.to||prior?.endNode||prior?.node;
+    if(currentPark().nodes.some(n=>n.id===node))$('breakNode').value=node;
+  }
+  function addFixedBreak() {
+    readSettings();const start=minute($('breakStart').value),duration=numberInput('breakDuration',1,180),node=$('breakNode').value,label=$('breakLabel').value.trim()||'ひと休み';
+    if(start<state.settings.entry||start+duration>state.settings.exit)throw Error('休憩は入園から退園までの時間に収めてください。');
+    if(!currentPark().nodes.some(n=>n.id===node))throw Error('休憩する場所を選んでください。');
+    const breaks=state.settings.fixedBreaks||[];
+    if(breaks.some(b=>b.start<start+duration&&start<b.start+b.duration))throw Error('指定した休憩の時間が重なっています。時刻を変えてください。');
+    if(breaks.length>=30)throw Error('指定できる休憩は30件までです。');
+    breaks.push({id:`break-${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`,start,duration,node,label});state.settings.fixedBreaks=breaks;
+    markResultStale();renderFixedBreaks();setStatus('休憩を追加しました。「休憩を入れて再探索」で移動と希望の順序を考え直します。');
+  }
+  function applyDataUpdate(patch) {
+    stopSearch();const {history,...settings}=patch;
+    if(Array.isArray(history)){state.history=history;state.settings.history=history;}
+    Object.assign(state.settings,settings);markResultStale();writeSettings();updateCrowd();renderCatalogue();renderMap();externalPanel?.refresh();
   }
   function checkSelectionDetails() {
     const invalid=$('wishlist').querySelector(':invalid');if(invalid){invalid.reportValidity();throw Error('希望の入力欄を確認してください。');}
@@ -207,12 +250,19 @@ export function initialiseApp() {
   function switchPark(id) {
     if(id===state.parkId)return;stopSearch();readSettings();state.parkStates[state.parkId]={settings:state.settings,result:state.result,resultDirty:!!state.resultDirty};
     const saved=state.parkStates[id];state.parkId=id;state.settings=saved?.settings||{...defaultSettings(),date:state.settings.date};state.result=saved?.result||null;state.resultDirty=!!saved?.resultDirty;
-    $('catalogueSearch').value='';writeSettings();updateContext();setStatus(`${currentPark().name}の計画へ切り替えました。`);
+    $('catalogueSearch').value='';wishlistGenre='all';writeSettings();updateContext();setStatus(`${currentPark().name}の計画へ切り替えました。`);
   }
   function downloadCatalogue(){const blob=new Blob([JSON.stringify(catalogue,null,2)],{type:'application/json;charset=utf-8'}),a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=`ParkItinerary_catalogue_${catalogue.updatedAt||'custom'}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   function attachEvents() {
     $('landTab').addEventListener('click',safely(()=>switchPark('land')));$('seaTab').addEventListener('click',safely(()=>switchPark('sea')));
     for(const id of ['landTab','seaTab'])$(id).addEventListener('keydown',event=>{if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();safely(()=>switchPark(state.parkId==='land'?'sea':'land'))();}});
+    $('wishlistTabs').addEventListener('click',event=>{const tab=event.target.closest('[data-wish-genre]');if(!tab)return;wishlistGenre=tab.dataset.wishGenre;renderWishlist();$(`wishTab-${wishlistGenre}`).focus();});
+    $('wishlistTabs').addEventListener('keydown',event=>{const tab=event.target.closest('[data-wish-genre]');if(!tab||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const index=GENRES.findIndex(g=>g.id===tab.dataset.wishGenre),next=event.key==='Home'?0:event.key==='End'?GENRES.length-1:(index+(event.key==='ArrowRight'?1:-1)+GENRES.length)%GENRES.length;wishlistGenre=GENRES[next].id;renderWishlist();$(`wishTab-${wishlistGenre}`).focus();});
+    $('breakEditor').addEventListener('toggle',()=>{if($('breakEditor').open&&state.result!==lastBreakSuggestionResult){suggestBreakLocation();lastBreakSuggestionResult=state.result;}});
+    $('breakStart').addEventListener('change',()=>suggestBreakLocation());
+    $('addBreak').addEventListener('click',safely(addFixedBreak));
+    $('reoptimiseBreaks').addEventListener('click',safely(startSearch));
+    $('fixedBreakList').addEventListener('click',event=>{const button=event.target.closest('[data-remove-break]');if(!button)return;state.settings.fixedBreaks=(state.settings.fixedBreaks||[]).filter(b=>b.id!==button.dataset.removeBreak);markResultStale();renderFixedBreaks();setStatus('休憩を外しました。再探索すると新しい条件で順序を考え直します。');});
     $('catalogueSearch').addEventListener('input',renderCatalogue);$('categoryFilter').addEventListener('change',renderCatalogue);
     $('catalogue').addEventListener('click',safely(event=>{const button=event.target.closest('[data-add]');if(button)addSelection(button.dataset.add);}));
     $('wishlist').addEventListener('click',safely(event=>{
@@ -235,16 +285,16 @@ export function initialiseApp() {
     $('sharePlan').addEventListener('click',safely(async()=>{readSettings();$('shareUrl').value=await createShareUrl(state,location.href);$('sharePanel').hidden=false;setStatus('リンクをコピーしてスマホへ送れます。予定表はJSONやスマホ用しおりでも持ち出せます。');}));
     $('copyShare').addEventListener('click',safely(async()=>{try{await navigator.clipboard.writeText($('shareUrl').value);setStatus('共有リンクをコピーしました。');}catch{$('shareUrl').select();setStatus('リンク欄を選択しました。コピーして送ってください。');}}));
     $('importPlan').addEventListener('click',()=>$('planFile').click());$('planFile').addEventListener('change',safely(async()=>{const file=$('planFile').files[0];if(!file)return;if(file.size>5000000)throw Error('計画ファイルは5MB以下で指定してください。');const value=parsePlanJson(await file.text());stopSearch();state=cleanState(value);writeSettings();updateContext();setStatus('計画ファイルを読み込みました。');$('planFile').value='';}));
-    $('importHistory').addEventListener('click',()=>$('historyFile').click());$('historyFile').addEventListener('change',safely(async()=>{const file=$('historyFile').files[0];if(!file)return;if(file.size>10000000)throw Error('待ち時間CSVは10MB以下で指定してください。');state.history=parseHistoryCsv(await file.text());state.settings.history=state.history;updateCrowd();markResultStale();setStatus(`${state.history.length}件の待ち時間を読み込みました。再探索すると計画へ反映します。`);$('historyFile').value='';}));
+    $('importHistory').addEventListener('click',()=>$('historyFile').click());$('historyFile').addEventListener('change',safely(async()=>{const file=$('historyFile').files[0];if(!file)return;if(file.size>10000000)throw Error('待ち時間CSVは10MB以下で指定してください。');state.history=parseHistoryCsv(await file.text());state.settings.history=state.history;updateCrowd();externalPanel?.refresh();markResultStale();setStatus(`${state.history.length}件の待ち時間を読み込みました。再探索すると計画へ反映します。`);$('historyFile').value='';}));
     $('exportCatalogue').addEventListener('click',safely(downloadCatalogue));$('importCatalogue').addEventListener('click',()=>$('catalogueFile').click());$('catalogueFile').addEventListener('change',safely(async()=>{const file=$('catalogueFile').files[0];if(!file)return;if(file.size>5000000)throw Error('施設JSONは5MB以下で指定してください。');const next=validateCatalogue(JSON.parse(await file.text()));stopSearch();catalogue=next;state.result=null;state.settings.selections=state.settings.selections.filter(s=>byId(s.id));updateContext();setStatus('施設情報を更新しました。時間・料金を確認して再探索してください。');$('catalogueFile').value='';}));
     $('refreshCatalogue').addEventListener('click',safely(async()=>{stopSearch();await loadCatalogue(true);stopSearch();state.result=null;updateContext();setStatus('配布中の施設情報を読み直しました。');}));
     $('exportJson').addEventListener('click',safely(()=>{readSettings();downloadPlanJson(state);}));$('exportCsv').addEventListener('click',safely(()=>downloadScheduleCsv(state.result,currentPark())));$('exportIcs').addEventListener('click',safely(()=>downloadCalendar(state.result,currentPark(),state.result.settings||state.settings)));$('exportHtml').addEventListener('click',safely(()=>downloadOfflineHtml(state.result,currentPark(),state.result.settings||state.settings)));$('printPlan').addEventListener('click',()=>window.print());
   }
   async function start() {
-    try{await loadCatalogue();const shared=await readSharedState(location.hash);if(shared){state=cleanState(shared);setStatus('共有された希望を読み込みました。必要に応じて調整し、プランを考えましょう。');}else setStatus('行きたい場所を選び、一日の条件を決めましょう。');writeSettings();attachEvents();updateContext();}
+    try{await loadCatalogue();const shared=await readSharedState(location.hash);if(shared){state=cleanState(shared);setStatus('共有された希望を読み込みました。必要に応じて調整し、プランを考えましょう。');}else setStatus('行きたい場所を選び、一日の条件を決めましょう。');writeSettings();attachEvents();externalPanel=initialiseExternalData({container:$('externalDataPanel'),getContext:()=>({park:currentPark(),settings:state.settings,history:state.history}),onUpdate:applyDataUpdate});updateContext();}
     catch(error){setStatus(error.message||'起動に失敗しました。ページを再読み込みしてください。',true);$('solveButton').disabled=true;}
   }
   start();
-  return {getState:()=>state,getCatalogue:()=>catalogue,readSettings,addSelection,renderResult,stopSearch};
+  return {getState:()=>state,getCatalogue:()=>catalogue,getContext:()=>({park:currentPark(),settings:state.settings,history:state.history}),applyDataUpdate,readSettings,addSelection,renderResult,stopSearch};
 }
 if(typeof document!=='undefined')initialiseApp();

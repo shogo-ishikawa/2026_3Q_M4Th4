@@ -1,0 +1,66 @@
+name: Collect park waits and train predictions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/park-wait-data.yml'
+      - 'projects/park-itinerary-lab/scripts/collect_wait_data.py'
+      - 'projects/park-itinerary-lab/scripts/train_wait_model.py'
+      - 'projects/park-itinerary-lab/web/wait-model.js'
+      - 'projects/park-itinerary-lab/web/data/queue-times-map.json'
+  workflow_dispatch:
+  schedule:
+    # 08:07–21:52 JST. Queue-Times publishes every five minutes; collect at 15-minute intervals.
+    - cron: '7,22,37,52 23,0-12 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: park-wait-observations
+  cancel-in-progress: false
+
+jobs:
+  collect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Prepare the separate observations branch
+        run: |
+          if git fetch origin park-wait-data; then
+            git worktree add -b park-wait-data data-publish FETCH_HEAD
+          else
+            git worktree add -b park-wait-data data-publish HEAD
+          fi
+      - name: Collect documented current waits
+        run: python projects/park-itinerary-lab/scripts/collect_wait_data.py --output-dir data-publish
+      - name: Retrain after a new calendar day
+        run: |
+          python - <<'PY'
+          import datetime as dt,json,pathlib,subprocess
+          output=pathlib.Path('data-publish/wait-model.json')
+          today=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat()
+          current=json.loads(output.read_text()) if output.exists() else {}
+          if not current.get('parks') or any(park.get('beforeDate')!=today for park in current['parks']):
+              subprocess.run(['python','projects/park-itinerary-lab/scripts/train_wait_model.py','--observations','data-publish/observations.json','--output',str(output),'--before-date',today],check=True)
+          PY
+      - name: Publish data without rebuilding the application
+        working-directory: data-publish
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add live-waits.json observations.json wait-model.json
+          if ! git diff --cached --quiet; then
+            git commit -m 'Update observed park waits and prediction model'
+            git push origin HEAD:park-wait-data
+          fi
