@@ -1,42 +1,5063 @@
 {
-  "schemaVersion": 1,
-  "updatedAt": "2026-11-17T11:48:22.312Z",
+  "schemaVersion": 2,
+  "updatedAt": "2026-11-17T13:13:22.467Z",
   "parks": [
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "method": "ridge-regression",
       "parkId": "land",
-      "status": "insufficient-data",
-      "usable": false,
-      "trainedAt": "2026-11-17T11:48:22.313Z",
-      "beforeDate": "2026-11-17",
-      "samples": 0,
-      "days": 0,
-      "firstDate": null,
-      "lastDate": null,
+      "status": "trained",
+      "usable": true,
+      "trainedAt": "2026-11-17T13:13:22.468Z",
+      "beforeDate": "2026-11-18",
+      "samples": 2819,
+      "availableSamples": 2819,
+      "sampling": "all-eligible",
+      "days": 7,
+      "firstDate": "2026-11-11",
+      "lastDate": "2026-11-17",
       "minDays": 7,
       "minSamples": 100,
-      "activityIds": [],
-      "coefficients": [],
-      "validation": null
+      "featureNames": [
+        "intercept",
+        "time_sin",
+        "time_cos",
+        "time_sin_2",
+        "time_cos_2",
+        "opening_90min",
+        "midday",
+        "weekday_1",
+        "weekday_2",
+        "weekday_3",
+        "weekday_4",
+        "weekday_5",
+        "weekday_6",
+        "month_sin",
+        "month_cos",
+        "holiday",
+        "before_holiday",
+        "after_holiday",
+        "rain",
+        "cloud",
+        "weather_known",
+        "temperature",
+        "temperature_known",
+        "precipitation",
+        "precipitation_known",
+        "event_present",
+        "event:land-christmas-2026"
+      ],
+      "eventIds": [
+        "land-christmas-2026"
+      ],
+      "activityIds": [
+        "land-attraction-151",
+        "land-attraction-152",
+        "land-attraction-153",
+        "land-attraction-154",
+        "land-attraction-156",
+        "land-attraction-157",
+        "land-attraction-158",
+        "land-attraction-159",
+        "land-attraction-160",
+        "land-attraction-161",
+        "land-attraction-162",
+        "land-attraction-163",
+        "land-attraction-164",
+        "land-attraction-165",
+        "land-attraction-167",
+        "land-attraction-168",
+        "land-attraction-169",
+        "land-attraction-170",
+        "land-attraction-171",
+        "land-attraction-172",
+        "land-attraction-173",
+        "land-attraction-174",
+        "land-attraction-175",
+        "land-attraction-176",
+        "land-attraction-178",
+        "land-attraction-179",
+        "land-attraction-180",
+        "land-attraction-181",
+        "land-attraction-183",
+        "land-attraction-189",
+        "land-attraction-191",
+        "land-attraction-194",
+        "land-attraction-196",
+        "land-attraction-197"
+      ],
+      "coefficients": [
+        0.33612292478567757,
+        0.24008926301093478,
+        -0.26061030393642526,
+        0.07079360269409908,
+        -0.28215268904487895,
+        0.39106932830170055,
+        0.10830940574177537,
+        0.1460167431776931,
+        -0.08286229102840886,
+        -0.09194332635734372,
+        0.02817764204227686,
+        0.25386933581180476,
+        0.30427546691292967,
+        -0.00029109098659897524,
+        0.00016806146238276028,
+        0,
+        0,
+        0,
+        -0.053269974622878254,
+        0.08723370000981019,
+        -0.02536464446792055,
+        0.1187722583190913,
+        -0.025364644467920538,
+        -0.0896273285890926,
+        -0.025364644467920548,
+        0.00033612292476687593,
+        0.00033612292476687593,
+        -0.46748268000205057,
+        -0.22181105564546483,
+        -0.1130421957004438,
+        -0.18758101041439046,
+        -0.2398842864737132,
+        1.3896997995042526,
+        -0.15444901523121726,
+        -0.3230107662539926,
+        0.08481030600701547,
+        -0.22883289846891014,
+        0.12974173386079962,
+        -0.15153744467868524,
+        0.217549413023703,
+        -0.1704123478470947,
+        -0.4051115473760895,
+        -0.3699611539380593,
+        0.2685347010110446,
+        -0.24526870873746565,
+        -0.013242131030438684,
+        -0.3124313929633647,
+        -0.3995308406284117,
+        0.2467195202017543,
+        -0.056674665435345176,
+        1.2796088152494502,
+        0.20471229943044572,
+        -0.17023961656444137,
+        0.20471229943044564,
+        -0.44932836301119056,
+        -0.3909309101917044,
+        0.16348276679002754,
+        -0.023359666970547123,
+        -0.02335966697054711,
+        0.5454617719241761,
+        0.38278506102551224
+      ],
+      "validation": {
+        "method": "later-days-holdout",
+        "trainThrough": "2026-11-15",
+        "testFrom": "2026-11-16",
+        "testThrough": "2026-11-17",
+        "trainSamples": 2088,
+        "testSamples": 729,
+        "modelMae": 8.770919067215363,
+        "baselineMae": 19.347050754458163,
+        "units": "minutes",
+        "unseenEvents": []
+      },
+      "dataSources": [
+        {
+          "name": "ThemeParks.wiki",
+          "url": "https://www.themeparks.wiki/",
+          "kind": "recent-historical-waits",
+          "attribution": "Powered by ThemeParks.wiki",
+          "termsUrl": "https://www.themeparks.wiki/terms"
+        },
+        {
+          "name": "Open-Meteo",
+          "url": "https://open-meteo.com/",
+          "kind": "past-weather-forecast",
+          "attribution": "Weather data by Open-Meteo.com",
+          "licenceUrl": "https://creativecommons.org/licenses/by/4.0/"
+        }
+      ],
+      "calendarData": {
+        "schemaVersion": 1,
+        "updatedAt": "2026-11-17T12:37:38.967306Z",
+        "sourceUrl": "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv",
+        "sourcePage": "https://www8.cao.go.jp/chosei/shukujitsu/gaiyou.html",
+        "attribution": "内閣府「国民の祝日」CSVを加工",
+        "coverage": {
+          "startDate": "1955-01-01",
+          "endDate": "2027-12-31"
+        },
+        "holidays": [
+          {
+            "date": "2026-11-23",
+            "name": "勤労感謝の日"
+          },
+          {
+            "date": "2027-01-01",
+            "name": "元日"
+          },
+          {
+            "date": "2027-01-11",
+            "name": "成人の日"
+          },
+          {
+            "date": "2027-02-11",
+            "name": "建国記念の日"
+          },
+          {
+            "date": "2027-02-23",
+            "name": "天皇誕生日"
+          },
+          {
+            "date": "2027-03-21",
+            "name": "春分の日"
+          },
+          {
+            "date": "2027-03-22",
+            "name": "休日"
+          },
+          {
+            "date": "2027-04-29",
+            "name": "昭和の日"
+          },
+          {
+            "date": "2027-05-03",
+            "name": "憲法記念日"
+          },
+          {
+            "date": "2027-05-04",
+            "name": "みどりの日"
+          },
+          {
+            "date": "2027-05-05",
+            "name": "こどもの日"
+          },
+          {
+            "date": "2027-07-19",
+            "name": "海の日"
+          },
+          {
+            "date": "2027-08-11",
+            "name": "山の日"
+          },
+          {
+            "date": "2027-09-20",
+            "name": "敬老の日"
+          },
+          {
+            "date": "2027-09-23",
+            "name": "秋分の日"
+          },
+          {
+            "date": "2027-10-11",
+            "name": "スポーツの日"
+          },
+          {
+            "date": "2027-11-03",
+            "name": "文化の日"
+          },
+          {
+            "date": "2027-11-23",
+            "name": "勤労感謝の日"
+          }
+        ]
+      },
+      "activityTimeProfiles": [
+        {
+          "activityId": "land-attraction-151",
+          "hour": 10,
+          "samples": 7,
+          "days": 7,
+          "meanWait": 5.7,
+          "correctionMinutes": -1.050558224504553
+        },
+        {
+          "activityId": "land-attraction-151",
+          "hour": 13,
+          "samples": 6,
+          "days": 6,
+          "meanWait": 5,
+          "correctionMinutes": -1.2683062764372424
+        },
+        {
+          "activityId": "land-attraction-151",
+          "hour": 16,
+          "samples": 7,
+          "days": 7,
+          "meanWait": 7.1,
+          "correctionMinutes": -1.3419746518437405
+        },
+        {
+          "activityId": "land-attraction-152",
+          "hour": 9,
+          "samples": 19,
+          "days": 7,
+          "meanWait": 12.9,
+          "correctionMinutes": -0.2024001974846442
+        },
+        {
+          "activityId": "land-attraction-152",
+          "hour": 10,
+          "samples": 11,
+          "days": 6,
+          "meanWait": 16.8,
+          "correctionMinutes": 0.761949746916844
+        },
+        {
+          "activityId": "land-attraction-152",
+          "hour": 11,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 16.4,
+          "correctionMinutes": -0.6551962301423876
+        },
+        {
+          "activityId": "land-attraction-152",
+          "hour": 12,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 10.7,
+          "correctionMinutes": -1.470539110977092
+        },
+        {
+          "activityId": "land-attraction-152",
+          "hour": 13,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 17.5,
+          "correctionMinutes": -0.05470770634397759
+        },
+        {
+          "activityId": "land-attraction-152",
+          "hour": 14,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 16.9,
+          "correctionMinutes": -0.5213423136066423
+        },
+        {
+          "activityId": "land-attraction-152",
+          "hour": 15,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 16.8,
+          "correctionMinutes": -1.5057275408215338
+        },
+        {
+          "activityId": "land-attraction-152",
+          "hour": 16,
+          "samples": 7,
+          "days": 4,
+          "meanWait": 17.1,
+          "correctionMinutes": -0.20395980010586476
+        },
+        {
+          "activityId": "land-attraction-152",
+          "hour": 18,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 12.5,
+          "correctionMinutes": -0.7388532948184832
+        },
+        {
+          "activityId": "land-attraction-152",
+          "hour": 19,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 13.3,
+          "correctionMinutes": 0.624895433687525
+        },
+        {
+          "activityId": "land-attraction-152",
+          "hour": 20,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 11,
+          "correctionMinutes": 1.8896758878296864
+        },
+        {
+          "activityId": "land-attraction-153",
+          "hour": 9,
+          "samples": 21,
+          "days": 7,
+          "meanWait": 12.9,
+          "correctionMinutes": -2.1307932754367442
+        },
+        {
+          "activityId": "land-attraction-153",
+          "hour": 10,
+          "samples": 15,
+          "days": 7,
+          "meanWait": 20.7,
+          "correctionMinutes": 0.9059721989970401
+        },
+        {
+          "activityId": "land-attraction-153",
+          "hour": 11,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 18.5,
+          "correctionMinutes": -0.49038083386649894
+        },
+        {
+          "activityId": "land-attraction-153",
+          "hour": 12,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 11,
+          "correctionMinutes": -2.895778106239776
+        },
+        {
+          "activityId": "land-attraction-153",
+          "hour": 13,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 23.2,
+          "correctionMinutes": 0.9804625012733794
+        },
+        {
+          "activityId": "land-attraction-153",
+          "hour": 14,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 24.5,
+          "correctionMinutes": 1.010067329793107
+        },
+        {
+          "activityId": "land-attraction-153",
+          "hour": 15,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 20.6,
+          "correctionMinutes": -0.04675295794341249
+        },
+        {
+          "activityId": "land-attraction-153",
+          "hour": 16,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 22.5,
+          "correctionMinutes": -0.3711888278751196
+        },
+        {
+          "activityId": "land-attraction-153",
+          "hour": 17,
+          "samples": 8,
+          "days": 5,
+          "meanWait": 28.8,
+          "correctionMinutes": 1.6248677727172922
+        },
+        {
+          "activityId": "land-attraction-153",
+          "hour": 18,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 13.3,
+          "correctionMinutes": -0.5392263281533889
+        },
+        {
+          "activityId": "land-attraction-153",
+          "hour": 19,
+          "samples": 7,
+          "days": 4,
+          "meanWait": 18.6,
+          "correctionMinutes": 0.5370050408736132
+        },
+        {
+          "activityId": "land-attraction-153",
+          "hour": 20,
+          "samples": 8,
+          "days": 5,
+          "meanWait": 15,
+          "correctionMinutes": 1.0048261952475614
+        },
+        {
+          "activityId": "land-attraction-154",
+          "hour": 9,
+          "samples": 15,
+          "days": 7,
+          "meanWait": 17.3,
+          "correctionMinutes": 1.1922004596217635
+        },
+        {
+          "activityId": "land-attraction-154",
+          "hour": 10,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 22.2,
+          "correctionMinutes": 1.0255833480595737
+        },
+        {
+          "activityId": "land-attraction-154",
+          "hour": 11,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 16.5,
+          "correctionMinutes": -0.03210229548151661
+        },
+        {
+          "activityId": "land-attraction-154",
+          "hour": 12,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 7,
+          "correctionMinutes": -3.502654359086526
+        },
+        {
+          "activityId": "land-attraction-154",
+          "hour": 13,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 15.8,
+          "correctionMinutes": -0.8774977915854878
+        },
+        {
+          "activityId": "land-attraction-154",
+          "hour": 14,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 15.8,
+          "correctionMinutes": -0.38014692218126744
+        },
+        {
+          "activityId": "land-attraction-154",
+          "hour": 15,
+          "samples": 7,
+          "days": 6,
+          "meanWait": 15.7,
+          "correctionMinutes": -1.2758718465674106
+        },
+        {
+          "activityId": "land-attraction-154",
+          "hour": 16,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 20,
+          "correctionMinutes": -0.2796772811188909
+        },
+        {
+          "activityId": "land-attraction-154",
+          "hour": 17,
+          "samples": 5,
+          "days": 3,
+          "meanWait": 15,
+          "correctionMinutes": -0.49423169019697455
+        },
+        {
+          "activityId": "land-attraction-154",
+          "hour": 18,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 20,
+          "correctionMinutes": 1.587425014372704
+        },
+        {
+          "activityId": "land-attraction-156",
+          "hour": 10,
+          "samples": 8,
+          "days": 7,
+          "meanWait": 8.8,
+          "correctionMinutes": -1.674253686651633
+        },
+        {
+          "activityId": "land-attraction-157",
+          "hour": 9,
+          "samples": 7,
+          "days": 7,
+          "meanWait": 5,
+          "correctionMinutes": -1.2566890500195793
+        },
+        {
+          "activityId": "land-attraction-157",
+          "hour": 10,
+          "samples": 11,
+          "days": 4,
+          "meanWait": 10,
+          "correctionMinutes": -0.4216581497485412
+        },
+        {
+          "activityId": "land-attraction-157",
+          "hour": 11,
+          "samples": 5,
+          "days": 4,
+          "meanWait": 14,
+          "correctionMinutes": 0.5256655937679668
+        },
+        {
+          "activityId": "land-attraction-157",
+          "hour": 12,
+          "samples": 7,
+          "days": 4,
+          "meanWait": 10.7,
+          "correctionMinutes": -0.07950476987099114
+        },
+        {
+          "activityId": "land-attraction-157",
+          "hour": 13,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 13.8,
+          "correctionMinutes": 1.1231264485344707
+        },
+        {
+          "activityId": "land-attraction-157",
+          "hour": 14,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 14.4,
+          "correctionMinutes": 1.0375987054184266
+        },
+        {
+          "activityId": "land-attraction-157",
+          "hour": 15,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 13,
+          "correctionMinutes": 0.4636636508372412
+        },
+        {
+          "activityId": "land-attraction-157",
+          "hour": 16,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 12.8,
+          "correctionMinutes": 0.4910409317296638
+        },
+        {
+          "activityId": "land-attraction-157",
+          "hour": 17,
+          "samples": 6,
+          "days": 3,
+          "meanWait": 14.2,
+          "correctionMinutes": 0.5729855655692896
+        },
+        {
+          "activityId": "land-attraction-158",
+          "hour": 10,
+          "samples": 8,
+          "days": 7,
+          "meanWait": 14.4,
+          "correctionMinutes": -0.7994131544444553
+        },
+        {
+          "activityId": "land-attraction-159",
+          "hour": 10,
+          "samples": 9,
+          "days": 7,
+          "meanWait": 6.1,
+          "correctionMinutes": -2.005857610751384
+        },
+        {
+          "activityId": "land-attraction-160",
+          "hour": 9,
+          "samples": 31,
+          "days": 7,
+          "meanWait": 55.3,
+          "correctionMinutes": 7.668782486232575
+        },
+        {
+          "activityId": "land-attraction-160",
+          "hour": 10,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 56.5,
+          "correctionMinutes": 1.5465838133278287
+        },
+        {
+          "activityId": "land-attraction-160",
+          "hour": 11,
+          "samples": 9,
+          "days": 5,
+          "meanWait": 51.1,
+          "correctionMinutes": 0.7652380435855599
+        },
+        {
+          "activityId": "land-attraction-160",
+          "hour": 12,
+          "samples": 14,
+          "days": 7,
+          "meanWait": 40.7,
+          "correctionMinutes": -3.5238113638052333
+        },
+        {
+          "activityId": "land-attraction-160",
+          "hour": 13,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 58,
+          "correctionMinutes": 1.164355592391022
+        },
+        {
+          "activityId": "land-attraction-160",
+          "hour": 14,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 49,
+          "correctionMinutes": -1.7361214408750294
+        },
+        {
+          "activityId": "land-attraction-160",
+          "hour": 15,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 47.7,
+          "correctionMinutes": -3.6422938552320256
+        },
+        {
+          "activityId": "land-attraction-160",
+          "hour": 16,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 59.5,
+          "correctionMinutes": -0.0879416216833234
+        },
+        {
+          "activityId": "land-attraction-160",
+          "hour": 17,
+          "samples": 7,
+          "days": 6,
+          "meanWait": 53.6,
+          "correctionMinutes": -0.6242260268105019
+        },
+        {
+          "activityId": "land-attraction-160",
+          "hour": 18,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 32.5,
+          "correctionMinutes": -3.364536857988686
+        },
+        {
+          "activityId": "land-attraction-160",
+          "hour": 19,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 36.2,
+          "correctionMinutes": 0.38308687660631074
+        },
+        {
+          "activityId": "land-attraction-160",
+          "hour": 20,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 23.2,
+          "correctionMinutes": -1.4122048388128343
+        },
+        {
+          "activityId": "land-attraction-161",
+          "hour": 10,
+          "samples": 7,
+          "days": 7,
+          "meanWait": 5,
+          "correctionMinutes": -2.5425877607656693
+        },
+        {
+          "activityId": "land-attraction-162",
+          "hour": 9,
+          "samples": 33,
+          "days": 7,
+          "meanWait": 49.4,
+          "correctionMinutes": 2.9715801017298564
+        },
+        {
+          "activityId": "land-attraction-162",
+          "hour": 10,
+          "samples": 14,
+          "days": 7,
+          "meanWait": 63.6,
+          "correctionMinutes": 4.205843202955835
+        },
+        {
+          "activityId": "land-attraction-162",
+          "hour": 11,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 60,
+          "correctionMinutes": 2.528436906946888
+        },
+        {
+          "activityId": "land-attraction-162",
+          "hour": 12,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 46.7,
+          "correctionMinutes": -1.9698464886938927
+        },
+        {
+          "activityId": "land-attraction-162",
+          "hour": 13,
+          "samples": 12,
+          "days": 6,
+          "meanWait": 62.1,
+          "correctionMinutes": 1.6581329715311348
+        },
+        {
+          "activityId": "land-attraction-162",
+          "hour": 14,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 56.9,
+          "correctionMinutes": -1.0567416896118311
+        },
+        {
+          "activityId": "land-attraction-162",
+          "hour": 15,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 65.4,
+          "correctionMinutes": 2.2460778457794506
+        },
+        {
+          "activityId": "land-attraction-162",
+          "hour": 16,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 56.8,
+          "correctionMinutes": -0.3819029869428882
+        },
+        {
+          "activityId": "land-attraction-162",
+          "hour": 17,
+          "samples": 8,
+          "days": 7,
+          "meanWait": 51.3,
+          "correctionMinutes": -1.6863839731886239
+        },
+        {
+          "activityId": "land-attraction-162",
+          "hour": 18,
+          "samples": 12,
+          "days": 6,
+          "meanWait": 32.9,
+          "correctionMinutes": -4.57968615972381
+        },
+        {
+          "activityId": "land-attraction-162",
+          "hour": 19,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 30,
+          "correctionMinutes": -2.1430046178573923
+        },
+        {
+          "activityId": "land-attraction-162",
+          "hour": 20,
+          "samples": 9,
+          "days": 5,
+          "meanWait": 20.6,
+          "correctionMinutes": -2.399607744781646
+        },
+        {
+          "activityId": "land-attraction-163",
+          "hour": 10,
+          "samples": 9,
+          "days": 7,
+          "meanWait": 7.2,
+          "correctionMinutes": -3.80594659647731
+        },
+        {
+          "activityId": "land-attraction-163",
+          "hour": 11,
+          "samples": 7,
+          "days": 4,
+          "meanWait": 28.6,
+          "correctionMinutes": 1.7289358656606948
+        },
+        {
+          "activityId": "land-attraction-163",
+          "hour": 12,
+          "samples": 8,
+          "days": 4,
+          "meanWait": 15.6,
+          "correctionMinutes": -1.487472751484917
+        },
+        {
+          "activityId": "land-attraction-163",
+          "hour": 13,
+          "samples": 9,
+          "days": 5,
+          "meanWait": 26.7,
+          "correctionMinutes": 1.2676830034154793
+        },
+        {
+          "activityId": "land-attraction-163",
+          "hour": 14,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 35,
+          "correctionMinutes": 1.923423530696982
+        },
+        {
+          "activityId": "land-attraction-163",
+          "hour": 15,
+          "samples": 5,
+          "days": 5,
+          "meanWait": 19,
+          "correctionMinutes": -1.075705293367799
+        },
+        {
+          "activityId": "land-attraction-164",
+          "hour": 9,
+          "samples": 29,
+          "days": 7,
+          "meanWait": 21.9,
+          "correctionMinutes": -1.8856003890870494
+        },
+        {
+          "activityId": "land-attraction-164",
+          "hour": 10,
+          "samples": 13,
+          "days": 6,
+          "meanWait": 29.2,
+          "correctionMinutes": -0.37519801748080356
+        },
+        {
+          "activityId": "land-attraction-164",
+          "hour": 11,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 30.4,
+          "correctionMinutes": 0.7488917190034395
+        },
+        {
+          "activityId": "land-attraction-164",
+          "hour": 12,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 23.8,
+          "correctionMinutes": -1.682451119345611
+        },
+        {
+          "activityId": "land-attraction-164",
+          "hour": 13,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 34.2,
+          "correctionMinutes": 1.5796734216982427
+        },
+        {
+          "activityId": "land-attraction-164",
+          "hour": 14,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 32.7,
+          "correctionMinutes": -0.05231180930167068
+        },
+        {
+          "activityId": "land-attraction-164",
+          "hour": 15,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 34,
+          "correctionMinutes": 0.8164076986749699
+        },
+        {
+          "activityId": "land-attraction-164",
+          "hour": 16,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 32.9,
+          "correctionMinutes": 0.7086091121887037
+        },
+        {
+          "activityId": "land-attraction-164",
+          "hour": 17,
+          "samples": 8,
+          "days": 5,
+          "meanWait": 36.3,
+          "correctionMinutes": 0.7919354588937192
+        },
+        {
+          "activityId": "land-attraction-164",
+          "hour": 18,
+          "samples": 8,
+          "days": 5,
+          "meanWait": 28.1,
+          "correctionMinutes": -0.14628225564677586
+        },
+        {
+          "activityId": "land-attraction-164",
+          "hour": 19,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 26.5,
+          "correctionMinutes": 1.9341728983223732
+        },
+        {
+          "activityId": "land-attraction-164",
+          "hour": 20,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 18.5,
+          "correctionMinutes": 0.7713976554334951
+        },
+        {
+          "activityId": "land-attraction-165",
+          "hour": 9,
+          "samples": 18,
+          "days": 7,
+          "meanWait": 10.6,
+          "correctionMinutes": -1.4026260619767397
+        },
+        {
+          "activityId": "land-attraction-165",
+          "hour": 10,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 17.5,
+          "correctionMinutes": -0.7690914275864166
+        },
+        {
+          "activityId": "land-attraction-165",
+          "hour": 11,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 16,
+          "correctionMinutes": -0.3364195588325726
+        },
+        {
+          "activityId": "land-attraction-165",
+          "hour": 12,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 12.2,
+          "correctionMinutes": -2.0832950743821397
+        },
+        {
+          "activityId": "land-attraction-165",
+          "hour": 13,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 20,
+          "correctionMinutes": 0.6775243118522145
+        },
+        {
+          "activityId": "land-attraction-165",
+          "hour": 14,
+          "samples": 5,
+          "days": 5,
+          "meanWait": 21,
+          "correctionMinutes": 0.27932167314836076
+        },
+        {
+          "activityId": "land-attraction-165",
+          "hour": 15,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 18,
+          "correctionMinutes": -0.8883101727168783
+        },
+        {
+          "activityId": "land-attraction-165",
+          "hour": 16,
+          "samples": 12,
+          "days": 6,
+          "meanWait": 21.7,
+          "correctionMinutes": -0.05821600594044746
+        },
+        {
+          "activityId": "land-attraction-165",
+          "hour": 17,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 19.4,
+          "correctionMinutes": 0.4004541601401452
+        },
+        {
+          "activityId": "land-attraction-165",
+          "hour": 18,
+          "samples": 11,
+          "days": 6,
+          "meanWait": 14.5,
+          "correctionMinutes": -0.08300171888721142
+        },
+        {
+          "activityId": "land-attraction-165",
+          "hour": 19,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 12.5,
+          "correctionMinutes": 0.7858735516728486
+        },
+        {
+          "activityId": "land-attraction-165",
+          "hour": 20,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 10.4,
+          "correctionMinutes": 1.835668367248838
+        },
+        {
+          "activityId": "land-attraction-167",
+          "hour": 9,
+          "samples": 7,
+          "days": 7,
+          "meanWait": 5,
+          "correctionMinutes": -0.06197197252962862
+        },
+        {
+          "activityId": "land-attraction-167",
+          "hour": 13,
+          "samples": 7,
+          "days": 6,
+          "meanWait": 13.6,
+          "correctionMinutes": 0.04531005099345884
+        },
+        {
+          "activityId": "land-attraction-167",
+          "hour": 14,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 16.7,
+          "correctionMinutes": -0.04229756740627389
+        },
+        {
+          "activityId": "land-attraction-167",
+          "hour": 15,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 10,
+          "correctionMinutes": -2.1806066233681496
+        },
+        {
+          "activityId": "land-attraction-167",
+          "hour": 16,
+          "samples": 11,
+          "days": 6,
+          "meanWait": 13.6,
+          "correctionMinutes": -0.09968464156959564
+        },
+        {
+          "activityId": "land-attraction-167",
+          "hour": 17,
+          "samples": 5,
+          "days": 3,
+          "meanWait": 17,
+          "correctionMinutes": -0.32598803079728755
+        },
+        {
+          "activityId": "land-attraction-168",
+          "hour": 9,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 6.8,
+          "correctionMinutes": -0.5783335819420544
+        },
+        {
+          "activityId": "land-attraction-168",
+          "hour": 10,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 12.5,
+          "correctionMinutes": 0.20497978827214094
+        },
+        {
+          "activityId": "land-attraction-168",
+          "hour": 11,
+          "samples": 5,
+          "days": 4,
+          "meanWait": 11,
+          "correctionMinutes": 0.6309329707398825
+        },
+        {
+          "activityId": "land-attraction-168",
+          "hour": 12,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 6.4,
+          "correctionMinutes": -1.6158419221161842
+        },
+        {
+          "activityId": "land-attraction-168",
+          "hour": 13,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 12.3,
+          "correctionMinutes": -0.4935991161207238
+        },
+        {
+          "activityId": "land-attraction-168",
+          "hour": 14,
+          "samples": 10,
+          "days": 5,
+          "meanWait": 14,
+          "correctionMinutes": -0.6330622023231027
+        },
+        {
+          "activityId": "land-attraction-168",
+          "hour": 15,
+          "samples": 7,
+          "days": 6,
+          "meanWait": 11.4,
+          "correctionMinutes": -1.378895751879063
+        },
+        {
+          "activityId": "land-attraction-168",
+          "hour": 16,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 15.8,
+          "correctionMinutes": -0.07309017382396071
+        },
+        {
+          "activityId": "land-attraction-168",
+          "hour": 17,
+          "samples": 8,
+          "days": 5,
+          "meanWait": 12.5,
+          "correctionMinutes": 0.06719455385792103
+        },
+        {
+          "activityId": "land-attraction-168",
+          "hour": 18,
+          "samples": 5,
+          "days": 4,
+          "meanWait": 7,
+          "correctionMinutes": -0.7500913280181876
+        },
+        {
+          "activityId": "land-attraction-168",
+          "hour": 20,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 6.7,
+          "correctionMinutes": 0.9712705093405432
+        },
+        {
+          "activityId": "land-attraction-169",
+          "hour": 9,
+          "samples": 29,
+          "days": 7,
+          "meanWait": 25.2,
+          "correctionMinutes": -0.5947234020229782
+        },
+        {
+          "activityId": "land-attraction-169",
+          "hour": 10,
+          "samples": 10,
+          "days": 5,
+          "meanWait": 31,
+          "correctionMinutes": 0.35370428049044284
+        },
+        {
+          "activityId": "land-attraction-169",
+          "hour": 11,
+          "samples": 7,
+          "days": 4,
+          "meanWait": 34.3,
+          "correctionMinutes": 1.0322081605250357
+        },
+        {
+          "activityId": "land-attraction-169",
+          "hour": 12,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 29.4,
+          "correctionMinutes": -0.09746642481710158
+        },
+        {
+          "activityId": "land-attraction-169",
+          "hour": 13,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 34,
+          "correctionMinutes": 0.8371936658812148
+        },
+        {
+          "activityId": "land-attraction-169",
+          "hour": 14,
+          "samples": 11,
+          "days": 6,
+          "meanWait": 35.5,
+          "correctionMinutes": 0.37782190888759976
+        },
+        {
+          "activityId": "land-attraction-169",
+          "hour": 15,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 31.3,
+          "correctionMinutes": -1.1360044735683414
+        },
+        {
+          "activityId": "land-attraction-169",
+          "hour": 16,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 34.2,
+          "correctionMinutes": -0.10258957266555604
+        },
+        {
+          "activityId": "land-attraction-169",
+          "hour": 17,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 34.2,
+          "correctionMinutes": 0.24607032845072313
+        },
+        {
+          "activityId": "land-attraction-169",
+          "hour": 18,
+          "samples": 8,
+          "days": 5,
+          "meanWait": 26.3,
+          "correctionMinutes": -0.4470624282216392
+        },
+        {
+          "activityId": "land-attraction-169",
+          "hour": 19,
+          "samples": 8,
+          "days": 5,
+          "meanWait": 30.6,
+          "correctionMinutes": 1.3801071392046687
+        },
+        {
+          "activityId": "land-attraction-169",
+          "hour": 20,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 29.2,
+          "correctionMinutes": 1.6776257920278395
+        },
+        {
+          "activityId": "land-attraction-170",
+          "hour": 9,
+          "samples": 15,
+          "days": 7,
+          "meanWait": 10,
+          "correctionMinutes": -1.2583470254692013
+        },
+        {
+          "activityId": "land-attraction-170",
+          "hour": 10,
+          "samples": 13,
+          "days": 6,
+          "meanWait": 17.3,
+          "correctionMinutes": -0.3591904978474841
+        },
+        {
+          "activityId": "land-attraction-170",
+          "hour": 11,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 15,
+          "correctionMinutes": -0.19508783687508968
+        },
+        {
+          "activityId": "land-attraction-170",
+          "hour": 12,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 10,
+          "correctionMinutes": -2.0304681126867927
+        },
+        {
+          "activityId": "land-attraction-170",
+          "hour": 13,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 18.5,
+          "correctionMinutes": 0.13115503940644105
+        },
+        {
+          "activityId": "land-attraction-170",
+          "hour": 14,
+          "samples": 7,
+          "days": 6,
+          "meanWait": 15,
+          "correctionMinutes": -1.106040778540214
+        },
+        {
+          "activityId": "land-attraction-170",
+          "hour": 15,
+          "samples": 11,
+          "days": 6,
+          "meanWait": 16.8,
+          "correctionMinutes": -1.3634578685090144
+        },
+        {
+          "activityId": "land-attraction-170",
+          "hour": 16,
+          "samples": 8,
+          "days": 5,
+          "meanWait": 20,
+          "correctionMinutes": 0.5284568630381126
+        },
+        {
+          "activityId": "land-attraction-170",
+          "hour": 17,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 20.6,
+          "correctionMinutes": 0.8951811303257531
+        },
+        {
+          "activityId": "land-attraction-170",
+          "hour": 18,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 14.3,
+          "correctionMinutes": -0.0015692483300466633
+        },
+        {
+          "activityId": "land-attraction-170",
+          "hour": 19,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 13.3,
+          "correctionMinutes": 0.6757758489088824
+        },
+        {
+          "activityId": "land-attraction-170",
+          "hour": 20,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 12.2,
+          "correctionMinutes": 1.8807304392352047
+        },
+        {
+          "activityId": "land-attraction-171",
+          "hour": 9,
+          "samples": 27,
+          "days": 7,
+          "meanWait": 37,
+          "correctionMinutes": 0.46406999791258824
+        },
+        {
+          "activityId": "land-attraction-171",
+          "hour": 10,
+          "samples": 12,
+          "days": 6,
+          "meanWait": 47.5,
+          "correctionMinutes": 0.5565076665167097
+        },
+        {
+          "activityId": "land-attraction-171",
+          "hour": 11,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 47,
+          "correctionMinutes": -0.17257759403874123
+        },
+        {
+          "activityId": "land-attraction-171",
+          "hour": 12,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 35,
+          "correctionMinutes": -3.179493160836888
+        },
+        {
+          "activityId": "land-attraction-171",
+          "hour": 13,
+          "samples": 14,
+          "days": 7,
+          "meanWait": 49.3,
+          "correctionMinutes": 1.1184549764904896
+        },
+        {
+          "activityId": "land-attraction-171",
+          "hour": 14,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 54.5,
+          "correctionMinutes": 1.140135849915183
+        },
+        {
+          "activityId": "land-attraction-171",
+          "hour": 15,
+          "samples": 8,
+          "days": 7,
+          "meanWait": 50,
+          "correctionMinutes": -0.17006423128168663
+        },
+        {
+          "activityId": "land-attraction-171",
+          "hour": 16,
+          "samples": 11,
+          "days": 6,
+          "meanWait": 56.4,
+          "correctionMinutes": 1.499328352596843
+        },
+        {
+          "activityId": "land-attraction-171",
+          "hour": 17,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 48.9,
+          "correctionMinutes": 1.31355676298527
+        },
+        {
+          "activityId": "land-attraction-171",
+          "hour": 18,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 34.5,
+          "correctionMinutes": -0.11485767803991405
+        },
+        {
+          "activityId": "land-attraction-171",
+          "hour": 19,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 26.5,
+          "correctionMinutes": -0.202175303698362
+        },
+        {
+          "activityId": "land-attraction-171",
+          "hour": 20,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 14.8,
+          "correctionMinutes": -2.604943509861679
+        },
+        {
+          "activityId": "land-attraction-172",
+          "hour": 9,
+          "samples": 15,
+          "days": 7,
+          "meanWait": 10.3,
+          "correctionMinutes": -0.33687808618770804
+        },
+        {
+          "activityId": "land-attraction-172",
+          "hour": 10,
+          "samples": 7,
+          "days": 6,
+          "meanWait": 14.3,
+          "correctionMinutes": 0.3423906599428556
+        },
+        {
+          "activityId": "land-attraction-172",
+          "hour": 11,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 15.6,
+          "correctionMinutes": 0.7055265920717994
+        },
+        {
+          "activityId": "land-attraction-172",
+          "hour": 12,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 10,
+          "correctionMinutes": -1.647471223833953
+        },
+        {
+          "activityId": "land-attraction-172",
+          "hour": 13,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 16.4,
+          "correctionMinutes": 0.12230663107124494
+        },
+        {
+          "activityId": "land-attraction-172",
+          "hour": 15,
+          "samples": 9,
+          "days": 7,
+          "meanWait": 11.1,
+          "correctionMinutes": -2.173329887485536
+        },
+        {
+          "activityId": "land-attraction-172",
+          "hour": 16,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 15,
+          "correctionMinutes": 0.06711911042805721
+        },
+        {
+          "activityId": "land-attraction-172",
+          "hour": 17,
+          "samples": 8,
+          "days": 5,
+          "meanWait": 15,
+          "correctionMinutes": -0.4599941641452673
+        },
+        {
+          "activityId": "land-attraction-172",
+          "hour": 18,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 10,
+          "correctionMinutes": -0.47727725888741085
+        },
+        {
+          "activityId": "land-attraction-172",
+          "hour": 19,
+          "samples": 5,
+          "days": 4,
+          "meanWait": 11,
+          "correctionMinutes": 0.22935677445170013
+        },
+        {
+          "activityId": "land-attraction-172",
+          "hour": 20,
+          "samples": 5,
+          "days": 4,
+          "meanWait": 9,
+          "correctionMinutes": 0.6040783292944117
+        },
+        {
+          "activityId": "land-attraction-173",
+          "hour": 9,
+          "samples": 9,
+          "days": 7,
+          "meanWait": 6.1,
+          "correctionMinutes": -0.3185452319429001
+        },
+        {
+          "activityId": "land-attraction-173",
+          "hour": 10,
+          "samples": 5,
+          "days": 3,
+          "meanWait": 12,
+          "correctionMinutes": -0.6738086262372036
+        },
+        {
+          "activityId": "land-attraction-173",
+          "hour": 12,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 7.1,
+          "correctionMinutes": -1.5837753095666487
+        },
+        {
+          "activityId": "land-attraction-173",
+          "hour": 13,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 11.4,
+          "correctionMinutes": -1.0616628763989726
+        },
+        {
+          "activityId": "land-attraction-173",
+          "hour": 15,
+          "samples": 5,
+          "days": 5,
+          "meanWait": 7,
+          "correctionMinutes": -1.2844362276994505
+        },
+        {
+          "activityId": "land-attraction-173",
+          "hour": 16,
+          "samples": 5,
+          "days": 5,
+          "meanWait": 15,
+          "correctionMinutes": -0.38343360285693306
+        },
+        {
+          "activityId": "land-attraction-173",
+          "hour": 20,
+          "samples": 5,
+          "days": 5,
+          "meanWait": 7,
+          "correctionMinutes": 1.2269119322215842
+        },
+        {
+          "activityId": "land-attraction-174",
+          "hour": 9,
+          "samples": 29,
+          "days": 7,
+          "meanWait": 63.5,
+          "correctionMinutes": 6.921901446699253
+        },
+        {
+          "activityId": "land-attraction-174",
+          "hour": 10,
+          "samples": 14,
+          "days": 7,
+          "meanWait": 67,
+          "correctionMinutes": 2.5278614389152465
+        },
+        {
+          "activityId": "land-attraction-174",
+          "hour": 11,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 57,
+          "correctionMinutes": -1.2124142089986267
+        },
+        {
+          "activityId": "land-attraction-174",
+          "hour": 12,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 49.1,
+          "correctionMinutes": -3.3724736145700227
+        },
+        {
+          "activityId": "land-attraction-174",
+          "hour": 13,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 76.7,
+          "correctionMinutes": 4.6145827502345975
+        },
+        {
+          "activityId": "land-attraction-174",
+          "hour": 14,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 67.3,
+          "correctionMinutes": -0.7671540551794519
+        },
+        {
+          "activityId": "land-attraction-174",
+          "hour": 15,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 67.2,
+          "correctionMinutes": 0.721375751625066
+        },
+        {
+          "activityId": "land-attraction-174",
+          "hour": 16,
+          "samples": 9,
+          "days": 7,
+          "meanWait": 67.1,
+          "correctionMinutes": 0.555274770718069
+        },
+        {
+          "activityId": "land-attraction-174",
+          "hour": 17,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 63.2,
+          "correctionMinutes": 0.21205193877647185
+        },
+        {
+          "activityId": "land-attraction-174",
+          "hour": 18,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 37.2,
+          "correctionMinutes": -4.057722133049523
+        },
+        {
+          "activityId": "land-attraction-174",
+          "hour": 19,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 44.4,
+          "correctionMinutes": -1.4678208622284274
+        },
+        {
+          "activityId": "land-attraction-174",
+          "hour": 20,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 22.4,
+          "correctionMinutes": -4.545433499244087
+        },
+        {
+          "activityId": "land-attraction-175",
+          "hour": 9,
+          "samples": 23,
+          "days": 7,
+          "meanWait": 12.6,
+          "correctionMinutes": -2.9519839577463713
+        },
+        {
+          "activityId": "land-attraction-175",
+          "hour": 10,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 25,
+          "correctionMinutes": 0.8908000433618567
+        },
+        {
+          "activityId": "land-attraction-175",
+          "hour": 11,
+          "samples": 11,
+          "days": 6,
+          "meanWait": 25.9,
+          "correctionMinutes": 1.7888656661286269
+        },
+        {
+          "activityId": "land-attraction-175",
+          "hour": 12,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 14.5,
+          "correctionMinutes": -1.4719754561301002
+        },
+        {
+          "activityId": "land-attraction-175",
+          "hour": 13,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 23.1,
+          "correctionMinutes": 0.7286294182666401
+        },
+        {
+          "activityId": "land-attraction-175",
+          "hour": 14,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 29.5,
+          "correctionMinutes": 2.456153244961982
+        },
+        {
+          "activityId": "land-attraction-175",
+          "hour": 15,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 22.3,
+          "correctionMinutes": -1.233520639207333
+        },
+        {
+          "activityId": "land-attraction-175",
+          "hour": 16,
+          "samples": 14,
+          "days": 7,
+          "meanWait": 29.6,
+          "correctionMinutes": 2.2074534714520158
+        },
+        {
+          "activityId": "land-attraction-175",
+          "hour": 17,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 23.8,
+          "correctionMinutes": -0.09896419275471079
+        },
+        {
+          "activityId": "land-attraction-175",
+          "hour": 18,
+          "samples": 9,
+          "days": 5,
+          "meanWait": 16.1,
+          "correctionMinutes": -0.5520915618319057
+        },
+        {
+          "activityId": "land-attraction-175",
+          "hour": 19,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 12.5,
+          "correctionMinutes": -0.7124372893648251
+        },
+        {
+          "activityId": "land-attraction-175",
+          "hour": 20,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 8.3,
+          "correctionMinutes": -0.7242607673351139
+        },
+        {
+          "activityId": "land-attraction-176",
+          "hour": 9,
+          "samples": 7,
+          "days": 7,
+          "meanWait": 5,
+          "correctionMinutes": -1.1139785148744652
+        },
+        {
+          "activityId": "land-attraction-176",
+          "hour": 14,
+          "samples": 9,
+          "days": 5,
+          "meanWait": 15,
+          "correctionMinutes": 1.223191963712197
+        },
+        {
+          "activityId": "land-attraction-176",
+          "hour": 15,
+          "samples": 5,
+          "days": 4,
+          "meanWait": 11,
+          "correctionMinutes": -0.07434197189531694
+        },
+        {
+          "activityId": "land-attraction-176",
+          "hour": 16,
+          "samples": 9,
+          "days": 5,
+          "meanWait": 16.1,
+          "correctionMinutes": 1.668635414697769
+        },
+        {
+          "activityId": "land-attraction-178",
+          "hour": 9,
+          "samples": 7,
+          "days": 7,
+          "meanWait": 5,
+          "correctionMinutes": 0.27940585748350366
+        },
+        {
+          "activityId": "land-attraction-179",
+          "hour": 9,
+          "samples": 18,
+          "days": 7,
+          "meanWait": 11.7,
+          "correctionMinutes": -1.636146098468152
+        },
+        {
+          "activityId": "land-attraction-179",
+          "hour": 10,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 19.2,
+          "correctionMinutes": 0.43525312514499825
+        },
+        {
+          "activityId": "land-attraction-179",
+          "hour": 11,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 15.8,
+          "correctionMinutes": 0.1671711450974654
+        },
+        {
+          "activityId": "land-attraction-179",
+          "hour": 12,
+          "samples": 8,
+          "days": 5,
+          "meanWait": 12.5,
+          "correctionMinutes": -2.245885485937645
+        },
+        {
+          "activityId": "land-attraction-179",
+          "hour": 13,
+          "samples": 7,
+          "days": 6,
+          "meanWait": 21.4,
+          "correctionMinutes": 0.6664725983651141
+        },
+        {
+          "activityId": "land-attraction-179",
+          "hour": 15,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 18.3,
+          "correctionMinutes": -1.1341172178854977
+        },
+        {
+          "activityId": "land-attraction-179",
+          "hour": 16,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 30.7,
+          "correctionMinutes": 1.5036894601614885
+        },
+        {
+          "activityId": "land-attraction-179",
+          "hour": 17,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 20.8,
+          "correctionMinutes": 0.20910729806931777
+        },
+        {
+          "activityId": "land-attraction-179",
+          "hour": 18,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 16.7,
+          "correctionMinutes": -0.5352368166727486
+        },
+        {
+          "activityId": "land-attraction-179",
+          "hour": 19,
+          "samples": 7,
+          "days": 4,
+          "meanWait": 15,
+          "correctionMinutes": 0.14058588699477242
+        },
+        {
+          "activityId": "land-attraction-179",
+          "hour": 20,
+          "samples": 7,
+          "days": 6,
+          "meanWait": 11.4,
+          "correctionMinutes": 0.9170097006719305
+        },
+        {
+          "activityId": "land-attraction-180",
+          "hour": 9,
+          "samples": 7,
+          "days": 7,
+          "meanWait": 5,
+          "correctionMinutes": 0.2794058574835039
+        },
+        {
+          "activityId": "land-attraction-181",
+          "hour": 10,
+          "samples": 14,
+          "days": 7,
+          "meanWait": 10.7,
+          "correctionMinutes": 0.8210140316064302
+        },
+        {
+          "activityId": "land-attraction-181",
+          "hour": 11,
+          "samples": 5,
+          "days": 4,
+          "meanWait": 8,
+          "correctionMinutes": -0.0034759523985062302
+        },
+        {
+          "activityId": "land-attraction-181",
+          "hour": 12,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 9.2,
+          "correctionMinutes": -1.0234100614612829
+        },
+        {
+          "activityId": "land-attraction-181",
+          "hour": 13,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 10.5,
+          "correctionMinutes": -0.3599010584047134
+        },
+        {
+          "activityId": "land-attraction-181",
+          "hour": 14,
+          "samples": 7,
+          "days": 4,
+          "meanWait": 15.7,
+          "correctionMinutes": 0.4412652362429054
+        },
+        {
+          "activityId": "land-attraction-181",
+          "hour": 15,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 7.5,
+          "correctionMinutes": -2.1333649583078267
+        },
+        {
+          "activityId": "land-attraction-181",
+          "hour": 16,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 12.5,
+          "correctionMinutes": -0.8882652366824973
+        },
+        {
+          "activityId": "land-attraction-181",
+          "hour": 17,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 9.2,
+          "correctionMinutes": -1.586549545738632
+        },
+        {
+          "activityId": "land-attraction-183",
+          "hour": 9,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 6.3,
+          "correctionMinutes": -0.16577095170110867
+        },
+        {
+          "activityId": "land-attraction-183",
+          "hour": 11,
+          "samples": 5,
+          "days": 3,
+          "meanWait": 20,
+          "correctionMinutes": 0.6317986100120321
+        },
+        {
+          "activityId": "land-attraction-183",
+          "hour": 12,
+          "samples": 5,
+          "days": 3,
+          "meanWait": 8,
+          "correctionMinutes": -1.6988017468933025
+        },
+        {
+          "activityId": "land-attraction-183",
+          "hour": 13,
+          "samples": 7,
+          "days": 4,
+          "meanWait": 9.3,
+          "correctionMinutes": -1.3524067819897354
+        },
+        {
+          "activityId": "land-attraction-183",
+          "hour": 14,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 12.3,
+          "correctionMinutes": -0.8399329700110089
+        },
+        {
+          "activityId": "land-attraction-183",
+          "hour": 15,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 8.1,
+          "correctionMinutes": -2.0898292200049413
+        },
+        {
+          "activityId": "land-attraction-183",
+          "hour": 16,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 15.8,
+          "correctionMinutes": -0.7381544271785171
+        },
+        {
+          "activityId": "land-attraction-183",
+          "hour": 17,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 13.2,
+          "correctionMinutes": 0.6530457515701956
+        },
+        {
+          "activityId": "land-attraction-183",
+          "hour": 18,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 7.5,
+          "correctionMinutes": -0.4382350805980701
+        },
+        {
+          "activityId": "land-attraction-183",
+          "hour": 20,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 10.7,
+          "correctionMinutes": 2.2852186178068754
+        },
+        {
+          "activityId": "land-attraction-189",
+          "hour": 9,
+          "samples": 25,
+          "days": 6,
+          "meanWait": 58.4,
+          "correctionMinutes": 6.131559004950211
+        },
+        {
+          "activityId": "land-attraction-189",
+          "hour": 10,
+          "samples": 15,
+          "days": 7,
+          "meanWait": 63,
+          "correctionMinutes": 1.519092240276962
+        },
+        {
+          "activityId": "land-attraction-189",
+          "hour": 11,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 50.8,
+          "correctionMinutes": -1.7866676256906113
+        },
+        {
+          "activityId": "land-attraction-189",
+          "hour": 12,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 41.5,
+          "correctionMinutes": -5.197439983515578
+        },
+        {
+          "activityId": "land-attraction-189",
+          "hour": 13,
+          "samples": 11,
+          "days": 6,
+          "meanWait": 55.5,
+          "correctionMinutes": 0.4698882672639507
+        },
+        {
+          "activityId": "land-attraction-189",
+          "hour": 14,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 67,
+          "correctionMinutes": 0.9776643274467858
+        },
+        {
+          "activityId": "land-attraction-189",
+          "hour": 15,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 57.3,
+          "correctionMinutes": -1.6139506724828852
+        },
+        {
+          "activityId": "land-attraction-189",
+          "hour": 16,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 70.9,
+          "correctionMinutes": 2.2687128413135835
+        },
+        {
+          "activityId": "land-attraction-189",
+          "hour": 18,
+          "samples": 9,
+          "days": 5,
+          "meanWait": 47.2,
+          "correctionMinutes": -1.2178435809029375
+        },
+        {
+          "activityId": "land-attraction-189",
+          "hour": 19,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 39,
+          "correctionMinutes": -1.6146140162868003
+        },
+        {
+          "activityId": "land-attraction-189",
+          "hour": 20,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 33.5,
+          "correctionMinutes": 0.29094741329281504
+        },
+        {
+          "activityId": "land-attraction-196",
+          "hour": 9,
+          "samples": 24,
+          "days": 7,
+          "meanWait": 102.5,
+          "correctionMinutes": 17.57006463817577
+        },
+        {
+          "activityId": "land-attraction-196",
+          "hour": 10,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 90.9,
+          "correctionMinutes": 5.228657792796031
+        },
+        {
+          "activityId": "land-attraction-196",
+          "hour": 11,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 75,
+          "correctionMinutes": -0.8433501801309431
+        },
+        {
+          "activityId": "land-attraction-196",
+          "hour": 12,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 68.5,
+          "correctionMinutes": -3.7802300722809834
+        },
+        {
+          "activityId": "land-attraction-196",
+          "hour": 13,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 80,
+          "correctionMinutes": 0.5442670666500035
+        },
+        {
+          "activityId": "land-attraction-196",
+          "hour": 14,
+          "samples": 9,
+          "days": 5,
+          "meanWait": 80,
+          "correctionMinutes": 0.004103635550617825
+        },
+        {
+          "activityId": "land-attraction-196",
+          "hour": 15,
+          "samples": 11,
+          "days": 6,
+          "meanWait": 80,
+          "correctionMinutes": -3.1026214803595624
+        },
+        {
+          "activityId": "land-attraction-196",
+          "hour": 16,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 86.7,
+          "correctionMinutes": 0.738977184426806
+        },
+        {
+          "activityId": "land-attraction-196",
+          "hour": 17,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 72.2,
+          "correctionMinutes": -1.843853993049847
+        },
+        {
+          "activityId": "land-attraction-196",
+          "hour": 18,
+          "samples": 11,
+          "days": 6,
+          "meanWait": 63.6,
+          "correctionMinutes": -1.8647293594048884
+        },
+        {
+          "activityId": "land-attraction-196",
+          "hour": 19,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 55,
+          "correctionMinutes": -4.060744233773305
+        },
+        {
+          "activityId": "land-attraction-196",
+          "hour": 20,
+          "samples": 11,
+          "days": 6,
+          "meanWait": 35.5,
+          "correctionMinutes": -5.438854646457228
+        },
+        {
+          "activityId": "land-attraction-197",
+          "hour": 9,
+          "samples": 18,
+          "days": 6,
+          "meanWait": 133.9,
+          "correctionMinutes": 18.59618088189755
+        },
+        {
+          "activityId": "land-attraction-197",
+          "hour": 10,
+          "samples": 12,
+          "days": 5,
+          "meanWait": 114.2,
+          "correctionMinutes": 4.030188718356796
+        },
+        {
+          "activityId": "land-attraction-197",
+          "hour": 11,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 94.2,
+          "correctionMinutes": -1.7868243938165866
+        },
+        {
+          "activityId": "land-attraction-197",
+          "hour": 12,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 100,
+          "correctionMinutes": -1.0639200051132511
+        },
+        {
+          "activityId": "land-attraction-197",
+          "hour": 13,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 108.8,
+          "correctionMinutes": -0.5146165023419808
+        },
+        {
+          "activityId": "land-attraction-197",
+          "hour": 14,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 107.5,
+          "correctionMinutes": -2.224497606299165
+        },
+        {
+          "activityId": "land-attraction-197",
+          "hour": 15,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 112.5,
+          "correctionMinutes": 1.7429272397439384
+        },
+        {
+          "activityId": "land-attraction-197",
+          "hour": 16,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 109.2,
+          "correctionMinutes": -1.8418083545064285
+        },
+        {
+          "activityId": "land-attraction-197",
+          "hour": 17,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 100,
+          "correctionMinutes": 0.46563318593608327
+        },
+        {
+          "activityId": "land-attraction-197",
+          "hour": 18,
+          "samples": 7,
+          "days": 6,
+          "meanWait": 81.4,
+          "correctionMinutes": -1.9691074878817754
+        },
+        {
+          "activityId": "land-attraction-197",
+          "hour": 19,
+          "samples": 9,
+          "days": 7,
+          "meanWait": 66.7,
+          "correctionMinutes": -4.4052243036815355
+        },
+        {
+          "activityId": "land-attraction-197",
+          "hour": 20,
+          "samples": 8,
+          "days": 5,
+          "meanWait": 38.1,
+          "correctionMinutes": -4.818056920369556
+        }
+      ],
+      "correlations": {
+        "units": "minutes",
+        "normalisation": "wait/baseWait",
+        "weekday": [
+          {
+            "key": "0",
+            "label": "日曜日",
+            "samples": 341,
+            "days": 1,
+            "meanWait": null,
+            "meanRatio": null
+          },
+          {
+            "key": "1",
+            "label": "月曜日",
+            "samples": 390,
+            "days": 1,
+            "meanWait": null,
+            "meanRatio": null
+          },
+          {
+            "key": "2",
+            "label": "火曜日",
+            "samples": 341,
+            "days": 1,
+            "meanWait": null,
+            "meanRatio": null
+          },
+          {
+            "key": "3",
+            "label": "水曜日",
+            "samples": 374,
+            "days": 1,
+            "meanWait": null,
+            "meanRatio": null
+          },
+          {
+            "key": "4",
+            "label": "木曜日",
+            "samples": 419,
+            "days": 1,
+            "meanWait": null,
+            "meanRatio": null
+          },
+          {
+            "key": "5",
+            "label": "金曜日",
+            "samples": 473,
+            "days": 1,
+            "meanWait": null,
+            "meanRatio": null
+          },
+          {
+            "key": "6",
+            "label": "土曜日",
+            "samples": 481,
+            "days": 1,
+            "meanWait": null,
+            "meanRatio": null
+          }
+        ],
+        "month": [
+          {
+            "key": "11",
+            "label": "11月",
+            "samples": 2819,
+            "days": 7,
+            "meanWait": 32.2,
+            "meanRatio": 0.788
+          }
+        ],
+        "weather": [
+          {
+            "key": "sun",
+            "label": "晴れ",
+            "samples": 1524,
+            "days": 5,
+            "meanWait": 32.8,
+            "meanRatio": 0.79
+          },
+          {
+            "key": "cloud",
+            "label": "曇り",
+            "samples": 731,
+            "days": 4,
+            "meanWait": 35.8,
+            "meanRatio": 0.932
+          },
+          {
+            "key": "rain",
+            "label": "雨",
+            "samples": 543,
+            "days": 2,
+            "meanWait": 27,
+            "meanRatio": 0.608
+          },
+          {
+            "key": "unknown",
+            "label": "不明",
+            "samples": 21,
+            "days": 1,
+            "meanWait": null,
+            "meanRatio": null
+          }
+        ],
+        "holiday": [
+          {
+            "key": "ordinary",
+            "label": "祝日以外",
+            "samples": 2819,
+            "days": 7,
+            "meanWait": 32.2,
+            "meanRatio": 0.788
+          }
+        ],
+        "event": [
+          {
+            "key": "land-christmas-2026",
+            "label": "ディズニー・クリスマス",
+            "samples": 2819,
+            "days": 7,
+            "meanWait": 32.2,
+            "meanRatio": 0.788
+          }
+        ],
+        "temperature": {
+          "samples": 2798,
+          "days": 7,
+          "r": 0.256
+        },
+        "precipitation": {
+          "samples": 2798,
+          "days": 7,
+          "r": -0.154
+        },
+        "note": "記録内の相関の傾向です。平均は5件以上・2日以上、数値の相関係数は20件以上・3日以上で表示します。施設ごとの基準値でも補正しますが因果関係は表しません。"
+      },
+      "bootstrap": {
+        "provider": "themeparks-wiki",
+        "fromDate": "2026-11-11",
+        "throughDate": "2026-11-17",
+        "partialThroughDate": "2026-11-17",
+        "attemptedAt": "2026-11-17T13:13:22.467Z",
+        "requestedDays": 7,
+        "observedDays": 7,
+        "weatherProvenance": "past-weather-forecast",
+        "requests": [
+          {
+            "parkId": "land",
+            "date": "2026-11-11",
+            "samples": 374,
+            "status": "ok"
+          },
+          {
+            "parkId": "land",
+            "date": "2026-11-12",
+            "samples": 419,
+            "status": "ok"
+          },
+          {
+            "parkId": "land",
+            "date": "2026-11-13",
+            "samples": 473,
+            "status": "ok"
+          },
+          {
+            "parkId": "land",
+            "date": "2026-11-14",
+            "samples": 481,
+            "status": "ok"
+          },
+          {
+            "parkId": "land",
+            "date": "2026-11-15",
+            "samples": 341,
+            "status": "ok"
+          },
+          {
+            "parkId": "land",
+            "date": "2026-11-16",
+            "samples": 390,
+            "status": "ok"
+          },
+          {
+            "parkId": "land",
+            "date": "2026-11-17",
+            "samples": 320,
+            "status": "ok"
+          }
+        ]
+      }
     },
     {
-      "schemaVersion": 1,
+      "schemaVersion": 2,
       "method": "ridge-regression",
       "parkId": "sea",
-      "status": "insufficient-data",
-      "usable": false,
-      "trainedAt": "2026-11-17T11:48:22.314Z",
-      "beforeDate": "2026-11-17",
-      "samples": 0,
-      "days": 0,
-      "firstDate": null,
-      "lastDate": null,
+      "status": "trained",
+      "usable": true,
+      "trainedAt": "2026-11-17T13:13:22.754Z",
+      "beforeDate": "2026-11-18",
+      "samples": 2686,
+      "availableSamples": 2686,
+      "sampling": "all-eligible",
+      "days": 7,
+      "firstDate": "2026-11-11",
+      "lastDate": "2026-11-17",
       "minDays": 7,
       "minSamples": 100,
-      "activityIds": [],
-      "coefficients": [],
-      "validation": null
+      "featureNames": [
+        "intercept",
+        "time_sin",
+        "time_cos",
+        "time_sin_2",
+        "time_cos_2",
+        "opening_90min",
+        "midday",
+        "weekday_1",
+        "weekday_2",
+        "weekday_3",
+        "weekday_4",
+        "weekday_5",
+        "weekday_6",
+        "month_sin",
+        "month_cos",
+        "holiday",
+        "before_holiday",
+        "after_holiday",
+        "rain",
+        "cloud",
+        "weather_known",
+        "temperature",
+        "temperature_known",
+        "precipitation",
+        "precipitation_known",
+        "event_present",
+        "event:sea-christmas-2026",
+        "event:sea-jubilee-2026"
+      ],
+      "eventIds": [
+        "sea-christmas-2026",
+        "sea-jubilee-2026"
+      ],
+      "activityIds": [
+        "sea-attraction-202",
+        "sea-attraction-218",
+        "sea-attraction-219",
+        "sea-attraction-220",
+        "sea-attraction-223",
+        "sea-attraction-224",
+        "sea-attraction-226",
+        "sea-attraction-230",
+        "sea-attraction-231",
+        "sea-attraction-232",
+        "sea-attraction-235",
+        "sea-attraction-236",
+        "sea-attraction-237",
+        "sea-attraction-238",
+        "sea-attraction-239",
+        "sea-attraction-240",
+        "sea-attraction-241",
+        "sea-attraction-242",
+        "sea-attraction-243",
+        "sea-attraction-244",
+        "sea-attraction-245",
+        "sea-attraction-246",
+        "sea-attraction-247",
+        "sea-attraction-255",
+        "sea-attraction-256",
+        "sea-attraction-257",
+        "sea-attraction-258"
+      ],
+      "coefficients": [
+        0.15689582082222941,
+        0.20250675266190266,
+        -0.3669760243002323,
+        0.2511709301161367,
+        -0.1296236996514554,
+        0.67257177082514,
+        -0.28528223063054114,
+        0.2095841787545641,
+        0.007924317962989723,
+        -0.044158851963819086,
+        0.11410302093888305,
+        0.2976557268234303,
+        0.23967275158836626,
+        -0.00013587575859176713,
+        7.844791039701963e-05,
+        0,
+        0,
+        0,
+        -0.15913953996357014,
+        -0.024962240415458328,
+        0.02890414192553117,
+        0.1666083130564466,
+        0.02890414192553118,
+        0.03312629503864393,
+        0.028904141925531188,
+        0.00015689582081069022,
+        0.00015689582081069024,
+        0.00015689582081069024,
+        -0.019062149649239926,
+        0.4904607025786358,
+        0.7226520827293468,
+        -0.13932685822844293,
+        0.5006985236777812,
+        -0.15893902326577614,
+        -0.3724363137400085,
+        -0.12591799896170708,
+        -0.29529124899182096,
+        -0.32200103816693876,
+        -0.4703832780883642,
+        -0.568179318957825,
+        -0.1203193549846466,
+        -0.2725263417415104,
+        -0.3329578438650347,
+        -0.0354986501446686,
+        -0.23720188178684293,
+        0.24596342464162463,
+        0.8231774210102959,
+        -0.019062149649239912,
+        0.21183046028658414,
+        -0.07948583809089771,
+        -0.24372543927556856,
+        0.6921666542421732,
+        -0.05074442942389952,
+        -0.16188818333146066,
+        0.3381549669973125
+      ],
+      "validation": {
+        "method": "later-days-holdout",
+        "trainThrough": "2026-11-15",
+        "testFrom": "2026-11-16",
+        "testThrough": "2026-11-17",
+        "trainSamples": 1952,
+        "testSamples": 732,
+        "modelMae": 12.699453551912569,
+        "baselineMae": 24.51366120218579,
+        "units": "minutes",
+        "unseenEvents": []
+      },
+      "dataSources": [
+        {
+          "name": "ThemeParks.wiki",
+          "url": "https://www.themeparks.wiki/",
+          "kind": "recent-historical-waits",
+          "attribution": "Powered by ThemeParks.wiki",
+          "termsUrl": "https://www.themeparks.wiki/terms"
+        },
+        {
+          "name": "Open-Meteo",
+          "url": "https://open-meteo.com/",
+          "kind": "past-weather-forecast",
+          "attribution": "Weather data by Open-Meteo.com",
+          "licenceUrl": "https://creativecommons.org/licenses/by/4.0/"
+        }
+      ],
+      "calendarData": {
+        "schemaVersion": 1,
+        "updatedAt": "2026-11-17T12:37:38.967306Z",
+        "sourceUrl": "https://www8.cao.go.jp/chosei/shukujitsu/syukujitsu.csv",
+        "sourcePage": "https://www8.cao.go.jp/chosei/shukujitsu/gaiyou.html",
+        "attribution": "内閣府「国民の祝日」CSVを加工",
+        "coverage": {
+          "startDate": "1955-01-01",
+          "endDate": "2027-12-31"
+        },
+        "holidays": [
+          {
+            "date": "2026-11-23",
+            "name": "勤労感謝の日"
+          },
+          {
+            "date": "2027-01-01",
+            "name": "元日"
+          },
+          {
+            "date": "2027-01-11",
+            "name": "成人の日"
+          },
+          {
+            "date": "2027-02-11",
+            "name": "建国記念の日"
+          },
+          {
+            "date": "2027-02-23",
+            "name": "天皇誕生日"
+          },
+          {
+            "date": "2027-03-21",
+            "name": "春分の日"
+          },
+          {
+            "date": "2027-03-22",
+            "name": "休日"
+          },
+          {
+            "date": "2027-04-29",
+            "name": "昭和の日"
+          },
+          {
+            "date": "2027-05-03",
+            "name": "憲法記念日"
+          },
+          {
+            "date": "2027-05-04",
+            "name": "みどりの日"
+          },
+          {
+            "date": "2027-05-05",
+            "name": "こどもの日"
+          },
+          {
+            "date": "2027-07-19",
+            "name": "海の日"
+          },
+          {
+            "date": "2027-08-11",
+            "name": "山の日"
+          },
+          {
+            "date": "2027-09-20",
+            "name": "敬老の日"
+          },
+          {
+            "date": "2027-09-23",
+            "name": "秋分の日"
+          },
+          {
+            "date": "2027-10-11",
+            "name": "スポーツの日"
+          },
+          {
+            "date": "2027-11-03",
+            "name": "文化の日"
+          },
+          {
+            "date": "2027-11-23",
+            "name": "勤労感謝の日"
+          }
+        ]
+      },
+      "activityTimeProfiles": [
+        {
+          "activityId": "sea-attraction-218",
+          "hour": 9,
+          "samples": 22,
+          "days": 7,
+          "meanWait": 128.6,
+          "correctionMinutes": 16.339185570789738
+        },
+        {
+          "activityId": "sea-attraction-218",
+          "hour": 10,
+          "samples": 18,
+          "days": 7,
+          "meanWait": 148.9,
+          "correctionMinutes": 7.432954982494607
+        },
+        {
+          "activityId": "sea-attraction-218",
+          "hour": 11,
+          "samples": 9,
+          "days": 5,
+          "meanWait": 121.1,
+          "correctionMinutes": -5.521906983013739
+        },
+        {
+          "activityId": "sea-attraction-218",
+          "hour": 12,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 114.4,
+          "correctionMinutes": -6.723153508098953
+        },
+        {
+          "activityId": "sea-attraction-218",
+          "hour": 13,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 137.5,
+          "correctionMinutes": -1.9993135168564962
+        },
+        {
+          "activityId": "sea-attraction-218",
+          "hour": 14,
+          "samples": 8,
+          "days": 5,
+          "meanWait": 150,
+          "correctionMinutes": 0.4668380110271997
+        },
+        {
+          "activityId": "sea-attraction-218",
+          "hour": 15,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 130.9,
+          "correctionMinutes": -4.137277240974482
+        },
+        {
+          "activityId": "sea-attraction-218",
+          "hour": 16,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 147.5,
+          "correctionMinutes": 3.995860980109163
+        },
+        {
+          "activityId": "sea-attraction-218",
+          "hour": 17,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 128.6,
+          "correctionMinutes": 1.3394795680919478
+        },
+        {
+          "activityId": "sea-attraction-218",
+          "hour": 18,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 101.1,
+          "correctionMinutes": -0.9683178179853724
+        },
+        {
+          "activityId": "sea-attraction-218",
+          "hour": 19,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 79.1,
+          "correctionMinutes": -2.3866635784566945
+        },
+        {
+          "activityId": "sea-attraction-218",
+          "hour": 20,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 60,
+          "correctionMinutes": -1.807463701511116
+        },
+        {
+          "activityId": "sea-attraction-219",
+          "hour": 9,
+          "samples": 26,
+          "days": 7,
+          "meanWait": 156.2,
+          "correctionMinutes": 21.624647214789512
+        },
+        {
+          "activityId": "sea-attraction-219",
+          "hour": 10,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 166.7,
+          "correctionMinutes": 4.544904180780309
+        },
+        {
+          "activityId": "sea-attraction-219",
+          "hour": 11,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 148.9,
+          "correctionMinutes": -2.8214783477189305
+        },
+        {
+          "activityId": "sea-attraction-219",
+          "hour": 12,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 142.9,
+          "correctionMinutes": -2.904281023157024
+        },
+        {
+          "activityId": "sea-attraction-219",
+          "hour": 13,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 140,
+          "correctionMinutes": -1.7827246016407798
+        },
+        {
+          "activityId": "sea-attraction-219",
+          "hour": 14,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 160,
+          "correctionMinutes": -1.2865148915463076
+        },
+        {
+          "activityId": "sea-attraction-219",
+          "hour": 15,
+          "samples": 5,
+          "days": 4,
+          "meanWait": 172,
+          "correctionMinutes": 2.3274009854522317
+        },
+        {
+          "activityId": "sea-attraction-219",
+          "hour": 16,
+          "samples": 5,
+          "days": 4,
+          "meanWait": 176,
+          "correctionMinutes": 2.706125133388953
+        },
+        {
+          "activityId": "sea-attraction-219",
+          "hour": 17,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 144.4,
+          "correctionMinutes": 0.05697714171801028
+        },
+        {
+          "activityId": "sea-attraction-219",
+          "hour": 18,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 118.9,
+          "correctionMinutes": -2.1009125375580613
+        },
+        {
+          "activityId": "sea-attraction-219",
+          "hour": 19,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 87.8,
+          "correctionMinutes": -5.924200445965622
+        },
+        {
+          "activityId": "sea-attraction-220",
+          "hour": 9,
+          "samples": 17,
+          "days": 7,
+          "meanWait": 10.9,
+          "correctionMinutes": -2.523052245527538
+        },
+        {
+          "activityId": "sea-attraction-220",
+          "hour": 10,
+          "samples": 18,
+          "days": 7,
+          "meanWait": 21.7,
+          "correctionMinutes": -1.6072708904533652
+        },
+        {
+          "activityId": "sea-attraction-220",
+          "hour": 11,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 25,
+          "correctionMinutes": -0.5241283696585628
+        },
+        {
+          "activityId": "sea-attraction-220",
+          "hour": 12,
+          "samples": 9,
+          "days": 5,
+          "meanWait": 21.7,
+          "correctionMinutes": -1.2471007045750695
+        },
+        {
+          "activityId": "sea-attraction-220",
+          "hour": 13,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 30.6,
+          "correctionMinutes": 1.1243264048781185
+        },
+        {
+          "activityId": "sea-attraction-220",
+          "hour": 14,
+          "samples": 7,
+          "days": 6,
+          "meanWait": 28.6,
+          "correctionMinutes": -0.16656420019726978
+        },
+        {
+          "activityId": "sea-attraction-220",
+          "hour": 16,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 29.3,
+          "correctionMinutes": -0.07149657673838121
+        },
+        {
+          "activityId": "sea-attraction-220",
+          "hour": 17,
+          "samples": 7,
+          "days": 4,
+          "meanWait": 33.6,
+          "correctionMinutes": 1.5974885421515632
+        },
+        {
+          "activityId": "sea-attraction-220",
+          "hour": 18,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 29.2,
+          "correctionMinutes": 1.6764148016617901
+        },
+        {
+          "activityId": "sea-attraction-220",
+          "hour": 19,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 16.7,
+          "correctionMinutes": 0.6418209908858841
+        },
+        {
+          "activityId": "sea-attraction-220",
+          "hour": 20,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 13.3,
+          "correctionMinutes": 1.0316936287369989
+        },
+        {
+          "activityId": "sea-attraction-223",
+          "hour": 9,
+          "samples": 24,
+          "days": 7,
+          "meanWait": 85.8,
+          "correctionMinutes": -7.833452966064982
+        },
+        {
+          "activityId": "sea-attraction-223",
+          "hour": 10,
+          "samples": 17,
+          "days": 7,
+          "meanWait": 144.7,
+          "correctionMinutes": 3.2250835004612077
+        },
+        {
+          "activityId": "sea-attraction-223",
+          "hour": 11,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 150.8,
+          "correctionMinutes": 5.040539098446038
+        },
+        {
+          "activityId": "sea-attraction-223",
+          "hour": 12,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 153.3,
+          "correctionMinutes": 2.143410838145221
+        },
+        {
+          "activityId": "sea-attraction-223",
+          "hour": 13,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 148,
+          "correctionMinutes": 5.305566673735198
+        },
+        {
+          "activityId": "sea-attraction-223",
+          "hour": 14,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 162,
+          "correctionMinutes": 6.810492670221921
+        },
+        {
+          "activityId": "sea-attraction-223",
+          "hour": 15,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 150,
+          "correctionMinutes": 3.2802632124393996
+        },
+        {
+          "activityId": "sea-attraction-223",
+          "hour": 16,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 146.3,
+          "correctionMinutes": 2.4930746355085938
+        },
+        {
+          "activityId": "sea-attraction-223",
+          "hour": 17,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 128.3,
+          "correctionMinutes": 2.7717290989026795
+        },
+        {
+          "activityId": "sea-attraction-223",
+          "hour": 18,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 109,
+          "correctionMinutes": 0.9049727860057487
+        },
+        {
+          "activityId": "sea-attraction-223",
+          "hour": 19,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 78.9,
+          "correctionMinutes": -2.0848348532472354
+        },
+        {
+          "activityId": "sea-attraction-224",
+          "hour": 9,
+          "samples": 22,
+          "days": 7,
+          "meanWait": 16.1,
+          "correctionMinutes": 0.24891840642185778
+        },
+        {
+          "activityId": "sea-attraction-224",
+          "hour": 10,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 32.3,
+          "correctionMinutes": 3.2889007876011718
+        },
+        {
+          "activityId": "sea-attraction-224",
+          "hour": 11,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 27.5,
+          "correctionMinutes": 0.9812144133749893
+        },
+        {
+          "activityId": "sea-attraction-224",
+          "hour": 12,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 25.5,
+          "correctionMinutes": -0.5345637977065095
+        },
+        {
+          "activityId": "sea-attraction-224",
+          "hour": 13,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 27.7,
+          "correctionMinutes": 0.6316431111415438
+        },
+        {
+          "activityId": "sea-attraction-224",
+          "hour": 14,
+          "samples": 5,
+          "days": 4,
+          "meanWait": 29,
+          "correctionMinutes": -0.6699249912403243
+        },
+        {
+          "activityId": "sea-attraction-224",
+          "hour": 15,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 23.5,
+          "correctionMinutes": -1.3285876731228137
+        },
+        {
+          "activityId": "sea-attraction-224",
+          "hour": 16,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 18.3,
+          "correctionMinutes": -1.2816191279541842
+        },
+        {
+          "activityId": "sea-attraction-224",
+          "hour": 17,
+          "samples": 9,
+          "days": 7,
+          "meanWait": 17.8,
+          "correctionMinutes": -0.9928677500674136
+        },
+        {
+          "activityId": "sea-attraction-224",
+          "hour": 18,
+          "samples": 8,
+          "days": 5,
+          "meanWait": 15,
+          "correctionMinutes": -0.8808797848572957
+        },
+        {
+          "activityId": "sea-attraction-224",
+          "hour": 19,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 7.5,
+          "correctionMinutes": -1.8171722655410372
+        },
+        {
+          "activityId": "sea-attraction-224",
+          "hour": 20,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 6.7,
+          "correctionMinutes": -0.3199687852975822
+        },
+        {
+          "activityId": "sea-attraction-226",
+          "hour": 10,
+          "samples": 7,
+          "days": 7,
+          "meanWait": 15,
+          "correctionMinutes": 0.018296901501027456
+        },
+        {
+          "activityId": "sea-attraction-226",
+          "hour": 14,
+          "samples": 5,
+          "days": 3,
+          "meanWait": 25,
+          "correctionMinutes": -0.2779021740380028
+        },
+        {
+          "activityId": "sea-attraction-226",
+          "hour": 16,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 19.2,
+          "correctionMinutes": -1.416786935624858
+        },
+        {
+          "activityId": "sea-attraction-230",
+          "hour": 9,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 8.5,
+          "correctionMinutes": -0.9899502259236217
+        },
+        {
+          "activityId": "sea-attraction-230",
+          "hour": 11,
+          "samples": 8,
+          "days": 7,
+          "meanWait": 10,
+          "correctionMinutes": -4.884899575728974
+        },
+        {
+          "activityId": "sea-attraction-230",
+          "hour": 12,
+          "samples": 8,
+          "days": 7,
+          "meanWait": 23.1,
+          "correctionMinutes": -0.8781322139313142
+        },
+        {
+          "activityId": "sea-attraction-230",
+          "hour": 15,
+          "samples": 7,
+          "days": 7,
+          "meanWait": 32.9,
+          "correctionMinutes": 1.0324430432159923
+        },
+        {
+          "activityId": "sea-attraction-230",
+          "hour": 16,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 42.9,
+          "correctionMinutes": 3.9350139045753876
+        },
+        {
+          "activityId": "sea-attraction-231",
+          "hour": 9,
+          "samples": 7,
+          "days": 7,
+          "meanWait": 5,
+          "correctionMinutes": 0.24486058406824565
+        },
+        {
+          "activityId": "sea-attraction-231",
+          "hour": 11,
+          "samples": 9,
+          "days": 7,
+          "meanWait": 12.2,
+          "correctionMinutes": -3.561038231229642
+        },
+        {
+          "activityId": "sea-attraction-231",
+          "hour": 12,
+          "samples": 9,
+          "days": 7,
+          "meanWait": 12.8,
+          "correctionMinutes": -3.1193616492201865
+        },
+        {
+          "activityId": "sea-attraction-231",
+          "hour": 13,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 20,
+          "correctionMinutes": -0.9678940916070997
+        },
+        {
+          "activityId": "sea-attraction-231",
+          "hour": 14,
+          "samples": 11,
+          "days": 6,
+          "meanWait": 23.2,
+          "correctionMinutes": 0.25884704487425275
+        },
+        {
+          "activityId": "sea-attraction-231",
+          "hour": 15,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 20,
+          "correctionMinutes": -1.6087837045747295
+        },
+        {
+          "activityId": "sea-attraction-231",
+          "hour": 16,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 20.5,
+          "correctionMinutes": -0.8421055645636579
+        },
+        {
+          "activityId": "sea-attraction-231",
+          "hour": 17,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 19.6,
+          "correctionMinutes": 0.3374564543377783
+        },
+        {
+          "activityId": "sea-attraction-231",
+          "hour": 18,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 20,
+          "correctionMinutes": 2.600372911506488
+        },
+        {
+          "activityId": "sea-attraction-231",
+          "hour": 19,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 11.5,
+          "correctionMinutes": 1.7527652044227946
+        },
+        {
+          "activityId": "sea-attraction-231",
+          "hour": 20,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 8.5,
+          "correctionMinutes": 2.1779069211147
+        },
+        {
+          "activityId": "sea-attraction-232",
+          "hour": 9,
+          "samples": 17,
+          "days": 7,
+          "meanWait": 11.5,
+          "correctionMinutes": 0.42564818318607894
+        },
+        {
+          "activityId": "sea-attraction-232",
+          "hour": 10,
+          "samples": 20,
+          "days": 7,
+          "meanWait": 20,
+          "correctionMinutes": 0.07233241637979129
+        },
+        {
+          "activityId": "sea-attraction-232",
+          "hour": 11,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 15.5,
+          "correctionMinutes": -2.590381649885887
+        },
+        {
+          "activityId": "sea-attraction-232",
+          "hour": 12,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 18.1,
+          "correctionMinutes": -1.0603530885618329
+        },
+        {
+          "activityId": "sea-attraction-232",
+          "hour": 13,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 22.5,
+          "correctionMinutes": 0.24352341329061922
+        },
+        {
+          "activityId": "sea-attraction-232",
+          "hour": 14,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 20.8,
+          "correctionMinutes": -0.377376399107911
+        },
+        {
+          "activityId": "sea-attraction-232",
+          "hour": 15,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 21.5,
+          "correctionMinutes": -0.5674797200614035
+        },
+        {
+          "activityId": "sea-attraction-232",
+          "hour": 16,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 19.5,
+          "correctionMinutes": -1.2143582653730154
+        },
+        {
+          "activityId": "sea-attraction-232",
+          "hour": 17,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 20.5,
+          "correctionMinutes": 0.7401668677682997
+        },
+        {
+          "activityId": "sea-attraction-232",
+          "hour": 18,
+          "samples": 9,
+          "days": 5,
+          "meanWait": 14.4,
+          "correctionMinutes": 0.16999776179299253
+        },
+        {
+          "activityId": "sea-attraction-232",
+          "hour": 19,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 8.3,
+          "correctionMinutes": 0.33878314791499076
+        },
+        {
+          "activityId": "sea-attraction-235",
+          "hour": 9,
+          "samples": 7,
+          "days": 7,
+          "meanWait": 5,
+          "correctionMinutes": 1.6066874770413602
+        },
+        {
+          "activityId": "sea-attraction-235",
+          "hour": 11,
+          "samples": 5,
+          "days": 4,
+          "meanWait": 13,
+          "correctionMinutes": -1.6774743110681578
+        },
+        {
+          "activityId": "sea-attraction-235",
+          "hour": 12,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 15.8,
+          "correctionMinutes": -0.8673616628273562
+        },
+        {
+          "activityId": "sea-attraction-235",
+          "hour": 13,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 16.3,
+          "correctionMinutes": -0.5703724216421492
+        },
+        {
+          "activityId": "sea-attraction-235",
+          "hour": 14,
+          "samples": 7,
+          "days": 4,
+          "meanWait": 15,
+          "correctionMinutes": -0.673472797265662
+        },
+        {
+          "activityId": "sea-attraction-235",
+          "hour": 15,
+          "samples": 5,
+          "days": 4,
+          "meanWait": 14,
+          "correctionMinutes": -0.94672440959326
+        },
+        {
+          "activityId": "sea-attraction-235",
+          "hour": 16,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 15.8,
+          "correctionMinutes": -1.0331825196782005
+        },
+        {
+          "activityId": "sea-attraction-235",
+          "hour": 17,
+          "samples": 5,
+          "days": 3,
+          "meanWait": 12,
+          "correctionMinutes": -1.2786268504991398
+        },
+        {
+          "activityId": "sea-attraction-236",
+          "hour": 10,
+          "samples": 7,
+          "days": 7,
+          "meanWait": 5,
+          "correctionMinutes": -1.0518500949529925
+        },
+        {
+          "activityId": "sea-attraction-236",
+          "hour": 13,
+          "samples": 7,
+          "days": 4,
+          "meanWait": 14.3,
+          "correctionMinutes": -1.0527647501878798
+        },
+        {
+          "activityId": "sea-attraction-236",
+          "hour": 15,
+          "samples": 5,
+          "days": 4,
+          "meanWait": 15,
+          "correctionMinutes": -1.0905007689476807
+        },
+        {
+          "activityId": "sea-attraction-236",
+          "hour": 16,
+          "samples": 5,
+          "days": 3,
+          "meanWait": 13,
+          "correctionMinutes": -1.0833062186936808
+        },
+        {
+          "activityId": "sea-attraction-236",
+          "hour": 17,
+          "samples": 5,
+          "days": 4,
+          "meanWait": 13,
+          "correctionMinutes": -0.6660073822868188
+        },
+        {
+          "activityId": "sea-attraction-236",
+          "hour": 18,
+          "samples": 5,
+          "days": 3,
+          "meanWait": 10,
+          "correctionMinutes": -0.15616857899748965
+        },
+        {
+          "activityId": "sea-attraction-237",
+          "hour": 9,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 10.8,
+          "correctionMinutes": -1.8114896667059095
+        },
+        {
+          "activityId": "sea-attraction-237",
+          "hour": 10,
+          "samples": 15,
+          "days": 7,
+          "meanWait": 22,
+          "correctionMinutes": -1.8876127646527854
+        },
+        {
+          "activityId": "sea-attraction-237",
+          "hour": 11,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 29,
+          "correctionMinutes": 0.5532141382378746
+        },
+        {
+          "activityId": "sea-attraction-237",
+          "hour": 12,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 27.5,
+          "correctionMinutes": -0.009278386653857749
+        },
+        {
+          "activityId": "sea-attraction-237",
+          "hour": 13,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 29,
+          "correctionMinutes": 0.38479286031511106
+        },
+        {
+          "activityId": "sea-attraction-237",
+          "hour": 14,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 27,
+          "correctionMinutes": 0.09974548600467005
+        },
+        {
+          "activityId": "sea-attraction-237",
+          "hour": 15,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 29.1,
+          "correctionMinutes": -0.3528365513550251
+        },
+        {
+          "activityId": "sea-attraction-237",
+          "hour": 16,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 28.3,
+          "correctionMinutes": 0.035132329191442255
+        },
+        {
+          "activityId": "sea-attraction-237",
+          "hour": 17,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 26.4,
+          "correctionMinutes": 0.34929675502018104
+        },
+        {
+          "activityId": "sea-attraction-237",
+          "hour": 18,
+          "samples": 5,
+          "days": 4,
+          "meanWait": 24,
+          "correctionMinutes": 0.4537285418214179
+        },
+        {
+          "activityId": "sea-attraction-237",
+          "hour": 19,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 15.7,
+          "correctionMinutes": 0.14857400108347832
+        },
+        {
+          "activityId": "sea-attraction-237",
+          "hour": 20,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 17.5,
+          "correctionMinutes": 1.6270884024736354
+        },
+        {
+          "activityId": "sea-attraction-238",
+          "hour": 9,
+          "samples": 16,
+          "days": 7,
+          "meanWait": 9.4,
+          "correctionMinutes": -0.8028741712627684
+        },
+        {
+          "activityId": "sea-attraction-238",
+          "hour": 10,
+          "samples": 17,
+          "days": 7,
+          "meanWait": 18.8,
+          "correctionMinutes": -0.8731702227310049
+        },
+        {
+          "activityId": "sea-attraction-238",
+          "hour": 11,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 20.8,
+          "correctionMinutes": -0.7474436711349334
+        },
+        {
+          "activityId": "sea-attraction-238",
+          "hour": 12,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 23,
+          "correctionMinutes": -0.3845523598770392
+        },
+        {
+          "activityId": "sea-attraction-238",
+          "hour": 13,
+          "samples": 11,
+          "days": 6,
+          "meanWait": 24.1,
+          "correctionMinutes": -0.15777205719199358
+        },
+        {
+          "activityId": "sea-attraction-238",
+          "hour": 14,
+          "samples": 9,
+          "days": 5,
+          "meanWait": 28.9,
+          "correctionMinutes": 0.40908955271752795
+        },
+        {
+          "activityId": "sea-attraction-238",
+          "hour": 15,
+          "samples": 10,
+          "days": 5,
+          "meanWait": 23,
+          "correctionMinutes": -0.907563551288619
+        },
+        {
+          "activityId": "sea-attraction-238",
+          "hour": 16,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 23.3,
+          "correctionMinutes": -0.3097980627322201
+        },
+        {
+          "activityId": "sea-attraction-238",
+          "hour": 18,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 16.7,
+          "correctionMinutes": 0.350451983342603
+        },
+        {
+          "activityId": "sea-attraction-238",
+          "hour": 19,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 9.2,
+          "correctionMinutes": -0.2397162153792685
+        },
+        {
+          "activityId": "sea-attraction-238",
+          "hour": 20,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 12.5,
+          "correctionMinutes": 1.6960750019374575
+        },
+        {
+          "activityId": "sea-attraction-239",
+          "hour": 9,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 6.5,
+          "correctionMinutes": -0.51974633869686
+        },
+        {
+          "activityId": "sea-attraction-239",
+          "hour": 10,
+          "samples": 12,
+          "days": 6,
+          "meanWait": 15.8,
+          "correctionMinutes": -1.9246473477375285
+        },
+        {
+          "activityId": "sea-attraction-239",
+          "hour": 11,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 18,
+          "correctionMinutes": -0.7429716497177494
+        },
+        {
+          "activityId": "sea-attraction-239",
+          "hour": 12,
+          "samples": 7,
+          "days": 6,
+          "meanWait": 23.6,
+          "correctionMinutes": 0.2425172859593894
+        },
+        {
+          "activityId": "sea-attraction-239",
+          "hour": 13,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 19,
+          "correctionMinutes": -0.20525458739091515
+        },
+        {
+          "activityId": "sea-attraction-239",
+          "hour": 14,
+          "samples": 8,
+          "days": 7,
+          "meanWait": 23.1,
+          "correctionMinutes": 0.14231591884215028
+        },
+        {
+          "activityId": "sea-attraction-239",
+          "hour": 15,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 22.7,
+          "correctionMinutes": -0.0027006720579324695
+        },
+        {
+          "activityId": "sea-attraction-239",
+          "hour": 16,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 18.6,
+          "correctionMinutes": 0.05908939540417134
+        },
+        {
+          "activityId": "sea-attraction-239",
+          "hour": 17,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 17.5,
+          "correctionMinutes": 0.2339707265461231
+        },
+        {
+          "activityId": "sea-attraction-239",
+          "hour": 18,
+          "samples": 9,
+          "days": 5,
+          "meanWait": 11.1,
+          "correctionMinutes": -0.3639594289917038
+        },
+        {
+          "activityId": "sea-attraction-239",
+          "hour": 19,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 7.5,
+          "correctionMinutes": -0.24307061115255324
+        },
+        {
+          "activityId": "sea-attraction-240",
+          "hour": 9,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 7.7,
+          "correctionMinutes": -3.8627560466418362
+        },
+        {
+          "activityId": "sea-attraction-240",
+          "hour": 10,
+          "samples": 20,
+          "days": 7,
+          "meanWait": 24.8,
+          "correctionMinutes": -2.224941807904593
+        },
+        {
+          "activityId": "sea-attraction-240",
+          "hour": 11,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 27.2,
+          "correctionMinutes": -0.21648604541978966
+        },
+        {
+          "activityId": "sea-attraction-240",
+          "hour": 12,
+          "samples": 8,
+          "days": 7,
+          "meanWait": 36.9,
+          "correctionMinutes": 1.724698813500106
+        },
+        {
+          "activityId": "sea-attraction-240",
+          "hour": 13,
+          "samples": 7,
+          "days": 4,
+          "meanWait": 32.9,
+          "correctionMinutes": 0.6221516398829635
+        },
+        {
+          "activityId": "sea-attraction-240",
+          "hour": 14,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 36.4,
+          "correctionMinutes": 1.7369228594400772
+        },
+        {
+          "activityId": "sea-attraction-240",
+          "hour": 15,
+          "samples": 11,
+          "days": 6,
+          "meanWait": 39.1,
+          "correctionMinutes": 2.162340200015199
+        },
+        {
+          "activityId": "sea-attraction-240",
+          "hour": 16,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 32.8,
+          "correctionMinutes": 1.6230585737432437
+        },
+        {
+          "activityId": "sea-attraction-240",
+          "hour": 17,
+          "samples": 8,
+          "days": 5,
+          "meanWait": 25.6,
+          "correctionMinutes": -0.8723921035526635
+        },
+        {
+          "activityId": "sea-attraction-240",
+          "hour": 18,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 22.2,
+          "correctionMinutes": 0.7199300371062852
+        },
+        {
+          "activityId": "sea-attraction-240",
+          "hour": 19,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 12.1,
+          "correctionMinutes": -0.3531079868173406
+        },
+        {
+          "activityId": "sea-attraction-241",
+          "hour": 9,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 7,
+          "correctionMinutes": -1.3129997233198942
+        },
+        {
+          "activityId": "sea-attraction-241",
+          "hour": 10,
+          "samples": 15,
+          "days": 7,
+          "meanWait": 18.7,
+          "correctionMinutes": -2.5305675407409027
+        },
+        {
+          "activityId": "sea-attraction-241",
+          "hour": 11,
+          "samples": 11,
+          "days": 6,
+          "meanWait": 20.9,
+          "correctionMinutes": -0.9898838813660977
+        },
+        {
+          "activityId": "sea-attraction-241",
+          "hour": 12,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 24.5,
+          "correctionMinutes": -0.1824268317399093
+        },
+        {
+          "activityId": "sea-attraction-241",
+          "hour": 13,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 24.5,
+          "correctionMinutes": 0.11753176553488451
+        },
+        {
+          "activityId": "sea-attraction-241",
+          "hour": 14,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 26.1,
+          "correctionMinutes": 0.6009783700827238
+        },
+        {
+          "activityId": "sea-attraction-241",
+          "hour": 15,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 25.6,
+          "correctionMinutes": 0.03851307573213601
+        },
+        {
+          "activityId": "sea-attraction-241",
+          "hour": 16,
+          "samples": 14,
+          "days": 7,
+          "meanWait": 25.4,
+          "correctionMinutes": 0.5137203813499233
+        },
+        {
+          "activityId": "sea-attraction-241",
+          "hour": 17,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 20,
+          "correctionMinutes": 0.07695365173742842
+        },
+        {
+          "activityId": "sea-attraction-241",
+          "hour": 18,
+          "samples": 10,
+          "days": 5,
+          "meanWait": 17,
+          "correctionMinutes": 1.4779683013749296
+        },
+        {
+          "activityId": "sea-attraction-241",
+          "hour": 19,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 8,
+          "correctionMinutes": -0.1321688807108692
+        },
+        {
+          "activityId": "sea-attraction-241",
+          "hour": 20,
+          "samples": 5,
+          "days": 3,
+          "meanWait": 7,
+          "correctionMinutes": 0.4279906302159091
+        },
+        {
+          "activityId": "sea-attraction-242",
+          "hour": 9,
+          "samples": 29,
+          "days": 7,
+          "meanWait": 34.1,
+          "correctionMinutes": -11.682905024125187
+        },
+        {
+          "activityId": "sea-attraction-242",
+          "hour": 10,
+          "samples": 16,
+          "days": 7,
+          "meanWait": 85,
+          "correctionMinutes": 4.326059808266702
+        },
+        {
+          "activityId": "sea-attraction-242",
+          "hour": 11,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 95,
+          "correctionMinutes": 5.422503446208975
+        },
+        {
+          "activityId": "sea-attraction-242",
+          "hour": 12,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 79,
+          "correctionMinutes": 0.6333726907006977
+        },
+        {
+          "activityId": "sea-attraction-242",
+          "hour": 13,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 85.9,
+          "correctionMinutes": 3.227688241228155
+        },
+        {
+          "activityId": "sea-attraction-242",
+          "hour": 14,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 90,
+          "correctionMinutes": 4.309596751280236
+        },
+        {
+          "activityId": "sea-attraction-242",
+          "hour": 15,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 106.4,
+          "correctionMinutes": 9.613479658743238
+        },
+        {
+          "activityId": "sea-attraction-242",
+          "hour": 16,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 83,
+          "correctionMinutes": 2.7153032603164613
+        },
+        {
+          "activityId": "sea-attraction-242",
+          "hour": 17,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 82.3,
+          "correctionMinutes": 5.4952853097669925
+        },
+        {
+          "activityId": "sea-attraction-242",
+          "hour": 18,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 40,
+          "correctionMinutes": -5.287036641396432
+        },
+        {
+          "activityId": "sea-attraction-242",
+          "hour": 19,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 28.3,
+          "correctionMinutes": -5.44043061632606
+        },
+        {
+          "activityId": "sea-attraction-242",
+          "hour": 20,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 28.1,
+          "correctionMinutes": -2.315130250477412
+        },
+        {
+          "activityId": "sea-attraction-243",
+          "hour": 9,
+          "samples": 35,
+          "days": 7,
+          "meanWait": 75.7,
+          "correctionMinutes": -6.9006060236499085
+        },
+        {
+          "activityId": "sea-attraction-243",
+          "hour": 10,
+          "samples": 18,
+          "days": 7,
+          "meanWait": 134.4,
+          "correctionMinutes": 13.28100053151224
+        },
+        {
+          "activityId": "sea-attraction-243",
+          "hour": 11,
+          "samples": 8,
+          "days": 5,
+          "meanWait": 97.5,
+          "correctionMinutes": -3.9481730930806505
+        },
+        {
+          "activityId": "sea-attraction-243",
+          "hour": 12,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 118.8,
+          "correctionMinutes": 2.155564976749743
+        },
+        {
+          "activityId": "sea-attraction-243",
+          "hour": 13,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 113.8,
+          "correctionMinutes": 1.006127014673591
+        },
+        {
+          "activityId": "sea-attraction-243",
+          "hour": 14,
+          "samples": 7,
+          "days": 6,
+          "meanWait": 127.1,
+          "correctionMinutes": 3.2685580751131478
+        },
+        {
+          "activityId": "sea-attraction-243",
+          "hour": 15,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 123.3,
+          "correctionMinutes": 1.8951742024986815
+        },
+        {
+          "activityId": "sea-attraction-243",
+          "hour": 16,
+          "samples": 5,
+          "days": 3,
+          "meanWait": 126,
+          "correctionMinutes": 2.360935177142916
+        },
+        {
+          "activityId": "sea-attraction-243",
+          "hour": 17,
+          "samples": 5,
+          "days": 5,
+          "meanWait": 132,
+          "correctionMinutes": 6.347204518420231
+        },
+        {
+          "activityId": "sea-attraction-243",
+          "hour": 18,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 111,
+          "correctionMinutes": 6.5621827432004185
+        },
+        {
+          "activityId": "sea-attraction-243",
+          "hour": 19,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 76.4,
+          "correctionMinutes": -1.0309556670566296
+        },
+        {
+          "activityId": "sea-attraction-243",
+          "hour": 20,
+          "samples": 5,
+          "days": 3,
+          "meanWait": 32,
+          "correctionMinutes": -5.174068469739556
+        },
+        {
+          "activityId": "sea-attraction-245",
+          "hour": 12,
+          "samples": 8,
+          "days": 7,
+          "meanWait": 5.6,
+          "correctionMinutes": -0.21154908450172819
+        },
+        {
+          "activityId": "sea-attraction-245",
+          "hour": 14,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 11.7,
+          "correctionMinutes": 1.176714091105226
+        },
+        {
+          "activityId": "sea-attraction-245",
+          "hour": 15,
+          "samples": 6,
+          "days": 5,
+          "meanWait": 5.8,
+          "correctionMinutes": -0.19960378337190338
+        },
+        {
+          "activityId": "sea-attraction-245",
+          "hour": 16,
+          "samples": 5,
+          "days": 4,
+          "meanWait": 6,
+          "correctionMinutes": -0.2165524069355967
+        },
+        {
+          "activityId": "sea-attraction-246",
+          "hour": 9,
+          "samples": 41,
+          "days": 7,
+          "meanWait": 16.8,
+          "correctionMinutes": 0.3559666632543569
+        },
+        {
+          "activityId": "sea-attraction-246",
+          "hour": 10,
+          "samples": 25,
+          "days": 7,
+          "meanWait": 25.6,
+          "correctionMinutes": -0.2890851699332107
+        },
+        {
+          "activityId": "sea-attraction-246",
+          "hour": 11,
+          "samples": 14,
+          "days": 7,
+          "meanWait": 22.5,
+          "correctionMinutes": -2.637441458764545
+        },
+        {
+          "activityId": "sea-attraction-246",
+          "hour": 12,
+          "samples": 14,
+          "days": 7,
+          "meanWait": 21.8,
+          "correctionMinutes": -2.821813661784775
+        },
+        {
+          "activityId": "sea-attraction-246",
+          "hour": 13,
+          "samples": 14,
+          "days": 7,
+          "meanWait": 26.4,
+          "correctionMinutes": -0.8652702081392496
+        },
+        {
+          "activityId": "sea-attraction-246",
+          "hour": 14,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 24.2,
+          "correctionMinutes": -1.917571234063948
+        },
+        {
+          "activityId": "sea-attraction-246",
+          "hour": 15,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 32.7,
+          "correctionMinutes": 1.0002683408454411
+        },
+        {
+          "activityId": "sea-attraction-246",
+          "hour": 16,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 27.7,
+          "correctionMinutes": -0.18485760225847309
+        },
+        {
+          "activityId": "sea-attraction-246",
+          "hour": 17,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 25.8,
+          "correctionMinutes": 0.6863252989246897
+        },
+        {
+          "activityId": "sea-attraction-246",
+          "hour": 18,
+          "samples": 12,
+          "days": 6,
+          "meanWait": 18.8,
+          "correctionMinutes": 0.2325954315892781
+        },
+        {
+          "activityId": "sea-attraction-246",
+          "hour": 19,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 16.5,
+          "correctionMinutes": 1.9897999260910566
+        },
+        {
+          "activityId": "sea-attraction-246",
+          "hour": 20,
+          "samples": 14,
+          "days": 7,
+          "meanWait": 15.7,
+          "correctionMinutes": 3.640747392644416
+        },
+        {
+          "activityId": "sea-attraction-247",
+          "hour": 9,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 17.5,
+          "correctionMinutes": 2.314565930817866
+        },
+        {
+          "activityId": "sea-attraction-247",
+          "hour": 10,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 20,
+          "correctionMinutes": -0.6682735156192636
+        },
+        {
+          "activityId": "sea-attraction-247",
+          "hour": 11,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 27.5,
+          "correctionMinutes": -0.015391274257757104
+        },
+        {
+          "activityId": "sea-attraction-247",
+          "hour": 13,
+          "samples": 6,
+          "days": 3,
+          "meanWait": 20,
+          "correctionMinutes": -1.7449045048535607
+        },
+        {
+          "activityId": "sea-attraction-247",
+          "hour": 16,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 22.1,
+          "correctionMinutes": 0.021893442083506978
+        },
+        {
+          "activityId": "sea-attraction-247",
+          "hour": 17,
+          "samples": 5,
+          "days": 4,
+          "meanWait": 17,
+          "correctionMinutes": -0.24863051685350598
+        },
+        {
+          "activityId": "sea-attraction-255",
+          "hour": 9,
+          "samples": 28,
+          "days": 7,
+          "meanWait": 127.1,
+          "correctionMinutes": 6.928056605127971
+        },
+        {
+          "activityId": "sea-attraction-255",
+          "hour": 10,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 196.7,
+          "correctionMinutes": 16.972944408976886
+        },
+        {
+          "activityId": "sea-attraction-255",
+          "hour": 11,
+          "samples": 13,
+          "days": 7,
+          "meanWait": 187.7,
+          "correctionMinutes": 12.467283518154986
+        },
+        {
+          "activityId": "sea-attraction-255",
+          "hour": 12,
+          "samples": 9,
+          "days": 7,
+          "meanWait": 164.4,
+          "correctionMinutes": 2.915601543276337
+        },
+        {
+          "activityId": "sea-attraction-255",
+          "hour": 13,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 162.5,
+          "correctionMinutes": 2.226712757253501
+        },
+        {
+          "activityId": "sea-attraction-255",
+          "hour": 14,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 170,
+          "correctionMinutes": 4.861788264034202
+        },
+        {
+          "activityId": "sea-attraction-255",
+          "hour": 15,
+          "samples": 9,
+          "days": 5,
+          "meanWait": 148.9,
+          "correctionMinutes": -0.8017642914195802
+        },
+        {
+          "activityId": "sea-attraction-255",
+          "hour": 16,
+          "samples": 7,
+          "days": 6,
+          "meanWait": 154.3,
+          "correctionMinutes": 0.5009426349555739
+        },
+        {
+          "activityId": "sea-attraction-255",
+          "hour": 17,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 142.2,
+          "correctionMinutes": -0.08316070779867626
+        },
+        {
+          "activityId": "sea-attraction-255",
+          "hour": 18,
+          "samples": 12,
+          "days": 6,
+          "meanWait": 106.7,
+          "correctionMinutes": -7.187483365435387
+        },
+        {
+          "activityId": "sea-attraction-255",
+          "hour": 19,
+          "samples": 11,
+          "days": 6,
+          "meanWait": 68.2,
+          "correctionMinutes": -12.203767738670171
+        },
+        {
+          "activityId": "sea-attraction-255",
+          "hour": 20,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 32.9,
+          "correctionMinutes": -12.10104212368051
+        },
+        {
+          "activityId": "sea-attraction-256",
+          "hour": 9,
+          "samples": 38,
+          "days": 7,
+          "meanWait": 53.4,
+          "correctionMinutes": 0.6778771774461053
+        },
+        {
+          "activityId": "sea-attraction-256",
+          "hour": 10,
+          "samples": 16,
+          "days": 7,
+          "meanWait": 108.8,
+          "correctionMinutes": 10.015436554022692
+        },
+        {
+          "activityId": "sea-attraction-256",
+          "hour": 11,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 99,
+          "correctionMinutes": 2.7857090846512804
+        },
+        {
+          "activityId": "sea-attraction-256",
+          "hour": 12,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 78,
+          "correctionMinutes": -2.2844742170360486
+        },
+        {
+          "activityId": "sea-attraction-256",
+          "hour": 13,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 87.5,
+          "correctionMinutes": 0.6251578596042098
+        },
+        {
+          "activityId": "sea-attraction-256",
+          "hour": 14,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 83.6,
+          "correctionMinutes": -1.521926843399601
+        },
+        {
+          "activityId": "sea-attraction-256",
+          "hour": 15,
+          "samples": 9,
+          "days": 5,
+          "meanWait": 97.8,
+          "correctionMinutes": -0.24610923784334351
+        },
+        {
+          "activityId": "sea-attraction-256",
+          "hour": 16,
+          "samples": 8,
+          "days": 5,
+          "meanWait": 81.3,
+          "correctionMinutes": -1.570839976576169
+        },
+        {
+          "activityId": "sea-attraction-256",
+          "hour": 17,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 78,
+          "correctionMinutes": -1.9918985746565387
+        },
+        {
+          "activityId": "sea-attraction-256",
+          "hour": 18,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 38.5,
+          "correctionMinutes": -6.605387232964545
+        },
+        {
+          "activityId": "sea-attraction-256",
+          "hour": 19,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 28.5,
+          "correctionMinutes": -2.858739280688865
+        },
+        {
+          "activityId": "sea-attraction-256",
+          "hour": 20,
+          "samples": 9,
+          "days": 7,
+          "meanWait": 19.4,
+          "correctionMinutes": -1.3311553178522615
+        },
+        {
+          "activityId": "sea-attraction-257",
+          "hour": 9,
+          "samples": 29,
+          "days": 6,
+          "meanWait": 43.8,
+          "correctionMinutes": 0.01998915418299027
+        },
+        {
+          "activityId": "sea-attraction-257",
+          "hour": 10,
+          "samples": 14,
+          "days": 4,
+          "meanWait": 98.6,
+          "correctionMinutes": 8.245133752074258
+        },
+        {
+          "activityId": "sea-attraction-257",
+          "hour": 11,
+          "samples": 12,
+          "days": 7,
+          "meanWait": 85.8,
+          "correctionMinutes": 1.3644438750398296
+        },
+        {
+          "activityId": "sea-attraction-257",
+          "hour": 12,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 76.4,
+          "correctionMinutes": -1.7152166859575706
+        },
+        {
+          "activityId": "sea-attraction-257",
+          "hour": 13,
+          "samples": 9,
+          "days": 5,
+          "meanWait": 72.2,
+          "correctionMinutes": -1.8507922732895095
+        },
+        {
+          "activityId": "sea-attraction-257",
+          "hour": 14,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 75,
+          "correctionMinutes": -3.3509686407004984
+        },
+        {
+          "activityId": "sea-attraction-257",
+          "hour": 15,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 81.8,
+          "correctionMinutes": -1.5538214683034897
+        },
+        {
+          "activityId": "sea-attraction-257",
+          "hour": 17,
+          "samples": 11,
+          "days": 6,
+          "meanWait": 52.7,
+          "correctionMinutes": -5.192081976840334
+        },
+        {
+          "activityId": "sea-attraction-257",
+          "hour": 18,
+          "samples": 12,
+          "days": 6,
+          "meanWait": 42.5,
+          "correctionMinutes": -1.710719642846814
+        },
+        {
+          "activityId": "sea-attraction-257",
+          "hour": 19,
+          "samples": 10,
+          "days": 7,
+          "meanWait": 23,
+          "correctionMinutes": -1.7270049652836936
+        },
+        {
+          "activityId": "sea-attraction-257",
+          "hour": 20,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 23.3,
+          "correctionMinutes": 1.4900844921691052
+        },
+        {
+          "activityId": "sea-attraction-258",
+          "hour": 9,
+          "samples": 31,
+          "days": 7,
+          "meanWait": 30,
+          "correctionMinutes": 0.20513202181760964
+        },
+        {
+          "activityId": "sea-attraction-258",
+          "hour": 10,
+          "samples": 9,
+          "days": 7,
+          "meanWait": 46.7,
+          "correctionMinutes": 2.695715557701269
+        },
+        {
+          "activityId": "sea-attraction-258",
+          "hour": 11,
+          "samples": 8,
+          "days": 6,
+          "meanWait": 47.5,
+          "correctionMinutes": 1.265720173597547
+        },
+        {
+          "activityId": "sea-attraction-258",
+          "hour": 12,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 41.8,
+          "correctionMinutes": 0.5148137791351265
+        },
+        {
+          "activityId": "sea-attraction-258",
+          "hour": 13,
+          "samples": 8,
+          "days": 5,
+          "meanWait": 39.4,
+          "correctionMinutes": 0.0026524119653405114
+        },
+        {
+          "activityId": "sea-attraction-258",
+          "hour": 14,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 42,
+          "correctionMinutes": 0.21232294986364195
+        },
+        {
+          "activityId": "sea-attraction-258",
+          "hour": 15,
+          "samples": 9,
+          "days": 6,
+          "meanWait": 48.3,
+          "correctionMinutes": 1.0964631541637884
+        },
+        {
+          "activityId": "sea-attraction-258",
+          "hour": 16,
+          "samples": 11,
+          "days": 7,
+          "meanWait": 40.5,
+          "correctionMinutes": -0.05850860658883532
+        },
+        {
+          "activityId": "sea-attraction-258",
+          "hour": 17,
+          "samples": 7,
+          "days": 5,
+          "meanWait": 25.7,
+          "correctionMinutes": -2.180474268030277
+        },
+        {
+          "activityId": "sea-attraction-258",
+          "hour": 18,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 25,
+          "correctionMinutes": -1.0623603080667745
+        },
+        {
+          "activityId": "sea-attraction-258",
+          "hour": 19,
+          "samples": 10,
+          "days": 6,
+          "meanWait": 24,
+          "correctionMinutes": 0.04948009316790826
+        },
+        {
+          "activityId": "sea-attraction-258",
+          "hour": 20,
+          "samples": 6,
+          "days": 4,
+          "meanWait": 21.7,
+          "correctionMinutes": 0.38429859820453405
+        }
+      ],
+      "correlations": {
+        "units": "minutes",
+        "normalisation": "wait/baseWait",
+        "weekday": [
+          {
+            "key": "0",
+            "label": "日曜日",
+            "samples": 361,
+            "days": 1,
+            "meanWait": null,
+            "meanRatio": null
+          },
+          {
+            "key": "1",
+            "label": "月曜日",
+            "samples": 357,
+            "days": 1,
+            "meanWait": null,
+            "meanRatio": null
+          },
+          {
+            "key": "2",
+            "label": "火曜日",
+            "samples": 377,
+            "days": 1,
+            "meanWait": null,
+            "meanRatio": null
+          },
+          {
+            "key": "3",
+            "label": "水曜日",
+            "samples": 352,
+            "days": 1,
+            "meanWait": null,
+            "meanRatio": null
+          },
+          {
+            "key": "4",
+            "label": "木曜日",
+            "samples": 390,
+            "days": 1,
+            "meanWait": null,
+            "meanRatio": null
+          },
+          {
+            "key": "5",
+            "label": "金曜日",
+            "samples": 413,
+            "days": 1,
+            "meanWait": null,
+            "meanRatio": null
+          },
+          {
+            "key": "6",
+            "label": "土曜日",
+            "samples": 436,
+            "days": 1,
+            "meanWait": null,
+            "meanRatio": null
+          }
+        ],
+        "month": [
+          {
+            "key": "11",
+            "label": "11月",
+            "samples": 2686,
+            "days": 7,
+            "meanWait": 52.4,
+            "meanRatio": 0.922
+          }
+        ],
+        "weather": [
+          {
+            "key": "sun",
+            "label": "晴れ",
+            "samples": 1411,
+            "days": 5,
+            "meanWait": 56.4,
+            "meanRatio": 0.992
+          },
+          {
+            "key": "cloud",
+            "label": "曇り",
+            "samples": 669,
+            "days": 4,
+            "meanWait": 52.7,
+            "meanRatio": 0.963
+          },
+          {
+            "key": "rain",
+            "label": "雨",
+            "samples": 583,
+            "days": 2,
+            "meanWait": 44.4,
+            "meanRatio": 0.736
+          },
+          {
+            "key": "unknown",
+            "label": "不明",
+            "samples": 23,
+            "days": 1,
+            "meanWait": null,
+            "meanRatio": null
+          }
+        ],
+        "holiday": [
+          {
+            "key": "ordinary",
+            "label": "祝日以外",
+            "samples": 2686,
+            "days": 7,
+            "meanWait": 52.4,
+            "meanRatio": 0.922
+          }
+        ],
+        "event": [
+          {
+            "key": "sea-christmas-2026",
+            "label": "ディズニー・クリスマス",
+            "samples": 2686,
+            "days": 7,
+            "meanWait": 52.4,
+            "meanRatio": 0.922
+          },
+          {
+            "key": "sea-jubilee-2026",
+            "label": "東京ディズニーシー25周年“スパークリング・ジュビリー”",
+            "samples": 2686,
+            "days": 7,
+            "meanWait": 52.4,
+            "meanRatio": 0.922
+          }
+        ],
+        "temperature": {
+          "samples": 2663,
+          "days": 7,
+          "r": 0.283
+        },
+        "precipitation": {
+          "samples": 2663,
+          "days": 7,
+          "r": -0.165
+        },
+        "note": "記録内の相関の傾向です。平均は5件以上・2日以上、数値の相関係数は20件以上・3日以上で表示します。施設ごとの基準値でも補正しますが因果関係は表しません。"
+      },
+      "bootstrap": {
+        "provider": "themeparks-wiki",
+        "fromDate": "2026-11-11",
+        "throughDate": "2026-11-17",
+        "partialThroughDate": "2026-11-17",
+        "attemptedAt": "2026-11-17T13:13:22.467Z",
+        "requestedDays": 7,
+        "observedDays": 7,
+        "weatherProvenance": "past-weather-forecast",
+        "requests": [
+          {
+            "parkId": "sea",
+            "date": "2026-11-11",
+            "samples": 352,
+            "status": "ok"
+          },
+          {
+            "parkId": "sea",
+            "date": "2026-11-12",
+            "samples": 390,
+            "status": "ok"
+          },
+          {
+            "parkId": "sea",
+            "date": "2026-11-13",
+            "samples": 413,
+            "status": "ok"
+          },
+          {
+            "parkId": "sea",
+            "date": "2026-11-14",
+            "samples": 436,
+            "status": "ok"
+          },
+          {
+            "parkId": "sea",
+            "date": "2026-11-15",
+            "samples": 361,
+            "status": "ok"
+          },
+          {
+            "parkId": "sea",
+            "date": "2026-11-16",
+            "samples": 357,
+            "status": "ok"
+          },
+          {
+            "parkId": "sea",
+            "date": "2026-11-17",
+            "samples": 354,
+            "status": "ok"
+          }
+        ]
+      }
     }
   ]
 }
