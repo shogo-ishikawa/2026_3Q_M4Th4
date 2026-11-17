@@ -3,7 +3,7 @@ const PUBLISHED='https://raw.githubusercontent.com/shogo-ishikawa/2026_3Q_M4Th4/
 const JMA_FORECAST='https://www.jma.go.jp/bosai/forecast/data/forecast/120000.json';
 const JMA_SERIES='https://www.jma.go.jp/bosai/jmatile/data/wdist/VPFD/120010.json';
 const JMA_SOURCE='https://www.jma.go.jp/bosai/forecast/#area_type=class20s&area_code=1222700';
-const CACHE_KEY='park-weather-v150';
+const CACHE_KEY='park-weather-v150-start-hour';
 const FRESH_MS=30*60000, MAX_AGE_MS=12*3600000;
 const memory=new WeakMap();
 const labels={sun:'晴れ',cloud:'曇り',rain:'雨・雪の可能性'};
@@ -55,15 +55,19 @@ function summarise(forecast,rows=forecast.hours) {
 export function normaliseOpenMeteo(data,date,{fetchedAt=new Date().toISOString(),transport='direct'}={}) {
   const hourly=data?.hourly;
   if(!Array.isArray(hourly?.time)||hourly.time.length>1000)throw new Error('Open-Meteoの予報形式を確認してください。');
+  const timestamp=time=>typeof time==='string'?Date.parse(time+'+09:00'):NaN;
+  const indexByTime=new Map(hourly.time.map((time,i)=>[timestamp(time),i]));
   const hours=[];
   for(let i=0;i<hourly.time.length;i++){
     const time=hourly.time[i],temperature=numeric(hourly.temperature_2m?.[i],-90,70),code=numeric(hourly.weather_code?.[i],0,99);
     if(typeof time!=='string'||!time.startsWith(date+'T')||temperature===null||code===null)continue;
-    const minute=minuteOf(time);if(!Number.isInteger(minute)||minute<0||minute>=1440)continue;
-    const previousHour=minute===0?'前日23:00〜00:00':interval(minute-60,minute);
+    const minute=minuteOf(time),instant=timestamp(time);if(!Number.isFinite(instant)||!Number.isInteger(minute)||minute<0||minute>=1440)continue;
+    // Accumulations/probabilities are end-labelled by Open-Meteo. The exact
+    // following timestamp supplies this row's containing hour, without interpolation.
+    const next=indexByTime.get(instant+3600000),period=interval(minute,minute+60);
     hours.push({time,minute,endMinute:minute+60,weather:weatherFromCode(code),temperature,
-      precipitation:numeric(hourly.precipitation?.[i],0,500),precipitationProbability:numeric(hourly.precipitation_probability?.[i],0,100),
-      weatherPeriodLabel:`${clock(minute)}時点・1時間ごと`,temperaturePeriodLabel:`${clock(minute)}時点`,probabilityPeriodLabel:previousHour+'（1時間）',precipitationPeriodLabel:previousHour+'（1時間雨量）'});
+      precipitation:numeric(hourly.precipitation?.[next],0,500),precipitationProbability:numeric(hourly.precipitation_probability?.[next],0,100),
+      weatherPeriodLabel:`${clock(minute)}時点・1時間ごと`,temperaturePeriodLabel:`${clock(minute)}時点`,probabilityPeriodLabel:period+'（1時間）',precipitationPeriodLabel:period+'（1時間雨量）'});
   }
   return summarise({date,hours,provider:'open-meteo',sourceUrl:'https://open-meteo.com/',fetchedAt,transport,regionLabel:'パーク周辺'});
 }
