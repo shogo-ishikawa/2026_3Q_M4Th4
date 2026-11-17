@@ -81,7 +81,7 @@ test('当日データと予測モデルはJSONに保存でき形式が壊れた�
     state=>{state.settings.liveData.rides.push({...state.settings.liveData.rides[0]});},
     state=>{state.settings.waitModel.coefficients=[Infinity];},
     state=>{state.settings.waitModel.activityIds=['bad id'];},
-    state=>{state.settings.waitModel.samples=50001;},
+    state=>{state.settings.waitModel.samples=Number.MAX_SAFE_INTEGER+1;},
     state=>{state.settings.waitModel.parkId='sea';}
   ]) {const bad=structuredClone(value);mutate(bad);assert.throws(()=>validateSavedState(bad));}
   const trained=structuredClone(value);Object.assign(trained.settings.waitModel,{status:'trained',usable:true,samples:1000,days:14,firstDate:'2026-11-01',lastDate:'2026-11-14',activityIds:['land-ride-1'],coefficients:Array(8).fill(0.1),validation:{method:'later-days-holdout',trainThrough:'2026-11-10',testFrom:'2026-11-11',testThrough:'2026-11-14',testSamples:120,modelMae:4,baselineMae:12}});

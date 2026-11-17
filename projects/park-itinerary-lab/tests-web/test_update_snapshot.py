@@ -84,7 +84,7 @@ class ArchiveTests(unittest.TestCase):
             (root/'observations.json').write_text(json.dumps([row,{**row,'time':555,'wait':35},{**row,'source':'themeparks-wiki'},{**row,'date':'2026-11-18'}]))
             (history/'2024-11.json').write_text('[]')
             (history/'ignore.json').write_text('["not loaded"]')
-            index=archive.update_archive(root,dt.date(2026,11,17))
+            index=archive.update_archive(root,dt.date(2026,11,17),retain_months=24)
             values=json.loads((history/'2026-11.json').read_text())
             self.assertEqual(len(values),2)
             self.assertTrue(all(r['source']=='queue-times' for r in values))

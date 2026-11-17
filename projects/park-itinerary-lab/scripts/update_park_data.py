@@ -448,6 +448,13 @@ def load_known_catalogue(bundled_path,published_path=None):
     if published_path and Path(published_path).exists():
         try:
             previous=validated_cached_catalogue(json.loads(Path(published_path).read_text(encoding='utf-8')))
+            def edition(value):
+                text=value.get('version','')
+                return tuple(map(int,text.split('.'))) if re.fullmatch(r'\d+\.\d+\.\d+',text) else (0,0,0)
+            # New reviewed venues and graph connections must survive an older
+            # data-branch snapshot, even when its last network request was later.
+            if edition(bundled)>edition(previous):
+                return bundled,seed_dynamic_catalogue(bundled,previous),'bundled-newer-version'
             def freshness(value):
                 text=value.get('fetchedAt') or value['updatedAt']
                 try:stamp=datetime.fromisoformat(text.replace('Z','+00:00'))
@@ -497,7 +504,7 @@ def main():
         atomic_json(report_path,{'date':args.date,'status':'seeded','checkedAt':checked_at,'origin':origin,'lastKnownCatalogueUsed':True,'sourceErrors':[]})
         print(f'Prepared validated {origin} catalogue without changing its verification dates.')
         return 0
-    original=seed_dynamic_catalogue(bundled,previous) if origin=='published' else bundled
+    original=seed_dynamic_catalogue(bundled,previous)
     failure=False
     try:
         updated,report=apply_official_updates(original,fetch_official_updates(args.date,args.fixture_dir),args.date)

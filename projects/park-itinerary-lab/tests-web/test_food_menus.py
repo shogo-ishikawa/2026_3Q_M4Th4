@@ -72,7 +72,7 @@ class FoodMenuTests(unittest.TestCase):
     def test_shipped_food_links_have_primary_sources_and_check_dates(self):
         catalogue=json.loads((ROOT/'web/data/parks.json').read_text())
         activities=[a for p in catalogue['parks'] for a in p['activities'] if a['category'] in food.FOOD]
-        self.assertEqual(len(activities),48)
+        self.assertEqual(len(activities),126)
         for activity in activities:
             self.assertEqual(activity['menuStatus'],'verified',activity['id'])
             self.assertTrue(activity['menuUrl'].startswith('https://www.tokyodisneyresort.jp/'),activity['id'])

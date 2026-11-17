@@ -69,5 +69,24 @@ class CatalogueFailureTests(unittest.TestCase):
             self.assertEqual(self.invoke('--catalogue',bundled,'--previous-catalogue',output,'--output',output,'--seed-only'),0)
             self.assertEqual(json.loads(output.read_text()),self.bundled)
 
+    def test_new_reviewed_catalogue_edition_survives_a_newer_but_older_edition_cache(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root=Path(folder);bundled=root/'bundled.json';output=root/'catalogue.json'
+            current=copy.deepcopy(self.bundled);current['version']='1.1.0'
+            previous=copy.deepcopy(current);previous['version']='1.0.0';previous['fetchedAt']='2026-11-17T12:00:00Z'
+            previous['parks'][0]['activities']=previous['parks'][0]['activities'][:-1]
+            existing=previous['parks'][0]['activities'][0]
+            existing['dailySchedules']['2026-12-24']={'closed':True,'closureSource':'explicit'}
+            bundled.write_text(json.dumps(current));output.write_text(json.dumps(previous))
+            self.assertEqual(self.invoke('--catalogue',bundled,'--previous-catalogue',output,'--output',output,'--seed-only'),0)
+            seeded=json.loads(output.read_text())
+            self.assertEqual(seeded['version'],'1.1.0')
+            self.assertEqual(len(seeded['parks'][0]['activities']),len(current['parks'][0]['activities']))
+            self.assertTrue(seeded['parks'][0]['activities'][0]['dailySchedules']['2026-12-24']['closed'])
+            self.assertEqual(self.invoke('--catalogue',bundled,'--previous-catalogue',output,'--output',output,'--date','2026-11-17',timeout=True),1)
+            failed=json.loads(output.read_text())
+            self.assertEqual(failed['version'],'1.1.0')
+            self.assertEqual(len(failed['parks'][0]['activities']),len(current['parks'][0]['activities']))
+
 
 if __name__=='__main__':unittest.main()

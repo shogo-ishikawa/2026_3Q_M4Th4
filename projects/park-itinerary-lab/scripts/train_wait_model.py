@@ -62,7 +62,7 @@ def main():
     calendar = json.loads(args.calendar.read_text()) if args.calendar and args.calendar.exists() else None
     module = (PROJECT / "web/wait-model.js").as_uri()
     fallback = json.loads(args.fallback_model.read_text()) if args.fallback_model and args.fallback_model.exists() else {}
-    script = "import {trainWaitModel,validateWaitModel} from " + json.dumps(module) + ";let raw='';for await(const chunk of process.stdin)raw+=chunk;const d=JSON.parse(raw);console.log(JSON.stringify({schemaVersion:2,updatedAt:new Date().toISOString(),validFallbacks:(d.fallback.parks||[]).filter(validateWaitModel),parks:d.parks.map(park=>trainWaitModel(d.observations,park,{beforeDate:d.beforeDate,calendarData:d.calendarData,dataSources:d.dataSources}))}));"
+    script = "import {trainWaitModel,validateWaitModel} from " + json.dumps(module) + ";let raw='';for await(const chunk of process.stdin)raw+=chunk;const d=JSON.parse(raw);console.log(JSON.stringify({schemaVersion:2,updatedAt:new Date().toISOString(),validFallbacks:(d.fallback.parks||[]).filter(validateWaitModel),parks:d.parks.map(park=>trainWaitModel(d.observations,park,{beforeDate:d.beforeDate,calendarData:d.calendarData,dataSources:d.dataSources,sampleLimit:null}))}));"
     process = subprocess.run(["node", "--input-type=module", "-e", script], input=json.dumps({"observations": observations, "parks": catalogue["parks"], "beforeDate": args.before_date, "calendarData": calendar, "dataSources": sources,"fallback":fallback}), text=True, capture_output=True, check=True)
     model = json.loads(process.stdout)
     valid_fallbacks = model.pop('validFallbacks', [])

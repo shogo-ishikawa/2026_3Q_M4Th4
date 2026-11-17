@@ -39,16 +39,16 @@ def atomic_json(path,value):
     temporary=path.with_suffix(path.suffix+'.tmp');temporary.write_text(json.dumps(value,ensure_ascii=False,separators=(',',':'))+'\n',encoding='utf-8');temporary.replace(path)
 
 
-def update_archive(data_dir,today,retain_months=24):
+def update_archive(data_dir,today,retain_months=None):
     data_dir=Path(data_dir);directory=data_dir/'history'
     if directory.is_symlink():raise ValueError('History directory must not be a symbolic link')
     directory.mkdir(parents=True,exist_ok=True)
-    earliest=month_number(today)-retain_months+1
+    earliest=month_number(today)-retain_months+1 if retain_months is not None else None
     months={}
     for path in directory.iterdir():
         if not MONTH_FILE.fullmatch(path.name) or path.is_symlink() or not path.is_file():continue
         month=dt.date.fromisoformat(path.stem+'-01')
-        if month_number(month)<earliest:path.unlink();continue
+        if earliest is not None and month_number(month)<earliest:path.unlink();continue
         rows=json.loads(path.read_text(encoding='utf-8'))
         if not isinstance(rows,list):raise ValueError(f'Archive is not a record array: {path.name}')
         months[path.stem]=[row for row in rows if valid_row(row,today) and row['date'].startswith(path.stem)]
@@ -57,7 +57,7 @@ def update_archive(data_dir,today,retain_months=24):
     if not isinstance(rows,list):raise ValueError('Recent observations must be a record array')
     for row in rows:
         if not valid_row(row,today):continue
-        if month_number(dt.date.fromisoformat(row['date']))>=earliest:months.setdefault(row['date'][:7],[]).append(row)
+        if earliest is None or month_number(dt.date.fromisoformat(row['date']))>=earliest:months.setdefault(row['date'][:7],[]).append(row)
     files=[]
     for month,values in sorted(months.items()):
         merged={}
@@ -74,7 +74,10 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--data-dir',type=Path,required=True)
     parser.add_argument('--date',type=dt.date.fromisoformat,default=dt.datetime.now(JST).date())
-    args=parser.parse_args();index=update_archive(args.data_dir,args.date)
+    parser.add_argument('--retain-months',type=int,help='Explicit retention limit; omit to keep every collected month')
+    args=parser.parse_args()
+    if args.retain_months is not None and args.retain_months<1:parser.error('--retain-months must be positive')
+    index=update_archive(args.data_dir,args.date,args.retain_months)
     print(f"Archived {index['samples']} Queue-Times observations in {len(index['files'])} months.")
 
 

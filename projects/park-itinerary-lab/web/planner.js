@@ -1,6 +1,6 @@
 import { weatherAtMinute, calendarContext } from './calendar-features.js';
 import { predictModelWait } from './wait-model.js';
-import { liveWaitFor } from './wait-data.js';
+import { liveWaitFor, currentRideStatus } from './wait-data.js';
 /* Browser itinerary search. Every returned plan is checked; the search does not claim global optimality. */
 const FOOD = new Set(['restaurant', 'cafe', 'snack', 'popcorn']);
 const FIXED = new Set(['show', 'parade']);
@@ -55,6 +55,24 @@ export function graphDistances(park) {
     }
   }
   return { distances, paths };
+}
+
+/** A labelled estimate of walking slowdown, separate from the measured route length. */
+export function walkingFactor(start,settings={}) {
+  if(settings.walkCrowdMode!=='estimate')return 1;
+  const calendar=calendarContext(settings.date,settings.calendarData);
+  const level={quiet:1,normal:1.08,busy:1.2}[settings.crowdLevel]??1.08;
+  const peak=(start>=480&&start<630)||(start>=1200&&start<1320)?1.08:1;
+  const holiday=calendar?.isHoliday?1.08:[0,6].includes(calendar?.weekday)?1.04:1;
+  const weather=weatherAtMinute(settings.date,start,settings).weather==='rain'?1.08:1;
+  const event=(settings.activeEvents||[]).length?1.04:1;
+  return Math.round(Math.min(1.8,level*peak*holiday*weather*event)*1000)/1000;
+}
+export function walkingMinutes(metres,start,settings={}) {
+  return Math.ceil(metres/Number(settings.speed??65)*walkingFactor(start,settings));
+}
+function walkingFields(start,settings) {
+  return {walkSpeed:Number(settings.speed??65),...(settings.walkCrowdMode==='estimate'?{walkingFactor:walkingFactor(start,settings),walkingSource:'congestion-estimate'}:{})};
 }
 
 function historicalWait(activity, start, settings, history) {
@@ -145,6 +163,10 @@ function normalise(park, settings) {
   }
   result.restEvery = numberIn(settings.restEvery ?? 120, '休憩の間隔', 0, 600, true);
   result.restMinutes = numberIn(settings.restMinutes ?? 10, '休憩の長さ', 0, 120, true);
+  result.walkCrowdMode=settings.walkCrowdMode??'off';
+  if(!['estimate','off'].includes(result.walkCrowdMode))throw new RangeError('移動時間の計算方法を確認してください。');
+  if(!Array.isArray(settings.excludedAutoBreaks||[])||(settings.excludedAutoBreaks||[]).length>60||(settings.excludedAutoBreaks||[]).some(key=>typeof key!=='string'||!key||key.length>220))throw new RangeError('外す自動休憩を確認してください。');
+  result.excludedAutoBreaks=[...new Set(settings.excludedAutoBreaks||[])];
   result.searchSeconds = numberIn(settings.searchSeconds ?? 10, '探索時間', 0.05, 120);
   result.searchMethod = settings.searchMethod ?? 'beam';
   if (!['beam', 'multistart', 'portfolio'].includes(result.searchMethod)) throw new RangeError('探索手法を確認してください。');
@@ -253,7 +275,7 @@ function contextFor(park, settings, initialPlan) {
     prefix = priorRows.filter(item => item.kind !== 'exit' &&
       (item.start < cutoff || (startedVisitIds.has(item.activityId) && ['queue', 'activity'].includes(item.kind)))).map(item => {
         const end = ['wait', 'rest'].includes(item.kind) && !item.fixedBreakId ? Math.min(item.end, cutoff) : item.end;
-        return { ...copy(item), end, duration: end - item.start, preserved: true };
+        return { ...copy(item), end, duration: end - item.start, preserved: true,...(item.kind==='walk'?{walkSpeed:item.walkSpeed??initialPlan?.settings?.speed??settings.speed}:{}) };
       });
     if (prefix.length) {
       beginning = Math.max(cutoff, ...prefix.map(item => item.end));
@@ -355,7 +377,7 @@ function dpaAvailable(activity, date) {
 }
 
 function scheduledOptions(state, baseActivity, selection, context) {
-  if (!activityAvailable(baseActivity, context.settings.date)) return [];
+  if (!activityAvailable(baseActivity, context.settings.date)||currentRideStatus(baseActivity,context.settings,{now:context.settings.waitAsOf})?.isOpen===false) return [];
   const settings = context.settings, graph = context.graph;
   const methods = [];
   if (selection.dpaMode !== 'owned') methods.push({ method: 'normal', windows: activityWindows(baseActivity, selection, settings), price: 0 });
@@ -377,17 +399,18 @@ function scheduledOptions(state, baseActivity, selection, context) {
     const activity = { ...baseActivity, node: method.method === 'dpa' ? (selection.nodeOverride || baseActivity.node) : baseActivity.node };
   const metres = graph.distances[state.node]?.[activity.node] ?? Infinity;
   if (!Number.isFinite(metres)) continue;
-  const walkMinutes = Math.ceil(metres / settings.speed);
   const rows = [];
   let departure = state.time, lastRest = state.lastRest;
-  if (settings.restEvery && settings.restMinutes && departure - lastRest >= settings.restEvery) {
-    rows.push(row('rest', departure, departure + settings.restMinutes, 'ひと休み', { node: state.node }));
+  const autoBreakId=`${state.node}:${activity.id}`;
+  if (settings.restEvery && settings.restMinutes && departure - lastRest >= settings.restEvery&&!settings.excludedAutoBreaks.includes(autoBreakId)) {
+    rows.push(row('rest', departure, departure + settings.restMinutes, 'ひと休み', { node: state.node,autoBreakId }));
     departure += settings.restMinutes; lastRest = departure;
   }
+  const walkMinutes=walkingMinutes(metres,departure,settings);
   const arrival = departure + walkMinutes;
   if (walkMinutes) rows.push(row('walk', departure, arrival, activity.name + 'へ移動', {
     from: state.node, to: activity.node, node: activity.node, metres,
-    path: graph.paths[state.node][activity.node], activityId: activity.id,
+    path: graph.paths[state.node][activity.node], activityId: activity.id,...walkingFields(departure,settings),
   }));
     if (!accessAllowed(activity, selection, method.method) || !budgetAllowed(state, activity, selection.cost, method.price, context)) continue;
     const windows = method.windows;
@@ -423,9 +446,9 @@ function scheduledOptions(state, baseActivity, selection, context) {
       if (!activityWindows(activity, selection, settings).some(open => queueStart >= open[0] && end <= open[1])) continue;
       const endNode = activity.endNode || activity.node;
       const exitMetres = graph.distances[endNode]?.[context.park.exitNode] ?? Infinity;
-      if (end + Math.ceil(exitMetres / settings.speed) > settings.exit) continue;
+      if (end + walkingMinutes(exitMetres,end,settings) > settings.exit) continue;
       const nextBreak = settings.fixedBreaks[state.breakIndex];
-      if (nextBreak && end + Math.ceil(graph.distances[endNode][nextBreak.node] / settings.speed) > nextBreak.start) continue;
+      if (nextBreak && end + walkingMinutes(graph.distances[endNode][nextBreak.node],end,settings) > nextBreak.start) continue;
       const key = method.method + ':' + queueStart + ':' + end;
       if (options.some(option => option.key === key)) continue;
       const extra = rows.slice();
@@ -465,7 +488,7 @@ function tieValue(state, context) {
   const preferenceScore = preference === 'food' ? state.visits.filter(visit => FOOD.has(visit.category)).length :
     preference === 'dpa' ? state.visits.filter(visit => visit.method === 'dpa').length : 0;
   const exitMetres = context.graph.distances[state.node]?.[context.park.exitNode] ?? Infinity;
-  const exitMinutes = Math.ceil(exitMetres / context.settings.speed);
+  const exitMinutes = walkingMinutes(exitMetres,state.time,context.settings);
   const burden = state.rows.filter(item => ['walk', 'queue', 'wait'].includes(item.kind))
     .reduce((sum, item) => sum + item.end - item.start, 0) + exitMinutes;
   // Time spent queueing, walking and waiting comes before distance alone.
@@ -489,12 +512,12 @@ function nextFixedBreak(state, context) {
   const reservation = context.settings.fixedBreaks[state.breakIndex];
   if (!reservation) return null;
   const metres = context.graph.distances[state.node]?.[reservation.node] ?? Infinity;
-  const arrival = state.time + Math.ceil(metres / context.settings.speed);
+  const arrival = state.time + walkingMinutes(metres,state.time,context.settings);
   if (!Number.isFinite(metres) || arrival > reservation.start) return null;
   const rows = state.rows.slice();
   if (arrival > state.time) rows.push(row('walk', state.time, arrival, reservation.label + 'の場所へ移動', {
     from: state.node, to: reservation.node, node: reservation.node, metres,
-    path: context.graph.paths[state.node][reservation.node],
+    path: context.graph.paths[state.node][reservation.node],...walkingFields(state.time,context.settings),
   }));
   if (arrival < reservation.start) rows.push(row('wait', arrival, reservation.start, '休憩までの自由時間', { node: reservation.node }));
   const end = reservation.start + reservation.duration;
@@ -505,16 +528,16 @@ function nextFixedBreak(state, context) {
 
 function canFinish(state, context) {
   const metres = context.graph.distances[state.node]?.[context.park.exitNode] ?? Infinity;
-  return state.breakIndex === context.settings.fixedBreaks.length && Number.isFinite(metres) && state.time + Math.ceil(metres / context.settings.speed) <= context.settings.exit &&
+  return state.breakIndex === context.settings.fixedBreaks.length && Number.isFinite(metres) && state.time + walkingMinutes(metres,state.time,context.settings) <= context.settings.exit &&
     state.cost + Math.max(0, finite(context.settings.souvenirReserve) - state.shoppingCost) <= context.settings.budget;
 }
 
 function finishRows(state, context) {
   const rows = state.rows.slice(), metres = context.graph.distances[state.node][context.park.exitNode];
-  const minutes = Math.ceil(metres / context.settings.speed), end = state.time + minutes;
+  const minutes = walkingMinutes(metres,state.time,context.settings), end = state.time + minutes;
   if (minutes) rows.push(row('walk', state.time, end, '出口へ移動', {
     from: state.node, to: context.park.exitNode, node: context.park.exitNode, metres,
-    path: context.graph.paths[state.node][context.park.exitNode],
+    path: context.graph.paths[state.node][context.park.exitNode],...walkingFields(state.time,context.settings),
   }));
   rows.push(row('exit', end, end, '退園', { node: context.park.exitNode }));
   return rows;
@@ -524,6 +547,7 @@ function omissionFor(selection, context, best) {
   const activity = context.map.get(selection.id);
   let reason = '移動・時間・予算の組合せで今回は採用されませんでした。';
   if (!activityAvailable(activity, context.settings.date)) reason = '訪問日は休止・開催期間外です。';
+  else if (currentRideStatus(activity,context.settings,{now:context.settings.waitAsOf})?.isOpen===false) reason='運営停止の再開を確認できていません。再開を確認するまで今回の残り予定には入れません。';
   else if (activity.category === 'parade' && selection.dpaMode === 'owned' && (!selection.nodeOverride || !selection.showTimes?.length)) reason = 'DPAの鑑賞地点と、その場所の公演時刻を入力してください。';
   else if (FIXED.has(activity.category) && !showTimes(activity, selection, context.settings).length) reason = '訪問日の公演時刻を入力してください。';
   else if (!accessAllowed(activity, selection, selection.dpaMode === 'owned' ? 'dpa' : 'normal') && selection.dpaMode !== 'consider') reason = '予約・エントリーなどの利用条件を確認してください。';
@@ -713,6 +737,7 @@ export function solveItinerary(park, rawSettings, options = {}) {
   diagnostics.notes = [
     '重要度の合計を優先し、同点では待ち時間・移動・待機の合計を短くする案を比べます。予算上限を守り、徒歩距離だけで訪問順を決めません。最適性の証明は行いません。',
     '待ち時間は手動指定、当日の新しい外部データ、検証で改善した学習モデル、履歴、傾向モデルの順に使います。施設ごとの出典は予定表に表示します。',
+    settings.walkCrowdMode==='estimate'?'移動時間は歩く速さに混雑の想定・時間帯・休日・天気・イベントの影響を加えた目安です。通路の距離は変えません。':'移動時間は設定した歩く速さと通路の距離から計算しています。',
     'DPAの購入案は入力した空き枠と購入履歴から計算しています。在庫は公式アプリで確認してください。',
   ];
   if (!tracker.best) diagnostics.notes.unshift('必須条件と追加した休憩をすべて満たす案は見つかりませんでした。指定した時刻・場所・予算を見直してください。実行不可能と証明した結果ではありません。');
@@ -731,6 +756,7 @@ export function validatePlan(park, settings, result) {
   const errors = [], graph = graphDistances(park), activities = new Map(park.activities.map(activity => [activity.id, activity]));
   const selectionMap = new Map((settings.selections || []).map(item => [item.id, item]));
   const entry = toMinutes(settings.entry), exit = toMinutes(settings.exit), speed = Number(settings.speed ?? 65);
+  const walkingSettings={...settings,activeEvents:(park.events||[]).filter(event=>event.startDate<=settings.date&&settings.date<=event.endDate)};
   const rows = result.rows || [];
   let previous = entry, node = settings.replanFrom !== undefined && rows.some(item => item.preserved) ? park.entryNode : (settings.currentNode || park.entryNode);
   const visited = new Set(settings.completedIds || []);
@@ -746,7 +772,11 @@ export function validatePlan(park, settings, result) {
       if (item.from !== node) errors.push('移動の出発地点がつながっていません。');
       const distance = graph.distances[item.from]?.[item.to];
       if (!Number.isFinite(distance) || Math.abs(distance - Number(item.metres)) > 0.01) errors.push('移動距離が歩行経路と一致しません。');
-      if (item.end - item.start < Math.ceil(distance / speed)) errors.push('移動時間が不足しています。');
+      const recordedSpeed=Number(item.walkSpeed);
+      if(item.preserved&&(!Number.isFinite(recordedSpeed)||recordedSpeed<10||recordedSpeed>150))errors.push('保持した移動の元の歩く速さがありません。');
+      const minimum=item.preserved?Math.ceil(distance/recordedSpeed*(item.walkingFactor??1)):walkingMinutes(distance,item.start,walkingSettings);
+      if (item.end - item.start < minimum) errors.push('移動時間が不足しています。');
+      if(!item.preserved&&item.walkingFactor!==undefined&&Math.abs(item.walkingFactor-walkingFactor(item.start,walkingSettings))>.001)errors.push('移動の混雑係数が設定と一致しません。');
       node = item.to;
     }
     if (item.kind === 'location') {
@@ -754,6 +784,7 @@ export function validatePlan(park, settings, result) {
       node = item.node;
     }
     if (item.kind === 'rest' && item.node !== node) errors.push('休憩の場所までの移動がありません。');
+    if(item.kind==='rest'&&!item.preserved&&item.autoBreakId&&(settings.excludedAutoBreaks||[]).includes(item.autoBreakId))errors.push('外した自動休憩が予定に残っています。');
     if (item.kind === 'activity') {
       if (!Number.isFinite(item.cost) || item.cost < 0 || item.cost % 100) errors.push('体験費用が不正です。');
       const activity = activities.get(item.activityId), selection = selectionMap.get(item.activityId);
@@ -763,6 +794,7 @@ export function validatePlan(park, settings, result) {
       if (item.node !== (item.dpa ? (selection?.nodeOverride || activity.node) : activity.node)) errors.push('体験地点が施設の地点と一致しません。');
       if (item.node !== node) errors.push('施設までの移動がありません。');
       if (!item.preserved && !activityAvailable(activity, settings.date)) errors.push('休止日の施設が含まれています。');
+      if(!item.preserved&&currentRideStatus(activity,settings,{now:settings.waitAsOf??Date.now()})?.isOpen===false)errors.push('現在停止中の施設が残りの予定に含まれています。');
       if (selection && !item.preserved) {
         if (item.end - item.start !== Number(selection.duration ?? activity.duration ?? 10)) errors.push('体験の所要時間が設定と一致しません。');
         if (selection.earliest !== undefined && item.start < toMinutes(selection.earliest)) errors.push('希望時間帯より前です。');

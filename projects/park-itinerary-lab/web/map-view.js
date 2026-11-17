@@ -21,7 +21,8 @@ export function renderParkMap(container, park, {plan = null, selectedIds = [], o
   const nodeMap = new Map(park.nodes.map(node => [node.id, node]));
   const selected = new Set(selectedIds), visits = plan?.visits || [];
   const visitNumbers = new Map(visits.map((visit, index) => [visit.activityId || visit.id, index + 1]));
-  const view = views.get(container)?.parkId === park.id ? views.get(container) : {parkId:park.id, scale:1, x:500, y:500, onlySelected:false};
+  const view = views.get(container)?.parkId === park.id ? views.get(container) : {parkId:park.id, scale:1, x:500, y:500, onlySelected:false,filterSetByUser:false};
+  if(visits.length && !view.filterSetByUser)view.onlySelected=true;
   views.set(container, view);
   const sea = park.id === 'sea', unique = `park-map-${++renderNumber}`;
   const point = node => `${Number(node.x)},${Number(node.y)}`;
@@ -66,7 +67,7 @@ export function renderParkMap(container, park, {plan = null, selectedIds = [], o
     const pos = positions.get(activity.id); if (!pos) return '';
     const isSelected = selected.has(activity.id), number = visitNumbers.get(activity.id);
     const colour = colours[activity.category] || '#2759a2';
-    const title = `${activity.name} / ${categories[activity.category] || activity.category}${number ? ` / 予定${number}` : ''}${isSelected ? ' / 希望に追加済み' : ' / 選んで希望に追加'}`;
+    const title = `${activity.name} / ${categories[activity.category] || activity.category}${number ? ` / 予定${number}` : ''}${isSelected ? ' / 選んで希望から外す' : ' / 選んで希望に追加'}`;
     const marker = number ? `<circle r="18" fill="${sea ? '#005b9a' : '#b42e43'}" stroke="white" stroke-width="3"/><text y="6" text-anchor="middle" font-size="19" font-weight="800" fill="white">${number}</text>` : `<circle r="${isSelected ? 11 : 5}" fill="${colour}" stroke="white" stroke-width="${isSelected ? 3 : 1.5}"/>${isSelected ? '<path d="M-5,0 L-1,4 L6,-5" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>' : ''}`;
     const tooltipX = clamp(-125, -pos.x + 8, 1000 - pos.x - 258);
     const tooltipY = pos.y < 85 ? 28 : -63;
@@ -118,7 +119,7 @@ export function renderParkMap(container, park, {plan = null, selectedIds = [], o
     if (action === 'down') move(0, 1);
     applyView();
   });
-  container.querySelector('[data-map-selected]').addEventListener('change', event => {view.onlySelected = event.target.checked; applyView();});
+  container.querySelector('[data-map-selected]').addEventListener('change', event => {view.onlySelected = event.target.checked;view.filterSetByUser=true; applyView();});
   for (const button of container.querySelectorAll('[data-focus-activity]')) button.addEventListener('click', () => {
     const position = positions.get(button.dataset.focusActivity);
     if (!position) return;
