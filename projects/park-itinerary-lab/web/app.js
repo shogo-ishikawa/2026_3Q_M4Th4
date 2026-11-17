@@ -37,12 +37,13 @@ export function initialiseApp() {
   const selected = id => state.settings.selections.find(s => s.id === id);
 
   function stopSearch(keepBest = false) {
+    requestId++;
     if(worker){worker.terminate();worker=null;}
     clearInterval(progressTimer);progressTimer=null;
     $('solveButton').disabled=false;$('cancelSearch').hidden=true;$('searchProgress').hidden=true;
     if(keepBest && latestPreview){state.result=latestPreview;renderResult();renderMap();}
   }
-  function markResultStale(){if(state.result){state.resultDirty=true;renderResult();}}
+  function markResultStale(){if(worker){stopSearch();setStatus('条件を変更したため探索を止めました。新しい条件でプランを考えてください。');}if(state.result){state.resultDirty=true;renderResult();}}
   function rememberOwnedPurchase(selection){
     if(selection.dpaMode!=='owned'||!Number.isInteger(selection.dpaStart)||!Number.isInteger(selection.dpaEnd)||!Number.isInteger(selection.dpaPurchasedAt)||selection.dpaStart>=selection.dpaEnd||selection.dpaPurchasedAt>selection.dpaStart)return;
     const activity=byId(selection.id);if(!activity?.dpa)return;const purchases=state.settings.purchases||[];const existing=purchases.find(p=>p.id===selection.id);const purchase={id:selection.id,kind:activity.dpa.kind||'attraction',purchasedAt:selection.dpaPurchasedAt,start:selection.dpaStart,end:selection.dpaEnd,cost:existing?.cost ?? activity.dpa.price};
@@ -184,7 +185,7 @@ export function initialiseApp() {
     $('solveButton').disabled=true;$('cancelSearch').hidden=false;$('searchProgress').hidden=false;$('progressBar').value=0;$('progressText').textContent='最初の計画を探しています…';
     const thisRequest=requestId;
     worker.onmessage=event=>{
-      const message=event.data;if(message.requestId!=null&&message.requestId!==thisRequest)return;
+      const message=event.data;if(thisRequest!==requestId||(message.requestId!=null&&message.requestId!==thisRequest))return;
       if(message.type==='progress'){
         const p=message.progress||{};if(message.result)latestPreview=message.result;
         $('progressText').textContent=`組合せを探索中 · 重要度 ${p.bestScore??'—'} · ${p.visits??0}件の希望`;
@@ -192,7 +193,7 @@ export function initialiseApp() {
         state.result=message.result;state.resultDirty=false;latestPreview=state.result;stopSearch();renderResult();renderMap();setStatus(state.result.status==='feasible'?'一日の計画ができました。採用された希望と費用を見比べてください。':'条件を満たす計画が見つかりませんでした。必須条件や時間帯を見直してください。',state.result.status!=='feasible');$('results').scrollIntoView({block:'start',behavior:'smooth'});
       }else if(message.type==='error'){stopSearch();setStatus(message.message||message.error||'計画の計算に失敗しました。',true);}
     };
-    worker.onerror=error=>{stopSearch();setStatus(error.message||'探索を開始できませんでした。ページを読み直してください。',true);};
+    worker.onerror=error=>{if(thisRequest!==requestId)return;stopSearch();setStatus(error.message||'探索を開始できませんでした。ページを読み直してください。',true);};
     progressTimer=setInterval(()=>{$('progressBar').value=Math.min(98,(performance.now()-searchStarted)/(state.settings.searchSeconds*1000)*100);},120);
     worker.postMessage({type:'solve',requestId:thisRequest,park:currentPark(),settings:state.settings,history:state.history,initialPlan:state.settings.replanFrom!=null?state.result:null});
     setStatus('希望の重要度を保ちながら移動と時間帯の組合せを探しています。');
@@ -219,12 +220,14 @@ export function initialiseApp() {
       if(remove){state.settings.selections=state.settings.selections.filter(s=>s.id!==remove.dataset.remove);markResultStale();renderWishlist();renderCatalogue();renderMap();}
       if(weight){selected(weight.dataset.for).weight=Number(weight.dataset.weight);markResultStale();renderWishlist();}
     }));
+    $('wishlist').addEventListener('input',()=>markResultStale());
     $('wishlist').addEventListener('change',event=>{event.target.setCustomValidity?.('');try{updateSelection(event);}catch(error){event.target.setCustomValidity?.(error.message);setStatus(error.message,true);}});
     $('purchaseActivity').addEventListener('change',()=>{const a=byId($('purchaseActivity').value);if(a?.dpa)$('purchaseCost').value=a.dpa.price;});
     $('addPurchase').addEventListener('click',safely(()=>{const a=byId($('purchaseActivity').value);if(!a?.dpa)throw Error('購入したDPAを選んでください。');const purchasedAt=minute($('purchaseTime').value),start=minute($('purchaseStart').value),end=minute($('purchaseEnd').value),cost=numberInput('purchaseCost',0,1000000,100);if(start>=end)throw Error('利用・入場終了は開始より後にしてください。');if(purchasedAt>start)throw Error('購入時刻は利用開始より前にしてください。');if(state.settings.purchases.some(p=>p.id===a.id))throw Error('この施設の購入履歴は追加済みです。訂正する場合は一度履歴から外してください。');state.settings.purchases.push({id:a.id,kind:a.dpa.kind||'attraction',purchasedAt,start,end,cost});renderPurchaseHistory();markResultStale();setStatus('購入履歴に追加しました。次の探索で購入間隔と支出へ反映します。');}));
     $('purchaseHistory').addEventListener('click',event=>{const button=event.target.closest('[data-remove-purchase]');if(!button)return;const removed=state.settings.purchases.splice(Number(button.dataset.removePurchase),1)[0];const selection=selected(removed?.id);if(selection?.dpaMode==='owned'){selection.dpaMode='none';renderWishlist();}renderPurchaseHistory();markResultStale();setStatus('購入履歴を外しました。この施設の取得済みDPA指定も通常利用へ戻しています。');});
     $('addSuggested').addEventListener('click',safely(suggestedSelection));$('clearSelection').addEventListener('click',()=>{state.settings.selections=[];markResultStale();renderWishlist();renderCatalogue();renderMap();});
     for(const id of ['visitDate','crowdMode','crowdLevel','weather'])$(id).addEventListener('change',safely(()=>{const previousDate=state.settings.date;readSettings();if(id==='visitDate'&&state.settings.date!==previousDate){stopSearch();resetForNewVisitDay(state);for(const selection of state.settings.selections){const activity=byId(selection.id);if(ENTERTAINMENT.has(activity.category)){selection.showTimes=activity.showTimesDate===state.settings.date?(activity.showTimes||[]).slice():[];selection.confirmSchedule=activity.showTimesDate===state.settings.date;}}writeSettings();setStatus('訪問日を変更しました。前の日付のDPA枠・購入履歴・支払い済み額・当日の組み替えと計画をリセットしています。新しい日付の条件で探索してください。');}updateContext();}));
+    document.querySelector('.settings-panel').addEventListener('input',()=>markResultStale());
     document.querySelector('.settings-panel').addEventListener('change',safely(()=>{readSettings();markResultStale();}));
     $('solveButton').addEventListener('click',safely(startSearch));$('cancelSearch').addEventListener('click',()=>{stopSearch(true);setStatus(latestPreview?'探索を止めて、そこまでで見つかった計画を表示しました。':'探索を止めました。前に作った計画がある場合はそのまま残っています。');});
     $('savePlan').addEventListener('click',safely(()=>{readSettings();saveLocal(state);setStatus('この端末に計画を保存しました。');}));
@@ -233,8 +236,8 @@ export function initialiseApp() {
     $('copyShare').addEventListener('click',safely(async()=>{try{await navigator.clipboard.writeText($('shareUrl').value);setStatus('共有リンクをコピーしました。');}catch{$('shareUrl').select();setStatus('リンク欄を選択しました。コピーして送ってください。');}}));
     $('importPlan').addEventListener('click',()=>$('planFile').click());$('planFile').addEventListener('change',safely(async()=>{const file=$('planFile').files[0];if(!file)return;if(file.size>5000000)throw Error('計画ファイルは5MB以下で指定してください。');const value=parsePlanJson(await file.text());stopSearch();state=cleanState(value);writeSettings();updateContext();setStatus('計画ファイルを読み込みました。');$('planFile').value='';}));
     $('importHistory').addEventListener('click',()=>$('historyFile').click());$('historyFile').addEventListener('change',safely(async()=>{const file=$('historyFile').files[0];if(!file)return;if(file.size>10000000)throw Error('待ち時間CSVは10MB以下で指定してください。');state.history=parseHistoryCsv(await file.text());state.settings.history=state.history;updateCrowd();markResultStale();setStatus(`${state.history.length}件の待ち時間を読み込みました。再探索すると計画へ反映します。`);$('historyFile').value='';}));
-    $('exportCatalogue').addEventListener('click',safely(downloadCatalogue));$('importCatalogue').addEventListener('click',()=>$('catalogueFile').click());$('catalogueFile').addEventListener('change',safely(async()=>{const file=$('catalogueFile').files[0];if(!file)return;if(file.size>5000000)throw Error('施設JSONは5MB以下で指定してください。');const next=validateCatalogue(JSON.parse(await file.text()));catalogue=next;state.result=null;state.settings.selections=state.settings.selections.filter(s=>byId(s.id));updateContext();setStatus('施設情報を更新しました。時間・料金を確認して再探索してください。');$('catalogueFile').value='';}));
-    $('refreshCatalogue').addEventListener('click',safely(async()=>{await loadCatalogue(true);state.result=null;updateContext();setStatus('配布中の施設情報を読み直しました。');}));
+    $('exportCatalogue').addEventListener('click',safely(downloadCatalogue));$('importCatalogue').addEventListener('click',()=>$('catalogueFile').click());$('catalogueFile').addEventListener('change',safely(async()=>{const file=$('catalogueFile').files[0];if(!file)return;if(file.size>5000000)throw Error('施設JSONは5MB以下で指定してください。');const next=validateCatalogue(JSON.parse(await file.text()));stopSearch();catalogue=next;state.result=null;state.settings.selections=state.settings.selections.filter(s=>byId(s.id));updateContext();setStatus('施設情報を更新しました。時間・料金を確認して再探索してください。');$('catalogueFile').value='';}));
+    $('refreshCatalogue').addEventListener('click',safely(async()=>{stopSearch();await loadCatalogue(true);state.result=null;updateContext();setStatus('配布中の施設情報を読み直しました。');}));
     $('exportJson').addEventListener('click',safely(()=>{readSettings();downloadPlanJson(state);}));$('exportCsv').addEventListener('click',safely(()=>downloadScheduleCsv(state.result,currentPark())));$('exportIcs').addEventListener('click',safely(()=>downloadCalendar(state.result,currentPark(),state.result.settings||state.settings)));$('exportHtml').addEventListener('click',safely(()=>downloadOfflineHtml(state.result,currentPark(),state.result.settings||state.settings)));$('printPlan').addEventListener('click',()=>window.print());
   }
   async function start() {
