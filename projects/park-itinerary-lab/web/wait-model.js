@@ -1,5 +1,5 @@
 /* Models use observed waits; unknown weather and missing historical days remain unknown. */
-import {validCalendarDate as dateValid,minuteOf,finiteObservationNumber,calendarContext,weatherAtMinute,eventIdsFor,WAIT_BASE_FEATURE_NAMES,waitFeatures,visitDayContext,learnVisitFactors,VISIT_FACTOR_NAMES} from './calendar-features.js?v=1.15.0';
+import {validCalendarDate as dateValid,minuteOf,finiteObservationNumber,calendarContext,weatherAtMinute,eventIdsFor,WAIT_BASE_FEATURE_NAMES,waitFeatures,visitDayContext,learnVisitFactors,VISIT_FACTOR_NAMES} from './calendar-features.js?v=1.15.1';
 import {activityAvailable} from './operation-windows.js';
 const MIN_DATES=7,MIN_SAMPLES=100,MAX_SAMPLES=50000;
 const clipped=value=>Math.max(0,Math.min(600,Math.round(value)));

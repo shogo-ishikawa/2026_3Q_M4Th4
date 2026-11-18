@@ -1,5 +1,5 @@
-import {calendarContext, longWeekendPosition, validCalendarDate} from './calendar-features.js?v=1.15.0';
-import {ticketFactsFor} from './ticket-calendar.js?v=1.15.0';
+import {calendarContext, longWeekendPosition, validCalendarDate} from './calendar-features.js?v=1.15.1';
+import {ticketFactsFor} from './ticket-calendar.js?v=1.15.1';
 
 const yen = n => n.toLocaleString('ja-JP')+'円';
 const positions = {first:'初日',last:'最終日'};
