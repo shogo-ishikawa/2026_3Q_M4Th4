@@ -23,6 +23,12 @@ def read_itinerary(page):
     return plan
 
 
+def download_saved_plan(page, name):
+    with page.expect_download() as download:
+        page.get_by_role('button', name=f'「{name}」をJSONで保存', exact=True).click()
+    return download.value.path()
+
+
 def set_time(page, field, minute):
     page.locator(f'#{field}-hour').fill(f'{minute // 60:02d}')
     page.locator(f'#{field}-minute').fill(f'{minute % 60:02d}')
@@ -124,6 +130,20 @@ def check_forecast_panel(page):
     report = page.locator('#sourcePanel #visitDayFactSources a[href*="accuracy.html"]')
     expect(report).to_have_attribute('href', 'accuracy.html?date=2026-11-18&park=land')
 
+    # The v1.5 JSON contains a valid fractional search limit. Preserve it and
+    # its itinerary when transferring the file to a new home-screen app.
+    expect(page.locator('#searchSeconds')).to_have_value('0.1')
+    page.locator('#savePlan').click()
+    page.locator('#planName').fill('JSONから引き継いだしおり')
+    page.locator('#saveNewPlan').click()
+    saved = page.locator('[data-saved-plan]').filter(has_text='JSONから引き継いだしおり')
+    saved.locator('[data-load-saved]').click()
+    restored = read_itinerary(page)
+    assert restored['settings']['searchSeconds'] == fixture['settings']['searchSeconds']
+    assert restored['result']['rows'] == fixture['result']['rows']
+    page.locator('#loadPlan').click()
+    saved.locator('[data-delete-saved]').click()
+
 
 def check_share_edits(page):
     share = page.locator('#sharePlan')
@@ -181,6 +201,17 @@ def check_mobile(page, url):
     first = ride.get_attribute('data-add')
     ride.click()
     page.get_by_label('乗りたい回数').select_option('2')
+    page.locator('#savePlan').click()
+    page.locator('#planName').fill('移行する希望')
+    page.locator('#saveNewPlan').click()
+    page.get_by_label('乗りたい回数').select_option('1')
+    draft_file = download_saved_plan(page, '移行する希望')
+    draft = json.loads(draft_file.read_text())
+    assert draft['result'] is None and draft['settings']['selections'][0]['repeatCount'] == 2
+    expect(page.get_by_label('乗りたい回数')).to_have_value('1')
+    page.locator('[data-delete-saved]').click()
+    page.locator('#planFile').set_input_files(draft_file)
+    expect(page.get_by_label('乗りたい回数')).to_have_value('2')
     plan = solve(page, page.locator('#solveButton'))
     first_visit, second_visit = activity_rows(plan)
     second = second_visit['activityId']
@@ -227,11 +258,31 @@ def check_mobile(page, url):
     page.reload()
     expect(page.locator('#solveButton')).to_be_enabled(timeout=30_000)
     page.locator('#loadPlan').click()
+    complete_file = download_saved_plan(page, '現地のテスト計画')
+    page.locator('#planFile').set_input_files(complete_file)
+    imported = read_itinerary(page)
+    assert imported['settings']['dayProgress'] == plan['settings']['dayProgress']
+    assert activity_rows(imported) == activity_rows(plan)
     page.locator('[data-load-saved]').click()
     restored = read_itinerary(page)
     assert restored['settings']['selections'][0]['repeatCount'] == 2
     assert restored['settings']['dayProgress'] == plan['settings']['dayProgress']
     assert activity_rows(restored) == activity_rows(plan)
+
+    # Reopen from the installed app's start URL with both HTTP cache and network unavailable.
+    page.wait_for_function("navigator.serviceWorker.controller !== null", timeout=30_000)
+    context = page.context
+    context.set_offline(True)
+    page.close()
+    offline = context.new_page()
+    offline.on('pageerror', lambda error: errors.append(str(error)))
+    offline.goto(url + '/park-itinerary-lab/')
+    expect(offline.locator('#solveButton')).to_be_enabled(timeout=30_000)
+    offline.locator('#loadPlan').click()
+    offline.locator('[data-load-saved]').click()
+    reopened = read_itinerary(offline)
+    assert reopened['settings']['dayProgress'] == plan['settings']['dayProgress']
+    assert activity_rows(reopened) == activity_rows(plan)
     assert not errors, errors
 
 
@@ -243,7 +294,7 @@ if __name__ == '__main__':
         try:
             browser = pw.chromium.launch(channel='chrome', headless=True)
             context = browser.new_context(locale='ja-JP', timezone_id='Asia/Tokyo', viewport={'width':393,'height':851},
-                                          has_touch=True, is_mobile=True, service_workers='block', reduced_motion='reduce')
+                                          has_touch=True, is_mobile=True, service_workers='allow', reduced_motion='reduce')
             check_mobile(context.new_page(), f'http://127.0.0.1:{server.server_port}')
             browser.close()
         finally:

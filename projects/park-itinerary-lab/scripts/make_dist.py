@@ -47,6 +47,9 @@ def build_zip(files, version, commit, target):
                             ensure_ascii=False, indent=2) + "\n"
     entries = [(name, (PROJECT_DIR / name).read_bytes()) for name in files]
     entries.append(("BUILD_INFO.json", build_info.encode("utf-8")))
+    # 展開先でブラウザ版を再配布しても、利用者が加えたファイルを取り込まない。
+    inventory = json.dumps(sorted([*files, "BUILD_INFO.json"]), ensure_ascii=False, indent=2) + "\n"
+    entries.append(("DISTRIBUTION_FILES.json", inventory.encode("utf-8")))
     with zipfile.ZipFile(target, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, data in sorted(entries):
             info = zipfile.ZipInfo(f"v{version}/{name}", date_time=FIXED_TIME)

@@ -1,0 +1,17 @@
+{
+  "id": "./",
+  "name": "TDRoute",
+  "short_name": "TDRoute",
+  "lang": "ja",
+  "description": "東京ディズニーランドと東京ディズニーシーの一日を計画するアプリ",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#191e37",
+  "theme_color": "#191e37",
+  "icons": [
+    {"src": "assets/pwa/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
+    {"src": "assets/pwa/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+    {"src": "assets/pwa/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable"}
+  ]
+}

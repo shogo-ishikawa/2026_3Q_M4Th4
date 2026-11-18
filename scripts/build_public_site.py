@@ -2,6 +2,7 @@
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 import json
+import runpy
 import shutil
 import subprocess
 import sys
@@ -22,17 +23,9 @@ PIPE_WEB_FILES = ('index.html', 'style.css', 'app.js', 'physics.js', 'sph.js',
 ILLUSION_WEB_FILES = ('index.html', 'style.css', 'app.js', 'core.js', 'renderer.js', 'guide.html', 'lessons.js', 'lesson-view.js', 'guide.js', 'lessons.css')
 
 
-PARK_WEB_FILES = ('index.html', 'style.css', 'app.js', 'planner.js', 'planner-worker.js',
-                  'accuracy.html', 'accuracy.css', 'accuracy-page.js', 'forecast-accuracy.js',
-                  'forecast-calendar.js', 'calendar-outlook.js',
-                  'onsite-navigation.js', 'visit-day-view.js', 'wishlist-presets.js', 'itinerary-image.js', 'ticket-calendar.js', 'ticket-calendar-seed.js',
-                  'day-progress-ui.js', 'day-progress-plan.js', 'repeat-visits.js', 'intraday-waits.js',
-                  'map-view.js', 'map-display.js', 'storage.js', 'weather.js', 'weather-view.js', 'time-input.js', 'operation-windows.js', 'guide.html', 'data/parks.json',
-                  'wait-data.js', 'wait-model.js', 'calendar-features.js', 'data/calendar.json', 'data/live-waits.json', 'data/wait-model.json',
-                  'assets/tdroute-logo.webp', 'assets/land-map.webp', 'assets/sea-map.webp', 'assets/land-hero.webp', 'assets/sea-hero.webp',
-                  'data/sea-geography.json', 'data/sea-geography-LICENCE.md', 'assets/sea-geographic-map.svg',
-                  'data/map-landmarks.json', 'data/land-map-scenery.json', 'data/sea-map-scenery.json',
-                  'contingency.js', 'data/land-geography.json', 'data/land-geography-LICENCE.md', 'assets/land-geographic-map.svg')
+# Only the TDRoute allowlist used by the portable app is published on Pages.
+park_packaging = runpy.run_path(str(ROOT / 'projects/park-itinerary-lab/scripts/package-web.py'))
+PARK_WEB_FILES = park_packaging['PARK_WEB_FILES']
 
 
 def build_park_site(output=OUTPUT):
@@ -44,15 +37,10 @@ def build_park_site(output=OUTPUT):
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(project / 'web' / name, target)
     version = 'v' + json.loads((project / 'version.json').read_text(encoding='utf-8'))['version']
-    downloads = destination / 'downloads'
-    downloads.mkdir(exist_ok=True)
-    archive = downloads / f'TDRoute_{version}.zip'
-    tracked = subprocess.check_output(['git', 'ls-files', '-z', '--', str(project.relative_to(ROOT))], cwd=ROOT).decode().split('\0')
-    with ZipFile(archive, 'w', ZIP_DEFLATED) as bundle:
-        for name in sorted(filter(None, tracked)):
-            path = ROOT / name
-            if path.is_file():
-                bundle.write(path, Path(version) / path.relative_to(project))
+    worker = park_packaging['public_worker'](project / 'web')
+    (destination / 'sw.js').write_bytes(worker)
+    archive = destination / 'downloads' / f'TDRoute_{version}.zip'
+    park_packaging['build_archive'](project, archive, worker)
     print(f'Built park-itinerary-lab with {archive.stat().st_size:,}-byte distribution ZIP')
     return archive
 

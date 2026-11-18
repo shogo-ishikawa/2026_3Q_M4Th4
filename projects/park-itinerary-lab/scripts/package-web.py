@@ -1,27 +1,87 @@
-"""Build the portable browser distribution using only project source folders."""
+"""Package the public TDRoute app and its portable source distribution."""
+from base64 import b64encode
+from hashlib import sha256
 from pathlib import Path
 from zipfile import ZipFile, ZIP_DEFLATED
 import json
+import subprocess
+import tempfile
+
+PROJECT = Path(__file__).resolve().parents[1]
+INVENTORY = 'DISTRIBUTION_FILES.json'
+
+PARK_WEB_FILES = ('index.html', 'pwa.js', 'sw.js', 'manifest.webmanifest', 'style.css', 'app.js', 'planner.js', 'planner-worker.js',
+                  'accuracy.html', 'accuracy.css', 'accuracy-page.js', 'forecast-accuracy.js',
+                  'forecast-calendar.js', 'calendar-outlook.js',
+                  'onsite-navigation.js', 'visit-day-view.js', 'wishlist-presets.js', 'itinerary-image.js', 'ticket-calendar.js', 'ticket-calendar-seed.js',
+                  'day-progress-ui.js', 'day-progress-plan.js', 'repeat-visits.js', 'intraday-waits.js',
+                  'map-view.js', 'map-display.js', 'storage.js', 'weather.js', 'weather-view.js', 'time-input.js', 'operation-windows.js', 'guide.html', 'data/parks.json',
+                  'wait-data.js', 'wait-model.js', 'calendar-features.js', 'data/calendar.json', 'data/live-waits.json', 'data/wait-model.json',
+                  'assets/tdroute-logo.webp', 'assets/land-map.webp', 'assets/sea-map.webp', 'assets/land-hero.webp', 'assets/sea-hero.webp',
+                  'data/sea-geography.json', 'data/sea-geography-LICENCE.md', 'assets/sea-geographic-map.svg',
+                  'data/map-landmarks.json', 'data/land-map-scenery.json', 'data/sea-map-scenery.json',
+                  'contingency.js', 'data/land-geography.json', 'data/land-geography-LICENCE.md', 'assets/land-geographic-map.svg',
+                  'assets/pwa/icon-192.png', 'assets/pwa/icon-512.png', 'assets/pwa/icon-maskable-512.png',
+                  'assets/pwa/apple-touch-icon.png', 'assets/pwa/splash.webp',
+                  'assets/pwa/startup-750x1334.jpg', 'assets/pwa/startup-1125x2436.jpg', 'assets/pwa/startup-828x1792.jpg',
+                  'assets/pwa/startup-1170x2532.jpg', 'assets/pwa/startup-1179x2556.jpg', 'assets/pwa/startup-1206x2622.jpg',
+                  'assets/pwa/startup-1284x2778.jpg', 'assets/pwa/startup-1290x2796.jpg', 'assets/pwa/startup-1320x2868.jpg')
 
 
-def build_archive():
-    root = Path(__file__).resolve().parents[1]
+def public_worker(web):
+    """Give a new deployment its own offline cache whenever a published file changes."""
+    digest = sha256()
+    integrity = {}
+    for name in sorted(PARK_WEB_FILES):
+        file_hash = sha256((web / name).read_bytes()).digest()
+        digest.update(name.encode('utf-8') + b'\0')
+        digest.update(file_hash)
+        if name != 'sw.js':
+            integrity[name] = 'sha256-' + b64encode(file_hash).decode('ascii')
+    source = (web / 'sw.js').read_text(encoding='utf-8')
+    marker = "const BUILD_ID = 'source';"
+    integrity_marker = "const INTEGRITY = {};"
+    if source.count(marker) != 1 or source.count(integrity_marker) != 1:
+        raise ValueError("sw.js: expected one build ID and one integrity marker")
+    source = source.replace(marker, f"const BUILD_ID = '{digest.hexdigest()}';")
+    return source.replace(integrity_marker, f'const INTEGRITY = {json.dumps(integrity)};').encode('utf-8')
+
+
+def source_files(root):
+    try:
+        result = subprocess.run(['git', 'ls-files', '-z', '--', '.'], cwd=root, capture_output=True, check=True)
+        tracked = result.stdout.decode('utf-8').split('\0')
+        if 'version.json' in tracked:
+            return sorted(name for name in tracked if name and (root / name).is_file())
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pass
+    inventory = root / INVENTORY
+    if inventory.is_file():
+        return json.loads(inventory.read_text(encoding='utf-8'))
+    # A copy made without Git or the release inventory can still distribute the public app.
+    return ['README.md', 'version.json', 'run.py', 'scripts/package-web.py', *('web/' + name for name in PARK_WEB_FILES)]
+
+
+def build_archive(root=PROJECT, destination=None, worker=None):
     version = 'v' + json.loads((root / 'version.json').read_text(encoding='utf-8'))['version']
-    destination = root / 'web/downloads' / f'TDRoute_{version}.zip'
-    destination.parent.mkdir(exist_ok=True)
-    allowed_roots = {'web', 'src', 'tests', 'tests-web', 'configs', 'data', 'docs', 'requirements', 'scripts'}
-    excluded = {'__pycache__', 'node_modules', 'downloads', 'outputs', 'uploads', 'dist', '.pytest_cache', '.ipynb_checkpoints'}
-    extensions = {'.js', '.mjs', '.py', '.html', '.css', '.json', '.csv', '.md', '.txt', '.toml', '.ipynb', '.sh', '.webp', '.svg', '.png'}
-    files = []
-    for path in root.rglob('*'):
-        relative = path.relative_to(root)
-        if (not path.is_file() or path.suffix not in extensions or any(part in excluded or part.startswith('.') for part in relative.parts)
-                or (len(relative.parts) > 1 and relative.parts[0] not in allowed_roots)):
-            continue
-        files.append(path)
-    with ZipFile(destination, 'w', ZIP_DEFLATED) as archive:
-        for path in sorted(files):
-            archive.write(path, Path(version) / path.relative_to(root))
+    if destination is None:
+        destination = root / 'web/downloads' / f'TDRoute_{version}.zip'
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    files = sorted(set(source_files(root)) - {INVENTORY})
+    with tempfile.TemporaryDirectory(dir=destination.parent) as staging:
+        temporary = Path(staging) / destination.name
+        with ZipFile(temporary, 'w', ZIP_DEFLATED) as archive:
+            for name in files:
+                path = root / name
+                if Path(name).is_absolute() or '..' in Path(name).parts or not path.resolve().is_relative_to(root.resolve()):
+                    raise ValueError(f'Invalid distribution path: {name}')
+                entry = f'{version}/{name}'
+                if name == 'web/sw.js' and worker is not None:
+                    archive.writestr(entry, worker)
+                else:
+                    archive.write(path, entry)
+            archive.writestr(f'{version}/{INVENTORY}', json.dumps(files, ensure_ascii=False, indent=2) + '\n')
+        temporary.replace(destination)
     return destination
 
 
