@@ -8,7 +8,7 @@ const parade={id:'parade',name:'パレード',category:'parade'};
 const cafe={id:'cafe',name:'テストカフェ',category:'cafe'};
 
 test('a wish outside the current genre can be identified by both facility and editable field',()=>{
-  const wish={id:'parade'};
+  const wish={id:'parade',required:true};
   const missing=wishInputProblem(wish,parade);
   assert.equal(missing.wishId,'parade');
   assert.equal(missing.field,'showTimes');

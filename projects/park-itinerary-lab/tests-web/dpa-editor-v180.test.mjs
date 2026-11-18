@@ -12,7 +12,7 @@ test('each eligible wish has its own radio group and shows only the fields for i
   for (const mode of ['none','unavailable','consider','owned']) {
     const html = dpaEditor(ride, {...wish(),dpaMode:mode}, park);
     assert.equal((html.match(/name="dpa-ride"/g)||[]).length,4);
-    assert.equal((html.match(/ checked>/g)||[]).length,1);
+    assert.equal((html.match(/<input type="radio"[^>]* checked>/g)||[]).length,1);
     assert.ok(html.includes(`value="${mode}" checked`));
     assert.ok(html.includes('2,000円／人'));
     assert.equal(html.includes('data-field="dpaStart"'),['consider','owned'].includes(mode));

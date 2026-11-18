@@ -1,4 +1,4 @@
-import {operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js';
+import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.9.0';
 import { weatherAtMinute, calendarContext } from './calendar-features.js';
 import { predictModelWait } from './wait-model.js';
 import { liveWaitFor, currentRideStatus } from './wait-data.js';
@@ -178,9 +178,12 @@ function normalise(park, settings) {
       if (result[key] % 100) throw new RangeError('予算は100円単位で指定してください。');
     }
   }
+  if (settings.dpaPurchaseLimit !== undefined && (!Number.isInteger(settings.dpaPurchaseLimit) || settings.dpaPurchaseLimit < 0 || settings.dpaPurchaseLimit > 200)) {
+    throw new RangeError('DPAの購入件数の上限は0〜200の整数で指定してください。');
+  }
   if(settings.gondolaAvoidHarbourShows!==undefined&&typeof settings.gondolaAvoidHarbourShows!=='boolean')throw new RangeError('ゴンドラのショー回避設定を確認してください。');
   result.gondolaAvoidHarbourShows=settings.gondolaAvoidHarbourShows!==false;
-  result.restEvery = numberIn(settings.restEvery ?? 120, '休憩の間隔', 0, 600, true);
+  result.restEvery = numberIn(settings.restEvery ?? 0, '休憩の間隔', 0, 600, true);
   result.restMinutes = numberIn(settings.restMinutes ?? 10, '休憩の長さ', 0, 120, true);
   result.waitBufferMode = settings.waitBufferMode ?? 'fixed';
   if (!['fixed', 'auto'].includes(result.waitBufferMode)) throw new RangeError('待ち時間の余裕の設定を確認してください。');
@@ -190,6 +193,9 @@ function normalise(park, settings) {
   if(!['estimate','off'].includes(result.walkCrowdMode))throw new RangeError('移動時間の計算方法を確認してください。');
   if(!Array.isArray(settings.excludedAutoBreaks||[])||(settings.excludedAutoBreaks||[]).length>60||(settings.excludedAutoBreaks||[]).some(key=>typeof key!=='string'||!key||key.length>220))throw new RangeError('外す自動休憩を確認してください。');
   result.excludedAutoBreaks=[...new Set(settings.excludedAutoBreaks||[])];
+  const skippedAfter=settings.skipAutoRestAfter??[];
+  if(!Array.isArray(skippedAfter)||skippedAfter.length>400||skippedAfter.some(id=>typeof id!=='string'||!/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,99}$/.test(id)))throw new RangeError('見送った自動休憩の施設を確認してください。');
+  result.skipAutoRestAfter=[...new Set(skippedAfter)];
   result.searchSeconds = numberIn(settings.searchSeconds ?? 10, '探索時間', 0.05, 120);
   result.searchMethod = settings.searchMethod ?? 'beam';
   if (!['beam', 'multistart', 'portfolio'].includes(result.searchMethod)) throw new RangeError('探索手法を確認してください。');
@@ -234,7 +240,7 @@ function normalise(park, settings) {
       if (selection.dpaStart >= selection.dpaEnd) throw new RangeError('取得済みDPAの時間帯を確認してください。');
       selection.required = true;
     }
-    if(item.timeWindowLinked!==undefined&&typeof item.timeWindowLinked!=='boolean')throw new RangeError('時間枠の連動設定を確認してください。');
+    if(['timeWindowLinked','dpaWindowLinked'].some(key=>item[key]!==undefined&&typeof item[key]!=='boolean'))throw new RangeError('時間枠の連動設定を確認してください。');
     selection.pauseWindows=normalisePauseWindows(item.pauseWindows||[]);
     for (const key of ['showTimes', 'normalShowTimes', 'dpaAvailableWindows', 'windows']) {
       if (item[key] !== undefined && !Array.isArray(item[key])) throw new RangeError('施設の時間設定を確認してください。');
@@ -286,9 +292,15 @@ function row(kind, start, end, name, extra = {}) {
   return { kind, type: kind, start, end, duration: end - start, name, cost: 0, dpa: false, ...extra };
 }
 
-function recoveryEnds(rows) {
+// A skipped break starts the next interval at the end of that visit even if a
+// subsequent search changes the next destination. It consumes no plan time.
+function restIntervalStartsAgain(category,duration,id,settings){
+  return (FOOD.has(category)&&duration>=DINING_RECOVERY_MINUTES)||settings.skipAutoRestAfter.includes(id);
+}
+
+function recoveryEnds(rows,settings) {
   return rows.filter(item => item.kind === 'rest' ||
-    (item.kind === 'activity' && FOOD.has(item.category) && item.end - item.start >= DINING_RECOVERY_MINUTES)).map(item => item.end);
+    (item.kind === 'activity' && restIntervalStartsAgain(item.category,item.end-item.start,item.activityId,settings))).map(item => item.end);
 }
 
 function autoRestDue(state, activity, context) {
@@ -321,7 +333,10 @@ function preservedPrefix(initialPlan,settings) {
   const cutoff=toMinutes(settings.replanFrom);
   return prefixSourceRows(initialPlan,settings).map(item=>{
     const end=['wait','rest'].includes(item.kind)&&!item.fixedBreakId?Math.min(item.end,cutoff):item.end;
-    return {...copy(item),end,duration:end-item.start,preserved:true,...(item.kind==='walk'?{walkSpeed:item.walkSpeed??initialPlan?.settings?.speed??settings.speed}:{})};
+    // Older plans identify a purchased candidate by its charge or, for a free slot, its ticket.
+    const legacyCandidate = item.kind === 'activity' && item.dpa && item.plannedDpaPurchase === undefined &&
+      !item.dpaCost && initialPlan?.purchases?.some(ticket => ticket.id === item.activityId && ticket.owned === false);
+    return {...copy(item),...(legacyCandidate ? {plannedDpaPurchase:true} : {}),end,duration:end-item.start,preserved:true,...(item.kind==='walk'?{walkSpeed:item.walkSpeed??initialPlan?.settings?.speed??settings.speed}:{})};
   });
 }
 const rowSignature=value=>JSON.stringify(value,(_,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);
@@ -366,18 +381,25 @@ function contextFor(park, settings, initialPlan) {
   const completedSelections = settings.selections.filter(selection => completed.has(selection.id));
   const selected = settings.selections.filter(selection => !completed.has(selection.id));
   const paidDpa = settings.purchases.reduce((sum, purchase) => sum + purchase.cost, 0);
-  const prefixNonDpa = prefix.filter(item => item.kind === 'activity').reduce((sum, item) => sum + Math.max(0, finite(item.cost) - finite(item.dpaCost)), 0);
-  const prefixDpa = prefix.filter(item => item.kind === 'activity').reduce((sum, item) => sum + finite(item.dpaCost), 0);
-  const spent = Math.max(settings.spentBudget, prefixNonDpa + Math.max(prefixDpa, paidDpa));
   const sourceRows = prefix.filter(item => item.kind === 'activity');
+  const prefixNonDpa = sourceRows.reduce((sum, item) => sum + Math.max(0, finite(item.cost) - finite(item.dpaCost)), 0);
+  // A subsequently confirmed ticket can also appear in a completed visit's charge.
+  const prefixDpa = sourceRows.reduce((sum, item) => {
+    if (!item.dpaCost) return sum;
+    const admission = prefix.find(row => row.kind === 'queue' && row.activityId === item.activityId)?.start ?? item.start;
+    const recorded = settings.purchases.some(ticket => ticket.id === item.activityId && ticket.start <= admission && admission < ticket.end);
+    return sum + (recorded ? 0 : item.dpaCost);
+  }, 0);
+  const spent = Math.max(settings.spentBudget, prefixNonDpa + paidDpa + prefixDpa);
   const initial = {
     time: beginning, node: location, rows: prefix, visits: prefixVisits, visited: new Set(completed),
     breakIndex: settings.fixedBreaks.filter(item => item.start + item.duration <= beginning).length,
     score: completedSelections.reduce((sum, item) => sum + item.weight, 0),
     cost: spent, foodCost: sourceRows.filter(item => FOOD.has(item.category)).reduce((sum, item) => sum + finite(item.cost), 0),
-    dpaCost: Math.max(prefixDpa, paidDpa), shoppingCost: sourceRows.filter(item => item.category === 'shop').reduce((sum, item) => sum + finite(item.cost), 0),
+    plannedDpaCount: sourceRows.filter(item => item.dpa && (item.plannedDpaPurchase || item.dpaCost > 0)).length,
+    dpaCost: prefixDpa + paidDpa, shoppingCost: sourceRows.filter(item => item.category === 'shop').reduce((sum, item) => sum + finite(item.cost), 0),
     walk: prefix.filter(item => item.kind === 'walk').reduce((sum, item) => sum + finite(item.metres), 0),
-    lastRest: prefix.length ? Math.max(Math.min(settings.entry, ...prefix.map(item => item.start)), ...recoveryEnds(prefix)) : beginning,
+    lastRest: prefix.length ? Math.max(Math.min(settings.entry, ...prefix.map(item => item.start)), ...recoveryEnds(prefix,settings)) : beginning,
     purchases: settings.purchases.map(copy), restDeferred:false, restDeferralMinutes:0,
     required: completedSelections.filter(item => item.required).length,
   };
@@ -404,9 +426,9 @@ function activityWindows(activity, selection, settings, park) {
 }
 
 function showTimes(activity, selection, settings) {
-  if (selection.showTimes?.length) return selection.showTimes;
+  if (selection.confirmSchedule===false) return [];
+  if (Array.isArray(selection.showTimes)) return selection.showTimes;
   if (activity.dailySchedules?.[settings.date]?.showTimes) return activity.dailySchedules[settings.date].showTimes.map(toMinutes);
-  if (selection.showTimes) return selection.showTimes;
   if (activity.showTimesDate && activity.showTimesDate !== settings.date) return [];
   return (activity.showTimes || []).map(toMinutes);
 }
@@ -434,15 +456,6 @@ function budgetAllowed(state, activity, price, dpaPrice, context) {
   if (settings.foodBudget !== undefined && state.foodCost + (FOOD.has(activity.category) ? price : 0) > settings.foodBudget) return false;
   if (settings.dpaBudget !== undefined && state.dpaCost + dpaPrice > settings.dpaBudget) return false;
   return true;
-}
-
-function activityAvailable(activity, date) {
-  if (activity.dailySchedules?.[date]?.closed === true) return false;
-  if ((activity.closedPeriods || []).some(period => period.startDate <= date && (!period.endDate || date <= period.endDate))) return false;
-  if ((activity.closedDates || []).includes(date)) return false;
-  if (activity.startDate && date < activity.startDate) return false;
-  if (activity.endDate && date > activity.endDate) return false;
-  return activity.closed !== true;
 }
 
 function dpaAvailable(activity, date) {
@@ -479,6 +492,7 @@ function scheduledOptions(state, baseActivity, selection, context, allowAutoRest
     method: 'dpa', windows: [[selection.dpaStart, selection.dpaEnd]], price: 0, owned: true,
   });
   if (dpaAvailable(baseActivity, settings.date) && selection.dpaMode === 'consider' &&
+    (settings.dpaPurchaseLimit === undefined || state.plannedDpaCount < settings.dpaPurchaseLimit) &&
     (baseActivity.category !== 'parade' || (selection.nodeOverride && selection.showTimes?.length))) {
     for (const window of selection.dpaAvailableWindows || []) {
       const purchaseAt = eligiblePurchaseAt(state, baseActivity, window, context);
@@ -555,6 +569,7 @@ function scheduledOptions(state, baseActivity, selection, context, allowAutoRest
       extra.push(row('activity', start, end, activity.name, {
         activityId: activity.id, node: activity.node, endNode, category: activity.category,
         cost: activityCost, dpaCost: method.price, dpa: method.method === 'dpa', method: method.method, waitSource,
+        ...(method.method === 'dpa' && !method.owned ? {plannedDpaPurchase:true} : {}),
         sourceUrl: activity.sourceUrl,
       }));
       const purchases = state.purchases.slice();
@@ -563,6 +578,7 @@ function scheduledOptions(state, baseActivity, selection, context, allowAutoRest
         start: window[0], end: window[1], cost: method.price, owned: false,
       });
       const visited = new Set(state.visited); visited.add(activity.id);
+      const intervalRestarts=restIntervalStartsAgain(activity.category,selection.duration,activity.id,settings);
       const child = {
         key, time: end, node: endNode, rows: state.rows.concat(extra), breakIndex: state.breakIndex,
         visits: state.visits.concat({ id: activity.id, activityId: activity.id, name: activity.name,
@@ -571,9 +587,10 @@ function scheduledOptions(state, baseActivity, selection, context, allowAutoRest
         visited, score: state.score + selection.weight, cost: state.cost + activityCost,
         foodCost: state.foodCost + (FOOD.has(activity.category) ? selection.cost : 0),
         shoppingCost: state.shoppingCost + (activity.category === 'shop' ? selection.cost : 0),
+        plannedDpaCount: state.plannedDpaCount + Number(method.method === 'dpa' && !method.owned),
         dpaCost: state.dpaCost + method.price, walk: state.walk + metres,
-        lastRest: FOOD.has(activity.category) && selection.duration >= DINING_RECOVERY_MINUTES ? end : lastRest,
-        restDeferred: FOOD.has(activity.category) && selection.duration >= DINING_RECOVERY_MINUTES ? false :
+        lastRest: intervalRestarts ? end : lastRest,
+        restDeferred: intervalRestarts ? false :
           (rows.some(item => item.autoBreakId) ? false : (state.restDeferred || deferRest)),
         restDeferralMinutes: (state.restDeferralMinutes || 0) +
           (!rows.some(item => item.autoBreakId) && (state.restDeferred || deferRest) ?
@@ -639,6 +656,7 @@ function nextFixedBreak(state, context) {
 function canFinish(state, context) {
   const metres = context.graph.distances[state.node]?.[context.park.exitNode] ?? Infinity;
   return state.breakIndex === context.settings.fixedBreaks.length && Number.isFinite(metres) && state.time + walkingMinutes(metres,state.time,context.settings) <= context.settings.exit &&
+    (context.settings.dpaBudget === undefined || state.dpaCost <= context.settings.dpaBudget) &&
     state.cost + Math.max(0, finite(context.settings.souvenirReserve) - state.shoppingCost) <= context.settings.budget;
 }
 
@@ -664,13 +682,30 @@ function finishRows(state, context) {
 
 function omissionFor(selection, context, best) {
   const activity = context.map.get(selection.id);
+  const conflict=(conflictField,reason)=>({id:selection.id,name:activity.name,weight:selection.weight,required:selection.required,conflictField,reason});
+  const date=context.settings.date;
+  if (!activityAvailable(activity,date)) return conflict('required','訪問日は休止・開催期間外です。訪問日か必須の指定を見直してください。');
+  if (currentRideStatus(activity,context.settings,{now:context.settings.waitAsOf})?.isOpen===false)
+    return conflict('required','運営停止の再開を確認できていません。当日の情報を更新するか必須の指定を見直してください。');
+  if (activity.category === 'parade' && selection.dpaMode === 'owned' && (!selection.nodeOverride || !selection.showTimes?.length))
+    return conflict(selection.nodeOverride?'showTimes':'nodeOverride','DPAの鑑賞地点と、その場所の公演時刻を入力してください。');
+  if (FIXED.has(activity.category) && !showTimes(activity, selection, context.settings).length)
+    return conflict('showTimes','訪問日の公演時刻が未入力です。公式時刻を確認して入力してください。');
+  if (!accessAllowed(activity, selection, selection.dpaMode === 'owned' ? 'dpa' : 'normal') && selection.dpaMode !== 'consider')
+    return conflict('confirmedAccess','訪問日の予約・エントリーなどの利用条件を確認してください。');
+  const earliest=Math.max(context.initial.time,selection.earliest??0);
+  const latest=Math.min(context.settings.exit,selection.latest??context.settings.exit);
+  const windows=activityWindows(activity,selection,context.settings,context.park);
+  const available=Math.max(0,...windows.map(([open,close])=>Math.min(close,latest)-Math.max(open,earliest)));
+  if (available<selection.duration)
+    return conflict('earliest',`営業時間と希望時間帯が重なるのは最大${available}分です。滞在${selection.duration}分を確保できるように希望時間帯を見直してください。`);
+  if (context.settings.crowdMode==='manual'&&!['consider','owned'].includes(selection.dpaMode)){
+    const wait=selection.manualWait??activity.baseWait??0;
+    if (wait+selection.duration>available)
+      return conflict('earliest',`待ち時間${wait}分と滞在${selection.duration}分に対して、営業時間と希望時間帯が重なるのは最大${available}分です。希望時間帯か待ち時間を見直してください。`);
+  }
   let reason = '移動・時間・予算の組合せで今回は採用されませんでした。';
-  if (!activityAvailable(activity, context.settings.date)) reason = '訪問日は休止・開催期間外です。';
-  else if (currentRideStatus(activity,context.settings,{now:context.settings.waitAsOf})?.isOpen===false) reason='運営停止の再開を確認できていません。再開を確認するまで今回の残り予定には入れません。';
-  else if (activity.category === 'parade' && selection.dpaMode === 'owned' && (!selection.nodeOverride || !selection.showTimes?.length)) reason = 'DPAの鑑賞地点と、その場所の公演時刻を入力してください。';
-  else if (FIXED.has(activity.category) && !showTimes(activity, selection, context.settings).length) reason = '訪問日の公演時刻を入力してください。';
-  else if (!accessAllowed(activity, selection, selection.dpaMode === 'owned' ? 'dpa' : 'normal') && selection.dpaMode !== 'consider') reason = '予約・エントリーなどの利用条件を確認してください。';
-  else if (!Number.isFinite(context.graph.distances[context.initial.node]?.[activity.node])) reason = '現在地からつながる歩行経路がありません。';
+  if (!Number.isFinite(context.graph.distances[context.initial.node]?.[activity.node])) reason = '現在地からつながる歩行経路がありません。';
   else if (selection.cost > context.settings.budget - context.initial.cost) reason = '残りの予算を超えています。';
   else if (!scheduledOptions(context.initial, activity, selection, context).length) reason = '指定の時間帯・待ち時間・取得済み枠では退園に間に合いません。';
   else if (selection.dpaMode === 'consider' && !(selection.dpaAvailableWindows || []).length) reason += ' DPAの空き枠が未入力のため通常待機だけで検討しました。';
@@ -697,6 +732,7 @@ function resultFrom(state, context, diagnostics, quick = false) {
     rows, visits: state?.visits || context.initial.visits, purchases: state?.purchases || context.initial.purchases,
     totals: {
       cost: money, foodCost: state?.foodCost ?? context.initial.foodCost,
+      plannedDpaCount: state?.plannedDpaCount ?? context.initial.plannedDpaCount,
       dpaCost: state?.dpaCost ?? context.initial.dpaCost, shoppingCost: state?.shoppingCost ?? context.initial.shoppingCost,
       walkingMetres: walk, walkMinutes: sumMinutes('walk'), queueMinutes: sumMinutes('queue'),
       waitMinutes: sumMinutes('queue') + sumMinutes('wait'), restMinutes: sumMinutes('rest'),
@@ -915,6 +951,7 @@ export function validatePlan(park, settings, result, options = {}) {
   if(result.historicalVisitBounds!==undefined&&rowSignature(result.historicalVisitBounds)!==rowSignature(expectedBounds))errors.push('保持した予定の元の滞在時間が一致しません。');
   let previous = Math.min(entry,originalEntry), node = settings.replanFrom !== undefined && rows.some(item => item.preserved) ? park.entryNode : (settings.currentNode || park.entryNode);
   const visited = new Set(settings.completedIds || []);
+  let previousRow=null;
   for (const item of rows) {
     if (!Number.isFinite(item.start) || !Number.isFinite(item.end) || item.start < previous || item.end < item.start) errors.push('予定の時刻が前後しています。');
     const verifiedPreserved=item.preserved&&sourceSignatures.has(rowSignature(item));
@@ -951,7 +988,10 @@ export function validatePlan(park, settings, result, options = {}) {
       node = item.node;
     }
     if (item.kind === 'rest' && item.node !== node) errors.push('休憩の場所までの移動がありません。');
-    if(item.kind==='rest'&&!item.preserved&&item.autoBreakId&&(settings.excludedAutoBreaks||[]).includes(item.autoBreakId))errors.push('外した自動休憩が予定に残っています。');
+    if(item.kind==='rest'&&!item.preserved&&item.autoBreakId){
+      const afterSkipped=previousRow?.kind==='activity'&&previousRow.end===item.start&&(settings.skipAutoRestAfter||[]).includes(previousRow.activityId);
+      if(afterSkipped||(settings.excludedAutoBreaks||[]).includes(item.autoBreakId))errors.push('外した自動休憩が予定に残っています。');
+    }
     if (item.kind === 'activity') {
       if (!Number.isFinite(item.cost) || item.cost < 0 || item.cost % 100) errors.push('体験費用が不正です。');
       const activity = activities.get(item.activityId), selection = selectionMap.get(item.activityId);
@@ -999,7 +1039,7 @@ export function validatePlan(park, settings, result, options = {}) {
       if ((item.endNode || item.node) !== node) errors.push('体験後の地点が一致しません。');
     }
     if (item.kind === 'exit' && (item.node !== park.exitNode || node !== park.exitNode)) errors.push('出口に到着していません。');
-    previous = item.end;
+    previous = item.end;previousRow=item;
   }
   for (const reservation of settings.fixedBreaks || []) {
     const expectedStart = toMinutes(reservation.start), expectedEnd = expectedStart + Number(reservation.duration);
@@ -1022,8 +1062,12 @@ export function validatePlan(park, settings, result, options = {}) {
   const ownedCosts = purchased.filter(item => item.owned).reduce((sum, item) => sum + item.cost, 0);
   const prefix = rows.filter(item => item.kind === 'activity' && item.preserved);
   const prefixNonDpa = prefix.reduce((sum, item) => sum + Math.max(0, item.cost - finite(item.dpaCost)), 0);
-  const prefixDpa = prefix.reduce((sum, item) => sum + finite(item.dpaCost), 0);
-  const baseSpent = Math.max(finite(settings.spentBudget), prefixNonDpa + Math.max(prefixDpa, ownedCosts));
+  let prefixDpa = 0;
+  for (const item of prefix.filter(row => row.dpa && row.dpaCost > 0)) {
+    const admission = rows.find(row => row.kind === 'queue' && row.activityId === item.activityId)?.start ?? item.start;
+    if (!purchased.some(ticket => ticket.owned && ticket.id === item.activityId && ticket.start <= admission && admission < ticket.end)) prefixDpa += item.dpaCost;
+  }
+  const baseSpent = Math.max(finite(settings.spentBudget), prefixNonDpa + prefixDpa + ownedCosts);
   const newCosts = rows.filter(item => item.kind === 'activity' && !item.preserved).reduce((sum, item) => sum + item.cost, 0);
   if (Math.abs(Number(result.totals?.cost) - baseSpent - newCosts) > 0.01) errors.push('合計費用が明細と一致しません。');
   if (Number(result.totals?.cost) > Number(settings.budget)) errors.push('予算を超えています。');
@@ -1037,7 +1081,14 @@ export function validatePlan(park, settings, result, options = {}) {
     }
   }
   const foodCost = rows.filter(item => item.kind === 'activity' && FOOD.has(item.category)).reduce((sum, item) => sum + item.cost - finite(item.dpaCost), 0);
-  const dpaCost = Math.max(prefixDpa, ownedCosts) + purchased.filter(item => !item.owned).reduce((sum, item) => sum + item.cost, 0);
+  const proposed = purchased.filter(ticket => !ticket.owned);
+  const dpaCost = prefixDpa + ownedCosts + proposed.reduce((sum, item) => sum + item.cost, 0);
+  const previousCount = sourceRows.filter(row => row.kind === 'activity' && row.dpa && (row.dpaCost > 0 || row.plannedDpaPurchase)).length;
+  const newVisits = rows.filter(row => row.kind === 'activity' && !row.preserved && row.dpa && selectionMap.get(row.activityId)?.dpaMode === 'consider');
+  if (newVisits.length !== proposed.length || proposed.some(ticket => !newVisits.some(row => row.activityId === ticket.id))) errors.push('DPA購入候補の件数が明細と一致しません。');
+  const plannedCount = previousCount + newVisits.length;
+  if (result.totals?.plannedDpaCount !== undefined && result.totals.plannedDpaCount !== plannedCount) errors.push('DPA購入候補の合計件数が明細と一致しません。');
+  if (settings.dpaPurchaseLimit !== undefined && newVisits.length > Math.max(0, settings.dpaPurchaseLimit - previousCount)) errors.push('DPAの購入件数の上限を超えています。');
   if (settings.foodBudget !== undefined && foodCost > settings.foodBudget) errors.push('食費の上限を超えています。');
   if (settings.dpaBudget !== undefined && dpaCost > settings.dpaBudget) errors.push('DPA予算の上限を超えています。');
   const shopCost = rows.filter(item => item.kind === 'activity' && item.category === 'shop').reduce((sum, item) => sum + item.cost, 0);

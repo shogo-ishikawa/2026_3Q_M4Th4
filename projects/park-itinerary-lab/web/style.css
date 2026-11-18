@@ -328,4 +328,7 @@ body[data-park=sea] .hero h1{font-size:clamp(24px,2.35vw,36px);line-height:1.6}
 }
 .reel-actions [data-clear] { margin-right: auto; }
 .reel-actions [data-apply] { border-color: var(--accent); background: var(--accent); color: white; }
-.day-time-link { margin: 8px 0 0; }
+
+.rest-edit-notice{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem .8rem;padding:.5rem 0 .8rem;font-size:.88rem}
+.rest-edit-notice button{color:var(--accent);background:transparent;border:0;text-decoration:underline;cursor:pointer;padding:.4rem .15rem}
+@media print{.rest-edit-notice{display:none}}

@@ -25,7 +25,7 @@ export function componentMinute(value,part,next,bounds=DEFAULT_BOUNDS){
   const result=part==='hour'?Math.max(Math.floor(bounds.min/60),Math.min(Math.floor(bounds.max/60),number))*60+minute:hour*60+Math.max(0,Math.min(59,number));
   return clampClock(result,bounds);
 }
-/** Link a preference range when the user edits one end. Confirmed slots stay independent. */
+/** Suggest the opposite end only when the user edits a linked range. */
 export function linkedWishWindow(changed,value,pair,bounds=DEFAULT_BOUNDS){
   const selected=clampClock(value,bounds);
   if(changed==='earliest'){
