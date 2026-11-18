@@ -514,7 +514,7 @@ const csvCell = value => {
   if (/^[\s]*[=+\-@\t\r]/.test(string)) string = "'" + string;
   return '"' + string.replaceAll('"', '""') + '"';
 };
-function checkedRows(plan) {
+export function checkedRows(plan) {
   if (!plan || !Array.isArray(plan.rows) || plan.rows.length > 5000) fail('保存する予定表を先に作成してください。');
   for (const row of plan.rows) if (!validTime(row.start) || !validTime(row.end) || row.start > row.end || !text(row.name, 500)) fail('予定表の時刻と名前を確認してください。');
   return plan.rows;

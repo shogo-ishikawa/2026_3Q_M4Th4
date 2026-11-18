@@ -24,6 +24,7 @@ ILLUSION_WEB_FILES = ('index.html', 'style.css', 'app.js', 'core.js', 'renderer.
 
 PARK_WEB_FILES = ('index.html', 'style.css', 'app.js', 'planner.js', 'planner-worker.js',
                   'accuracy.html', 'accuracy.css', 'accuracy-page.js', 'forecast-accuracy.js',
+                  'onsite-navigation.js', 'wishlist-presets.js', 'itinerary-image.js', 'ticket-calendar.js', 'ticket-calendar-seed.js',
                   'day-progress-ui.js', 'day-progress-plan.js', 'repeat-visits.js', 'intraday-waits.js',
                   'map-view.js', 'map-display.js', 'storage.js', 'weather.js', 'weather-view.js', 'time-input.js', 'operation-windows.js', 'guide.html', 'data/parks.json',
                   'wait-data.js', 'wait-model.js', 'calendar-features.js', 'data/calendar.json', 'data/live-waits.json', 'data/wait-model.json',

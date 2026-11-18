@@ -4,6 +4,7 @@ import {access, link, mkdir, readFile, rm, writeFile} from 'node:fs/promises';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {chooseCatalogue, defaultSettings} from '../web/app.js';
+import {visitDayContext} from '../web/calendar-features.js';
 import {activityAvailable, operationPauseInfo, subtractPauseWindows} from '../web/operation-windows.js';
 import {estimateWait, setWaitForecastContext} from '../web/planner.js';
 import {validateCatalogue} from '../web/storage.js';
@@ -88,7 +89,10 @@ export async function forecastPark(park, {date, issuedAt, waitModel, calendarDat
   return {parkId:park.id, issuedAt, trainedThrough:waitModel?.lastDate ?? null,
     modelTrainedAt:waitModel?.trainedAt ?? null, weatherProvider:settings.weatherForecast?.provider ?? null,
     weatherFetchedAt:settings.weatherForecast?.fetchedAt ?? null, weatherAssumption:settings.weather,
-    crowd, activities, rows};
+    visitDayFactors:{
+      inputs:visitDayContext(date,park,calendarData,now),
+      modelFeatures:waitModel?.usable ? (waitModel.visitFactors || []).map(factor=>factor.name) : []
+    }, crowd, activities, rows};
 }
 
 async function readJson(path, optional = false) {

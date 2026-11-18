@@ -1,5 +1,5 @@
 /* Models use observed waits; unknown weather and missing historical days remain unknown. */
-import {validCalendarDate as dateValid,minuteOf,finiteObservationNumber,calendarContext,weatherAtMinute,eventIdsFor,WAIT_BASE_FEATURE_NAMES,waitFeatures} from './calendar-features.js';
+import {validCalendarDate as dateValid,minuteOf,finiteObservationNumber,calendarContext,weatherAtMinute,eventIdsFor,WAIT_BASE_FEATURE_NAMES,waitFeatures,visitDayContext,learnVisitFactors,VISIT_FACTOR_NAMES} from './calendar-features.js';
 import {activityAvailable} from './operation-windows.js';
 const MIN_DATES=7,MIN_SAMPLES=100,MAX_SAMPLES=50000;
 const clipped=value=>Math.max(0,Math.min(600,Math.round(value)));
@@ -13,12 +13,14 @@ function baseline(row,activity) {
   const day=new Date(row.date+'T12:00:00Z').getUTCDay(),hour=row.minute/60,time=hour<10?.8:hour<12?1.12:hour<16?1.2:hour<18?1.03:.82;
   return clipped(activity.baseWait*time*(day===0||day===6?1.18:1)*(row.weather==='rain'?.84:row.weather==='cloud'?.97:1)*(row.eventIds?.length?1.15:1));
 }
-function observations(history,park,beforeDate) {
+function observations(history,park,beforeDate,calendarData) {
+  const contexts = new Map();
   const activities=new Map(park.activities.map(activity=>[activity.id,activity])),dedup=new Map();
   for(const row of Array.isArray(history)?history:[]) {
     const activityId=row.activityId??row.activity_id??row.id,activity=activities.get(activityId),minute=minuteOf(row.time??row.minute),wait=finiteObservationNumber(row.wait??row.waitMinutes??row.wait_minutes);
     if(!activity||!dateValid(row.date)||row.date>=beforeDate||minute===null||wait===null||wait<0||wait>600||row.isOpen===false||['CLOSED','DOWN','REFURBISHMENT'].includes(row.status))continue;
-    const item={activityId,date:row.date,minute,wait,weather:['sun','cloud','rain'].includes(row.weather)?row.weather:'',eventIds:eventIdsFor(row.date,park,row),temperature:finiteObservationNumber(row.temperature),precipitation:finiteObservationNumber(row.precipitation),openingMinute:minuteOf(row.openingMinute)};
+    if (!contexts.has(row.date)) contexts.set(row.date,visitDayContext(row.date,park,calendarData));
+    const item={activityId,date:row.date,minute,wait,visitContext:contexts.get(row.date),weather:['sun','cloud','rain'].includes(row.weather)?row.weather:'',eventIds:eventIdsFor(row.date,park,row),temperature:finiteObservationNumber(row.temperature),precipitation:finiteObservationNumber(row.precipitation),openingMinute:minuteOf(row.openingMinute)};
     const opening=item.openingMinute??minuteOf(activity.windows?.[0]?.[0])??540,bucket=minute>=opening&&minute<opening+90?10:30;
     dedup.set([row.date,activityId,bucket,Math.floor(minute/bucket)].join('|'),item);
   }
@@ -38,7 +40,24 @@ function balancedSample(rows,limit=MAX_SAMPLES) {
   return result;
 }
 function featureValues(row,activity,model) {
-  return model.schemaVersion===1?legacyFeatures(row):waitFeatures(row,{eventIds:model.eventIds,calendarData:model.calendarData,activity});
+  return model.schemaVersion===1?legacyFeatures(row):waitFeatures(row,{eventIds:model.eventIds,calendarData:model.calendarData,activity,visitFactors:model.visitFactors});
+}
+function featureNames(eventIds, visitFactors = []) {
+  return WAIT_BASE_FEATURE_NAMES.concat(visitFactors.map(item => item.name),eventIds.map(id => 'event:'+id));
+}
+function validVisitFactors(factors, days) {
+  if (factors === undefined) return true;
+  if (!Array.isArray(factors) || factors.length > VISIT_FACTOR_NAMES.length) return false;
+  let last = -1;
+  for (const factor of factors) {
+    const order = VISIT_FACTOR_NAMES.indexOf(factor?.name);
+    if (order <= last || !Number.isInteger(factor.days) || factor.days < 6 || factor.days > days ||
+        !Number.isFinite(factor.mean) || !Number.isInteger(factor.min) || !Number.isInteger(factor.max) ||
+        factor.min < 0 || factor.max > (factor.name.endsWith('_yen') ? 100000 : 1) ||
+        !(factor.min < factor.mean && factor.mean < factor.max)) return false;
+    last = order;
+  }
+  return true;
 }
 function fit(rows,park,model) {
   const activities=new Map(park.activities.map(activity=>[activity.id,activity])),count=model.featureNames.length;
@@ -96,22 +115,46 @@ function correlations(rows,park,calendarData) {
 }
 function compactCalendar(calendarData,firstDate,beforeDate) {
   if(!calendarData||!Array.isArray(calendarData.holidays))return null;
-  const start=new Date(Date.parse((firstDate||beforeDate)+'T12:00:00Z')-86400000).toISOString().slice(0,10),last=new Date(Date.parse(beforeDate+'T12:00:00Z')+2*366*86400000).toISOString().slice(0,10);
-  return {...calendarData,holidays:calendarData.holidays.filter(item=>dateValid(item?.date)&&item.date>=start&&item.date<=last).map(item=>({date:item.date,name:String(item.name||'祝日').slice(0,100)}))};
+  const start=new Date(Date.parse((firstDate||beforeDate)+'T12:00:00Z')-2*86400000).toISOString().slice(0,10),last=new Date(Date.parse(beforeDate+'T12:00:00Z')+2*366*86400000).toISOString().slice(0,10);
+  const range = calendarData.coverage;
+  const coverage = range && {startDate:range.startDate > start ? range.startDate : start,endDate:range.endDate < last ? range.endDate : last};
+  return {...calendarData,coverage,holidays:calendarData.holidays.filter(item=>dateValid(item?.date)&&item.date>=start&&item.date<=last).map(item=>({date:item.date,name:String(item.name||'祝日').slice(0,100)}))};
 }
 /** Later dates are held out before the final refit; future or target-day rows never train a model. */
 export function trainWaitModel(history,park,{beforeDate,trainedAt=new Date().toISOString(),calendarData,dataSources=[],sampleLimit=MAX_SAMPLES}={}) {
   if(!dateValid(beforeDate))throw new RangeError('学習の基準日をYYYY-MM-DDで指定してください。');
   if(sampleLimit!==null&&(!Number.isInteger(sampleLimit)||sampleLimit<MIN_SAMPLES||sampleLimit>MAX_SAMPLES))throw new RangeError('学習件数の上限を確認してください。');
-  const available=observations(history,park,beforeDate),rows=balancedSample(available,sampleLimit),dates=[...new Set(rows.map(row=>row.date))],eventIds=[...new Set(rows.flatMap(row=>row.eventIds))].sort().slice(0,60);
-  const result={schemaVersion:2,method:'ridge-regression',parkId:park.id,status:'insufficient-data',usable:false,trainedAt,beforeDate,samples:rows.length,availableSamples:available.length,sampling:rows.length<available.length?'calendar-balanced':'all-eligible',days:dates.length,firstDate:dates[0]??null,lastDate:dates.at(-1)??null,minDays:MIN_DATES,minSamples:MIN_SAMPLES,featureNames:WAIT_BASE_FEATURE_NAMES.concat(eventIds.map(id=>'event:'+id)),eventIds,activityIds:[],coefficients:[],validation:null,dataSources:dataSources.filter(source=>source&&typeof source.name==='string'&&typeof source.url==='string'&&/^https:\/\//.test(source.url)).map(source=>({name:source.name.slice(0,120),url:source.url.slice(0,2000),kind:String(source.kind||'observation').slice(0,100),attribution:String(source.attribution||source.name).slice(0,300)})).slice(0,20),calendarData:compactCalendar(calendarData,dates[0],beforeDate),activityTimeProfiles:[],correlations:correlations(rows,park,calendarData)};
+  const available=observations(history,park,beforeDate,calendarData),rows=balancedSample(available,sampleLimit),dates=[...new Set(rows.map(row=>row.date))],eventIds=[...new Set(rows.flatMap(row=>row.eventIds))].sort().slice(0,60);
+  const result={schemaVersion:2,method:'ridge-regression',parkId:park.id,status:'insufficient-data',usable:false,trainedAt,beforeDate,samples:rows.length,availableSamples:available.length,sampling:rows.length<available.length?'calendar-balanced':'all-eligible',days:dates.length,firstDate:dates[0]??null,lastDate:dates.at(-1)??null,minDays:MIN_DATES,minSamples:MIN_SAMPLES,featureNames:featureNames(eventIds),eventIds,activityIds:[],coefficients:[],validation:null,dataSources:dataSources.filter(source=>source&&typeof source.name==='string'&&typeof source.url==='string'&&/^https:\/\//.test(source.url)).map(source=>({name:source.name.slice(0,120),url:source.url.slice(0,2000),kind:String(source.kind||'observation').slice(0,100),attribution:String(source.attribution||source.name).slice(0,300)})).slice(0,20),calendarData:compactCalendar(calendarData,dates[0],beforeDate),activityTimeProfiles:[],correlations:correlations(rows,park,calendarData)};
+  result.visitFactorSupport = learnVisitFactors(rows).support;
   if(dates.length<MIN_DATES||rows.length<MIN_SAMPLES)return result;
   const split=dates.slice(-Math.max(2,Math.ceil(dates.length*.2)))[0],training=rows.filter(row=>row.date<split),testing=rows.filter(row=>row.date>=split);
   const trainEvents=[...new Set(training.flatMap(row=>row.eventIds))].sort().slice(0,60),activities=new Map(park.activities.map(activity=>[activity.id,activity]));
-  const provisional={...result,eventIds:trainEvents,featureNames:WAIT_BASE_FEATURE_NAMES.concat(trainEvents.map(id=>'event:'+id)),activityIds:[...new Set(training.map(row=>row.activityId))].sort()};
-  provisional.coefficients=fit(training,park,provisional);provisional.activityTimeProfiles=timeProfiles(training,park,provisional);
+  const provisional = {...result,eventIds:trainEvents,featureNames:featureNames(trainEvents),activityIds:[...new Set(training.map(row=>row.activityId))].sort()};
   const evaluated=testing.filter(row=>provisional.activityIds.includes(row.activityId));if(!evaluated.length)return result;
-  const modelMae=evaluated.reduce((sum,row)=>sum+Math.abs(predict(row,activities.get(row.activityId),provisional)-row.wait),0)/evaluated.length,baselineMae=evaluated.reduce((sum,row)=>sum+Math.abs(baseline(row,activities.get(row.activityId))-row.wait),0)/evaluated.length;
+  function holdoutError(instance) {
+    instance.coefficients=fit(training,park,instance);
+    instance.activityTimeProfiles=timeProfiles(training,park,instance);
+    return evaluated.reduce((sum,row)=>sum+Math.abs(predict(row,activities.get(row.activityId),instance)-row.wait),0)/evaluated.length;
+  }
+  const previousFeatureMae = holdoutError(provisional);
+  let modelMae = previousFeatureMae;
+  // Estimate support and centring on the earlier training days alone. An unrepresented
+  // factor cannot be selected on the later test days or introduced silently at final refit.
+  const candidates = learnVisitFactors(training).factors.filter(factor =>
+    new Set(evaluated.map(row=>row.visitContext[factor.name]).filter(Number.isFinite)).size >= 2);
+  if (candidates.length) {
+    const extended = {...provisional,visitFactors:candidates,featureNames:featureNames(trainEvents,candidates)};
+    const candidateMae = holdoutError(extended);
+    const adopted = candidateMae < previousFeatureMae;
+    result.visitFactorValidation = {candidates:candidates.map(item=>item.name),previousFeatureMae,candidateMae,adopted};
+    if (adopted) {
+      result.visitFactors = candidates;
+      result.featureNames = featureNames(eventIds,candidates);
+      modelMae = candidateMae;
+    }
+  }
+  const baselineMae=evaluated.reduce((sum,row)=>sum+Math.abs(baseline(row,activities.get(row.activityId))-row.wait),0)/evaluated.length;
   result.status='trained';result.usable=modelMae<=baselineMae;result.validation={method:'later-days-holdout',trainThrough:training.at(-1).date,testFrom:split,testThrough:dates.at(-1),trainSamples:training.length,testSamples:evaluated.length,modelMae,baselineMae,units:'minutes',unseenEvents:[...new Set(testing.flatMap(row=>row.eventIds))].filter(id=>!trainEvents.includes(id))};
   result.activityIds=[...new Set(rows.map(row=>row.activityId))].sort();result.coefficients=fit(rows,park,result);result.activityTimeProfiles=timeProfiles(rows,park,result);return result;
 }
@@ -120,14 +163,14 @@ export function validateWaitModel(model) {
   if(!model||![1,2].includes(model.schemaVersion)||model.method!=='ridge-regression'||!['land','sea'].includes(model.parkId)||!['trained','insufficient-data'].includes(model.status)||!Array.isArray(model.activityIds)||model.activityIds.length>400||new Set(model.activityIds).size!==model.activityIds.length||!model.activityIds.every(id=>typeof id==='string'&&id.length<121)||!Array.isArray(model.coefficients)||model.coefficients.some(value=>!Number.isFinite(value)))return false;
   let count=7;
   if(model.dataSources!==undefined&&(!Array.isArray(model.dataSources)||model.dataSources.length>20||model.dataSources.some(source=>!source||typeof source.name!=='string'||source.name.length>120||typeof source.url!=='string'||source.url.length>2000||!/^https:\/\//.test(source.url)||typeof source.attribution!=='string'||source.attribution.length>300)))return false;
-  if(model.schemaVersion===2){if(!Number.isInteger(model.samples)||model.samples<0||!Number.isSafeInteger(model.samples)||!Number.isInteger(model.days)||model.days<0||model.days>100000||typeof model.trainedAt!=='string'||!Number.isFinite(Date.parse(model.trainedAt))||!dateValid(model.beforeDate)||(model.lastDate!==null&&(!dateValid(model.lastDate)||model.lastDate>=model.beforeDate))||(model.status==='trained'&&(!dateValid(model.firstDate)||model.firstDate>model.lastDate||v?.testThrough>model.lastDate)))return false;if(!Array.isArray(model.featureNames)||!Array.isArray(model.eventIds)||model.eventIds.length>60||model.eventIds.some(id=>typeof id!=='string'||!id||id.length>120)||new Set(model.eventIds).size!==model.eventIds.length)return false;const expected=WAIT_BASE_FEATURE_NAMES.concat(model.eventIds.map(id=>'event:'+id));if(JSON.stringify(expected)!==JSON.stringify(model.featureNames))return false;count=expected.length;if(model.calendarData!==null&&model.calendarData!==undefined&&(!Array.isArray(model.calendarData.holidays)||model.calendarData.holidays.length>5000||model.calendarData.holidays.some(item=>!item||!dateValid(item.date)||typeof item.name!=='string'||item.name.length>120)))return false;if(model.activityTimeProfiles!==undefined&&(!Array.isArray(model.activityTimeProfiles)||model.activityTimeProfiles.length>9600||new Set(model.activityTimeProfiles.map(p=>p?.activityId+'|'+p?.hour)).size!==model.activityTimeProfiles.length||model.activityTimeProfiles.some(p=>!p||!model.activityIds.includes(p.activityId)||!Number.isInteger(p.hour)||p.hour<0||p.hour>23||!Number.isInteger(p.days)||p.days<1||!Number.isInteger(p.samples)||p.samples<1||!Number.isFinite(p.correctionMinutes)||Math.abs(p.correctionMinutes)>600||!Number.isFinite(p.meanWait)||p.meanWait<0||p.meanWait>600)))return false;}
+  if(model.schemaVersion===2){if(!Number.isInteger(model.samples)||model.samples<0||!Number.isSafeInteger(model.samples)||!Number.isInteger(model.days)||model.days<0||model.days>100000||typeof model.trainedAt!=='string'||!Number.isFinite(Date.parse(model.trainedAt))||!dateValid(model.beforeDate)||(model.lastDate!==null&&(!dateValid(model.lastDate)||model.lastDate>=model.beforeDate))||(model.status==='trained'&&(!dateValid(model.firstDate)||model.firstDate>model.lastDate||v?.testThrough>model.lastDate)))return false;if(!Array.isArray(model.featureNames)||!Array.isArray(model.eventIds)||model.eventIds.length>60||model.eventIds.some(id=>typeof id!=='string'||!id||id.length>120)||new Set(model.eventIds).size!==model.eventIds.length)return false;if(!validVisitFactors(model.visitFactors,model.days))return false;const expected=featureNames(model.eventIds,model.visitFactors);if(JSON.stringify(expected)!==JSON.stringify(model.featureNames))return false;count=expected.length;if(model.calendarData!==null&&model.calendarData!==undefined&&(!Array.isArray(model.calendarData.holidays)||model.calendarData.holidays.length>5000||model.calendarData.holidays.some(item=>!item||!dateValid(item.date)||typeof item.name!=='string'||item.name.length>120)))return false;if(model.activityTimeProfiles!==undefined&&(!Array.isArray(model.activityTimeProfiles)||model.activityTimeProfiles.length>9600||new Set(model.activityTimeProfiles.map(p=>p?.activityId+'|'+p?.hour)).size!==model.activityTimeProfiles.length||model.activityTimeProfiles.some(p=>!p||!model.activityIds.includes(p.activityId)||!Number.isInteger(p.hour)||p.hour<0||p.hour>23||!Number.isInteger(p.days)||p.days<1||!Number.isInteger(p.samples)||p.samples<1||!Number.isFinite(p.correctionMinutes)||Math.abs(p.correctionMinutes)>600||!Number.isFinite(p.meanWait)||p.meanWait<0||p.meanWait>600)))return false;}
   return model.status!=='trained'||(metrics&&model.coefficients.length===count+model.activityIds.length&&dateValid(model.lastDate)&&model.days>=MIN_DATES&&model.samples>=MIN_SAMPLES);
 }
 /** Predict at queue start using hourly weather and the same calendar/event encoding used for fitting. */
-export function predictModelWait(activity,minute,settings,model) {
+export function predictModelWait(activity,minute,settings,model,visitContext) {
   if(!Number.isInteger(minute)||minute<0||minute>1439||!validateWaitModel(model)||model.status!=='trained'||!model.usable||!dateValid(settings.date)||model.lastDate>=settings.date||!activity.id.startsWith(model.parkId+'-'))return null;
   const weather=weatherAtMinute(settings.date,minute,settings),eventIds=(settings.activeEvents||[]).map(event=>typeof event==='string'?event:event.id).filter(Boolean);
-  const row={date:settings.date,minute,...weather,eventIds,event:eventIds.join('|')};
+  const row={date:settings.date,minute,...weather,eventIds,event:eventIds.join('|'),visitContext};
   const activeModel=model.schemaVersion===2?{...model,calendarData:settings.calendarData||model.calendarData}:model;
   const value=predict(row,activity,activeModel);return value===null?null:{minutes:value,source:'ml',samples:model.samples,modelDays:model.days,validationMae:model.validation?.modelMae,unseenEvents:eventIds.filter(id=>model.schemaVersion===2&&!model.eventIds.includes(id))};
 }
@@ -159,6 +202,7 @@ export function estimateParkCrowd(park, settings, recordReference) {
   // A dated report can still evaluate a calendar forecast against pre-existing reference waits.
   if (!covered && !recordReference) return fallback;
 
+  const visitContext = model.visitFactors?.length ? visitDayContext(date,park,calendarData,settings.waitAsOf ?? Date.now()) : null;
   const profilesByRide = new Map();
   for (const profile of model.activityTimeProfiles || []) {
     if (!profilesByRide.has(profile.activityId)) profilesByRide.set(profile.activityId, []);
@@ -181,7 +225,7 @@ export function estimateParkCrowd(park, settings, recordReference) {
       const hour = profile.hour, minute = hour * 60 + 30;
       if (!parkCrowdHours.includes(hour) || profile.samples < 5 || profile.days < 3 || profile.meanWait < 10 ||
           !covers(parkHours, minute) || !covers(datedWindows, minute)) continue;
-      const row = {date, minute, ...weatherAtMinute(date, minute, settings), eventIds:events};
+      const row = {date, minute, ...weatherAtMinute(date, minute, settings), eventIds:events, visitContext};
       expected += predict(row, ride, activeModel);
       usual += profile.meanWait;
       anchors.push(profile);
