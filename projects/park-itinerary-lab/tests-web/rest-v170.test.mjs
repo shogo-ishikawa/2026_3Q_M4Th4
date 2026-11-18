@@ -56,7 +56,7 @@ test('an early recovery rest yields to an imminent fixed show or an owned DPA wi
     const result=solveItinerary(p,s);
     assert.equal(result.status,'feasible',kind);
     assert.equal(result.visits[1].start,605,kind);
-    assert.equal(autoRests(result).length,0,kind);
+    assert.ok(autoRests(result).every(rest => rest.start >= result.visits[1].end),kind);
     assert.equal(validatePlan(p,s,result).valid,true,kind);
   }
 });
@@ -67,7 +67,7 @@ test('recovery also yields when the confirmed show follows an intervening requir
   const result=solveItinerary(p,s);
   assert.equal(result.status,'feasible');
   assert.deepEqual(result.visits.map(v=>[v.id,v.start]),[['long',585],['next',600],['show',620]]);
-  assert.equal(autoRests(result).length,0);
+  assert.ok(autoRests(result).every(rest => rest.start >= 630));
   assert.equal(validatePlan(p,s,result).valid,true);
 });
 
@@ -77,7 +77,7 @@ test('a later required time window also takes precedence over automatic recovery
   const result=solveItinerary(p,s);
   assert.equal(result.status,'feasible');
   assert.deepEqual(result.visits.map(v=>[v.id,v.start]),[['long',585],['next',600],['last',610]]);
-  assert.equal(autoRests(result).length,0);
+  assert.ok(autoRests(result).every(rest => rest.start >= 630));
   assert.equal(validatePlan(p,s,result).valid,true);
 });
 
@@ -113,3 +113,40 @@ test('removed auto rests and disabled auto mode stay disabled',()=>{
   assert.equal(autoRests(removed).length,0);
   assert.equal(autoRests(solveItinerary(p,{...s,restEvery:0})).length,0);
 });
+
+test('selected wish scores take precedence over the soft recovery preference',()=>{
+  const p=park([venue('long',{baseWait:45}),venue('optional',{duration:20})]);
+  const s=settings({exit:620,selections:[choose('long',540,600),choose('optional',600,620,{required:false,weight:5})]});
+  const result=solveItinerary(p,s);
+  assert.equal(result.status,'feasible');
+  assert.deepEqual(result.visits.map(v=>v.id),['long','optional']);
+  assert.equal(result.coverage.weight,8);
+  assert.equal(autoRests(result).length,0);
+  assert.equal(validatePlan(p,s,result).valid,true);
+});
+
+for(const searchMethod of ['beam','multistart','portfolio']) {
+  test(`${searchMethod}: defer recovery through a critical chain, then resume immediately after its show`,()=>{
+    const p=park([venue('long',{baseWait:45}),venue('a',{duration:10}),venue('b',{duration:10}),venue('c',{duration:10}),venue('show',{category:'show',showTimes:[635],baseWait:5,duration:10}),venue('after',{duration:10})]);
+    const s=settings({searchMethod,selections:[choose('long',540,600),choose('a',600,620),choose('b',610,630),choose('c',620,640),choose('show',600,645),choose('after',645,680)]});
+    const result=solveItinerary(p,s);
+    assert.equal(result.status,'feasible');
+    assert.deepEqual(result.visits.map(v=>[v.id,v.start]),[['long',585],['a',600],['b',610],['c',620],['show',635],['after',655]]);
+    assert.deepEqual(autoRests(result).map(r=>[r.start,r.end]),[[645,655]]);
+    assert.equal(validatePlan(p,s,result).valid,true);
+  });
+
+  test(`${searchMethod}: recovery can resume before exit when the show is the last visit`,()=>{
+    const p=park([venue('long',{baseWait:45}),venue('a',{duration:10}),venue('b',{duration:10}),venue('c',{duration:10}),venue('show',{category:'show',showTimes:[635],baseWait:5,duration:10})]);
+    const s=settings({searchMethod,selections:[choose('long',540,600),choose('a',600,620),choose('b',610,630),choose('c',620,640),choose('show',600,645)]});
+    const result=solveItinerary(p,s);
+    assert.equal(result.status,'feasible');
+    assert.deepEqual(autoRests(result).map(r=>[r.start,r.end]),[[645,655]]);
+    assert.equal(validatePlan(p,s,result).valid,true);
+    const tight = {...s,exit:645}, noRoom = solveItinerary(p,tight);
+    assert.equal(noRoom.status,'feasible');
+    assert.equal(noRoom.totals.finish,645);
+    assert.equal(autoRests(noRoom).length,0);
+    assert.equal(validatePlan(p,tight,noRoom).valid,true);
+  });
+}

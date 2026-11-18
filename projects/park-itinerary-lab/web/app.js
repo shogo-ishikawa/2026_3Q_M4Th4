@@ -1,11 +1,11 @@
 import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, fetchPublishedModel, prepareLiveForReplan, prepareWeatherForVisit } from './wait-data.js';
 import { enhanceTimeInputs, parkTimeBounds, linkedWishWindow, clampClock } from './time-input.js';
 import { weatherForMinute } from './weather.js';
-import { forecastCardHtml, forecastSourcesHtml } from './weather-view.js';
+import { forecastCardHtml, forecastSourcesHtml } from './weather-view.js?v=1.7.0';
 import { operationPauseInfo } from './operation-windows.js';
 import { contingencySettings, compareContingency } from './contingency.js';
-import { renderParkMap } from './map-view.js';
-import { listSavedPlans, saveNamedPlan, loadSavedPlan, renameSavedPlan, deleteSavedPlan, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js';
+import { renderParkMap } from './map-view.js?v=1.7.0';
+import { listSavedPlans, saveNamedPlan, loadSavedPlan, renameSavedPlan, deleteSavedPlan, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=1.7.0';
 
 const CATEGORY = {attraction:'アトラクション',show:'ショー',parade:'パレード',restaurant:'レストラン',cafe:'カフェ',snack:'スナック',popcorn:'ポップコーン',greeting:'グリーティング',shop:'お土産'};
 const FOOD = new Set(['restaurant','cafe','snack','popcorn']);
@@ -212,7 +212,7 @@ export function initialiseApp() {
     document.body.dataset.park=state.parkId;
     document.title=`TDRoute — ${park.name}`;
     const copy=PARK_COPY[state.parkId]||PARK_COPY.land;
-    $('pageTitle').innerHTML=`<span>${copy[0]}</span><em>${copy[1]}</em>`;
+    $('pageTitle').innerHTML=`<span>${copy[0].replace('イマジネーション','<span class="unbroken">イマジネーション</span>')}</span><em>${copy[1]}</em>`;
     $('landTab').setAttribute('aria-selected',String(state.parkId==='land'));$('seaTab').setAttribute('aria-selected',String(state.parkId==='sea'));
     $('landTab').tabIndex=state.parkId==='land'?0:-1;$('seaTab').tabIndex=state.parkId==='sea'?0:-1;
     $('officialMapLink').href=park.mapUrl || park.officialUrl;$('officialParkLink').href=park.officialUrl;
@@ -329,7 +329,7 @@ export function initialiseApp() {
     const percent=Number(c.percent)||0;
     $('resultSummary').innerHTML=`<div class="metric"><strong>${Math.round(percent)}<small>%</small></strong><span>希望の重要度を反映</span></div><div class="metric"><strong>${escapeHtml(c.count ?? result.visits?.length ?? 0)}<small> / ${escapeHtml(c.totalCount ?? state.settings.selections.length)}</small></strong><span>予定に入った希望</span></div><div class="metric"><strong>${(Number(t.walkingMetres||0)/1000).toFixed(1)}<small> km</small></strong><span>歩く距離の目安</span></div><div class="metric"><strong>${Math.round(Number(t.cost)||0).toLocaleString('ja-JP')}<small>円</small></strong><span>予定の支出合計</span></div>`;
     const planSettings=result.settings||state.settings;
-    $('resultExplanation').textContent=result.status==='feasible'?`${state.resultDirty?'条件を変更しています。現在の希望で再探索してください。 ':''}${planSettings.date} ${timeText(planSettings.entry)}–${timeText(planSettings.exit)} の計画。重要度 ${c.weight ?? t.score ?? 0} / ${c.totalWeight ?? 0}。フード ${money(t.foodCost)} · DPA ${money(t.dpaCost)} · お土産 ${money(t.shoppingCost)}。残り ${money(t.budgetRemaining)}（お土産への配分 ${money(t.souvenirAllocation)}）。`:'時間や予算に収まる計画が見つかりませんでした。必須の希望・食事の時間帯・公演枠を見直してください。';
+    $('resultExplanation').textContent=result.status==='feasible'?`${state.resultDirty?'条件を変更しています。現在の希望で再探索してください。 ':''}${planSettings.date} ${timeText(planSettings.entry)}–${timeText(planSettings.exit)} · フード ${money(t.foodCost)} · DPA ${money(t.dpaCost)} · お土産 ${money(t.shoppingCost)}。残り ${money(t.budgetRemaining)}${t.souvenirAllocation?` · お土産へ ${money(t.souvenirAllocation)}`:''}。`:'時間や予算に収まる計画が見つかりませんでした。必須の希望・食事の時間帯・公演枠を見直してください。';
     $('timeline').innerHTML=(result.rows||[]).map((row,index)=>{
       const kind=row.kind||row.type||'activity',a=byId(row.activityId),duration=Number(row.end)-Number(row.start);
       const name=row.name || ({walk:'徒歩で移動',wait:'時間を調整',queue:'待ち列',rest:'ひと休み',exit:'退園へ'}[kind]) || a?.name || '予定';
@@ -393,7 +393,7 @@ export function initialiseApp() {
     const extra=Number($('contingencyDelay').value),profile=contingencySettings(state.result.settings||state.settings,extra);
     contingencyBase=state.result;const request=++contingencyRequest;
     const initialPlan=profile.replanFrom!=null?state.result:null;
-    contingencyWorker=new Worker(new URL('./planner-worker.js',import.meta.url),{type:'module'});
+    contingencyWorker=new Worker(new URL('./planner-worker.js?v=1.7.0',import.meta.url),{type:'module'});
     $('searchContingency').disabled=true;$('cancelContingency').hidden=false;
     $('contingencyStatus').textContent=`通常の待ち列がさらに${extra}分長い場合を探索しています。`;
     contingencyWorker.onmessage=event=>{
@@ -434,7 +434,7 @@ export function initialiseApp() {
     if(preparingRequest!==requestId)return;
     preparation=null;state.settings=prepared;if(state.result){state.resultDirty=true;renderResult();}writeSettings();externalPanel?.refresh();
     searchStarted=performance.now();
-    try{worker=new Worker(new URL('./planner-worker.js',import.meta.url),{type:'module'});}catch(error){stopSearch();throw error;}
+    try{worker=new Worker(new URL('./planner-worker.js?v=1.7.0',import.meta.url),{type:'module'});}catch(error){stopSearch();throw error;}
     $('solveButton').disabled=true;$('cancelSearch').hidden=false;$('searchProgress').hidden=false;$('progressBar').value=0;$('progressText').textContent='最初の計画を探しています…';
     const thisRequest=requestId;
     worker.onmessage=event=>{
