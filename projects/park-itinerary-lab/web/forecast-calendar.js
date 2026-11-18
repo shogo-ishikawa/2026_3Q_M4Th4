@@ -1,14 +1,14 @@
-import {forecastDateRange} from './weather.js?v=1.16.0';
+import {forecastDateRange} from './weather.js?v=1.16.1';
 
 const weatherStatus = {
-  confirmed: {mark:'●', label:'予報確認済み'},
-  eligible: {mark:'○', label:'取得対象'},
-  outside: {mark:'−', label:'取得対象外'}
+  confirmed: {mark:'●', label:'予報あり'},
+  eligible: {mark:'○', label:'未取得'},
+  outside: {mark:'−', label:'期間外'}
 };
 const crowdStatus = {
-  model: {mark:'◆', label:'学習予測'},
-  calendar: {mark:'◇', label:'暦の目安'},
-  pending: {mark:'…', label:'判定中'}
+  model: {mark:'◆', label:'過去の待ち時間から予想'},
+  calendar: {mark:'◇', label:'曜日・祝日から予想'},
+  pending: {mark:'…', label:'確認中'}
 };
 
 function dateKey(day) {
@@ -20,6 +20,11 @@ function asDate(key) {
 function shortDate(key) {
   const [,month,day] = key.split('-');
   return Number(month) + '/' + Number(day);
+}
+const visitDayLabel = new Intl.DateTimeFormat('ja-JP', {month:'long',day:'numeric',timeZone:'UTC'});
+function visitDay(date) {
+  const day = asDate(date);
+  return visitDayLabel.format(day) + '（' + '日月火水木金土'[day.getUTCDay()] + '）';
 }
 function moveDate(key, days, months = 0) {
   const day = asDate(key);
@@ -35,16 +40,17 @@ function moveDate(key, days, months = 0) {
   return day.getUTCFullYear() >= 1 && day.getUTCFullYear() <= 9999 ? dateKey(day) : key;
 }
 
-/** The text input keeps the selected date. The calendar only commits on activation. */
-export function createForecastCalendar({getCoverage, onOpen, today = () => forecastDateRange().startDate}) {
+/** The grid previews a candidate. Only the confirmation button changes the plan. */
+export function createForecastCalendar({getCoverage, getPreview, getChangeNotice, onOpen, today = () => forecastDateRange().startDate}) {
   const byId = id => document.getElementById(id);
   const input = byId('visitDate'), opener = byId('openForecastCalendar'), dialog = byId('forecastCalendarDialog');
-  const grid = byId('forecastCalendarDays'), detail = byId('forecastCalendarDetail');
+  const grid = byId('forecastCalendarDays'), confirm = byId('confirmForecastDate');
   let cursor;
 
   function describe(button) {
     const {date, weather, crowd} = button.dataset;
-    return shortDate(date) + '　天気 ' + weatherStatus[weather].label + '　混雑 ' + crowdStatus[crowd].label;
+    const current = date === input.value ? '、現在の訪問日' : '';
+    return visitDay(date) + current + '、天気予報 ' + weatherStatus[weather].label + '、混雑 ' + crowdStatus[crowd].label;
   }
 
   function makeDay(date, todayKey) {
@@ -74,6 +80,19 @@ export function createForecastCalendar({getCoverage, onOpen, today = () => forec
     return grid.querySelector('[data-date="' + cursor + '"]');
   }
 
+  function updatePreview() {
+    const {weather, crowd, ticket} = getPreview(cursor);
+    byId('calendarPreviewWeather').textContent = weather.label;
+    byId('calendarPreviewWeatherDetail').textContent = weather.detail;
+    byId('calendarPreviewCrowd').textContent = crowd.label;
+    byId('calendarPreviewCrowdDetail').textContent = crowd.detail;
+    byId('calendarPreviewTicket').textContent = ticket ?? '料金未確認';
+    const notice = byId('calendarDateNotice');
+    notice.textContent = cursor !== input.value ? getChangeNotice?.(cursor) || '' : '';
+    notice.hidden = !notice.textContent;
+    confirm.textContent = visitDay(cursor) + 'を訪問日にする';
+  }
+
   function render() {
     const first = asDate(cursor.slice(0,7) + '-01');
     const end = new Date(first);
@@ -90,27 +109,30 @@ export function createForecastCalendar({getCoverage, onOpen, today = () => forec
         const cell = row.insertCell(), number = week * 7 + weekday - firstWeekday + 1;
         if (number < 1 || number > monthLength) continue;
         const date = dateKey(first).slice(0,8) + String(number).padStart(2,'0');
-        cell.setAttribute('aria-selected', String(date === input.value));
+        cell.setAttribute('aria-selected', String(date === cursor));
+        if (date === input.value) cell.className = 'current-visit';
         cell.append(makeDay(date, todayKey));
       }
       fragment.append(row);
     }
     grid.replaceChildren(fragment);
-    detail.textContent = describe(cursorButton());
+    updatePreview();
     const range = forecastDateRange(todayKey + 'T12:00:00+09:00');
-    byId('forecastCalendarRange').textContent = '天気の取得対象　' + shortDate(range.startDate) + '〜' + shortDate(range.endDate);
+    byId('forecastCalendarRange').textContent = '天気を調べられる期間　' + shortDate(range.startDate) + '〜' + shortDate(range.endDate);
     byId('forecastCalendarPending').hidden = !grid.querySelector('[data-crowd="pending"]');
   }
 
   function moveCursor(next, focus = true) {
     const changeMonth = next.slice(0,7) !== cursor.slice(0,7);
     const old = cursorButton();
-    if (old) old.tabIndex = -1;
+    old.tabIndex = -1;
+    old.parentElement.setAttribute('aria-selected','false');
     cursor = next;
     if (changeMonth) render();
+    else updatePreview();
     const button = cursorButton();
     button.tabIndex = 0;
-    detail.textContent = describe(button);
+    button.parentElement.setAttribute('aria-selected','true');
     if (focus) button.focus();
   }
   function refresh() {
@@ -124,7 +146,9 @@ export function createForecastCalendar({getCoverage, onOpen, today = () => forec
   opener.hidden = false;
   input.classList.add('has-forecast-calendar');
   opener.addEventListener('click', () => {
-    cursor = /^\d{4}-\d{2}-\d{2}$/.test(input.value) ? input.value : today();
+    const selected = /^\d{4}-\d{2}-\d{2}$/.test(input.value) ? input.value : null;
+    cursor = selected || today();
+    byId('forecastCalendarCurrent').textContent = selected ? selected.slice(0,4) + '年' + visitDay(selected) : input.value || '未設定';
     render();
     dialog.showModal();
     cursorButton().focus();
@@ -136,10 +160,12 @@ export function createForecastCalendar({getCoverage, onOpen, today = () => forec
   byId('nextForecastMonth').addEventListener('click', () => moveCursor(moveDate(cursor,0,1),false));
   grid.addEventListener('click', event => {
     const date = event.target.closest('button[data-date]')?.dataset.date;
-    if (!date) return;
+    if (date) moveCursor(date);
+  });
+  confirm.addEventListener('click', () => {
     dialog.close();
-    if (date !== input.value) {
-      input.value = date;
+    if (cursor !== input.value) {
+      input.value = cursor;
       input.dispatchEvent(new Event('change', {bubbles:true}));
     }
   });

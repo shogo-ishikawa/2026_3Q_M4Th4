@@ -2,6 +2,7 @@
 from datetime import datetime, timedelta
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+import base64
 import json
 from pathlib import Path
 from threading import Thread
@@ -41,20 +42,29 @@ def activity_rows(plan):
 
 def check_forecast_calendar(page):
     date = page.locator('#visitDate')
-    opener = page.get_by_role('button', name='予報カレンダー')
+    opener = page.get_by_role('button', name='訪問日を選ぶ')
     opener.click()
-    dialog = page.get_by_role('dialog', name='予報カレンダー')
+    dialog = page.get_by_role('dialog', name='訪問日を選ぶ')
     expect(dialog).to_be_visible()
     expect(dialog.locator('[aria-current="date"]')).to_be_focused()
     expect(dialog.locator('#forecastCalendarRange')).to_contain_text('11/19〜12/4')
     dialog.locator('#nextForecastMonth').click()
-    expect(dialog.locator('[data-date="2026-12-05"]')).to_have_attribute('data-weather', 'outside')
+    outside = dialog.locator('[data-date="2026-12-05"]')
+    expect(outside).to_have_attribute('data-weather', 'outside')
+    outside.click()
+    expect(dialog.locator('#confirmForecastDate')).to_have_text('12月5日（土）を訪問日にする')
     expect(date).to_have_value('2026-11-19')
     page.keyboard.press('Escape')
     expect(dialog).not_to_be_visible()
     expect(opener).to_be_focused()
     opener.click()
     page.keyboard.press('ArrowRight')
+    page.keyboard.press('Enter')
+    expect(date).to_have_value('2026-11-19')
+    expect(dialog.locator('#calendarPreviewCrowd')).not_to_be_empty()
+    page.keyboard.press('Tab')
+    confirm = dialog.get_by_role('button', name='11月20日（金）を訪問日にする')
+    expect(confirm).to_be_focused()
     page.keyboard.press('Enter')
     expect(date).to_have_value('2026-11-20')
     expect(dialog).not_to_be_visible()
@@ -64,7 +74,10 @@ def check_forecast_calendar(page):
 def check_forecast_panel(page):
     ticket = page.locator('#dayTicketPrice')
     expect(ticket).to_have_text('10,900円')
-    page.locator('#seaTab').click()
+    page.locator('#landTab').focus()
+    page.keyboard.press('ArrowRight')
+    expect(page.locator('#seaTab')).to_be_focused()
+    expect(page.locator('#seaTab')).to_have_attribute('aria-selected', 'true')
     page.locator('#visitDate').fill('2026-11-21')
     expect(ticket).to_have_text('12,400円')
     page.locator('#visitDate').fill('2028-01-15')
@@ -112,6 +125,37 @@ def check_forecast_panel(page):
     expect(report).to_have_attribute('href', 'accuracy.html?date=2026-11-18&park=land')
 
 
+def check_share_edits(page):
+    share = page.locator('#sharePlan')
+    panel = page.locator('#sharePanel')
+    link = page.locator('#shareUrl')
+    date = page.locator('#visitDate')
+    share.click()
+    expect(page.locator('#copyShare')).to_be_focused()
+    date.fill('2026-11-20')
+    expect(panel).to_be_hidden()
+    expect(link).to_have_value('')
+    share.click()
+    page.evaluate("""Object.defineProperty(navigator, 'clipboard', {
+        configurable: true, value: {writeText: async value => { window.copiedPlan = value; }}
+    })""")
+    page.locator('#copyShare').click()
+    copied = page.evaluate('window.copiedPlan')
+    assert copied == link.input_value()
+    encoded = copied.split('#plan=')[1]
+    shared = json.loads(base64.urlsafe_b64decode(encoded + '=' * (-len(encoded) % 4)))
+    assert shared['settings']['date'] == '2026-11-20'
+    assert shared['parkId'] == 'land'
+    page.locator('#seaTab').click()
+    expect(panel).to_be_hidden()
+    share.click()
+    share.click()
+    expect(share).to_have_attribute('aria-expanded', 'false')
+    expect(panel).to_be_hidden()
+    page.locator('#landTab').click()
+    date.fill('2026-11-19')
+
+
 def check_mobile(page, url):
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
@@ -121,12 +165,16 @@ def check_mobile(page, url):
     page.goto(url + '/park-itinerary-lab/')
     expect(page.locator('#solveButton')).to_be_enabled(timeout=30_000)
     expect(page.locator('#visitDate')).to_have_value('2026-11-19')
+    check_share_edits(page)
     check_forecast_calendar(page)
     check_forecast_panel(page)
     page.reload()
     expect(page.locator('#solveButton')).to_be_enabled(timeout=30_000)
     expect(page.locator('#sourcePanel #visitDayFactSources a[href*="accuracy.html"]')).to_have_count(0)
 
+    page.locator('#jumpToWishes').click()
+    expect(page.locator('#selectionTitle')).to_be_focused()
+    expect(page.locator('#workflowWishlistTab')).to_have_attribute('aria-selected', 'true')
     page.get_by_role('searchbox', name='施設名やエリアで検索').fill('カリブの海賊')
     ride = page.locator('#catalogue button[data-add]')
     expect(ride).to_have_count(1)

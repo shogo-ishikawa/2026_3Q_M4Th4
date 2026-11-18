@@ -321,16 +321,21 @@ export function forecastCacheLabel(forecast){
   return '取得完了';
 }
 
+/** Both browsing and selecting a day use the forecast for the same visit hours. */
+export function weatherProfileForVisit(forecast,settings) {
+  if(forecast.date!==settings.date)throw new Error('指定した日付と予報の日付が一致しません。');
+  const duringVisit=forecast.hours.filter(hour=>weatherRowInterval(hour,settings.date,settings.entry,settings.exit));
+  if(!duringVisit.length)throw new Error('滞在時間帯の予報がありません。');
+  if(forecast.provider!=='jma'&&!duringVisit.some(row=>Number.isFinite(row.temperature)))throw new Error('気温を含む予報を取得できませんでした。');
+  return summarise(forecast,duringVisit);
+}
+
 export async function prepareWeatherForVisit(settings,park,{signal,fetchWeatherImpl=fetchWeather}={}){
   const clean={...settings,weatherForecast:null};
   if(settings.weatherMode==='manual')return {...clean,weatherMode:'manual',weatherNotice:'天気は手動の設定を使います。'};
   try{
     const forecast=await fetchWeatherImpl(settings.date,{signal,park});checkAbort(signal);
-    if(forecast.date!==settings.date)throw new Error('指定した日付と予報の日付が一致しません。');
-    const duringVisit=forecast.hours.filter(hour=>weatherRowInterval(hour,settings.date,settings.entry,settings.exit));
-    if(!duringVisit.length)throw new Error('滞在時間帯の予報がありません。');
-    if(forecast.provider!=='jma'&&!duringVisit.some(row=>Number.isFinite(row.temperature)))throw new Error('気温を含む予報を取得できませんでした。');
-    const profile=summarise(forecast,duringVisit);
+    const profile=weatherProfileForVisit(forecast,settings);
     return {...clean,weatherMode:'auto',weather:profile.weather,weatherForecast:profile,weatherNotice:`天気予報を取得しました（${settings.date}・${forecastSourceLabel(profile)}）。滞在中の予報を計画に反映します。${forecastCacheLabel(profile)}。${profile.provider==='jma'?'天気は3時間または日単位、降水確率は6時間または日単位です。降水量は未提供です。':''}`};
   }catch(error){
     if(signal?.aborted||error.name==='AbortError')throw error;

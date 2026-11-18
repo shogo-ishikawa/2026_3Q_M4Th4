@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {WAIT_BASE_FEATURE_NAMES} from '../web/calendar-features.js';
-import {calendarDayOutlook} from '../web/calendar-outlook.js';
+import {calendarDayOutlook, calendarDayPreview, CROWD_LABELS} from '../web/calendar-outlook.js';
+import {cachedForecastForDate, prepareWeatherForVisit, warmCalendarWeather} from '../web/weather.js?v=1.16.1';
 import {estimateParkCrowd} from '../web/wait-model.js';
 import {solveItinerary,validatePlan} from '../web/planner.js';
 
@@ -76,4 +77,36 @@ test('walking and unmodelled queues apply the park index once, and forecast or m
   const old=solveItinerary(park,{...s,crowdLevel:'quiet'});
   assert.equal(old.diagnostics.crowdEstimate,undefined);
   assert.equal(queue(old).estimatedMinutes,36);
+});
+
+test('a highlighted date uses its cached visit weather and matches the confirmed plan without new requests', async () => {
+  const now=Date.parse('2026-11-19T01:00Z'), date='2026-11-22', fetchedAt=new Date(now).toISOString();
+  const model=testModel(1);
+  model.coefficients[model.featureNames.indexOf('rain')]=1;
+  const original=settings({weatherMode:'auto',weather:'sun',waitModel:model,
+    weatherForecast:{date:'2026-11-21',weather:'sun'},entry:780,exit:840});
+  const unchanged=structuredClone(original);
+  // Rain covers the chosen visit. The crowd estimator also samples hours before and after it.
+  const hourly={time:[date+'T01:00',date+'T13:00'],temperature_2m:[19,10],weather_code:[0,61]};
+  const fetch=globalThis.fetch;
+  let calls=0;
+  try {
+    globalThis.fetch=async()=>{
+      calls++;
+      return {ok:true,json:async()=>({schemaVersion:1,providers:{'open-meteo':{fetchedAt,data:{hourly}}}})};
+    };
+    await warmCalendarWeather({now});
+    const preview=calendarDayPreview(park,original,date,{now});
+    assert.equal(preview.weather.label,'雨');
+    assert.match(preview.weather.detail,/10℃/);
+    const confirmed=await prepareWeatherForVisit({...original,date},park,{fetchWeatherImpl:async()=>cachedForecastForDate(date,now)});
+    assert.equal(preview.crowd.label,CROWD_LABELS[estimateParkCrowd(park,confirmed).level]);
+    assert.equal(preview.crowd.label,'混み合う');
+    assert.match(preview.crowd.detail,/過去の待ち時間/);
+    const uncovered=calendarDayPreview(park,{...original,entry:660,exit:720},date,{now});
+    assert.equal(uncovered.weather.label,'予報未取得');
+    assert.equal(uncovered.crowd.label,'ふつう');
+    assert.equal(calls,1);
+    assert.deepEqual(original,unchanged);
+  } finally { globalThis.fetch=fetch; }
 });

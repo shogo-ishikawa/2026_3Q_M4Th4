@@ -1,4 +1,4 @@
-import {forecastDateInRange, usableWeatherForecast, weatherRowInterval} from './weather.js?v=1.16.0';
+import {forecastDateInRange, usableWeatherForecast, weatherRowInterval} from './weather.js?v=1.16.1';
 
 /** Compact forecast cards. Original periods and provenance remain in the details. */
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
