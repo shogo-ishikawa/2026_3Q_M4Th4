@@ -40,6 +40,11 @@ def activity_rows(plan):
 
 
 def check_forecast_panel(page):
+    expect(page.locator('#dayBudget')).to_have_text('12,000円')
+    page.get_by_text('予算とお金の使い方', exact=True).click()
+    page.locator('#budget').fill('14000')
+    page.locator('#budget').press('Tab')
+    expect(page.locator('#dayBudget')).to_have_text('14,000円')
     page.locator('#forecastPanel > summary').click()
     expect(page.locator('#crowdOutlookValue')).to_be_visible()
     expect(page.locator('#forecastPanel a')).to_have_count(0)
@@ -50,6 +55,12 @@ def check_forecast_panel(page):
     page.locator('#weatherMode').select_option('manual')
     expect(page.locator('#weather')).to_be_visible()
     page.locator('#weather').select_option('rain')
+    expect(page.locator('#dayWeatherValue')).to_have_text('雨')
+    expect(page.locator('#dayWeatherDetail')).to_have_text('手動設定')
+    page.locator('#crowdLevel').select_option('busy')
+    expect(page.locator('#dayCrowdTitle')).to_have_text('混雑の想定')
+    expect(page.locator('#dayCrowdValue')).to_have_text('混み合う')
+    expect(page.locator('#dayCrowdSource')).to_have_text('手動')
     page.locator('#weatherMode').select_option('auto')
     expect(page.locator('#manualWeatherField')).to_be_hidden()
     expect(page.locator('#weather')).to_be_disabled()
@@ -63,6 +74,8 @@ def check_forecast_panel(page):
     expect(page.locator('#weatherMode')).to_have_value('manual')
     expect(page.locator('#weather')).to_be_enabled()
     expect(page.locator('#weather')).to_have_value('rain')
+    expect(page.locator('#dayWeatherValue')).to_have_text('雨')
+    expect(page.locator('#dayBudget')).to_have_text('10,000円')
     report = page.locator('#sourcePanel #visitDayFactSources a[href*="accuracy.html"]')
     expect(report).to_have_attribute('href', 'accuracy.html?date=2026-11-18&park=land')
 

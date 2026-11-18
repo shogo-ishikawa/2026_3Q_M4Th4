@@ -9,13 +9,28 @@ const memory=new WeakMap();
 const labels={sun:'晴れ',cloud:'曇り',rain:'雨・雪の可能性'};
 const icons={sun:'☀',cloud:'☁',rain:'☂'};
 const dateOf=value=>new Date(new Date(value).getTime()+9*3600000).toISOString().slice(0,10);
-const validDate=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&new Date(value+'T12:00Z').toISOString().slice(0,10)===value;
+export function forecastDateInRange(date,now=Date.now()) {
+  const time=new Date(now).getTime();
+  if(!Number.isFinite(time)||typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(date))return false;
+  const day=Date.parse(date+'T12:00Z');
+  return Number.isFinite(day)&&new Date(day).toISOString().startsWith(date)&&date>=dateOf(time)&&date<=dateOf(time+15*86400000);
+}
 const numeric=(value,min=-Infinity,max=Infinity)=>typeof value==='number'&&Number.isFinite(value)&&value>=min&&value<=max?value:null;
 const jmaNumber=(value,min,max)=>value!==''&&value!==null&&value!==undefined?numeric(Number(value),min,max):null;
 const minuteOf=value=>Number(value.slice(11,13))*60+Number(value.slice(14,16));
 const clock=value=>`${String(Math.floor(value/60)).padStart(2,'0')}:${String(value%60).padStart(2,'0')}`;
 const interval=(start,end)=>`${clock(start)}〜${clock(end)}`;
 const weatherFromCode=code=>code===0?'sun':code<=3||code===45||code===48?'cloud':'rain';
+function openMeteoLabel(code) {
+  if (code === 0) return '晴れ';
+  if (code === 1) return 'おおむね晴れ';
+  if (code === 2 || code === 3) return 'くもり';
+  if (code === 45 || code === 48) return '霧';
+  if ([71,73,75,77,85,86].includes(code)) return '雪';
+  if ([95,96,99].includes(code)) return '雷雨';
+  if ([51,53,55,56,57,61,63,65,66,67,80,81,82].includes(code)) return '雨';
+  return labels[weatherFromCode(code)];
+}
 const jmaWeather=code=>String(code).startsWith('1')?'sun':String(code).startsWith('2')?'cloud':'rain';
 const weatherFromText=text=>/雨|雪/.test(text)?'rain':/晴/.test(text)?'sun':'cloud';
 const aggregate=rows=>rows.some(row=>row.weather==='rain')?'rain':rows.some(row=>row.weather==='cloud')?'cloud':'sun';
@@ -65,7 +80,7 @@ export function normaliseOpenMeteo(data,date,{fetchedAt=new Date().toISOString()
     // Accumulations/probabilities are end-labelled by Open-Meteo. The exact
     // following timestamp supplies this row's containing hour, without interpolation.
     const next=indexByTime.get(instant+3600000),period=interval(minute,minute+60);
-    hours.push({time,minute,endMinute:minute+60,weather:weatherFromCode(code),temperature,
+    hours.push({time,minute,endMinute:minute+60,weather:weatherFromCode(code),label:openMeteoLabel(code),temperature,
       precipitation:numeric(hourly.precipitation?.[next],0,500),precipitationProbability:numeric(hourly.precipitation_probability?.[next],0,100),
       weatherPeriodLabel:`${clock(minute)}時点・1時間ごと`,temperaturePeriodLabel:`${clock(minute)}時点`,probabilityPeriodLabel:period+'（1時間）',precipitationPeriodLabel:period+'（1時間雨量）'});
   }
@@ -127,11 +142,14 @@ function cacheFor(fetchImpl){let cache=memory.get(fetchImpl);if(!cache){cache=ne
 function storedForecast(date,now){
   try{
     const data=JSON.parse(globalThis.sessionStorage?.getItem(CACHE_KEY)||'null');
-    return usable(data?.[date],date,now)?data[date]:null;
+    return usableWeatherForecast(data?.[date],date,now)?data[date]:null;
   }catch{return null;}
 }
-function usable(forecast,date,now){
-  return forecast?.date===date&&['open-meteo','jma'].includes(forecast.provider)&&ageOf(forecast.fetchedAt,now)<=MAX_AGE_MS&&Array.isArray(forecast.hours)&&forecast.hours.length>0&&forecast.hours.length<=48&&forecast.hours.every(row=>Number.isInteger(row.minute)&&row.minute>=0&&row.minute<1440&&['sun','cloud','rain'].includes(row.weather));
+export function usableWeatherForecast(forecast,date,now){
+  if (!forecast || forecast.date !== date || !['open-meteo','jma'].includes(forecast.provider)) return false;
+  if (ageOf(forecast.fetchedAt,now) > MAX_AGE_MS || (forecast.provider === 'jma' && ageOf(forecast.issuedAt,now) > 36*3600000)) return false;
+  return Array.isArray(forecast.hours) && forecast.hours.length > 0 && forecast.hours.length <= 48 &&
+    forecast.hours.every(row => Number.isInteger(row?.minute) && row.minute >= 0 && row.minute < 1440 && ['sun','cloud','rain'].includes(row.weather));
 }
 function saveForecast(cache,forecast,now,persist){
   const saved={...clone(forecast),cacheStoredAt:new Date(now).toISOString()};
@@ -139,7 +157,7 @@ function saveForecast(cache,forecast,now,persist){
   if(!persist)return;
   try{
     const previous=JSON.parse(globalThis.sessionStorage?.getItem(CACHE_KEY)||'{}'),kept={};
-    for(const [date,value] of Object.entries(previous))if(usable(value,date,now))kept[date]=value;
+    for(const [date,value] of Object.entries(previous))if(usableWeatherForecast(value,date,now))kept[date]=value;
     kept[forecast.date]=saved;globalThis.sessionStorage?.setItem(CACHE_KEY,JSON.stringify(kept));
   }catch{/* A full or disabled session store does not prevent planning. */}
 }
@@ -167,9 +185,9 @@ export function weatherFromPublishedCache(data,date,now,{strictAsOf=false}={}){
 /** A selected-day request, a server cache, then an independent JMA fallback; each has a short deadline. */
 export async function fetchWeather(date,{signal,fetchImpl=fetch,now=Date.now(),timeoutMs=4500,useSessionCache=fetchImpl===globalThis.fetch}={}) {
   now=new Date(now).getTime();checkAbort(signal);
-  if(!validDate(date)||date<dateOf(now)||date>dateOf(now+15*86400000))throw new RangeError('天気予報は今日から15日先まで取得できます。それ以外の日は天気を選んでください。');
+  if(!forecastDateInRange(date,now))throw new RangeError('天気予報は今日から15日先まで取得できます。それ以外の日は天気を選んでください。');
   const cache=cacheFor(fetchImpl),previous=cache.get(date)||(useSessionCache?storedForecast(date,now):null);
-  if(usable(previous,date,now)&&ageOf(previous.cacheStoredAt||previous.fetchedAt,now)<FRESH_MS)return cacheResult(previous,now);
+  if(usableWeatherForecast(previous,date,now)&&ageOf(previous.cacheStoredAt||previous.fetchedAt,now)<FRESH_MS)return cacheResult(previous,now);
   const options={signal,fetchImpl,now,timeoutMs:Math.min(8000,Math.max(10,timeoutMs))};
   const url='https://api.open-meteo.com/v1/forecast?latitude=35.632&longitude=139.883&hourly=temperature_2m,precipitation,precipitation_probability,weather_code&start_date='+date+'&end_date='+date+'&timezone=Asia%2FTokyo';
   const requestController=new AbortController(),abort=()=>requestController.abort();
@@ -196,7 +214,7 @@ export async function fetchWeather(date,{signal,fetchImpl=fetch,now=Date.now(),t
       }
     }
     if(!forecast){
-      if(usable(previous,date,now))return {...cacheResult(previous,now,true),refreshFailure:firstError?.message||'通信失敗'};
+      if(usableWeatherForecast(previous,date,now))return {...cacheResult(previous,now,true),refreshFailure:firstError?.message||'通信失敗'};
       throw firstError||new Error('天気予報を取得できませんでした。');
     }
     checkAbort(signal);saveForecast(cache,forecast,now,useSessionCache);return clone(forecast);

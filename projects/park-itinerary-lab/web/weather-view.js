@@ -1,7 +1,79 @@
+import {forecastDateInRange, usableWeatherForecast} from './weather.js?v=1.15.1';
+
 /** Compact forecast cards. Original periods and provenance remain in the details. */
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const clock = minute => `${String(Math.floor(minute / 60)).padStart(2, '0')}:${String(minute % 60).padStart(2, '0')}`;
 const sourceName = info => ({'jma':'気象庁','open-meteo':'Open-Meteo'}[info.provider] || info.provider || '出典未提供');
+
+const conditionNames = {sun:'晴れ', cloud:'くもり', rain:'雨'};
+function conditionOf(row) {
+  if (typeof row.label === 'string' && row.label.trim()) return row.label.trim().replace(/\s+/g, ' ');
+  return row.weather === 'rain' ? '雨・雪' : conditionNames[row.weather];
+}
+
+function forecastTemperatures(rows, provider, entry, exit) {
+  if (provider === 'jma') {
+    // These extrema describe the day at the JMA station, including hours outside the visit.
+    const {temperatureMin, temperatureMax} = rows[0];
+    const extrema = [Number.isFinite(temperatureMin) && `日最低${temperatureMin}℃`,
+      Number.isFinite(temperatureMax) && `日最高${temperatureMax}℃`].filter(Boolean);
+    if (extrema.length) return extrema.join(' / ');
+  }
+  const points = new Map();
+  for (const row of rows) {
+    const at = provider === 'jma' ? row.temperatureAtMinute : row.minute;
+    if (Number.isInteger(at) && at >= entry && at < exit && Number.isFinite(row.temperature)) points.set(at, row.temperature);
+  }
+  if (!points.size) return '';
+  if (points.size === 1) {
+    const [[at, value]] = points;
+    return `${clock(at)} ${value}℃`;
+  }
+  const low = Math.min(...points.values()), high = Math.max(...points.values());
+  return `予報気温 ${low === high ? low : low + '〜' + high}℃`;
+}
+
+/** Summarise the forecast already used by the visit outlook, in Japan time. */
+export function visitWeatherSummary(settings, {pending = false, now = Date.now()} = {}) {
+  const {date, entry, exit, weatherForecast:forecast} = settings;
+  const manual = conditionNames[settings.weather];
+  if (settings.weatherMode === 'manual') return {label:manual || '未設定', detail:'手動設定'};
+  const fallback = manual ? `計画は${manual}で仮定` : '';
+  if (!forecastDateInRange(date, now)) return {label:'予報の対象外', detail:fallback};
+  if (pending) return {label:'確認中…', detail:''};
+  if (!usableWeatherForecast(forecast, date, now)) return {label:'予報未取得', detail:fallback};
+
+  let coveredTo = entry, gap = false;
+  const rows = [], changes = [];
+  for (const row of [...forecast.hours].sort((a,b) => a.minute - b.minute)) {
+    // Some JMA daily bulletins start mid-day. Their lookup rows before release do not cover the morning.
+    const start = Math.max(entry, row.minute, row.weatherFromMinute ?? 0);
+    const end = Math.min(exit, row.endMinute ?? row.minute + 60, row.weatherToMinute ?? 1440);
+    if (start >= end || (row.time && !String(row.time).startsWith(date + 'T'))) continue;
+    if (start > coveredTo) gap = true;
+    coveredTo = Math.max(coveredTo, end);
+    rows.push(row);
+    const label = conditionOf(row);
+    if (label !== changes.at(-1)?.label) changes.push({label, start});
+  }
+  if (!rows.length) return {label:'滞在中の予報なし', detail:fallback};
+  const partial = gap || coveredTo < exit;
+  // A daily JMA bulletin can cover the same hours as a more detailed product.
+  // Do not present repeated copies of the bulletin as hourly weather changes.
+  const daily = forecast.provider === 'jma' && rows.find(row => row.weatherPeriodLabel?.includes('日予報'));
+  const sequence = changes.map(change => change.label);
+  let label = [...new Set(sequence)].join('・');
+  if (daily) label = conditionOf(daily);
+  else if (!partial && sequence.length <= 3) label = sequence.join('のち');
+  const detail = [];
+  if (daily) detail.push('日予報');
+  if (partial) detail.push('一部時間帯のみ');
+  if (!daily && !partial && changes.length === 2) detail.push(`${clock(changes[1].start)}から${changes[1].label}`);
+  const temperatures = forecastTemperatures(rows, forecast.provider, entry, exit);
+  if (temperatures) detail.push(temperatures);
+  if (forecast.stale) detail.push('前回取得の予報');
+  return {label, detail:detail.join(' · ')};
+}
 
 export function compactPeriod(label) {
   if (!label || label === '未提供') return '';
