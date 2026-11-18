@@ -12,6 +12,8 @@ from pathlib import Path
 import re
 import subprocess
 
+from issued_training_inputs import with_issued_inputs
+
 PROJECT = Path(__file__).resolve().parents[1]
 QUEUE_SOURCE = {"name": "Queue-Times.com", "url": "https://queue-times.com/", "kind": "collected-live-observations", "attribution": "Powered by Queue-Times.com"}
 
@@ -42,7 +44,7 @@ def fit_summary(candidate):
     """Keep the evidence for a candidate separately from the model used for predictions."""
     fields = ("trainedAt", "beforeDate", "firstDate", "lastDate", "days", "samples",
               "minDays", "minSamples", "status", "usable", "validation",
-              "visitFactorSupport", "visitFactors", "visitFactorValidation")
+              "visitFactorSupport", "visitFactors", "visitFactorValidation", "issuedInputCoverage")
     return {key: candidate[key] for key in fields if key in candidate}
 
 
@@ -50,6 +52,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--observations", type=Path)
     parser.add_argument("--history-dir", type=Path)
+    parser.add_argument("--forecast-dir", type=Path, help="Frozen daily forecasts with their hourly inputs")
     parser.add_argument("--catalogue", type=Path, default=PROJECT / "web/data/parks.json")
     parser.add_argument("--calendar", type=Path)
     parser.add_argument("--source-metadata", type=Path)
@@ -62,6 +65,7 @@ def main():
     observations, sources = load_observations(args.observations) if args.observations else ([], [])
     archived, archive_sources = load_history(args.history_dir)
     observations.extend(archived)
+    observations = with_issued_inputs(observations, args.forecast_dir)
     sources.extend(archive_sources)
     if any(row.get("source") == "queue-times" for row in observations if isinstance(row, dict)):
         sources.append(QUEUE_SOURCE)

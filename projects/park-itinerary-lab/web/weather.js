@@ -111,6 +111,8 @@ export function normaliseJma(forecast,series,date,{fetchedAt=new Date().toISOStr
     const chance=popIndex>=0?jmaNumber(pops?.pops?.[popIndex],0,100):jmaNumber(weekly?.[0]?.areas?.[0]?.pops?.[weekIndex],0,100);
     hours.push({time:`${date}T${clock(minute)}`,minute,endMinute:minute+60,weather:weatherBand?weatherFromText(weatherBand.text):jmaWeather(code),
       label:weatherBand?.text||(shortIndex>=0?daily.weathers?.[index]:null)||labels[jmaWeather(code)],temperature:point?.temperature??null,
+      weatherFromMinute:weatherBand?.minute ?? minuteOf((shortIndex>=0?short:weekly)[0].timeDefines[index]),
+      weatherToMinute:weatherBand?Math.min(1440,weatherBand.minute+180):1440,temperatureAtMinute:point?.minute??null,
       temperatureMin:range.temperatureMin,temperatureMax:range.temperatureMax,
       precipitationProbability:chance,precipitation:null,
       weatherPeriodLabel:weatherBand?`千葉県北西部・${interval(weatherBand.minute,weatherBand.minute+180)}（3時間）`:`${shortIndex>=0?'千葉県北西部':'千葉県'}・日予報`,
@@ -147,15 +149,15 @@ async function publishedForecast(date,options){
   return weatherFromPublishedCache(await readJson(PUBLISHED,options),date,options.now);
 }
 
-export function weatherFromPublishedCache(data,date,now){
+export function weatherFromPublishedCache(data,date,now,{strictAsOf=false}={}){
   if(data?.schemaVersion!==1)throw new Error('公開済み予報の形式を確認してください。');
   let firstError;
   for(const provider of ['open-meteo','jma']){
     const item=data.providers?.[provider];
-    if(!item||ageOf(item.fetchedAt,now)>MAX_AGE_MS)continue;
+    if(!item||ageOf(item.fetchedAt,now)>MAX_AGE_MS||(strictAsOf&&Date.parse(item.fetchedAt)>now))continue;
     try{
       const forecast=provider==='open-meteo'?normaliseOpenMeteo(item.data,date,{fetchedAt:item.fetchedAt,transport:'published-cache'}):normaliseJma(item.forecast,item.series,date,{fetchedAt:item.fetchedAt,transport:'published-cache'});
-      if(provider==='jma'&&ageOf(forecast.issuedAt,now)>36*3600000)continue;
+      if(provider==='jma'&&(ageOf(forecast.issuedAt,now)>36*3600000||(strictAsOf&&Date.parse(forecast.issuedAt)>now)))continue;
       return {...forecast,cacheAgeMinutes:Math.floor(ageOf(item.fetchedAt,now)/60000)};
     }catch(error){firstError??=error;}
   }

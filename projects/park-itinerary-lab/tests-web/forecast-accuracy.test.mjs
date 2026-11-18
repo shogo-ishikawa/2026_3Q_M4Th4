@@ -90,14 +90,20 @@ test('observed park congestion needs multiple hours per ride, three rides, and n
     }
   }
   const result = score(slots, notes);
-  assert.deepEqual(result.crowd, {forecastLevel:'busy',observedLevel:'busy',ratio:2,facilities:3,slots:7,matched:7});
+  assert.deepEqual(result.crowd, {forecastLevel:'busy',observedLevel:'busy',ratio:2,facilities:3,slots:7,expected:7,matched:7});
   const withoutThirdHour = score(slots, notes.filter(row=>row.time !== 870));
   assert.equal(withoutThirdHour.crowd.observedLevel, null);
   assert.equal(withoutThirdHour.crowd.ratio, null);
+  assert.equal(withoutThirdHour.crowd.expected, 7);
+  assert.equal(withoutThirdHour.crowd.matched, 5);
+  const morning = score(slots, notes, {asOf:instant(700)});
+  assert.equal(morning.crowd.expected, 3);
+  assert.equal(morning.crowd.observedLevel, null);
   const scarce = score(slots, notes.filter(row => row.activityId === 'land-a'));
   assert.equal(scarce.crowd.observedLevel, null);
   const arbitraryHour = score([target(540, 20, facility, 25)], [post(540, 30)]);
   assert.equal(arbitraryHour.crowd.matched, 0);
+  assert.equal(arbitraryHour.crowd.expected, 0);
 });
 
 test('invalid date and timezone-less as-of rejected', () => {

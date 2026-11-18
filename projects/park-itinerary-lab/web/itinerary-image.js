@@ -1,4 +1,4 @@
-import {checkedRows, formatTime} from './storage.js?v=1.14.1';
+import {checkedRows, formatTime} from './storage.js?v=1.15.0';
 import {baseVisitId, isRepeatVisit} from './repeat-visits.js';
 
 const WIDTH = 720;

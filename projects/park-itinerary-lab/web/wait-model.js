@@ -1,5 +1,5 @@
 /* Models use observed waits; unknown weather and missing historical days remain unknown. */
-import {validCalendarDate as dateValid,minuteOf,finiteObservationNumber,calendarContext,weatherAtMinute,eventIdsFor,WAIT_BASE_FEATURE_NAMES,waitFeatures,visitDayContext,learnVisitFactors,VISIT_FACTOR_NAMES} from './calendar-features.js?v=1.14.1';
+import {validCalendarDate as dateValid,minuteOf,finiteObservationNumber,calendarContext,weatherAtMinute,eventIdsFor,WAIT_BASE_FEATURE_NAMES,waitFeatures,visitDayContext,learnVisitFactors,VISIT_FACTOR_NAMES} from './calendar-features.js?v=1.15.0';
 import {activityAvailable} from './operation-windows.js';
 const MIN_DATES=7,MIN_SAMPLES=100,MAX_SAMPLES=50000;
 const clipped=value=>Math.max(0,Math.min(600,Math.round(value)));
@@ -20,7 +20,9 @@ function observations(history,park,beforeDate,calendarData) {
     const activityId=row.activityId??row.activity_id??row.id,activity=activities.get(activityId),minute=minuteOf(row.time??row.minute),wait=finiteObservationNumber(row.wait??row.waitMinutes??row.wait_minutes);
     if(!activity||!dateValid(row.date)||row.date>=beforeDate||minute===null||wait===null||wait<0||wait>600||row.isOpen===false||['CLOSED','DOWN','REFURBISHMENT'].includes(row.status))continue;
     if (!contexts.has(row.date)) contexts.set(row.date,visitDayContext(row.date,park,calendarData));
-    const item={activityId,date:row.date,minute,wait,visitContext:contexts.get(row.date),weather:['sun','cloud','rain'].includes(row.weather)?row.weather:'',eventIds:eventIdsFor(row.date,park,row),temperature:finiteObservationNumber(row.temperature),precipitation:finiteObservationNumber(row.precipitation),openingMinute:minuteOf(row.openingMinute)};
+    const issued=row.issuedVisitFactors;
+    const events=Array.isArray(issued?.eventIds) ? issued.eventIds : eventIdsFor(row.date,park,row);
+    const item={activityId,date:row.date,minute,wait,atIssue:!!issued,visitContext:issued?.inputs??contexts.get(row.date),weather:['sun','cloud','rain'].includes(row.weather)?row.weather:'',eventIds:events,temperature:finiteObservationNumber(row.temperature),precipitation:finiteObservationNumber(row.precipitation),openingMinute:minuteOf(row.openingMinute)};
     const opening=item.openingMinute??minuteOf(activity.windows?.[0]?.[0])??540,bucket=minute>=opening&&minute<opening+90?10:30;
     dedup.set([row.date,activityId,bucket,Math.floor(minute/bucket)].join('|'),item);
   }
@@ -126,6 +128,9 @@ export function trainWaitModel(history,park,{beforeDate,trainedAt=new Date().toI
   if(sampleLimit!==null&&(!Number.isInteger(sampleLimit)||sampleLimit<MIN_SAMPLES||sampleLimit>MAX_SAMPLES))throw new RangeError('学習件数の上限を確認してください。');
   const available=observations(history,park,beforeDate,calendarData),rows=balancedSample(available,sampleLimit),dates=[...new Set(rows.map(row=>row.date))],eventIds=[...new Set(rows.flatMap(row=>row.eventIds))].sort().slice(0,60);
   const result={schemaVersion:2,method:'ridge-regression',parkId:park.id,status:'insufficient-data',usable:false,trainedAt,beforeDate,samples:rows.length,availableSamples:available.length,sampling:rows.length<available.length?'calendar-balanced':'all-eligible',days:dates.length,firstDate:dates[0]??null,lastDate:dates.at(-1)??null,minDays:MIN_DATES,minSamples:MIN_SAMPLES,featureNames:featureNames(eventIds),eventIds,activityIds:[],coefficients:[],validation:null,dataSources:dataSources.filter(source=>source&&typeof source.name==='string'&&typeof source.url==='string'&&/^https:\/\//.test(source.url)).map(source=>({name:source.name.slice(0,120),url:source.url.slice(0,2000),kind:String(source.kind||'observation').slice(0,100),attribution:String(source.attribution||source.name).slice(0,300)})).slice(0,20),calendarData:compactCalendar(calendarData,dates[0],beforeDate),activityTimeProfiles:[],correlations:correlations(rows,park,calendarData)};
+  const issuedRows=rows.filter(row=>row.atIssue);
+  result.issuedInputCoverage={days:new Set(issuedRows.map(row=>row.date)).size,samples:issuedRows.length,
+    withWeather:issuedRows.filter(row=>row.weather || row.temperature!==null || row.precipitation!==null).length};
   result.visitFactorSupport = learnVisitFactors(rows).support;
   if(dates.length<MIN_DATES||rows.length<MIN_SAMPLES)return result;
   const split=dates.slice(-Math.max(2,Math.ceil(dates.length*.2)))[0],training=rows.filter(row=>row.date<split),testing=rows.filter(row=>row.date>=split);
@@ -202,7 +207,7 @@ export function estimateParkCrowd(park, settings, recordReference) {
   // A dated report can still evaluate a calendar forecast against pre-existing reference waits.
   if (!covered && !recordReference) return fallback;
 
-  const visitContext = model.visitFactors?.length ? visitDayContext(date,park,calendarData,settings.waitAsOf ?? Date.now()) : null;
+  const visitContext = model.visitFactors?.length ? visitDayContext(date,park,calendarData,settings.visitForecastAsOf ?? settings.waitAsOf ?? Date.now()) : null;
   const profilesByRide = new Map();
   for (const profile of model.activityTimeProfiles || []) {
     if (!profilesByRide.has(profile.activityId)) profilesByRide.set(profile.activityId, []);

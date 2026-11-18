@@ -1,11 +1,11 @@
 import {baseVisitId, canStartVisit, compactRepeatSelections, expandRepeatVisits, facilityForVisit} from './repeat-visits.js';
 import {clockText, parkTimeBounds} from './time-input.js';
 import {applyProgressToPrefix, progressEntries} from './day-progress-plan.js';
-import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.14.1';
-import { weatherAtMinute, calendarContext, visitDayContext } from './calendar-features.js?v=1.14.1';
-import { predictModelWait, estimateParkCrowd, calendarCrowdLevel } from './wait-model.js?v=1.14.1';
-import { liveWaitFor, currentRideStatus } from './wait-data.js?v=1.14.1';
-import {deriveIntradayAdjustment, applyIntradayAdjustment, describeIntradayAdjustment} from './intraday-waits.js?v=1.14.1';
+import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.15.0';
+import { weatherAtMinute, calendarContext, visitDayContext } from './calendar-features.js?v=1.15.0';
+import { predictModelWait, estimateParkCrowd, calendarCrowdLevel } from './wait-model.js?v=1.15.0';
+import { liveWaitFor, currentRideStatus } from './wait-data.js?v=1.15.0';
+import {deriveIntradayAdjustment, applyIntradayAdjustment, describeIntradayAdjustment} from './intraday-waits.js?v=1.15.0';
 /* Browser itinerary search. Every returned plan is checked; the search does not claim global optimality. */
 const resolvedCrowd = Symbol('park crowd');
 const visitContext = Symbol('dated park factors');
@@ -183,7 +183,7 @@ export function estimateWait(activity, start, settings, history = []) {
 export function setWaitForecastContext(park, settings, recordReference) {
   settings.activeEvents = (park.events || []).filter(event => event.startDate <= settings.date && settings.date <= event.endDate);
   settings[visitContext] = settings.waitModel?.visitFactors?.length
-    ? visitDayContext(settings.date,park,settings.calendarData || settings.waitModel.calendarData,settings.waitAsOf ?? Date.now()) : null;
+    ? visitDayContext(settings.date,park,settings.calendarData || settings.waitModel.calendarData,settings.visitForecastAsOf ?? settings.waitAsOf ?? Date.now()) : null;
   settings[intradayAdjustment] = deriveIntradayAdjustment(park, settings, settings[visitContext]);
   if (settings.crowdLevel !== 'auto') return null;
   const crowd = estimateParkCrowd(park, settings, recordReference);

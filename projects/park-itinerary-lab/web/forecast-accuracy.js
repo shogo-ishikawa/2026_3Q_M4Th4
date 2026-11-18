@@ -59,11 +59,13 @@ function measure(slots) {
 function classifyCrowd(estimate, slots) {
   const result = {
     forecastLevel:['quiet', 'normal', 'busy'].includes(estimate?.level) ? estimate.level : null,
-    observedLevel:null, ratio:null, facilities:0, slots:0, matched:0
+    observedLevel:null, ratio:null, facilities:0, slots:0, expected:0, matched:0
   };
   const rides = new Map();
   for (const slot of slots) {
-    if (slot.reference === null || slot.observed === null) continue;
+    if (slot.reference === null) continue;
+    result.expected++;
+    if (slot.observed === null) continue;
     result.matched++;
     if (!rides.has(slot.activityId)) rides.set(slot.activityId, []);
     rides.get(slot.activityId).push(slot);

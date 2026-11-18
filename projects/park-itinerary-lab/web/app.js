@@ -1,19 +1,20 @@
-import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, fetchPublishedModel, prepareLiveForReplan, prepareWeatherForVisit } from './wait-data.js?v=1.14.1';
-import {visitDayDetails} from './visit-day-view.js?v=1.14.1';
+import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, createVisitOutlook, prepareLiveForReplan } from './wait-data.js?v=1.15.0';
+export {prepareWeatherForVisit as prepareWeatherForPlan} from './wait-data.js?v=1.15.0';
+import {visitDayDetails} from './visit-day-view.js?v=1.15.0';
 import {WISH_PRESETS, presetFacilities, presetStartsPlan, addPresetWishes} from './wishlist-presets.js';
 import {attachItineraryImage} from './itinerary-image.js';
 import {attachOnsiteNavigation} from './onsite-navigation.js';
-import {attachDayProgress} from './day-progress-ui.js?v=1.14.1';
+import {attachDayProgress} from './day-progress-ui.js?v=1.15.0';
 import {baseVisitId, repeatVisitId, isRepeatVisit, expandRepeatVisits, resolveDpaVisit} from './repeat-visits.js';
-import { restsBesideFood, settledReplanWishes } from './planner.js?v=1.14.1';
-import { enhanceTimeInputs, parkTimeBounds, clampClock } from './time-input.js?v=1.14.1';
-import { estimateParkCrowd } from './wait-model.js?v=1.14.1';
-import { weatherForMinute } from './weather.js?v=1.14.1';
-import { forecastCardHtml, forecastSourcesHtml } from './weather-view.js?v=1.14.1';
-import { activityAvailable, operationPauseInfo } from './operation-windows.js?v=1.14.1';
+import { restsBesideFood, settledReplanWishes } from './planner.js?v=1.15.0';
+import { enhanceTimeInputs, parkTimeBounds, clampClock } from './time-input.js?v=1.15.0';
+import { estimateParkCrowd } from './wait-model.js?v=1.15.0';
+import { weatherForMinute } from './weather.js?v=1.15.0';
+import { forecastCardHtml, forecastSourcesHtml } from './weather-view.js?v=1.15.0';
+import { activityAvailable, operationPauseInfo } from './operation-windows.js?v=1.15.0';
 import { contingencySettings, compareContingency } from './contingency.js';
-import { renderParkMap } from './map-view.js?v=1.14.1';
-import { listSavedPlans, saveNamedPlan, loadSavedPlan, renameSavedPlan, deleteSavedPlan, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=1.14.1';
+import { renderParkMap } from './map-view.js?v=1.15.0';
+import { listSavedPlans, saveNamedPlan, loadSavedPlan, renameSavedPlan, deleteSavedPlan, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=1.15.0';
 
 const CATEGORY = {attraction:'アトラクション',show:'ショー',parade:'パレード',restaurant:'レストラン',cafe:'カフェ',snack:'スナック',popcorn:'ポップコーン',greeting:'グリーティング',shop:'お土産'};
 const FOOD = new Set(['restaurant','cafe','snack','popcorn']);
@@ -44,19 +45,9 @@ export function crowdExplanation(park, settings) {
   const auto = settings.crowdLevel === 'auto';
   const estimate = auto ? estimateParkCrowd(park, settings) : null;
   const label = CROWD_LABELS[estimate?.level || settings.crowdLevel] || CROWD_LABELS.normal;
-  let source = '手動', detail = '';
-  if (estimate) {
-    const coverage = `${estimate.days}日・${estimate.samples.toLocaleString('ja-JP')}件`;
-    if (estimate.source === 'model') {
-      source = '学習予測';
-      detail = `${estimate.rides}施設の予測は、同じ施設・時間帯の過去平均の約${estimate.ratio.toFixed(2)}倍です（${coverage}）。`;
-    } else {
-      source = '暦の目安';
-      detail = estimate.days ? `学習記録（${coverage}）からは判定できないため、曜日と祝日を使います。`
-        : 'この日の推定に使える学習モデルがありません。曜日と祝日から推定しました。';
-    }
-  }
-  return {label, source, summary:`${label}（${source}）`, detail};
+  let source = '手動';
+  if (estimate) source = estimate.source === 'model' ? '学習予測' : '暦の目安';
+  return {label, source, summary:`${label}（${source}）`};
 }
 
 /** The two planning steps share a location but retain independent panel state. */
@@ -141,8 +132,9 @@ const visitDayFields = ['dpaStart','dpaEnd','dpaPurchasedAt','dpaAvailableWindow
 
 /** Carry preferences to a new visit day and replace date-specific facts. */
 export function resetForNewVisitDay(state, park, drafts) {
+  if(state.settings.weatherMode==='auto' && state.settings.weatherForecast)state.settings.weather='sun';
   state.settings.purchases=[];state.settings.spentBudget=0;state.settings.excludedAutoBreaks=[];delete state.settings.skipAutoRestAfter;
-  for(const key of ['replanFrom','currentNode','completedIds','dayProgress','weatherForecast','weatherNotice','liveData','liveNotice','waitAsOf','operationalHolds'])delete state.settings[key];
+  for(const key of ['replanFrom','currentNode','completedIds','dayProgress','weatherForecast','weatherNotice','visitForecastAsOf','liveData','liveNotice','waitAsOf','operationalHolds'])delete state.settings[key];
   for(const selection of state.settings.selections){
     selection.dpaMode=['consider','owned'].includes(selection.dpaMode)?'consider':'none';
     for(const key of visitDayFields)delete selection[key];
@@ -156,12 +148,6 @@ export function resetForNewVisitDay(state, park, drafts) {
   }
   state.result=null;state.resultDirty=false;state.parkStates={};
   return state;
-}
-
-
-/** Fetch the visit day's weather before planning; manual and failure paths cannot reuse an old forecast. */
-export async function prepareWeatherForPlan(settings,park,options={}) {
-  return prepareWeatherForVisit(settings,park,options);
 }
 
 
@@ -379,6 +365,8 @@ export function initialiseApp() {
   let catalogue, calendarData, externalPanel, preparation = null, worker = null, requestId = 0, searchStarted = 0, progressTimer = null, latestPreview = null, wishlistGenre = 'all', lastBreakSuggestionResult = null, workflowView = 'wishlist', openedPlanId = null;
   let purchaseDraft, progressEditor, itineraryImage, onsiteCard;
   const modelCache=new Map();
+  const visitOutlook=createVisitOutlook();
+  let displayedOutlook;
   const restUndo=new WeakMap();
   // An invalid edit stays with its wish when the user switches genre or opens another card.
   const wishDrafts=new WeakMap();
@@ -428,13 +416,39 @@ export function initialiseApp() {
     onsiteCard?.refresh();
     if(scroll)$('workflowTabs').scrollIntoView({block:'start',behavior:'smooth'});
   }
+  function useOutlook(values) {
+    const {waitModel,...weather}=values;
+    Object.assign(state.settings,weather);
+    if(waitModel && state.settings.waitModel?.parkId!==state.parkId){
+      state.settings.waitModel=waitModel;
+      modelCache.set(state.parkId,waitModel);
+    }
+    $('weather').value=weather.weather;
+  }
+  function prepareVisitOutlook(preparedWeather) {
+    const request=visitOutlook.resolve(currentPark(),state.settings,preparedWeather);
+    if(request.values)useOutlook(request.values);
+    if(request!==displayedOutlook) {
+      displayedOutlook=request;
+      if(!request.values) {
+        state.settings.weatherForecast=null;
+        if(state.settings.weatherMode!=='manual')state.settings.weatherNotice='訪問日の予報を確認中…';
+        request.promise.then(values=>{
+          if(request!==displayedOutlook)return;
+          useOutlook(values);
+          updateDayOverview();updateCrowd();renderSources();externalPanel?.refresh();
+        }).catch(error=>{if(error.name!=='AbortError' && request===displayedOutlook)setStatus('訪問日の情報を確認できませんでした。',true);});
+      }
+    }
+    return request;
+  }
   function updateDayOverview(){
     const s=state.settings,speed=s.speed===50?'ゆっくり':s.speed===90?'早め':'普通';
-    const crowd=crowdExplanation(currentPark(),s);
+    const pending=s.crowdLevel==='auto' && displayedOutlook && !displayedOutlook.values;
+    const crowd=pending ? {label:'確認中…',source:'',summary:'確認中…',detail:''} : crowdExplanation(currentPark(),s);
     $('crowdOutlookTitle').textContent=s.crowdLevel==='auto'?'混雑予想':'混雑の想定';
     $('crowdOutlookValue').textContent=crowd.label;
     $('crowdOutlookSource').textContent=crowd.source;
-    $('crowdLevelDetail').textContent=crowd.detail;
     const details=visitDayDetails(currentPark(),s);
     $('visitDayFacts').hidden=!details;
     const events = details?.events || [];
@@ -451,9 +465,6 @@ export function initialiseApp() {
         badge.textContent=fact.label;
         return badge;
       }));
-      $('visitDayForecastUse').textContent=details.forecast;
-      $('visitDaySupport').hidden=!details.support;
-      $('visitDaySupportText').textContent=details.support;
     }
     const links=(details?.sources || []).filter(source=>safeLink(source.url)!=='#').map(source=>
       `<a href="${safeLink(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.label)} ↗</a>`);
@@ -511,7 +522,7 @@ export function initialiseApp() {
       else delete settings.currentNode;
     }else{delete settings.replanFrom;delete settings.currentNode;}
     if(settings.weatherMode==='manual'){settings.weatherForecast=null;settings.weatherNotice='天気は手動の設定を使います。';}
-    else if(state.settings.weatherMode==='manual'){settings.weatherForecast=null;settings.weatherNotice='プランを考えると訪問日の予報を取得します。';}
+    else if(state.settings.weatherMode==='manual'){settings.weatherForecast=null;settings.weatherNotice='訪問日の予報を確認中…';}
     state.settings=settings;for(const selection of settings.selections)rememberOwnedPurchase(selection);return settings;
   }
   function syncManualWeather() {
@@ -532,7 +543,7 @@ export function initialiseApp() {
     syncManualWeather();
     $('avoidConsecutiveFood').checked=s.avoidConsecutiveFood===true;
     $('dpaPurchaseLimit').value=s.dpaPurchaseLimit??'';
-    $('weatherStatus').textContent=s.weatherNotice||(s.weatherMode==='manual'?'天気は手動の設定を使います。':'プランを考えると訪問日の予報を取得します。');
+    $('weatherStatus').textContent=s.weatherNotice||(s.weatherMode==='manual'?'天気は手動の設定を使います。':'訪問日の予報を確認中…');
     $('entryTime').value=timeText(s.entry);$('exitTime').value=timeText(s.exit);$('replanEnabled').checked=Number.isInteger(s.replanFrom);$('replanTime').value=timeText(s.replanFrom ?? 840);renderPurchaseHistory();renderFixedBreaks();updateDayOverview();syncTimeEditors();
   }
   function cleanState(value) {
@@ -549,6 +560,7 @@ export function initialiseApp() {
       const first=s.dpaAvailableWindows?.[0];
       if(s.dpaMode==='consider'&&first&&s.dpaStart==null&&s.dpaEnd==null)[s.dpaStart,s.dpaEnd]=first;
     }
+    visitOutlook.cancel();displayedOutlook=null;
     return {parkId:value.parkId,settings:{...defaultSettings(),...value.settings,crowdLevel:value.settings.crowdLevel??'normal',avoidConsecutiveFood:value.settings.avoidConsecutiveFood??false,waitBufferMode:value.settings.waitBufferMode??'fixed',waitBufferMinutes:value.settings.waitBufferMinutes??0,queueDelayMinutes:value.settings.queueDelayMinutes??0,selections},result:value.result||null,resultDirty:!!value.resultDirty,history:Array.isArray(value.history)?value.history:[],parkStates:{}};
   }
   function updateContext() {
@@ -571,7 +583,7 @@ export function initialiseApp() {
     $('breakNode').value=selectableNodes(park).some(n=>n.id===breakNode)?breakNode:park.entryNode;renderFixedBreaks();
     const purchaseId=$('purchaseActivity').value;$('purchaseActivity').replaceChildren();for(const a of park.activities.filter(a=>a.dpa)){const option=document.createElement('option');option.value=a.id;option.textContent=a.name;$('purchaseActivity').append(option);}$('purchaseActivity').value=park.activities.some(a=>a.id===purchaseId&&a.dpa)?purchaseId:park.activities.find(a=>a.dpa)?.id||'';refreshPurchaseEditor();renderPurchaseHistory();
     $('dataVersion').textContent=`施設・イベントの確認日：${catalogue.updatedAt || park.updatedAt || 'データ内の出典を確認'} / データ版 ${catalogue.version || '—'}。フードの予算は変更できます。施設・休止・イベントは毎朝6:15に更新を確認し、待ち時間は両園の閉園後に採点し、再学習します。${catalogue.fetchedAt?` 最終取得 ${new Date(catalogue.fetchedAt).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}`:''}${catalogueRefreshNotice(catalogue)}`;
-    updateDayOverview();updateCrowd();renderCatalogue();renderWishlist();renderMap();renderResult();renderSources();syncTimeEditors();
+    prepareVisitOutlook();updateDayOverview();updateCrowd();renderCatalogue();renderWishlist();renderMap();renderResult();renderSources();syncTimeEditors();
     document.dispatchEvent(new CustomEvent('park-context-change',{detail:{park,settings:state.settings,history:state.history}}));
   }
   function refreshPurchaseEditor() {
@@ -591,7 +603,7 @@ export function initialiseApp() {
   }
   function renderPurchaseHistory(){if(!catalogue)return;const purchases=state.settings.purchases||[];$('purchaseHistory').innerHTML=purchases.length?purchases.map((p,index)=>`<div class="purchase-item" id="purchase-record-${escapeHtml(p.id)}" tabindex="-1"><strong>${escapeHtml(byId(p.id)?.name||p.id)}</strong><p>購入 ${timeText(p.purchasedAt)} · 利用 ${timeText(p.start)}–${timeText(p.end)} · ${money(p.cost)}</p><button type="button" data-remove-purchase="${index}">履歴から外す</button></div>`).join(''):'<p class="field-note">購入履歴はまだありません。</p>';}
   function updateCrowd() {
-    $('weatherStatus').textContent=state.settings.weatherNotice||(state.settings.weatherMode==='manual'?'天気は手動の設定を使います。':'プランを考えると訪問日の予報を取得します。');
+    $('weatherStatus').textContent=state.settings.weatherNotice||(state.settings.weatherMode==='manual'?'天気は手動の設定を使います。':'訪問日の予報を確認中…');
     const s=state.settings;
     $('crowdExplanation').textContent=s.crowdMode==='manual'?'待ち時間：希望欄の手動設定':'待ち時間：当日の情報・学習モデル・履歴から推定';
     $('historyStatus').textContent=`待ち時間の実績データ：${state.history?.length ? `${state.history.length}件を読込済み` : '未読込'}`;
@@ -863,8 +875,9 @@ export function initialiseApp() {
   }
   function applyDataUpdate(patch) {
     stopSearch();const {history,...settings}=patch;
+    const preparedWeather=Object.hasOwn(settings,'weatherForecast') ? settings : null;
     if(Array.isArray(history)){state.history=history;state.settings.history=history;}
-    Object.assign(state.settings,settings);if(settings.waitModel?.parkId===state.parkId)modelCache.set(state.parkId,settings.waitModel);markResultStale();writeSettings();updateCrowd();renderCatalogue();renderMap();externalPanel?.refresh();syncTimeEditors();
+    Object.assign(state.settings,settings);if(settings.waitModel?.parkId===state.parkId)modelCache.set(state.parkId,settings.waitModel);markResultStale();prepareVisitOutlook(preparedWeather);writeSettings();updateCrowd();renderCatalogue();renderMap();externalPanel?.refresh();syncTimeEditors();
   }
   function checkSelectionDetails() {
     const settled=settledReplanWishes(currentPark(),state.settings,state.result);
@@ -978,7 +991,7 @@ export function initialiseApp() {
     const extra=Number($('contingencyDelay').value),profile=contingencySettings(state.result.settings||state.settings,extra);
     contingencyBase=state.result;const request=++contingencyRequest;
     const initialPlan=profile.replanFrom!=null?state.result:null;
-    contingencyWorker=new Worker(new URL('./planner-worker.js?v=1.14.1',import.meta.url),{type:'module'});
+    contingencyWorker=new Worker(new URL('./planner-worker.js?v=1.15.0',import.meta.url),{type:'module'});
     $('searchContingency').disabled=true;$('cancelContingency').hidden=false;
     $('contingencyStatus').textContent=`通常の待ち列がさらに${extra}分長い場合を探索しています。`;
     contingencyWorker.onmessage=event=>{
@@ -1017,18 +1030,24 @@ export function initialiseApp() {
     try{readSettings();checkSelectionDetails();checkVisitCommitments();}
     catch(error){showPlanError(error);return;}
     externalPanel?.cancel();stopSearch();latestPreview=null;requestId++;
-    const preparingRequest=requestId,park=currentPark(),input=state.settings;
+    const preparingRequest=requestId,park=currentPark();
     preparation=new AbortController();showWorkflow('schedule',{focus:true,scroll:true});$('scheduleEmptyText').textContent='天気と当日の情報を確認して、希望をつなぐ順序を探しています。';
     setSolveDisabled(true);$('cancelSearch').hidden=false;$('searchProgress').hidden=false;$('progressBar').value=0;
-    $('progressText').textContent=input.weatherMode==='manual'?'計画の条件を確認しています…':'訪問日の天気予報を取得しています…';
-    setStatus(input.weatherMode==='manual'?'計画を準備中…':'天気予報を取得中…');
+    $('progressText').textContent='訪問日の条件を確認しています…';
+    setStatus('計画を準備中…');
     let prepared;
-    try{let base=input;if(!base.waitModel||base.waitModel.parkId!==park.id){const model=await fetchPublishedModel(park,{signal:preparation.signal,timeoutMs:5000});if(model)base={...base,waitModel:model};}prepared=await prepareWeatherForPlan(base,park,{signal:preparation.signal});prepared=await prepareLiveForReplan(prepared,park,{signal:preparation.signal});}
+    try{
+      const outlook=prepareVisitOutlook();
+      updateDayOverview();
+      await outlook.promise;
+      if(preparingRequest!==requestId)return;
+      prepared=await prepareLiveForReplan(state.settings,park,{signal:preparation.signal});
+    }
     catch(error){if(preparingRequest!==requestId)return;stopSearch();showPlanError(new Error('計画の準備を完了できませんでした。天気・待ち時間の取得設定を確認してもう一度お試しください。'));return;}
     if(preparingRequest!==requestId)return;
     preparation=null;state.settings=prepared;if(state.result){state.resultDirty=true;renderResult();}writeSettings();externalPanel?.refresh();
     searchStarted=performance.now();
-    try{worker=new Worker(new URL('./planner-worker.js?v=1.14.1',import.meta.url),{type:'module'});}catch{stopSearch();showPlanError(new Error('探索を起動できませんでした。ページを再読み込みしてもう一度お試しください。'));return;}
+    try{worker=new Worker(new URL('./planner-worker.js?v=1.15.0',import.meta.url),{type:'module'});}catch{stopSearch();showPlanError(new Error('探索を起動できませんでした。ページを再読み込みしてもう一度お試しください。'));return;}
     setSolveDisabled(true);$('cancelSearch').hidden=false;$('searchProgress').hidden=false;$('progressBar').value=0;$('progressText').textContent='最初の計画を探しています…';
     const thisRequest=requestId;
     worker.onmessage=event=>{
@@ -1224,6 +1243,7 @@ export function initialiseApp() {
     document.querySelector('.settings-panel').addEventListener('input',()=>markResultStale());
     document.querySelector('.settings-panel').addEventListener('change',safely(event=>{
       readSettings();
+      if(['entryTime','exitTime'].includes(event.target.id)){prepareVisitOutlook();updateDayOverview();}
       if(['dpaPurchaseLimit','entryTime','exitTime'].includes(event.target.id))renderWishlist();
       markResultStale();
     }));
@@ -1253,7 +1273,7 @@ export function initialiseApp() {
     $('exportJson').addEventListener('click',safely(()=>{readSettings();downloadPlanJson(state);}));$('exportCsv').addEventListener('click',safely(()=>downloadScheduleCsv(state.result,currentPark())));$('exportIcs').addEventListener('click',safely(()=>downloadCalendar(state.result,currentPark(),state.result.settings||state.settings)));$('exportHtml').addEventListener('click',safely(()=>downloadOfflineHtml(state.result,currentPark(),state.result.settings||state.settings)));$('printPlan').addEventListener('click',()=>window.print());
   }
   async function start() {
-    try{setSolveDisabled(true);setStatus('施設情報を確認中…');await loadCatalogue();const shared=await readSharedState(location.hash);if(shared)state=cleanState(shared);const context=await Promise.all([fetchPublishedCalendar({timeoutMs:5000}),fetchPublishedModel(currentPark(),{timeoutMs:5000})]);calendarData=context[0];if(calendarData)state.settings.calendarData=calendarData;if(context[1])state.settings.waitModel=context[1];writeSettings();attachEvents();showWorkflow(state.result?'schedule':'wishlist');renderSavedPlans();setSolveDisabled(false);externalPanel=initialiseExternalData({container:$('externalDataPanel'),getContext:()=>({park:currentPark(),settings:state.settings,history:state.history}),onUpdate:applyDataUpdate,beforeAction:readSettings});updateContext();setStatus(shared?'共有された希望を読み込みました。':'');}
+    try{setSolveDisabled(true);setStatus('施設情報を確認中…');await loadCatalogue();const shared=await readSharedState(location.hash);if(shared)state=cleanState(shared);calendarData=await fetchPublishedCalendar({timeoutMs:5000});if(calendarData)state.settings.calendarData=calendarData;writeSettings();attachEvents();showWorkflow(state.result?'schedule':'wishlist');renderSavedPlans();setSolveDisabled(false);externalPanel=initialiseExternalData({container:$('externalDataPanel'),getContext:()=>({park:currentPark(),settings:state.settings,history:state.history}),onUpdate:applyDataUpdate,beforeAction:readSettings});updateContext();setStatus(shared?'共有された希望を読み込みました。':'');}
     catch(error){setStatus(error.message||'起動に失敗しました。ページを再読み込みしてください。',true);setSolveDisabled(true);}
   }
   start();

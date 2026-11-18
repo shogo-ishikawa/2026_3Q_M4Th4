@@ -1,5 +1,5 @@
 /** Calendar and hourly weather features shared by training and prediction. */
-import {ticketFactsFor} from './ticket-calendar.js?v=1.14.1';
+import {ticketFactsFor} from './ticket-calendar.js?v=1.15.0';
 export const validCalendarDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value+'T12:00:00Z')) && new Date(value+'T12:00:00Z').toISOString().slice(0,10) === value;
 export const minuteOf = value => {
   if (Number.isInteger(value) && value >= 0 && value < 1440) return value;
@@ -107,8 +107,12 @@ export function weatherAtMinute(date,minute,settings={}) {
   const forecast=settings.weatherForecast, rows=forecast?.date===date&&Array.isArray(forecast.hours)?forecast.hours:[];
   const candidates=rows.filter(row=>row&&typeof row==='object').map(row=>({...row,minute:minuteOf(row.minute??String(row.time||'').slice(11,16))})).filter(row=>row.minute!==null).sort((a,b)=>a.minute-b.minute);
   const hour=candidates.filter(row=>row.minute<=minute).at(-1);
-  const chosen=hour&&minute-hour.minute<120?hour:{};
-  return {weather:['sun','cloud','rain'].includes(chosen.weather)?chosen.weather:settings.weather||'',temperature:finiteObservationNumber(chosen.temperature),precipitation:finiteObservationNumber(chosen.precipitation)};
+  const chosen=hour&&minute<(hour.endMinute??hour.minute+60)?hour:{};
+  // JMA may display a three-hourly point in later hours with its original
+  // timestamp. Only the matching hour supplies a temperature to the wait model.
+  const temperature=forecast?.provider==='jma' && chosen.temperatureAtMinute!==chosen.minute
+    ? null : finiteObservationNumber(chosen.temperature);
+  return {weather:['sun','cloud','rain'].includes(chosen.weather)?chosen.weather:settings.weather||'',temperature,precipitation:finiteObservationNumber(chosen.precipitation)};
 }
 export function eventIdsFor(date,park={},row={}) {
   if(typeof row.event==='string'&&row.event.trim())return [...new Set(row.event.split('|').map(value=>value.trim()).filter(value=>value&&value.length<=120))].slice(0,60);

@@ -13,6 +13,12 @@ test('official holiday coverage distinguishes holidays, adjacent days and unknow
 test('queue-time weather uses that hour without borrowing a later forecast or daily worst weather',()=>{
  const settings={weather:'cloud',weatherForecast:{date:'2026-11-17',hours:[{minute:540,weather:'sun',temperature:16,precipitation:0},{minute:1080,weather:'rain',temperature:10,precipitation:4}]}};
  assert.equal(weatherAtMinute('2026-11-17',570,settings).weather,'sun');assert.equal(weatherAtMinute('2026-11-17',1100,settings).weather,'rain');assert.equal(weatherAtMinute('2026-11-17',500,settings).weather,'cloud');assert.equal(weatherAtMinute('2026-11-18',570,settings).weather,'cloud');
+ assert.deepEqual(weatherAtMinute('2026-11-17',615,settings),{weather:'cloud',temperature:null,precipitation:null});
+ settings.weatherForecast={date:'2026-11-17',provider:'jma',hours:[
+   {minute:540,endMinute:600,weather:'sun',temperature:16,temperatureAtMinute:540},
+   {minute:600,endMinute:660,weather:'sun',temperature:16,temperatureAtMinute:540}]};
+ assert.equal(weatherAtMinute('2026-11-17',575,settings).temperature,16);
+ assert.equal(weatherAtMinute('2026-11-17',615,settings).temperature,null);
 });
 test('features encode weekday, seasonal phase, named events and opening ramp independently',()=>{
  const activity=park.activities[0],early=waitFeatures({date:'2026-11-23',minute:540,eventIds:['fest-a'],weather:'sun'},{activity,eventIds:['fest-a','fest-b'],calendarData:calendar}),later=waitFeatures({date:'2026-11-23',minute:630,eventIds:['fest-b'],weather:'rain'},{activity,eventIds:['fest-a','fest-b'],calendarData:calendar});
