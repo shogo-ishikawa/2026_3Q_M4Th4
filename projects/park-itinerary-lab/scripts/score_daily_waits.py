@@ -5,6 +5,7 @@ import datetime as dt
 import json
 from pathlib import Path
 import subprocess
+import sys
 
 from archive_wait_history import atomic_json
 from nightly_wait_training import latest_closed_day
@@ -39,6 +40,8 @@ def date_rows(path, dates):
 
 
 def preserve_coverage(prior, current):
+    previous_comparison = (prior or {}).get('intradayComparison')
+    current_comparison = current.get('intradayComparison')
     if prior and prior['issuedAt']:
         if current['issuedAt'] and (prior['issuedAt'] != current['issuedAt']
                                     or prior['slotsInDay'] != current['slotsInDay']):
@@ -49,7 +52,11 @@ def preserve_coverage(prior, current):
             return park['overall']['matched'], park['overall'].get('samples', 0)
 
         if not current['issuedAt'] or support(prior) > support(current):
-            return prior
+            current = dict(prior)
+    comparisons = [entry for entry in (current_comparison, previous_comparison) if entry]
+    if comparisons:
+        current['intradayComparison'] = max(comparisons, key=lambda entry: (
+            entry['matched'], entry['samples'], entry['expected']))
     return current
 
 
@@ -60,6 +67,14 @@ def save_report(data, date, observations, now):
         raise ValueError(f'Invalid saved forecast for {date}.')
     payload = dict(date=date, forecast=forecast, observations=observations,
                    asOf=now.isoformat(), source='queue-times')
+    issues = []
+    for path in sorted((data / 'forecasts-intraday' / date).glob('*-????.json')):
+        try:
+            issues.append(read(path, None))
+        except (OSError, ValueError) as error:
+            print(f'Ignoring unreadable intraday issue {path.name}: {error}', file=sys.stderr)
+    if issues:
+        payload['intradayIssues'] = issues
     scored = subprocess.run(['node', str(SCRIPTS / 'aggregate_wait_history.mjs')],
                             input=json.dumps(payload), capture_output=True, text=True, check=True)
     parks = json.loads(scored.stdout)

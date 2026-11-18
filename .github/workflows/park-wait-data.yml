@@ -13,12 +13,14 @@ on:
       - 'projects/park-itinerary-lab/scripts/bootstrap_wait_history.py'
       - 'projects/park-itinerary-lab/scripts/train_wait_model.py'
       - 'projects/park-itinerary-lab/scripts/issue_wait_forecast.mjs'
+      - 'projects/park-itinerary-lab/scripts/issue_intraday_forecast.mjs'
       - 'projects/park-itinerary-lab/scripts/score_daily_waits.py'
       - 'projects/park-itinerary-lab/scripts/score_wait_history.py'
       - 'projects/park-itinerary-lab/scripts/aggregate_wait_history.mjs'
       - 'projects/park-itinerary-lab/web/forecast-accuracy.js'
       - 'projects/park-itinerary-lab/web/planner.js'
       - 'projects/park-itinerary-lab/web/wait-model.js'
+      - 'projects/park-itinerary-lab/web/intraday-waits.js'
       - 'projects/park-itinerary-lab/web/data/queue-times-map.json'
       - 'projects/park-itinerary-lab/web/data/wait-model.json'
   workflow_dispatch:
@@ -71,6 +73,11 @@ jobs:
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         continue-on-error: true
         run: python projects/park-itinerary-lab/scripts/collect_weather.py --output data-publish/weather-forecast.json
+      - name: Record prospective intraday comparisons from fresh posted waits
+        id: intraday
+        if: ${{ !cancelled() && steps.collect.outcome == 'success' }}
+        continue-on-error: true
+        run: node projects/park-itinerary-lab/scripts/issue_intraday_forecast.mjs --data-dir data-publish
       - name: Score frozen forecasts against collected waits after closing
         id: daily_score
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
@@ -119,6 +126,9 @@ jobs:
             echo "::warning::Supplementary provider history is unavailable. See the local daily report and the history step log."
           fi
           if [ "$FORECAST_STATUS" = success ] && [ -d forecasts ]; then git add forecasts; fi
+          if [ -d forecasts-intraday ]; then
+            git ls-files --others --exclude-standard -z -- ':(glob)forecasts-intraday/????-??-??/*-[0-9][0-9][0-9][0-9].json' | xargs -0 -r git add --
+          fi
           if ! git diff --cached --quiet; then
             git commit -m 'Update park observations, models and forecasts'
             # The separate official catalogue updater may have published since checkout.

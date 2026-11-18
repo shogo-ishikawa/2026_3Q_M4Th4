@@ -1,6 +1,7 @@
-import {validateWaitModel} from './wait-model.js?v=1.12.2';
+import {validateWaitModel} from './wait-model.js?v=1.13.0';
 import {weatherForMinute,formatWeatherDetails} from './weather.js';
-import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=1.12.2';
+import {baseVisitId, isRepeatVisit} from './repeat-visits.js';
+import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=1.13.0';
 /** Portable schedules: the shared link contains preferences, never a browser's saved history. */
 const STORAGE_KEY = 'park-itinerary-lab:v1';
 const PLANS_KEY = 'park-itinerary-lab:plans:v1';
@@ -9,6 +10,7 @@ export const MAX_SAVED_PLANS = 20;
 const MAX_SHARED_LENGTH = 14000;
 const MAX_FILE_LENGTH = 4_000_000;
 const MAX_ACTIVITIES = 400;
+const MAX_VISITS = MAX_ACTIVITIES * 2;
 const CATEGORIES = new Set(['attraction', 'show', 'parade', 'restaurant', 'cafe', 'snack', 'popcorn', 'greeting', 'shop']);
 const ROW_TYPES = new Set(['walk', 'wait', 'queue', 'activity', 'rest', 'exit', 'location']);
 
@@ -18,10 +20,12 @@ const finite = (value, min, max) => typeof value === 'number' && Number.isFinite
 const integer = (value, min, max) => Number.isInteger(value) && finite(value, min, max);
 const text = (value, max = 300) => typeof value === 'string' && value.length <= max;
 const id = value => typeof value === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,99}$/.test(value);
+// A second visit is an itinerary occurrence; the catalogue and provider IDs remain unchanged.
+const visitId = value => id(baseVisitId(value));
 const optionalNumber = (object, key, min, max, whole = false) => object[key] === undefined || (whole ? integer : finite)(object[key], min, max);
 const validTime = value => integer(value, 0, 1440);
 const validWindow = pair => Array.isArray(pair) && pair.length === 2 && validTime(pair[0]) && validTime(pair[1]) && pair[0] < pair[1];
-const autoBreakId = value => typeof value==='string' && value.length<=220 && /^[a-zA-Z0-9][a-zA-Z0-9_.:-]*:[a-zA-Z0-9_.:-]+$/.test(value);
+const autoBreakId = value => typeof value==='string' && value.length<=222 && /^[a-zA-Z0-9][a-zA-Z0-9_.:-]*:[a-zA-Z0-9_.:-]+(?:~2)?$/.test(value);
 
 function safeTree(value, depth = 0) {
   if (depth > 16) fail('データの入れ子が深すぎます。');
@@ -106,6 +110,35 @@ export function validateCatalogue(data) {
   return data;
 }
 
+function validateDayProgress(progress, parkId, date) {
+  if (progress === undefined) return;
+  if (!plain(progress) || progress.parkId !== parkId || progress.date !== date ||
+      !plain(progress.visits) || Object.keys(progress.visits).length > MAX_VISITS) {
+    fail('当日の体験記録のパーク・日付・件数を確認してください。');
+  }
+  let activeVisits = 0;
+  const otherPark = parkId === 'land' ? 'sea-' : 'land-';
+  for (const [key, visit] of Object.entries(progress.visits)) {
+    if (!visitId(key) || key.startsWith(otherPark) || !plain(visit) ||
+        !['pending', 'queue', 'riding', 'done', 'skipped'].includes(visit.status)) {
+      fail('当日の施設と体験状況を確認してください。');
+    }
+    if (!optionalNumber(visit, 'startedAt', 0, 1440, true) || !optionalNumber(visit, 'endsAt', 0, 1440, true) ||
+        (visit.startedAt !== undefined && visit.endsAt !== undefined && visit.endsAt < visit.startedAt)) {
+      fail('当日の体験記録の時刻を確認してください。');
+    }
+    if (visit.reportedAt !== undefined && (visit.status !== 'done' || !validTime(visit.reportedAt) ||
+        (visit.endsAt ?? visit.startedAt ?? 0) > visit.reportedAt)) {
+      fail('体験済みを確認した時刻を確認してください。');
+    }
+    if (visit.status === 'queue' || visit.status === 'riding') {
+      activeVisits++;
+      if (!validTime(visit.endsAt) || visit.endsAt <= (visit.startedAt ?? -1)) fail('進行中の体験の終了見込みを確認してください。');
+    }
+  }
+  if (activeVisits > 1) fail('同時に進行中にできる体験は1回です。');
+}
+
 /** Check portable settings independently of the optimiser. */
 export function validateSavedState(state) {
   safeTree(state);
@@ -127,7 +160,7 @@ export function validateSavedState(state) {
   if (settings.walkCrowdMode !== undefined && !['estimate','off'].includes(settings.walkCrowdMode)) fail('混雑による移動時間の設定を確認してください。');
   if (settings.waitAsOf !== undefined && !integer(settings.waitAsOf,0,253402300799999)) fail('待ち時間を確認した時刻を確認してください。');
   if (settings.excludedAutoBreaks !== undefined && (!Array.isArray(settings.excludedAutoBreaks)||settings.excludedAutoBreaks.length>60||new Set(settings.excludedAutoBreaks).size!==settings.excludedAutoBreaks.length||settings.excludedAutoBreaks.some(value=>!autoBreakId(value)))) fail('取り除いた自動休憩の一覧を確認してください。');
-  if(settings.skipAutoRestAfter!==undefined&&(!Array.isArray(settings.skipAutoRestAfter)||settings.skipAutoRestAfter.length>MAX_ACTIVITIES||new Set(settings.skipAutoRestAfter).size!==settings.skipAutoRestAfter.length||settings.skipAutoRestAfter.some(value=>!id(value))))fail('見送った自動休憩の施設を確認してください。');
+  if(settings.skipAutoRestAfter!==undefined&&(!Array.isArray(settings.skipAutoRestAfter)||settings.skipAutoRestAfter.length>MAX_VISITS||new Set(settings.skipAutoRestAfter).size!==settings.skipAutoRestAfter.length||settings.skipAutoRestAfter.some(value=>!visitId(value))))fail('見送った自動休憩の施設を確認してください。');
   if (settings.operationalHolds!==undefined&&settings.operationalHolds!==null) {
     const holds=settings.operationalHolds,today=new Date(Date.now()+9*3600000).toISOString().slice(0,10);
     if(!plain(holds)||!validDate(holds.date)||holds.date!==settings.date||holds.date>today||!validTimestamp(holds.observedAt)||Date.parse(holds.observedAt)>Date.now()+60000||new Date(Date.parse(holds.observedAt)+9*3600000).toISOString().slice(0,10)!==holds.date||!Array.isArray(holds.activityIds)||holds.activityIds.length>MAX_ACTIVITIES||new Set(holds.activityIds).size!==holds.activityIds.length||holds.activityIds.some(value=>!id(value)||!value.startsWith(state.parkId+'-')))fail('運営停止の記録の日付・パーク・確認時刻を確認してください。');
@@ -189,6 +222,8 @@ export function validateSavedState(state) {
   const ids = new Set();
   for (const selection of settings.selections) {
     if (!plain(selection) || !id(selection.id) || ids.has(selection.id) || !integer(selection.weight, 1, 5)) fail('希望のIDと重要度1〜5を確認してください。');
+    if (!optionalNumber(selection, 'repeatCount', 1, 2, true)) fail('希望する体験回数は1回または2回で指定してください。');
+    if (!optionalNumber(selection, 'dpaVisit', 1, selection.repeatCount ?? 1, true)) fail('DPAを使う回は希望する体験回数の中から選んでください。');
     ids.add(selection.id);
     if (selection.nodeOverride !== undefined && !id(selection.nodeOverride)) fail('鑑賞・集合地点のIDを確認してください。');
     for (const key of ['earliest', 'latest', 'dpaStart', 'dpaEnd', 'dpaPurchasedAt']) if (!optionalNumber(selection, key, 0, 1440, true)) fail('希望する時間帯を確認してください。');
@@ -203,10 +238,15 @@ export function validateSavedState(state) {
     if (selection.dpaAvailableWindows !== undefined && (!Array.isArray(selection.dpaAvailableWindows) || selection.dpaAvailableWindows.length > 30 || selection.dpaAvailableWindows.some(value => !validWindow(value)))) fail('DPAの販売枠を確認してください。');
   }
   if (settings.currentNode !== undefined && !id(settings.currentNode)) fail('現在地の地点を確認してください。');
-  if (settings.completedIds !== undefined && (!Array.isArray(settings.completedIds) || settings.completedIds.length > MAX_ACTIVITIES || settings.completedIds.some(value => !id(value)))) fail('体験済みの施設を確認してください。');
-  if (settings.purchases !== undefined && (!Array.isArray(settings.purchases) || settings.purchases.length > MAX_ACTIVITIES || settings.purchases.some(item => !plain(item) || !id(item.id) || !['attraction', 'show'].includes(item.kind) || !validTime(item.purchasedAt) || !validTime(item.start) || !validTime(item.end) || item.start >= item.end || !integer(item.cost, 0, 1000000) || item.cost % 100 !== 0))) fail('購入済みDPAの時刻と費用を確認してください。');
+  if (settings.completedIds !== undefined && (!Array.isArray(settings.completedIds) || settings.completedIds.length > MAX_VISITS || settings.completedIds.some(value => !visitId(value)))) fail('体験済みの施設を確認してください。');
+  validateDayProgress(settings.dayProgress, state.parkId, settings.date);
+  if (settings.purchases !== undefined) {
+    if (!Array.isArray(settings.purchases) || settings.purchases.length > MAX_ACTIVITIES || settings.purchases.some(item => !plain(item) || !id(item.id) || !['attraction', 'show'].includes(item.kind) || !validTime(item.purchasedAt) || !validTime(item.start) || !validTime(item.end) || item.start >= item.end || !integer(item.cost, 0, 1000000) || item.cost % 100 !== 0)) fail('購入済みDPAの時刻と費用を確認してください。');
+    if (new Set(settings.purchases.map(ticket=>ticket.id)).size !== settings.purchases.length) fail('同じ施設の購入済みDPAが重複しています。');
+  }
   if (state.result !== undefined && state.result !== null) {
     if (!plain(state.result) || !Array.isArray(state.result.rows) || state.result.rows.length > 5000) fail('予定表の行を確認してください。');
+    if (state.result.settings?.dayProgress !== undefined) validateDayProgress(state.result.settings.dayProgress, state.parkId, state.result.settings.date);
     if(state.result.historicalVisitBounds!==undefined){const bounds=state.result.historicalVisitBounds;if(!plain(bounds)||bounds.parkId!==state.parkId||!validDate(bounds.date)||!validTime(bounds.entry)||!validTime(bounds.exit)||bounds.entry>=bounds.exit||(state.result.settings?.date!==undefined&&bounds.date!==state.result.settings.date))fail('保持した予定の元の滞在時間を確認してください。');}
 
     for (const row of state.result.rows) {
@@ -215,7 +255,8 @@ export function validateSavedState(state) {
       if (row.path !== undefined && (!Array.isArray(row.path) || row.path.length > 1000 || row.path.some(value => !id(value)))) fail('予定表の徒歩ルートを確認してください。');
       if ((row.kind || row.type) === 'location' && (row.start !== row.end || !id(row.node))) fail('現在地の変更は同じ時刻の地点として指定してください。');
       if (row.fixedBreakId !== undefined && (!id(row.fixedBreakId) || (row.kind || row.type) !== 'rest' || !id(row.node))) fail('指定した休憩のIDと地点を確認してください。');
-      if (row.awaitingPerformance !== undefined && (row.awaitingPerformance !== true || (row.kind || row.type) !== 'wait' || row.dpa !== true || !id(row.activityId) || !id(row.node))) fail('DPA入場から開演までの待機を確認してください。');
+      if (row.activityId !== undefined && !visitId(row.activityId)) fail('予定表の施設IDと体験回数を確認してください。');
+      if (row.awaitingPerformance !== undefined && (row.awaitingPerformance !== true || (row.kind || row.type) !== 'wait' || row.dpa !== true || !visitId(row.activityId) || !id(row.node))) fail('DPA入場から開演までの待機を確認してください。');
       if (row.plannedDpaPurchase!==undefined && (typeof row.plannedDpaPurchase!=='boolean' || !row.dpa || (row.kind||row.type)!=='activity')) fail('DPA購入候補の利用記録を確認してください。');
       if (row.autoBreakId!==undefined&&(!autoBreakId(row.autoBreakId)||(row.kind||row.type)!=='rest')) fail('自動休憩のIDを確認してください。');
       if ((row.walkingFactor!==undefined&&(!finite(row.walkingFactor,1,3)||(row.kind||row.type)!=='walk'))||(row.walkingSource!==undefined&&(row.walkingSource!=='congestion-estimate'||(row.kind||row.type)!=='walk'))) fail('混雑を考慮した徒歩時間を確認してください。');
@@ -225,7 +266,7 @@ export function validateSavedState(state) {
         if ((row.kind || row.type) !== 'queue' || !integer(row.estimatedMinutes,0,600) || !integer(row.bufferMinutes,0,30) || !integer(row.delayMinutes,0,60) || row.end-row.start !== row.estimatedMinutes+row.bufferMinutes+row.delayMinutes) fail('待ち時間と余裕の内訳を確認してください。');
       }
     }
-    if (state.result.visits !== undefined && (!Array.isArray(state.result.visits) || state.result.visits.length > MAX_ACTIVITIES || state.result.visits.some(visit => !plain(visit) || !id(visit.activityId || visit.id) || !id(visit.node) || (visit.endNode !== undefined && !id(visit.endNode)) || !validTime(visit.start) || !validTime(visit.end) || visit.start > visit.end))) fail('体験した施設と地点を確認してください。');
+    if (state.result.visits !== undefined && (!Array.isArray(state.result.visits) || state.result.visits.length > MAX_VISITS || state.result.visits.some(visit => !plain(visit) || !visitId(visit.activityId || visit.id) || !id(visit.node) || (visit.endNode !== undefined && !id(visit.endNode)) || !validTime(visit.start) || !validTime(visit.end) || visit.start > visit.end))) fail('体験した施設と地点を確認してください。');
   }
   if (state.history !== undefined && (!Array.isArray(state.history) || state.history.length > 50000 || state.history.some(row => !validDate(row.date) || !id(row.activityId) || !integer(row.time, 0, 1439) || !finite(row.wait, 0, 600)))) fail('待ち時間の履歴を確認してください。');
   return state;
@@ -380,7 +421,11 @@ export function createShareUrl(state, baseUrl = location.href) {
   validateSavedState(state);
   const url = new URL(baseUrl);
   if (!['https:', 'http:'].includes(url.protocol)) fail('共有用のWebページを開いてください。');
-  const {history, initialPlan, waitModel, liveData, liveSnapshot, liveNotice, waitAsOf, operationalHolds, calendarData, weatherForecast, weatherNotice, ...portableSettings} = state.settings;
+  const {history, initialPlan, waitModel, liveData, liveSnapshot, liveNotice, waitAsOf, operationalHolds, calendarData, weatherForecast, weatherNotice, dayProgress, completedIds, ...portableSettings} = state.settings;
+  if (dayProgress) {
+    delete portableSettings.replanFrom;
+    delete portableSettings.currentNode;
+  }
   const encoded = encodeBase64(JSON.stringify({v:1, parkId:state.parkId, settings:portableSettings}));
   if (encoded.length > MAX_SHARED_LENGTH) fail('希望が多いためリンクが長くなります。JSONで共有してください。');
   url.hash = `plan=${encoded}`;
@@ -451,7 +496,17 @@ export const formatTime = value => `${String(Math.floor(value / 60)).padStart(2,
 const yen = value => `${Math.round(Number(value) || 0).toLocaleString('ja-JP')}円`;
 const html = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
 const rowKind = row => row.kind || row.type || '';
-const rowTitle = row => rowKind(row) === 'rest' && !row.name.includes('休憩') ? `休憩 · ${row.name}` : rowKind(row) === 'queue' && (row.bufferMinutes || row.delayMinutes) ? `${row.name}（見込み${row.estimatedMinutes}分${row.bufferMinutes ? `＋余裕${row.bufferMinutes}分` : ''}${row.delayMinutes ? `＋混雑想定${row.delayMinutes}分` : ''}）` : row.name;
+function rowTitle(row) {
+  let label = row.name;
+  if (rowKind(row) === 'rest' && !label.includes('休憩')) label = `休憩 · ${label}`;
+  if (rowKind(row) === 'queue' && (row.bufferMinutes || row.delayMinutes)) {
+    label += `（見込み${row.estimatedMinutes}分${row.bufferMinutes ? `＋余裕${row.bufferMinutes}分` : ''}${row.delayMinutes ? `＋混雑想定${row.delayMinutes}分` : ''}）`;
+  }
+  if (row.userProgress === 'done') return `${label}（体験済み）`;
+  if (row.userProgress === 'riding') return `${label}（体験中）`;
+  if (row.userProgress === 'queue') return label + (rowKind(row) === 'queue' ? '（並んでいる）' : '（体験終了の見込み）');
+  return label;
+}
 const rowLocation = (row, park) => park?.nodes?.find(node => node.id === (row.node || row.to))?.name || '';
 const rowCategory = row => ({walk:'徒歩', wait:'時間調整', queue:'待ち時間', activity:'体験', rest:'休憩', exit:'退園', location:'現在地'})[rowKind(row)] || rowKind(row);
 const csvCell = value => {
@@ -516,9 +571,12 @@ export function buildCalendar(plan, park, settings) {
   const stamp = new Date().toISOString().replaceAll('-', '').replaceAll(':', '').replace(/\.\d+/, '');
   const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//TDRoute//Day Plan//JA', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH', `X-WR-CALNAME:${icalText(park.name)}`];
   rows.forEach((row, index) => {
-    if (row.start === row.end) return;
+    const instant = row.start === row.end;
+    if (instant && !(rowKind(row) === 'activity' && row.userProgress === 'done')) return;
     const place = rowLocation(row, park),weather=exportedWeather(plan,settings,row.start);
-    lines.push('BEGIN:VEVENT', `UID:${settings.date}-${park.id}-${index}-${row.start}@park-itinerary-lab`, `DTSTAMP:${stamp}`, `DTSTART:${calendarStamp(settings.date, row.start)}`, `DTEND:${calendarStamp(settings.date, row.end)}`, `SUMMARY:${icalText(rowTitle(row))}`, `DESCRIPTION:${icalText(`${row.fixedBreakId ? '指定した時刻と地点で休憩。' : ''}${row.dpa ? 'DPA利用。' : ''}費用 ${yen(row.cost)}${row.metres ? `。徒歩 約${Math.round(row.metres)}m` : ''}。${weatherDescription(weather)}`)}`, `LOCATION:${icalText(place ? `${park.name} · ${place}` : park.name)}`, 'END:VEVENT');
+    lines.push('BEGIN:VEVENT', `UID:${settings.date}-${park.id}-${index}-${row.start}@park-itinerary-lab`, `DTSTAMP:${stamp}`, `DTSTART:${calendarStamp(settings.date, row.start)}`);
+    if (!instant) lines.push(`DTEND:${calendarStamp(settings.date, row.end)}`);
+    lines.push(`SUMMARY:${icalText(rowTitle(row))}`, `DESCRIPTION:${icalText(`${row.fixedBreakId ? '指定した時刻と地点で休憩。' : ''}${row.dpa ? 'DPA利用。' : ''}費用 ${yen(row.cost)}${row.metres ? `。徒歩 約${Math.round(row.metres)}m` : ''}。${weatherDescription(weather)}`)}`, `LOCATION:${icalText(place ? `${park.name} · ${place}` : park.name)}`, 'END:VEVENT');
   });
   lines.push('END:VCALENDAR'); return lines.map(foldIcal).join('\r\n') + '\r\n';
 }
@@ -528,9 +586,18 @@ export function buildOfflineHtml(plan, park, settings) {
   const total = plan.totals || {};
   const breakdown = [['フード', total.foodCost], ['DPA', total.dpaCost], ['お買い物', total.shoppingCost], ['残り予算', total.budgetRemaining], ['お土産に使える額', total.souvenirAllocation]].filter(([, value]) => finite(value, 0, 10000000)).map(([label, value]) => `<span>${html(label)} ${html(yen(value))}</span>`).join(' · ');
   const paidNote = settings.spentBudget > 0 || (settings.purchases || []).length > 0 ? '（支払済みを含む）' : '';
-  const cards = rows.map((row, index) => `<article class="row ${rowKind(row) === 'activity' ? 'visit' : rowKind(row) === 'rest' ? 'rest' : ''}"><div class="time">${html(formatTime(row.start))}<small>${html(formatTime(row.end))}</small></div><div><h2>${html(rowTitle(row))}</h2><p>${rowLocation(row, park) ? `${html(rowLocation(row, park))} · ` : ''}${html(row.end - row.start)}分${row.metres ? ` · 徒歩 約${html(Math.round(row.metres))}m` : ''}${row.dpa ? ' · DPA利用' : ''}${row.cost ? ` · ${html(yen(row.cost))}` : ''}</p>${forecastCardHtml(exportedWeather(plan,settings,row.start).info,{missingLabel:`天気 ${(plan.settings||settings).weatherMode==='manual'?'手動設定':'予報未取得'}`})}<label><input type="checkbox" data-row="${index}">済み</label></div></article>`).join('');
+  const progress = (plan.settings || settings).dayProgress;
+  const confirmed = progress?.parkId === park.id && progress.date === settings.date ? progress.visits : {};
+  const timedVisits = new Set(rows.filter(row=>rowKind(row) === 'activity').map(row=>row.activityId));
+  const otherVisits = Object.entries(confirmed).filter(([id, visit])=>visit.status === 'done' && !timedVisits.has(id));
+  const untimed = otherVisits.map(([id])=>{
+    const facility = park.activities?.find(activity=>activity.id === baseVisitId(id));
+    return `<li>${html(facility?.name || baseVisitId(id))}${isRepeatVisit(id) ? '（2回目）' : ''}</li>`;
+  });
+  const untimedSection = untimed.length ? `<section><h2>体験済み（時刻の記録なし）</h2><ul>${untimed.join('')}</ul></section>` : '';
+  const cards = rows.map((row, index) => `<article class="row ${rowKind(row) === 'activity' ? 'visit' : rowKind(row) === 'rest' ? 'rest' : ''}"><div class="time">${html(formatTime(row.start))}<small>${html(formatTime(row.end))}</small></div><div><h2>${html(rowTitle(row))}</h2><p>${rowLocation(row, park) ? `${html(rowLocation(row, park))} · ` : ''}${html(row.end - row.start)}分${row.metres ? ` · 徒歩 約${html(Math.round(row.metres))}m` : ''}${row.dpa ? ' · DPA利用' : ''}${row.cost ? ` · ${html(yen(row.cost))}` : ''}</p>${forecastCardHtml(exportedWeather(plan,settings,row.start).info,{missingLabel:`天気 ${(plan.settings||settings).weatherMode==='manual'?'手動設定':'予報未取得'}`})}<label><input type="checkbox" data-row="${index}"${row.userProgress === 'done' || (rowKind(row) === 'activity' && confirmed[row.activityId]?.status === 'done') ? ' checked' : ''}>済み</label></div></article>`).join('');
   const sources = forecastSourcesHtml(rows.map(row => exportedWeather(plan,settings,row.start).info),{snapshot:true});
   const safeMap = webUrl(park.mapUrl) ? `<a href="${html(park.mapUrl)}" target="_blank" rel="noopener noreferrer">公式の園内マップを開く ↗</a>` : '';
-  return `<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${html(park.name)} · ${html(settings.date)} の予定</title><style>*{box-sizing:border-box}body{margin:0;background:${park.id === 'sea' ? '#e8f5ff' : '#f4f6ff'};color:#183047;font-family:system-ui,"Yu Gothic",sans-serif;line-height:1.7}.wrap{max-width:720px;margin:auto;padding:26px 18px}header{margin-bottom:24px}h1{font-size:25px;margin:8px 0}h2{font-size:16px;margin:0}p{margin:5px 0;color:#536579;font-size:13px}.kicker{letter-spacing:.13em;font-size:10px;font-weight:800}.row{display:grid;grid-template-columns:68px 1fr;gap:14px;background:#ffffffad;border:1px solid #d2dde6;border-radius:14px;padding:17px;margin:9px 0}.visit{border-left:4px solid #308bc9;background:white}.rest{border-left:4px solid #99701c;background:#fff9e9}.time{font-weight:800;font-size:17px}.time small{display:block;font-size:12px;font-weight:500;color:#64758b}label{font-size:12px;display:inline-flex;align-items:center;gap:5px}input:checked{accent-color:#268769}a{color:#22689e}footer{margin:25px 0;font-size:12px}button{padding:9px 15px;border-radius:9px;border:1px solid #bdd0df;background:white;color:#183047;font:inherit}.forecast-card{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:8px 0;padding:10px 12px;background:#eef5fb;border-radius:10px}.forecast-main,.forecast-rain{display:flex;align-items:center;gap:12px}.forecast-icon{font-size:26px}.forecast-temperature{font-size:17px;font-weight:700}.forecast-period{display:block;font-size:11px;font-weight:500;color:#64758b}.forecast-main>.forecast-period{align-self:center}.forecast-value{display:flex;flex-direction:column;line-height:1.35}.forecast-value strong{font-size:14px}.forecast-metric-label{font-size:10px}.forecast-missing{color:#64758b}.forecast-sources{margin-top:20px}.forecast-sources h4{margin:12px 0 4px}.table-wrap{overflow:auto}table{border-collapse:collapse;font-size:11px}th,td{padding:5px;border:1px solid #d2dde6;text-align:left}summary{cursor:pointer}@media print{body{background:white}.wrap{max-width:none}.row{break-inside:avoid}button,label{display:none}}</style><div class="wrap"><header><div class="kicker">TDRoute / MY DAY</div><h1>${html(park.name)}</h1><p>${html(settings.date)} · ${html(formatTime(settings.entry))}〜${html(formatTime(settings.exit))}</p><p>合計 ${html(yen(total.cost ?? total.spend ?? rows.reduce((sum,row)=>sum+(Number(row.cost)||0),0)))}${paidNote} · 予算 ${html(yen(settings.budget))}</p><p>${breakdown}</p><button onclick="window.print()">印刷・PDFに保存</button></header><main>${cards}</main><footer>${safeMap}${sources}<p>この予定表は通信がない場所でも開けます。チェックはこの画面を開いている間だけ保持されます。</p></footer></div></html>`;
+  return `<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><title>${html(park.name)} · ${html(settings.date)} の予定</title><style>*{box-sizing:border-box}body{margin:0;background:${park.id === 'sea' ? '#e8f5ff' : '#f4f6ff'};color:#183047;font-family:system-ui,"Yu Gothic",sans-serif;line-height:1.7}.wrap{max-width:720px;margin:auto;padding:26px 18px}header{margin-bottom:24px}h1{font-size:25px;margin:8px 0}h2{font-size:16px;margin:0}p{margin:5px 0;color:#536579;font-size:13px}.kicker{letter-spacing:.13em;font-size:10px;font-weight:800}.row{display:grid;grid-template-columns:68px 1fr;gap:14px;background:#ffffffad;border:1px solid #d2dde6;border-radius:14px;padding:17px;margin:9px 0}.visit{border-left:4px solid #308bc9;background:white}.rest{border-left:4px solid #99701c;background:#fff9e9}.time{font-weight:800;font-size:17px}.time small{display:block;font-size:12px;font-weight:500;color:#64758b}label{font-size:12px;display:inline-flex;align-items:center;gap:5px}input:checked{accent-color:#268769}a{color:#22689e}footer{margin:25px 0;font-size:12px}button{padding:9px 15px;border-radius:9px;border:1px solid #bdd0df;background:white;color:#183047;font:inherit}.forecast-card{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:8px 0;padding:10px 12px;background:#eef5fb;border-radius:10px}.forecast-main,.forecast-rain{display:flex;align-items:center;gap:12px}.forecast-icon{font-size:26px}.forecast-temperature{font-size:17px;font-weight:700}.forecast-period{display:block;font-size:11px;font-weight:500;color:#64758b}.forecast-main>.forecast-period{align-self:center}.forecast-value{display:flex;flex-direction:column;line-height:1.35}.forecast-value strong{font-size:14px}.forecast-metric-label{font-size:10px}.forecast-missing{color:#64758b}.forecast-sources{margin-top:20px}.forecast-sources h4{margin:12px 0 4px}.table-wrap{overflow:auto}table{border-collapse:collapse;font-size:11px}th,td{padding:5px;border:1px solid #d2dde6;text-align:left}summary{cursor:pointer}@media print{body{background:white}.wrap{max-width:none}.row{break-inside:avoid}button,label{display:none}}</style><div class="wrap"><header><div class="kicker">TDRoute / MY DAY</div><h1>${html(park.name)}</h1><p>${html(settings.date)} · ${html(formatTime(settings.entry))}〜${html(formatTime(settings.exit))}</p><p>合計 ${html(yen(total.cost ?? total.spend ?? rows.reduce((sum,row)=>sum+(Number(row.cost)||0),0)))}${paidNote} · 予算 ${html(yen(settings.budget))}</p><p>${breakdown}</p><button onclick="window.print()">印刷・PDFに保存</button></header><main>${untimedSection}${cards}</main><footer>${safeMap}${sources}<p>この予定表は通信がない場所でも開けます。チェックはこの画面を開いている間だけ保持されます。</p></footer></div></html>`;
 }
 export function downloadOfflineHtml(plan, park, settings) { downloadBlob(buildOfflineHtml(plan, park, settings), 'text/html;charset=utf-8', `TDRoute_${park.id}_${settings.date}.html`); }

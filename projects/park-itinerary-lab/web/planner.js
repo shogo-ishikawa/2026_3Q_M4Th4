@@ -1,9 +1,13 @@
-import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.12.2';
+import {baseVisitId, canStartVisit, compactRepeatSelections, expandRepeatVisits, facilityForVisit} from './repeat-visits.js';
+import {applyProgressToPrefix, progressEntries} from './day-progress-plan.js';
+import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.13.0';
 import { weatherAtMinute, calendarContext } from './calendar-features.js';
-import { predictModelWait, estimateParkCrowd, calendarCrowdLevel } from './wait-model.js?v=1.12.2';
-import { liveWaitFor, currentRideStatus } from './wait-data.js?v=1.12.2';
+import { predictModelWait, estimateParkCrowd, calendarCrowdLevel } from './wait-model.js?v=1.13.0';
+import { liveWaitFor, currentRideStatus } from './wait-data.js?v=1.13.0';
+import {deriveIntradayAdjustment, applyIntradayAdjustment, describeIntradayAdjustment} from './intraday-waits.js';
 /* Browser itinerary search. Every returned plan is checked; the search does not claim global optimality. */
 const resolvedCrowd = Symbol('park crowd');
+const intradayAdjustment = Symbol('same-day wait adjustment');
 const FOOD = new Set(['restaurant', 'cafe', 'snack', 'popcorn']);
 const FIXED = new Set(['show', 'parade']);
 const DINING_RECOVERY_MINUTES = 20;
@@ -137,11 +141,12 @@ export function estimateWait(activity, start, settings, history = []) {
     minutes: Math.round(numberIn(selection.manualWait ?? activity.baseWait ?? 0, '手動の待ち時間', 0, 600)),
     source: 'manual', samples: 0,
   };
+  activity = facilityForVisit(activity);
   const live = liveWaitFor(activity, start, settings, { now: settings.waitAsOf ?? Date.now() });
   if (live?.isOpen) return live;
   const predictionActivity = activity.dailySchedules?.[settings.date]?.windows ? {...activity,windows:activity.dailySchedules[settings.date].windows} : activity;
   const prediction = predictModelWait(predictionActivity, start, settings, settings.waitModel);
-  if (prediction) return prediction;
+  if (prediction) return applyIntradayAdjustment(prediction, start, settings[intradayAdjustment], predictionActivity);
   const measured = historicalWait(activity, start, settings, history);
   if (measured) return measured;
   const calendar = calendarContext(settings.date, settings.calendarData);
@@ -175,6 +180,7 @@ export function estimateWait(activity, start, settings, history = []) {
 /** Prepare a fresh set of settings for the browser planner or the shared daily forecast. */
 export function setWaitForecastContext(park, settings, recordReference) {
   settings.activeEvents = (park.events || []).filter(event => event.startDate <= settings.date && settings.date <= event.endDate);
+  settings[intradayAdjustment] = deriveIntradayAdjustment(park, settings);
   if (settings.crowdLevel !== 'auto') return null;
   const crowd = estimateParkCrowd(park, settings, recordReference);
   settings[resolvedCrowd] = crowd;
@@ -215,7 +221,7 @@ function normalise(park, settings) {
   if(!Array.isArray(settings.excludedAutoBreaks||[])||(settings.excludedAutoBreaks||[]).length>60||(settings.excludedAutoBreaks||[]).some(key=>typeof key!=='string'||!key||key.length>220))throw new RangeError('外す自動休憩を確認してください。');
   result.excludedAutoBreaks=[...new Set(settings.excludedAutoBreaks||[])];
   const skippedAfter=settings.skipAutoRestAfter??[];
-  if(!Array.isArray(skippedAfter)||skippedAfter.length>400||skippedAfter.some(id=>typeof id!=='string'||!/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,99}$/.test(id)))throw new RangeError('見送った自動休憩の施設を確認してください。');
+  if(!Array.isArray(skippedAfter)||skippedAfter.length>400||skippedAfter.some(id=>typeof id!=='string'||!/^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,99}(?:~2)?$/.test(id)))throw new RangeError('見送った自動休憩の施設を確認してください。');
   result.skipAutoRestAfter=[...new Set(skippedAfter)];
   result.searchSeconds = numberIn(settings.searchSeconds ?? 10, '探索時間', 0.05, 120);
   result.searchMethod = settings.searchMethod ?? 'beam';
@@ -236,7 +242,7 @@ function normalise(park, settings) {
   setWaitForecastContext(park, result);
   const activities = new Map(park.activities.map(activity => [activity.id, activity]));
   const input = settings.selections || [];
-  if (!Array.isArray(input) || input.length > 200) throw new RangeError('希望する施設は200件以内にしてください。');
+  if (!Array.isArray(input) || input.length > 400 || input.filter(s=>baseVisitId(s?.id)===s?.id).length>200) throw new RangeError('希望する施設は200件以内にしてください。');
   const ids = new Set();
   result.selections = input.map(item => {
     if (!item || !activities.has(item.id) || ids.has(item.id)) throw new RangeError('施設の選択IDを確認してください。');
@@ -282,7 +288,7 @@ function normalise(park, settings) {
   });
   if (!Array.isArray(settings.purchases || []) || (settings.purchases || []).length > 200) throw new RangeError('DPAの購入履歴を確認してください。');
   result.purchases = (settings.purchases || []).map(purchase => {
-    if (!activities.has(purchase.id)) throw new RangeError('取得済みDPAの施設IDを確認してください。');
+    if (baseVisitId(purchase.id)!==purchase.id || !activities.has(purchase.id)) throw new RangeError('取得済みDPAの施設IDを確認してください。');
     const activity = activities.get(purchase.id);
     if (!activity.dpa) throw new RangeError('取得済みDPAの対象を確認してください。');
     if (purchase.kind && purchase.kind !== (activity.dpa.kind || 'attraction')) throw new RangeError('DPA購入履歴の種別が施設と一致しません。');
@@ -291,9 +297,10 @@ function normalise(park, settings) {
       end: toMinutes(purchase.end), cost: ceil100(numberIn(purchase.cost ?? activity.dpa.price, '支払済みDPAの費用', 0, 10000000, true)), owned: true };
   });
   for (const selection of result.selections.filter(item => item.dpaMode === 'owned')) {
-    if (!result.purchases.some(purchase => purchase.id === selection.id)) {
+    const facilityId=baseVisitId(selection.id);
+    if (!result.purchases.some(purchase => purchase.id === facilityId)) {
       const activity = activities.get(selection.id);
-      result.purchases.push({ id: selection.id, kind: activity.dpa.kind || 'attraction', purchasedAt: selection.dpaPurchasedAt,
+      result.purchases.push({ id: facilityId, kind: activity.dpa.kind || 'attraction', purchasedAt: selection.dpaPurchasedAt,
         start: selection.dpaStart, end: selection.dpaEnd, cost: activity.dpa.price, owned: true });
     }
   }
@@ -301,7 +308,7 @@ function normalise(park, settings) {
   for (const purchase of result.purchases) {
     if (purchaseIds.has(purchase.id)) throw new RangeError('同じDPAの購入履歴が重複しています。');
     purchaseIds.add(purchase.id);
-    const selection = result.selections.find(item => item.id === purchase.id && item.dpaMode === 'owned');
+    const selection = result.selections.find(item => baseVisitId(item.id) === purchase.id && item.dpaMode === 'owned');
     if (selection && (selection.dpaStart !== purchase.start || selection.dpaEnd !== purchase.end || selection.dpaPurchasedAt !== purchase.purchasedAt)) throw new RangeError('取得済みDPAの時刻と購入履歴が一致しません。');
     if (purchase.purchasedAt < entry || purchase.start >= purchase.end || purchase.end > 1439 ||
       purchase.purchasedAt > purchase.start) throw new RangeError('取得済みDPAの購入・利用時刻を確認してください。');
@@ -378,22 +385,32 @@ function prefixSourceRows(initialPlan,settings) {
 export function settledReplanWishes(park,settings,previous) {
   if (!Number.isInteger(settings.replanFrom)) return new Set();
   const settled = new Set(settings.completedIds || []);
+  const entries=progressEntries(park,settings);
+  const reports=new Map(entries);
+  for (const [id, value] of entries) {
+    if (['done','queue','riding','skipped'].includes(value.status)) settled.add(id);
+    else settled.delete(id);
+  }
   const source = replanSource(park,settings,previous);
   if (!source || source.settings?.date !== settings.date || !['feasible','no-plan'].includes(source.status)) return settled;
-  for (const row of prefixSourceRows(source,settings)) {
-    if (row.kind === 'activity' && row.activityId) settled.add(row.activityId);
+  const expanded = expandRepeatVisits(park,settings,source);
+  const rows = entries.length || source.rows?.some(r=>r.userProgress || r.progressAnchor)
+    ? preservedPrefix(source,expanded.settings,expanded.park) : prefixSourceRows(source,settings);
+  for (const row of rows) {
+    if (row.kind === 'activity' && row.activityId && !reports.has(row.activityId)) settled.add(row.activityId);
   }
   return settled;
 }
-function preservedPrefix(initialPlan,settings) {
+function preservedPrefix(initialPlan,settings,park) {
   const cutoff=toMinutes(settings.replanFrom);
-  return prefixSourceRows(initialPlan,settings).map(item=>{
+  const original=prefixSourceRows(initialPlan,settings).map(item=>{
     const end=['wait','rest'].includes(item.kind)&&!item.fixedBreakId&&!item.awaitingPerformance?Math.min(item.end,cutoff):item.end;
     // Older plans identify a purchased candidate by its charge or, for a free slot, its ticket.
     const legacyCandidate = item.kind === 'activity' && item.dpa && item.plannedDpaPurchase === undefined &&
-      !item.dpaCost && initialPlan?.purchases?.some(ticket => ticket.id === item.activityId && ticket.owned === false);
+      !item.dpaCost && initialPlan?.purchases?.some(ticket => ticket.id === baseVisitId(item.activityId) && ticket.owned === false);
     return {...copy(item),...(legacyCandidate ? {plannedDpaPurchase:true} : {}),end,duration:end-item.start,preserved:true,...(item.kind==='walk'?{walkSpeed:item.walkSpeed??initialPlan?.settings?.speed??settings.speed}:{})};
   });
+  return applyProgressToPrefix(park,{...settings,entry:toMinutes(settings.entry),exit:toMinutes(settings.exit)},cutoff,original,initialPlan);
 }
 const rowSignature=value=>JSON.stringify(value,(_,item)=>item&&typeof item==='object'&&!Array.isArray(item)?Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])):item);
 function historicalBounds(park,settings,source) {
@@ -405,7 +422,7 @@ function historicalBounds(park,settings,source) {
   const sourceRows=prefixSourceRows(source,settings);
   if(!sourceRows.every(item=>(item.start>=originalEntry&&item.end<=originalExit)||(item.preserved&&inheritedValid&&item.start>=inherited.entry&&item.end<=inherited.exit)))return current;
   // Bounds come from the exact recorded prefix, never from an arbitrary expanded metadata value.
-  const rows=preservedPrefix(source,settings);
+  const rows=preservedPrefix(source,settings,park);
   return {...current,entry:Math.min(current.entry,...rows.map(item=>item.start)),exit:Math.max(current.exit,...rows.map(item=>item.end))};
 }
 
@@ -416,35 +433,56 @@ function contextFor(park, settings, initialPlan) {
   if (!graph.distances[park.entryNode] || !graph.distances[park.exitNode]) throw new RangeError('入口と出口の地点がありません。');
   let prefix = [], beginning = settings.entry, location = settings.currentNode || park.entryNode;
   const completed = new Set(settings.completedIds || []);
+  const reports=new Map(progressEntries(park,settings));
+  for(const id of reports.keys()) completed.delete(id);
+  const active=[...reports.values()].some(f=>f.status==='queue'||f.status==='riding');
   if (settings.replanFrom !== undefined && settings.replanFrom !== '') {
     const cutoff = toMinutes(settings.replanFrom);
     if (cutoff < settings.entry || cutoff >= settings.exit) throw new RangeError('組み替える時刻は滞在時間内にしてください。');
-    prefix=preservedPrefix(initialPlan,settings);
+    prefix=preservedPrefix(initialPlan,settings,park);
     if (prefix.length) {
       beginning = Math.max(cutoff, ...prefix.map(item => item.end));
       const prefixEnd = prefix[prefix.length - 1];
       const prefixNode = prefixEnd.endNode || prefixEnd.node || prefixEnd.to || location;
-      if (settings.currentNode && settings.currentNode !== prefixNode && beginning > cutoff) throw new RangeError('進行中の予定の終了地点と現在地が一致しません。組み替える時刻を予定の終了後にしてください。');
-      location = settings.currentNode || prefixNode;
-      if (settings.currentNode && settings.currentNode !== prefixNode) prefix.push(row('location', beginning, beginning, '現在地を確認', { node: location, preserved: true }));
+      if (!active && settings.currentNode && settings.currentNode !== prefixNode && beginning > cutoff) throw new RangeError('進行中の予定の終了地点と現在地が一致しません。組み替える時刻を予定の終了後にしてください。');
+      location = active ? prefixNode : (settings.currentNode || prefixNode);
+      if (!active && settings.currentNode && settings.currentNode !== prefixNode) prefix.push(row('location', beginning, beginning, '現在地を確認', { node: location, preserved: true }));
     } else beginning = cutoff;
-    prefix.filter(item => item.kind === 'activity').forEach(item => completed.add(item.activityId));
+    for(const [id,value] of reports)
+      if(value.status==='done' && !prefix.some(item=>item.kind==='activity' && item.activityId===id)) completed.add(id);
+    for(const item of prefix.filter(item=>item.kind==='activity')) {
+      if (!canStartVisit(item.activityId,completed)) throw new RangeError('2回目の体験を記録する前に1回目の体験を確認してください。');
+      completed.add(item.activityId);
+    }
+    for(const id of completed) {
+      if (!canStartVisit(id,completed)) throw new RangeError('2回目の体験には1回目の完了記録が必要です。');
+    }
   }
   if (!graph.distances[location]) throw new RangeError('現在地を地図から選んでください。');
-  const prefixVisits = (initialPlan?.visits || []).filter(visit => prefix.some(item => item.kind === 'activity' && item.activityId === visit.id)).map(copy);
+  const prefixVisits = prefix.filter(item=>item.kind==='activity').flatMap(item=>{
+    const previous=(initialPlan?.visits || []).find(visit=>visit.id===item.activityId);
+    if(!item.userProgress) return previous ? [copy(previous)] : [];
+    const queue=prefix.find(r=>r.kind==='queue' && r.activityId===item.activityId);
+    return [{id:item.activityId, activityId:item.activityId, name:item.name, category:item.category,
+      node:item.node, endNode:item.endNode, start:item.start, end:item.end, queueStart:item.dpaAdmission??queue?.start??item.start,
+      arrival:queue?.start??item.start, method:item.dpa?'dpa':'normal', userProgress:item.userProgress,
+      cost:item.cost, dpaCost:item.dpaCost??0}];
+  });
   const replanCutoff = settings.replanFrom === undefined || settings.replanFrom === '' ? settings.entry : toMinutes(settings.replanFrom);
   if (settings.fixedBreaks.some(item => item.start < beginning && item.start + item.duration > replanCutoff && !prefix.some(saved => saved.fixedBreakId === item.id))) throw new RangeError('進行中の予定と追加した休憩が重なっています。休憩時刻を見直してください。');
   const completedSelections = settings.selections.filter(selection => completed.has(selection.id));
-  const selected = settings.selections.filter(selection => !completed.has(selection.id));
+  const goalSelections=settings.selections.filter(selection=>reports.get(selection.id)?.status!=='skipped');
+  const selected = goalSelections.filter(selection => !completed.has(selection.id));
   const paidDpa = settings.purchases.reduce((sum, purchase) => sum + purchase.cost, 0);
   const sourceRows = prefix.filter(item => item.kind === 'activity');
+  const previousDpaEntries=dpaAdmissions(prefix);
   const lastVisit = sourceRows.at(-1);
   const prefixNonDpa = sourceRows.reduce((sum, item) => sum + Math.max(0, finite(item.cost) - finite(item.dpaCost)), 0);
   // A subsequently confirmed ticket can also appear in a completed visit's charge.
   const prefixDpa = sourceRows.reduce((sum, item) => {
     if (!item.dpaCost) return sum;
-    const admission = prefix.find(row => row.kind === 'queue' && row.activityId === item.activityId)?.start ?? item.start;
-    const recorded = settings.purchases.some(ticket => ticket.id === item.activityId && ticket.start <= admission && admission < ticket.end);
+    const admission = item.dpaAdmission ?? prefix.find(row => row.kind === 'queue' && row.activityId === item.activityId)?.start ?? item.start;
+    const recorded = settings.purchases.some(ticket => ticket.id === baseVisitId(item.activityId) && ticket.start <= admission && admission < ticket.end);
     return sum + (recorded ? 0 : item.dpaCost);
   }, 0);
   const spent = Math.max(settings.spentBudget, prefixNonDpa + paidDpa + prefixDpa);
@@ -473,7 +511,7 @@ function contextFor(park, settings, initialPlan) {
     if (!historyById.has(id)) historyById.set(id, []);
     historyById.get(id).push(record);
   }
-  return { park, settings, map, graph, selected, completed, completedSelections, initial, historicalVisitBounds:prefix.length?historicalBounds(park,settings,initialPlan):null, historyById, waitCache: new Map(), rankCache: new WeakMap() };
+  return { park, settings, map, graph, selected, previousDpaEntries, goalSelections, completed, completedSelections, initial, historicalVisitBounds:prefix.length?historicalBounds(park,settings,initialPlan):null, historyById, waitCache: new Map(), rankCache: new WeakMap() };
 }
 
 function activityWindows(activity, selection, settings, park) {
@@ -496,7 +534,7 @@ function eligiblePurchaseAt(state, activity, window, context) {
   let at = context.settings.replanFrom !== undefined && context.settings.replanFrom !== '' ? toMinutes(context.settings.replanFrom) : context.settings.entry;
   for (const purchase of state.purchases.filter(item => item.kind === kind)) {
     at = Math.max(at, Math.min(purchase.purchasedAt + 60, purchase.start));
-    if (purchase.id === activity.id) at = Math.max(at, purchase.end);
+    if (purchase.id === baseVisitId(activity.id)) at = Math.max(at, purchase.end);
   }
   return at <= window[0] ? at : Infinity;
 }
@@ -514,6 +552,23 @@ function budgetAllowed(state, activity, price, dpaPrice, context) {
   if (settings.foodBudget !== undefined && state.foodCost + (FOOD.has(activity.category) ? price : 0) > settings.foodBudget) return false;
   if (settings.dpaBudget !== undefined && state.dpaCost + dpaPrice > settings.dpaBudget) return false;
   return true;
+}
+
+// Receipts are issued for a facility. Visits keep their individual entry time
+// so the same receipt cannot be admitted a second time after a replan.
+function dpaAdmissions(rows) {
+  const result=new Map();
+  const queueStarts=new Map(rows.filter(row=>row.kind==='queue' && row.dpa).map(row=>[row.activityId,row.start]));
+  for(const row of rows.filter(row=>row.kind==='activity' && row.dpa)) {
+    const facility=baseVisitId(row.activityId);
+    if(!result.has(facility)) result.set(facility,[]);
+    result.get(facility).push(row.dpaAdmission ?? queueStarts.get(row.activityId) ?? row.start);
+  }
+  return result;
+}
+
+function usedDpaWindow(context,id,start,end) {
+  return context.previousDpaEntries.get(baseVisitId(id))?.some(time=>time>=start && time<end) ?? false;
 }
 
 function dpaAvailable(activity, date) {
@@ -541,12 +596,13 @@ function requiredVisitsStillReachable(state, context) {
 }
 
 function scheduledOptions(state, baseActivity, selection, context, allowAutoRest = true, deferRest = false) {
-  if (!activityAvailable(baseActivity, context.settings.date)||currentRideStatus(baseActivity,context.settings,{now:context.settings.waitAsOf})?.isOpen===false) return [];
+  if (!activityAvailable(baseActivity, context.settings.date)||currentRideStatus(facilityForVisit(baseActivity),context.settings,{now:context.settings.waitAsOf})?.isOpen===false) return [];
   const settings = context.settings, graph = context.graph;
   if (settings.avoidConsecutiveFood && state.lastVisitWasFood && FOOD.has(baseActivity.category)) return [];
   const methods = [];
   if (selection.dpaMode !== 'owned') methods.push({ method: 'normal', windows: activityWindows(baseActivity, selection, settings, context.park), price: 0 });
   if (dpaAvailable(baseActivity, settings.date) && selection.dpaMode === 'owned' &&
+    !usedDpaWindow(context, selection.id, selection.dpaStart, selection.dpaEnd) &&
     (baseActivity.category !== 'parade' || (selection.nodeOverride && selection.showTimes?.length))) methods.push({
     method: 'dpa', windows: [[selection.dpaStart, selection.dpaEnd]], price: 0, owned: true,
   });
@@ -554,6 +610,7 @@ function scheduledOptions(state, baseActivity, selection, context, allowAutoRest
     (settings.dpaPurchaseLimit === undefined || state.plannedDpaCount < settings.dpaPurchaseLimit) &&
     (baseActivity.category !== 'parade' || (selection.nodeOverride && selection.showTimes?.length))) {
     for (const window of selection.dpaAvailableWindows || []) {
+      if (usedDpaWindow(context, selection.id, window[0], window[1])) continue;
       const purchaseAt = eligiblePurchaseAt(state, baseActivity, window, context);
       if (Number.isFinite(purchaseAt)) methods.push({
         method: 'dpa', windows: [window], price: ceil100(baseActivity.dpa.price), purchaseAt,
@@ -596,9 +653,9 @@ function scheduledOptions(state, baseActivity, selection, context, allowAutoRest
     for (const window of windows) for (const proposed of [...new Set(starts)]) {
       if (context.deadline && now() >= context.deadline) return options;
       let queueStart = Math.max(earliest, window[0], proposed);
-      if (liveWaitFor(activity, fixed ? proposed : queueStart, settings, { now: settings.waitAsOf })?.isOpen === false) continue;
+      if (liveWaitFor(facilityForVisit(activity), fixed ? proposed : queueStart, settings, { now: settings.waitAsOf })?.isOpen === false) continue;
       const cacheKey = activity.id + ':' + queueStart;
-      if (!context.waitCache.has(cacheKey)) context.waitCache.set(cacheKey, estimateWait(activity, queueStart, settings, context.historyById.get(activity.id) || []));
+      if (!context.waitCache.has(cacheKey)) context.waitCache.set(cacheKey, estimateWait(activity, queueStart, settings, context.historyById.get(baseVisitId(activity.id)) || []));
       const waitEstimate = context.waitCache.get(cacheKey);
       const waitSource = method.method === 'dpa' ? 'dpa' : waitEstimate.source;
       const allowance = queueAllowance(activity, method.method === 'dpa' ? {minutes:Math.round(finite(activity.dpa.wait, 10)), source:'dpa'} : waitEstimate, method.method, settings);
@@ -648,7 +705,7 @@ function scheduledOptions(state, baseActivity, selection, context, allowAutoRest
       }));
       const purchases = state.purchases.slice();
       if (method.method === 'dpa' && !method.owned) purchases.push({
-        id: activity.id, kind: activity.dpa.kind || 'attraction', purchasedAt: method.purchaseAt,
+        id: baseVisitId(activity.id), kind: activity.dpa.kind || 'attraction', purchasedAt: method.purchaseAt,
         start: window[0], end: window[1], cost: method.price, owned: false,
       });
       const visited = new Set(state.visited); visited.add(activity.id);
@@ -709,7 +766,7 @@ function compare(a, b, context) {
 }
 
 function requiredMet(state, context) {
-  return context.settings.selections.filter(item => item.required).every(item => state.visited.has(item.id));
+  return context.goalSelections.filter(item => item.required).every(item => state.visited.has(item.id));
 }
 
 /** A fixed rest is a zero-score reservation. Walking and any idle time are explicit. */
@@ -764,8 +821,12 @@ function omissionFor(selection, context, best) {
   const conflict=(conflictField,reason)=>({id:selection.id,name:activity.name,weight:selection.weight,required:selection.required,conflictField,reason});
   const date=context.settings.date;
   if (!activityAvailable(activity,date)) return conflict('required','訪問日は休止・開催期間外です。訪問日か必須の指定を見直してください。');
-  if (currentRideStatus(activity,context.settings,{now:context.settings.waitAsOf})?.isOpen===false)
+  if (currentRideStatus(facilityForVisit(activity),context.settings,{now:context.settings.waitAsOf})?.isOpen===false)
     return conflict('required','運営停止の再開を確認できていません。当日の情報を更新するか必須の指定を見直してください。');
+  if (selection.dpaMode==='owned' && usedDpaWindow(context, selection.id, selection.dpaStart, selection.dpaEnd))
+    return conflict('dpaStart','このDPAの利用枠は体験履歴で使用済みです。2回目の待ち列か、当日の体験記録を確認してください。');
+  if (selection.dpaMode==='owned' && context.initial.time>=selection.dpaEnd)
+    return conflict('dpaStart','取得済みDPAの受付終了を過ぎています。実際の利用状況と残りの希望を確認してください。');
   if (activity.category === 'parade' && selection.dpaMode === 'owned' && (!selection.nodeOverride || !selection.showTimes?.length))
     return conflict(selection.nodeOverride?'showTimes':'nodeOverride','DPAの鑑賞地点と、その場所の公演時刻を入力してください。');
   if (FIXED.has(activity.category) && !showTimes(activity, selection, context.settings).length)
@@ -800,7 +861,7 @@ function omissionFor(selection, context, best) {
 }
 
 function resultFrom(state, context, diagnostics, quick = false) {
-  const selections = context.settings.selections;
+  const selections = context.goalSelections;
   const rows = state ? finishRows(state, context) : context.initial.rows;
   const visited = state?.visited || context.initial.visited;
   const weight = selections.filter(item => visited.has(item.id)).reduce((sum, item) => sum + item.weight, 0);
@@ -814,7 +875,7 @@ function resultFrom(state, context, diagnostics, quick = false) {
     id: selection.id, name: context.map.get(selection.id).name, weight: selection.weight, required: selection.required, reason: '探索中のため、まだ採用されていません。',
   } : omissionFor(selection, context, state));
   return {
-    status: state ? 'feasible' : 'no-plan', parkId: context.park.id, settings: copy({ ...context.settings, history: [], historySampleCount: context.settings.history.length }),
+    status: state ? 'feasible' : 'no-plan', parkId: context.park.id, settings: copy({ ...context.settings, selections:context.portableSelections, history: [], historySampleCount: context.settings.history.length }),
     ...(context.historicalVisitBounds?{historicalVisitBounds:copy(context.historicalVisitBounds)}:{}),
     rows, visits: state?.visits || context.initial.visits, purchases: state?.purchases || context.initial.purchases,
     totals: {
@@ -885,7 +946,7 @@ function beamSearch(context, tracker, deadline) {
       const rest = nextFixedBreak(state, context);
       if (rest) { tracker.accept(rest); next.push(rest); }
       for (const selection of context.selected) {
-        if (state.visited.has(selection.id)) continue;
+        if (state.visited.has(selection.id) || !canStartVisit(selection.id,state.visited)) continue;
         if (now() >= deadline) return;
         for (const child of scheduledOptions(state, context.map.get(selection.id), selection, context)) {
           tracker.accept(child); next.push(child);
@@ -925,7 +986,7 @@ function replayOrder(order, context, tracker, random, diversify = false) {
       if (now() >= context.deadline) break;
       let choices = [];
       for (const selection of order) {
-        if (state.visited.has(selection.id)) continue;
+        if (state.visited.has(selection.id) || !canStartVisit(selection.id,state.visited)) continue;
         choices = scheduledOptions(state, context.map.get(selection.id), selection, context);
         if (choices.length) break;
       }
@@ -986,7 +1047,9 @@ export function solveItinerary(park, rawSettings, options = {}) {
     const priorOwned = initialPlan.purchases.filter(purchase => purchase.owned);
     input = { ...rawSettings, purchases: priorOwned };
   }
+  ({park, settings:input} = expandRepeatVisits(park,input,initialPlan));
   const settings = normalise(park, input), context = contextFor(park, settings, initialPlan);
+  context.portableSelections=compactRepeatSelections(settings.selections,rawSettings.selections || []);
   const milliseconds = Math.min(settings.searchSeconds * 1000,
     options.deadlineMs === undefined ? Infinity : Math.max(1, Number(options.deadlineMs)));
   context.deadline = started + milliseconds;
@@ -1002,6 +1065,7 @@ export function solveItinerary(park, rawSettings, options = {}) {
   const diagnostics = tracker.diagnostics(false);
   delete diagnostics.running;
   diagnostics.notes = [
+    ...(settings[intradayAdjustment] ? [describeIntradayAdjustment(settings[intradayAdjustment])] : []),
     '重要度の合計を優先し、同点では待ち時間・移動・待機の合計を短くする案を比べます。予算上限を守り、徒歩距離だけで訪問順を決めません。最適性の証明は行いません。',
     '待ち時間は手動指定、当日の新しい外部データ、検証で改善した学習モデル、履歴、傾向モデルの順に使います。施設ごとの出典は予定表に表示します。',
     '通常の待ち時間に計画用の余裕を加えます。自動設定は採用された学習モデルの検証MAEを5分単位に切り上げ、最大30分を目安にします。MAEは遅れを防ぐ保証ではありません。公演・DPAの集合時間は変えません。',
@@ -1012,6 +1076,12 @@ export function solveItinerary(park, rawSettings, options = {}) {
     ...(settings.selections.some(item=>item.id==='sea-attraction-230')?[settings.gondolaAvoidHarbourShows?'ゴンドラは指定した休止枠と、日付を確認できたハーバーショーの上演中を避けます。前後の準備・再開時刻は当日の稼働状況で確認します。':'ゴンドラは指定した休止枠を避けます。ショー上演中を避ける目安は使用していません。']:[]),
     'DPAの購入案は入力した空き枠と購入履歴から計算しています。在庫は公式アプリで確認してください。',
   ];
+  if (replan) for (const ticket of settings.purchases) {
+    if (toMinutes(settings.replanFrom)>=ticket.end && !usedDpaWindow(context,ticket.id,ticket.start,ticket.end)) {
+      const endTime=String(Math.floor(ticket.end/60)).padStart(2,'0')+':'+String(ticket.end%60).padStart(2,'0');
+      diagnostics.notes.push(context.map.get(ticket.id).name+'の取得済みDPAは'+endTime+'で受付終了です。しおりにこの枠の利用記録はなく、購入額は支払済みとして保持します。');
+    }
+  }
   if (!tracker.best) diagnostics.notes.unshift('必須条件と追加した休憩をすべて満たす案は見つかりませんでした。指定した時刻・場所・予算を見直してください。実行不可能と証明した結果ではありません。');
   context.deadline = null;
   const result = resultFrom(tracker.best, context, diagnostics);
@@ -1025,24 +1095,42 @@ export function solveItinerary(park, rawSettings, options = {}) {
 
 /** Independently recompute chronological, geometric, window and money checks. */
 export function validatePlan(park, settings, result, options = {}) {
+  ({park,settings}=expandRepeatVisits(park,settings,options.initialPlan));
   const errors = [], graph = graphDistances(park), activities = new Map(park.activities.map(activity => [activity.id, activity]));
   const edgeLengths=new Map();
   for(const edge of park.edges){const from=edge.from??edge.a,to=edge.to??edge.b,metres=Number(edge.metres);for(const key of [from+'\0'+to,to+'\0'+from])edgeLengths.set(key,Math.min(edgeLengths.get(key)??Infinity,metres));}
   const selectionMap = new Map((settings.selections || []).map(item => [item.id, item]));
   const entry = toMinutes(settings.entry), exit = toMinutes(settings.exit), speed = Number(settings.speed ?? 65);
-  const walkingSettings={...settings,activeEvents:(park.events||[]).filter(event=>event.startDate<=settings.date&&settings.date<=event.endDate)};
-  if (settings.crowdLevel === 'auto') walkingSettings[resolvedCrowd] = estimateParkCrowd(park, settings);
+  const walkingSettings = {...settings};
+  setWaitForecastContext(park, walkingSettings);
   const rows = result.rows || [];
   const cutoff=settings.replanFrom===undefined||settings.replanFrom===''?null:toMinutes(settings.replanFrom);
   const sourcePlan=replanSource(park,settings,options.initialPlan);
   const datedSource=sourcePlan?.settings?.date===settings.date&&(!sourcePlan.parkId||sourcePlan.parkId===park.id);
-  const sourceRows=cutoff===null?[]:preservedPrefix(sourcePlan,settings);
+  const sourceRows=cutoff===null?[]:preservedPrefix(sourcePlan,settings,park);
   const sourceSignatures=new Set(sourceRows.map(rowSignature));
+  if(sourcePlan || sourceRows.some(item=>item.userProgress)){
+    // Every protected row appears once, in order, even when an optional visit
+    // would otherwise be convenient for the remaining route to drop.
+    const observed=rows.filter(r=>r.preserved && sourceSignatures.has(rowSignature(r)));
+    if(rowSignature(observed)!==rowSignature(sourceRows)) errors.push('保持する予定が記録と一致しません。');
+  }
+  const reports=new Map(progressEntries(park,settings));
+  const reportedDone=new Set(settings.completedIds||[]);
+  for(const [id,f] of reports) {
+    if(['done','riding','queue'].includes(f.status)) reportedDone.add(id);
+    else reportedDone.delete(id);
+  }
+  const activityRowsSeen=new Set();
   const expectedBounds=historicalBounds(park,settings,sourcePlan);
   const originalEntry=expectedBounds.entry,originalExit=expectedBounds.exit;
   if(result.historicalVisitBounds!==undefined&&rowSignature(result.historicalVisitBounds)!==rowSignature(expectedBounds))errors.push('保持した予定の元の滞在時間が一致しません。');
   let previous = Math.min(entry,originalEntry), node = settings.replanFrom !== undefined && rows.some(item => item.preserved) ? park.entryNode : (settings.currentNode || park.entryNode);
   const visited = new Set(settings.completedIds || []);
+  for(const [id,value] of reports){
+    visited.delete(id);
+    if(value.status==='done' && !sourceRows.some(item=>item.kind==='activity' && item.activityId===id)) visited.add(id);
+  }
   let previousRow=null;
   let previousVisitWasFood=false;
   for (const item of rows) {
@@ -1050,10 +1138,13 @@ export function validatePlan(park, settings, result, options = {}) {
     const verifiedPreserved=item.preserved&&sourceSignatures.has(rowSignature(item));
     const historicalBoundary=verifiedPreserved&&datedSource;
     if (item.start < (historicalBoundary?originalEntry:entry) || item.end > (historicalBoundary?originalExit:exit)) errors.push('滞在時間の外に予定があります。');
+    if (!item.preserved && cutoff!==null && item.start<cutoff) errors.push('再計画する時刻より前に新しい予定があります。');
+    if(item.preserved && sourcePlan && !verifiedPreserved && item.kind!=='location')errors.push('保持した予定が元の記録と一致しません。');
+    if(item.userProgress && !verifiedPreserved) errors.push('確認した体験と予定の内容が一致しません。');
     if (item.preserved) {
       const cutoff=settings.replanFrom === undefined || settings.replanFrom === '' ? null : toMinutes(settings.replanFrom);
       const ongoing=cutoff!==null&&(item.kind==='activity'||item.awaitingPerformance===true)&&rows.some(prior=>prior.preserved&&prior.kind==='queue'&&prior.activityId===item.activityId&&prior.start<cutoff);
-      if(cutoff===null||(item.kind!=='location'&&item.start>=cutoff&&!ongoing))errors.push('保持した予定が組み替え開始より前につながっていません。');
+      if(cutoff===null||(item.kind!=='location'&&item.start>=cutoff&&!ongoing&&!(verifiedPreserved&&item.userProgress)))errors.push('保持した予定が組み替え開始より前につながっていません。');
     }
     if (item.kind === 'walk') {
       if (item.from !== node) errors.push('移動の出発地点がつながっていません。');
@@ -1077,7 +1168,7 @@ export function validatePlan(park, settings, result, options = {}) {
       node = item.to;
     }
     if (item.kind === 'location') {
-      if (!settings.currentNode || item.node !== settings.currentNode || settings.replanFrom === undefined || item.start < toMinutes(settings.replanFrom)) errors.push('現在地の確認地点が不正です。');
+      if (!(verifiedPreserved && (item.progressAnchor || item.kind==='location')) && (!settings.currentNode || item.node !== settings.currentNode || settings.replanFrom === undefined || item.start < toMinutes(settings.replanFrom))) errors.push('現在地の確認地点が不正です。');
       node = item.node;
     }
     if (item.kind === 'rest' && item.node !== node) errors.push('休憩の場所までの移動がありません。');
@@ -1089,18 +1180,23 @@ export function validatePlan(park, settings, result, options = {}) {
       if (!Number.isFinite(item.cost) || item.cost < 0 || item.cost % 100) errors.push('体験費用が不正です。');
       const activity = activities.get(item.activityId), selection = selectionMap.get(item.activityId);
       if (!activity) { errors.push('施設が見つかりません。'); continue; }
+      if (!selection && !item.preserved) errors.push('希望していない体験が新しく予定されています。');
       const isFood = FOOD.has(verifiedPreserved ? (item.category ?? activity.category) : activity.category);
       if (settings.avoidConsecutiveFood && !verifiedPreserved && previousVisitWasFood && isFood) {
         errors.push('フードが連続しています。間に別の体験を入れてください。');
       }
       previousVisitWasFood = isFood;
-      if (visited.has(activity.id) && !(settings.completedIds || []).includes(activity.id)) errors.push('同じ施設が重複しています。');
+      if (activityRowsSeen.has(activity.id) || (!item.preserved && reportedDone.has(activity.id))) errors.push('同じ体験が重複しています。');
+      if (!canStartVisit(activity.id,visited)) errors.push('2回目の体験より前に1回目が必要です。');
+      if(reports.get(activity.id)?.status==='skipped')errors.push('見送った体験が予定に残っています。');
+      activityRowsSeen.add(activity.id);
       visited.add(activity.id);
       if (item.node !== (item.dpa ? (selection?.nodeOverride || activity.node) : activity.node)) errors.push('体験地点が施設の地点と一致しません。');
       if (item.node !== node) errors.push('施設までの移動がありません。');
       if (!item.preserved && !activityAvailable(activity, settings.date)) errors.push('休止日の施設が含まれています。');
-      if(!item.preserved&&currentRideStatus(activity,settings,{now:settings.waitAsOf??Date.now()})?.isOpen===false)errors.push('現在停止中の施設が残りの予定に含まれています。');
+      if(!item.preserved&&currentRideStatus(facilityForVisit(activity),settings,{now:settings.waitAsOf??Date.now()})?.isOpen===false)errors.push('現在停止中の施設が残りの予定に含まれています。');
       if (selection && !item.preserved) {
+        if (selection.dpaMode==='owned' && !item.dpa) errors.push('取得済みDPAを指定した回の利用方法が違います。');
         if (item.end - item.start !== Number(selection.duration ?? activity.duration ?? 10)) errors.push('体験の所要時間が設定と一致しません。');
         if (selection.earliest !== undefined && item.start < toMinutes(selection.earliest)) errors.push('希望時間帯より前です。');
         if (selection.latest !== undefined && item.end > toMinutes(selection.latest)) errors.push('希望時間帯より後です。');
@@ -1111,7 +1207,7 @@ export function validatePlan(park, settings, result, options = {}) {
         const admission = queue?.start ?? item.start;
         // Fixed entertainment is forecast at its show time before its queue is placed backwards.
         const estimateAt = fixed ? item.start : admission;
-        const estimate = item.dpa ? {minutes:Math.round(finite(activity.dpa.wait, 10)), source:'dpa'} : estimateWait(activity, estimateAt, walkingSettings, (settings.history || []).filter(record => (record.activityId || record.activity_id) === activity.id));
+        const estimate = item.dpa ? {minutes:Math.round(finite(activity.dpa.wait, 10)), source:'dpa'} : estimateWait(activity, estimateAt, walkingSettings, (settings.history || []).filter(record => (record.activityId || record.activity_id) === baseVisitId(activity.id)));
         const allowance = queueAllowance(activity, estimate, item.dpa ? 'dpa' : 'normal', settings);
         const venueWait=previousRow?.awaitingPerformance ? previousRow : null;
         if (venueWait && (!fixed || !item.dpa || venueWait.kind!=='wait' || venueWait.activityId!==activity.id ||
@@ -1124,7 +1220,7 @@ export function validatePlan(park, settings, result, options = {}) {
           if (!dpaAvailable(activity, settings.date)) errors.push('この日にはDPAを利用できません。');
           if (activity.category === 'parade' && (!selection.nodeOverride || !selection.showTimes?.length)) errors.push('パレードDPAの鑑賞地点・時刻が未確認です。');
           const owned = selection.dpaMode === 'owned';
-          const ticket = (result.purchases || []).find(purchase => purchase.id === item.activityId &&
+          const ticket = (result.purchases || []).find(purchase => purchase.id === baseVisitId(item.activityId) &&
             purchase.owned === owned && purchase.start <= admission && admission < purchase.end);
           if (ticket && fixed && showTimes(activity,timeSelection,settings).some(time=>time>=ticket.start && time<item.start))
             errors.push('DPAの入場枠に対応する公演回と一致しません。');
@@ -1144,6 +1240,7 @@ export function validatePlan(park, settings, result, options = {}) {
     if (item.kind === 'exit' && (item.node !== park.exitNode || node !== park.exitNode)) errors.push('出口に到着していません。');
     previous = item.end;previousRow=item;
   }
+  if ([...visited].some(id=>!canStartVisit(id,visited))) errors.push('2回目の体験には1回目の完了記録が必要です。');
   for (const rest of restsBesideFood(rows, activities)) {
     if (rest.autoBreakId && !rest.preserved) errors.push('フードと自動休憩が連続しています。');
   }
@@ -1155,7 +1252,7 @@ export function validatePlan(park, settings, result, options = {}) {
     if (matches.length !== 1 || matches[0].kind !== 'rest' || matches[0].start !== expectedStart || matches[0].end !== expectedEnd || matches[0].node !== reservation.node) errors.push('追加した休憩の時刻・長さ・地点が一致しません。');
   }
   for (const item of rows.filter(item => item.fixedBreakId && !item.preserved)) if (!(settings.fixedBreaks || []).some(reservation => reservation.id === item.fixedBreakId)) errors.push('設定にない休憩が含まれています。');
-  for (const selection of settings.selections || []) if (selection.required && !visited.has(selection.id)) errors.push('必須の希望がありません。');
+  for (const selection of settings.selections || []) if ((selection.required || selection.dpaMode==='owned') && reports.get(selection.id)?.status!=='skipped' && !visited.has(selection.id)) errors.push('必須の希望がありません。');
   const purchased = result.purchases || [];
   for (const recorded of settings.purchases || []) {
     const recordedCost = recorded.cost ?? activities.get(recorded.id)?.dpa?.price;
@@ -1165,13 +1262,19 @@ export function validatePlan(park, settings, result, options = {}) {
       errors.push('支払済みDPAの時刻・料金が購入履歴と一致しません。');
     }
   }
+  const admissions=dpaAdmissions(rows);
+  for(const ticket of purchased) {
+    if (ticket.id!==baseVisitId(ticket.id)) errors.push('DPA購入履歴の施設IDが不正です。');
+    if ((admissions.get(ticket.id)||[]).filter(at=>at>=ticket.start && at<ticket.end).length>1)
+      errors.push('同じDPAの利用枠を複数の体験に使用しています。');
+  }
   const ownedCosts = purchased.filter(item => item.owned).reduce((sum, item) => sum + item.cost, 0);
   const prefix = rows.filter(item => item.kind === 'activity' && item.preserved);
   const prefixNonDpa = prefix.reduce((sum, item) => sum + Math.max(0, item.cost - finite(item.dpaCost)), 0);
   let prefixDpa = 0;
   for (const item of prefix.filter(row => row.dpa && row.dpaCost > 0)) {
-    const admission = rows.find(row => row.kind === 'queue' && row.activityId === item.activityId)?.start ?? item.start;
-    if (!purchased.some(ticket => ticket.owned && ticket.id === item.activityId && ticket.start <= admission && admission < ticket.end)) prefixDpa += item.dpaCost;
+    const admission = item.dpaAdmission ?? rows.find(row => row.kind === 'queue' && row.activityId === item.activityId)?.start ?? item.start;
+    if (!purchased.some(ticket => ticket.owned && ticket.id === baseVisitId(item.activityId) && ticket.start <= admission && admission < ticket.end)) prefixDpa += item.dpaCost;
   }
   const baseSpent = Math.max(finite(settings.spentBudget), prefixNonDpa + prefixDpa + ownedCosts);
   const newCosts = rows.filter(item => item.kind === 'activity' && !item.preserved).reduce((sum, item) => sum + item.cost, 0);
@@ -1191,7 +1294,7 @@ export function validatePlan(park, settings, result, options = {}) {
   const dpaCost = prefixDpa + ownedCosts + proposed.reduce((sum, item) => sum + item.cost, 0);
   const previousCount = sourceRows.filter(row => row.kind === 'activity' && row.dpa && (row.dpaCost > 0 || row.plannedDpaPurchase)).length;
   const newVisits = rows.filter(row => row.kind === 'activity' && !row.preserved && row.dpa && selectionMap.get(row.activityId)?.dpaMode === 'consider');
-  if (newVisits.length !== proposed.length || proposed.some(ticket => !newVisits.some(row => row.activityId === ticket.id))) errors.push('DPA購入候補の件数が明細と一致しません。');
+  if (newVisits.length !== proposed.length || proposed.some(ticket => !newVisits.some(row => baseVisitId(row.activityId) === ticket.id))) errors.push('DPA購入候補の件数が明細と一致しません。');
   const plannedCount = previousCount + newVisits.length;
   if (result.totals?.plannedDpaCount !== undefined && result.totals.plannedDpaCount !== plannedCount) errors.push('DPA購入候補の合計件数が明細と一致しません。');
   if (settings.dpaPurchaseLimit !== undefined && newVisits.length > Math.max(0, settings.dpaPurchaseLimit - previousCount)) errors.push('DPAの購入件数の上限を超えています。');
