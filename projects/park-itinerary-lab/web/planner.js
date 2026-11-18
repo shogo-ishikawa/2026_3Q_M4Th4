@@ -1,11 +1,11 @@
 import {baseVisitId, canStartVisit, compactRepeatSelections, expandRepeatVisits, facilityForVisit} from './repeat-visits.js';
 import {clockText, parkTimeBounds} from './time-input.js';
 import {applyProgressToPrefix, progressEntries} from './day-progress-plan.js';
-import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.13.0';
-import { weatherAtMinute, calendarContext, visitDayContext } from './calendar-features.js';
-import { predictModelWait, estimateParkCrowd, calendarCrowdLevel } from './wait-model.js?v=1.13.0';
-import { liveWaitFor, currentRideStatus } from './wait-data.js?v=1.13.0';
-import {deriveIntradayAdjustment, applyIntradayAdjustment, describeIntradayAdjustment} from './intraday-waits.js';
+import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.14.0';
+import { weatherAtMinute, calendarContext, visitDayContext } from './calendar-features.js?v=1.14.0';
+import { predictModelWait, estimateParkCrowd, calendarCrowdLevel } from './wait-model.js?v=1.14.0';
+import { liveWaitFor, currentRideStatus } from './wait-data.js?v=1.14.0';
+import {deriveIntradayAdjustment, applyIntradayAdjustment, describeIntradayAdjustment} from './intraday-waits.js?v=1.14.0';
 /* Browser itinerary search. Every returned plan is checked; the search does not claim global optimality. */
 const resolvedCrowd = Symbol('park crowd');
 const visitContext = Symbol('dated park factors');

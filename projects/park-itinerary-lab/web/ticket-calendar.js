@@ -2,7 +2,7 @@ import {seedFares, faresCheckedAt} from './ticket-calendar-seed.js';
 
 const parks = {land:'tdl', sea:'tds'};
 const campus = {
-  checkedAt:faresCheckedAt, coverageFrom:'2026-11-19', coverageThrough:'2027-03-23',
+  checkedAt:'2026-11-18T17:10:10Z', coverageFrom:'2026-11-19', coverageThrough:'2027-03-23',
   first:'2027-01-04', last:'2027-03-19', discount:1000,
   url:'https://www.tokyodisneyresort.jp/treasure/spring2027/'
 };

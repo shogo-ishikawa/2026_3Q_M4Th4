@@ -13,7 +13,7 @@ class ParkPublicBuildTests(unittest.TestCase):
         builder = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(builder)
         required = {'accuracy.html', 'accuracy.css', 'accuracy-page.js', 'forecast-accuracy.js',
-                    'onsite-navigation.js', 'wishlist-presets.js', 'itinerary-image.js', 'ticket-calendar.js', 'ticket-calendar-seed.js',
+                    'onsite-navigation.js', 'visit-day-view.js', 'wishlist-presets.js', 'itinerary-image.js', 'ticket-calendar.js', 'ticket-calendar-seed.js',
                     'repeat-visits.js', 'intraday-waits.js', 'day-progress-ui.js', 'day-progress-plan.js'}
         self.assertTrue(required.issubset(builder.PARK_WEB_FILES))
         with tempfile.TemporaryDirectory() as directory:

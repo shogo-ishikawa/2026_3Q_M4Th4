@@ -1,6 +1,6 @@
 # TDRoute — パークの一日をデザイン
 
-ブラウザ版 v1.13.0。東京ディズニーランドと東京ディズニーシーの希望を、時間・歩く距離・重要度・予算に合わせて組み立てます。
+ブラウザ版 v1.14.0。東京ディズニーランドと東京ディズニーシーの希望を、時間・歩く距離・重要度・予算に合わせて組み立てます。
 
 [アプリを開く](https://shogo-ishikawa.github.io/2026_3Q_M4Th4/park-itinerary-lab/) ／ [使い方と計画の仕組み](web/guide.html)
 
@@ -66,9 +66,9 @@
 
 ## ブラウザ版をパソコンで起動
 
-配布ZIPを展開すると `v1.13.0` フォルダになります。そのフォルダでWindowsは `py run.py`、macOS・Linuxは `python3 run.py` を実行します。Python標準ライブラリだけで起動します。終了は `Ctrl+C` です。
+配布ZIPを展開すると `v1.14.0` フォルダになります。そのフォルダでWindowsは `py run.py`、macOS・Linuxは `python3 run.py` を実行します。Python標準ライブラリだけで起動します。終了は `Ctrl+C` です。
 
-配置例：`/Users/shogo/Dropbox/share_data/open_material/misc/apps/TDRoute/v1.13.0`
+配置例：`/Users/shogo/Dropbox/share_data/open_material/misc/apps/TDRoute/v1.14.0`
 
 `bash sync_to_github.sh` で既存のクラスリポジトリへHTTPSでアップロードできます。確認後はPagesへ反映します。
 
@@ -88,7 +88,7 @@ python3 scripts/update_park_data.py --date 2026-11-17
 
 初期モデルはThemeParks.wikiの匿名で取得できる7日分の履歴に、過去の時間別気象予報と内閣府の祝日カレンダーを組み合わせて学習しています。公開するのは係数・検証結果・十分に集計した統計です。[Powered by ThemeParks.wiki](https://www.themeparks.wiki/)。
 
-学習最終日より後の訪問日に使います。v1.13.0同梱モデルの学習期間は2026年11月11〜17日、利用対象は11月18日以降です。16〜17日を検証用にしたMAEはランド8.79分、シー12.49分でした。画面では更新後の期間・件数・誤差を確認できます。
+学習最終日より後の訪問日に使います。v1.14.0同梱モデルの学習期間は2026年11月11〜17日、利用対象は11月18日以降です。16〜17日を検証用にしたMAEはランド8.79分、シー12.49分でした。画面では更新後の期間・件数・誤差を確認できます。
 
 | 日本時間 | 自動更新 |
 | --- | --- |

@@ -379,6 +379,11 @@ body[data-park=sea] .hero h1{font-size:clamp(24px,2.35vw,36px);line-height:1.6}
 @media print { .day-progress,.visit-actions { display:none !important; } }
 
 
+#visitDayFacts { border-top:1px solid var(--line); margin-top:.9rem; padding-top:.75rem; }
+#visitDayFacts h3 { margin:0; font-size:1rem; }
+#visitDayFacts p { margin:.35rem 0; }
+#visitDaySupport summary { font-size:.85rem; }
+.visit-day-sources { display:flex; flex-wrap:wrap; gap:.3rem .8rem; font-size:.8rem; }
 .wish-presets { margin:0 0 1.1rem; padding:.8rem 1rem 1rem; border:1px solid var(--line); border-radius:16px; min-width:0; }
 .wish-presets legend { padding:0 .3rem; font-weight:750; }
 .wish-presets .field-note { margin:0 0 .6rem; }

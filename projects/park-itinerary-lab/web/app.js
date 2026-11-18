@@ -1,18 +1,19 @@
-import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, fetchPublishedModel, prepareLiveForReplan, prepareWeatherForVisit } from './wait-data.js?v=1.13.0';
+import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, fetchPublishedModel, prepareLiveForReplan, prepareWeatherForVisit } from './wait-data.js?v=1.14.0';
+import {visitDayDetails} from './visit-day-view.js';
 import {WISH_PRESETS, presetFacilities, presetStartsPlan, addPresetWishes} from './wishlist-presets.js';
 import {attachItineraryImage} from './itinerary-image.js';
 import {attachOnsiteNavigation} from './onsite-navigation.js';
-import {attachDayProgress} from './day-progress-ui.js';
+import {attachDayProgress} from './day-progress-ui.js?v=1.14.0';
 import {baseVisitId, repeatVisitId, isRepeatVisit, expandRepeatVisits, resolveDpaVisit} from './repeat-visits.js';
-import { restsBesideFood, settledReplanWishes } from './planner.js?v=1.13.0';
-import { enhanceTimeInputs, parkTimeBounds, clampClock } from './time-input.js?v=1.13.0';
-import { estimateParkCrowd } from './wait-model.js?v=1.13.0';
+import { restsBesideFood, settledReplanWishes } from './planner.js?v=1.14.0';
+import { enhanceTimeInputs, parkTimeBounds, clampClock } from './time-input.js?v=1.14.0';
+import { estimateParkCrowd } from './wait-model.js?v=1.14.0';
 import { weatherForMinute } from './weather.js';
-import { forecastCardHtml, forecastSourcesHtml } from './weather-view.js?v=1.13.0';
-import { activityAvailable, operationPauseInfo } from './operation-windows.js?v=1.13.0';
+import { forecastCardHtml, forecastSourcesHtml } from './weather-view.js?v=1.14.0';
+import { activityAvailable, operationPauseInfo } from './operation-windows.js?v=1.14.0';
 import { contingencySettings, compareContingency } from './contingency.js';
-import { renderParkMap } from './map-view.js?v=1.13.0';
-import { listSavedPlans, saveNamedPlan, loadSavedPlan, renameSavedPlan, deleteSavedPlan, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=1.13.0';
+import { renderParkMap } from './map-view.js?v=1.14.0';
+import { listSavedPlans, saveNamedPlan, loadSavedPlan, renameSavedPlan, deleteSavedPlan, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=1.14.0';
 
 const CATEGORY = {attraction:'アトラクション',show:'ショー',parade:'パレード',restaurant:'レストラン',cafe:'カフェ',snack:'スナック',popcorn:'ポップコーン',greeting:'グリーティング',shop:'お土産'};
 const FOOD = new Set(['restaurant','cafe','snack','popcorn']);
@@ -430,6 +431,18 @@ export function initialiseApp() {
     const s=state.settings,speed=s.speed===50?'ゆっくり':s.speed===90?'早め':'普通';
     const crowd=crowdExplanation(currentPark(),s);
     $('crowdLevelStatus').textContent=crowd.detail;
+    const details=visitDayDetails(currentPark(),s);
+    $('visitDayFacts').hidden=!details;
+    if(details){
+      $('visitDayFactSummary').textContent=details.facts.join(' · ');
+      $('visitDayForecastUse').textContent=details.forecast;
+      $('visitDaySupport').hidden=!details.support;
+      $('visitDaySupportText').textContent=details.support;
+      const links=details.sources.filter(source=>safeLink(source.url)!=='#').map(source=>
+        `<a href="${safeLink(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.label)} ↗</a>`);
+      if(details.report)links.push(`<a href="${escapeHtml(details.report)}">この日の予測の精度 →</a>`);
+      $('visitDayFactSources').innerHTML=links.join(' ');
+    }
     $('dayOverview').textContent=`${money(s.budget)} · 混雑 ${crowd.summary} · 歩く速さ ${speed} · ${s.restEvery&&s.restMinutes?'休憩は自動':'自動休憩なし'}`;
     $('livePlanStatus').textContent=s.liveNotice||'';$('livePlanStatus').hidden=!s.liveNotice;
   }
@@ -945,7 +958,7 @@ export function initialiseApp() {
     const extra=Number($('contingencyDelay').value),profile=contingencySettings(state.result.settings||state.settings,extra);
     contingencyBase=state.result;const request=++contingencyRequest;
     const initialPlan=profile.replanFrom!=null?state.result:null;
-    contingencyWorker=new Worker(new URL('./planner-worker.js?v=1.13.0',import.meta.url),{type:'module'});
+    contingencyWorker=new Worker(new URL('./planner-worker.js?v=1.14.0',import.meta.url),{type:'module'});
     $('searchContingency').disabled=true;$('cancelContingency').hidden=false;
     $('contingencyStatus').textContent=`通常の待ち列がさらに${extra}分長い場合を探索しています。`;
     contingencyWorker.onmessage=event=>{
@@ -995,7 +1008,7 @@ export function initialiseApp() {
     if(preparingRequest!==requestId)return;
     preparation=null;state.settings=prepared;if(state.result){state.resultDirty=true;renderResult();}writeSettings();externalPanel?.refresh();
     searchStarted=performance.now();
-    try{worker=new Worker(new URL('./planner-worker.js?v=1.13.0',import.meta.url),{type:'module'});}catch{stopSearch();showPlanError(new Error('探索を起動できませんでした。ページを再読み込みしてもう一度お試しください。'));return;}
+    try{worker=new Worker(new URL('./planner-worker.js?v=1.14.0',import.meta.url),{type:'module'});}catch{stopSearch();showPlanError(new Error('探索を起動できませんでした。ページを再読み込みしてもう一度お試しください。'));return;}
     setSolveDisabled(true);$('cancelSearch').hidden=false;$('searchProgress').hidden=false;$('progressBar').value=0;$('progressText').textContent='最初の計画を探しています…';
     const thisRequest=requestId;
     worker.onmessage=event=>{

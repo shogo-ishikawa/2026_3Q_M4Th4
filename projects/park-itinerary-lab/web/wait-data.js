@@ -1,6 +1,6 @@
-import { weatherAtMinute } from './calendar-features.js';
-import {trainWaitModel, validateWaitModel} from './wait-model.js?v=1.13.0';
-import {validateCatalogue} from './storage.js';
+import { weatherAtMinute } from './calendar-features.js?v=1.14.0';
+import {trainWaitModel, validateWaitModel} from './wait-model.js?v=1.14.0';
+import {validateCatalogue} from './storage.js?v=1.14.0';
 import {prepareWeatherForVisit,forecastSourceLabel,forecastCacheLabel} from './weather.js';
 export {fetchWeather,prepareWeatherForVisit} from './weather.js';
 
