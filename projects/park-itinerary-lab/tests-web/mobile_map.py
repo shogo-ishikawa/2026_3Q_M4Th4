@@ -50,8 +50,10 @@ def visible_pin(page):
             const p = new DOMPoint(0,0).matrixTransform(pin.getScreenCTM());
             if (p.x < rect.left + 45 || p.x > rect.right - 45 ||
                 p.y < rect.top + 45 || p.y > rect.bottom - 45) continue;
-            if (document.elementFromPoint(p.x, p.y)?.closest('[data-activity-id]') === pin)
-                return {x:Math.round(p.x), y:Math.round(p.y), id};
+            const x = Math.round(p.x), y = Math.round(p.y);
+            const tap = [[0,0], [-2,0], [2,0], [0,-2], [0,2]];
+            if (tap.every(([dx,dy]) => document.elementFromPoint(x+dx,y+dy)?.closest('[data-activity-id]') === pin))
+                return {x, y, id};
         }
         throw new Error('No tappable park marker in the viewport');
     }''')
