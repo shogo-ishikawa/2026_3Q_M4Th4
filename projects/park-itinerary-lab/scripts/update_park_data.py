@@ -15,6 +15,10 @@ import argparse
 import copy
 import json
 import re
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from official_http import fetch_html
 
 ROOT = Path(__file__).resolve().parents[1]
 ORIGIN = 'https://www.tokyodisneyresort.jp'
@@ -291,12 +295,7 @@ def calendar_links(html,park_id):
 
 
 def fetch_document(url):
-    request = Request(url, headers={'User-Agent':'ParkItineraryLab/1.3 (educational official catalogue update)'})
-    with urlopen(request, timeout=20) as response:
-        raw = response.read(8_000_001)
-    if len(raw) > 8_000_000:
-        raise ValueError('Official page is larger than the supported limit')
-    return raw.decode('utf-8')
+    return fetch_html(url)
 
 
 class CatalogueRefreshError(RuntimeError):
@@ -318,7 +317,7 @@ def fetch_official_updates(selected_date, fixture_dir=None):
         park_id,slug,kind,url=item
         html = (Path(fixture_dir)/(slug+'-'+kind.replace('/','-')+'.html')).read_text() if fixture_dir else fetch_document(url)
         return item,html
-    with ThreadPoolExecutor(max_workers=6) as pool:
+    with ThreadPoolExecutor(max_workers=3) as pool:
         futures = {pool.submit(load,item):item for item in requests}
         for future in as_completed(futures):
             item = futures[future]
@@ -348,7 +347,7 @@ def fetch_official_updates(selected_date, fixture_dir=None):
                 errors.append({'url':url,'message':str(error)[:300]})
                 print(f'{slug}/{kind}: retained previous data ({error})',flush=True)
     if additional_calendars:
-        with ThreadPoolExecutor(max_workers=6) as pool:
+        with ThreadPoolExecutor(max_workers=3) as pool:
             tasks={pool.submit(fetch_document,url):(park_id,url) for park_id,url in additional_calendars}
             for future in as_completed(tasks):
                 park_id,url=tasks[future]

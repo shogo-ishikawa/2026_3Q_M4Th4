@@ -8,7 +8,14 @@ on:
       - 'projects/park-itinerary-lab/scripts/update_park_data.py'
       - 'projects/park-itinerary-lab/scripts/update_food_menus.py'
       - 'projects/park-itinerary-lab/scripts/update_calendar.py'
+      - 'projects/park-itinerary-lab/scripts/official_http.py'
       - 'projects/park-itinerary-lab/web/data/parks.json'
+  pull_request:
+    paths:
+      - '.github/workflows/park-data-check.yml'
+      - 'projects/park-itinerary-lab/scripts/official_http.py'
+      - 'projects/park-itinerary-lab/scripts/update_park_data.py'
+      - 'projects/park-itinerary-lab/scripts/update_food_menus.py'
   workflow_dispatch:
     inputs:
       visit_date:
@@ -22,11 +29,47 @@ permissions:
   contents: write
 
 concurrency:
-  group: park-data-publication
+  group: ${{ github.event_name == 'pull_request' && format('park-catalogue-check-{0}', github.event.pull_request.number) || 'park-data-publication' }}
   cancel-in-progress: false
 
 jobs:
+  check-official-network:
+    if: github.event_name == 'pull_request'
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-15]
+    runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Read official lists without publishing
+        run: python projects/park-itinerary-lab/scripts/update_park_data.py --output "${{ runner.temp }}/catalogue.json"
+      - name: Check official menu links from both parks
+        run: |
+          python - <<'PY'
+          import datetime as dt,json,pathlib,sys
+          sys.path.insert(0,'projects/park-itinerary-lab/scripts')
+          from update_food_menus import refresh_food
+          catalogue=json.loads(pathlib.Path('projects/park-itinerary-lab/web/data/parks.json').read_text())
+          date=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat()
+          for park in catalogue['parks']:
+              activity=next(a for a in park['activities'] if a['category']=='restaurant')
+              result=refresh_food(activity,date)
+              print(park['id'],result['menuStatus'],result['menuUrl'],len(result['menuItems']))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: official-network-${{ matrix.os }}
+          path: ${{ runner.temp }}/catalogue-report.json
   update-catalogue:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -80,7 +123,7 @@ jobs:
           date=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat()
           # A failed list fetch may also affect venue pages: try once with a bounded shorter timeout.
           fetcher=menus.fetch_text if os.environ['FACTS_OUTCOME']=='success' else lambda url:menus.fetch_text(url,timeout=4)
-          result,report=menus.update_catalogue(json.loads(target.read_text()),date,workers=8,fetcher=fetcher)
+          result,report=menus.update_catalogue(json.loads(target.read_text()),date,workers=4,fetcher=fetcher)
           menus.atomic_json(target,result)
           print(f"Food menus: {report['updated']}/{report['checked']} verified, {len(report['errors'])} failed. Previous verified menu facts are retained on failure.")
           PY
@@ -134,7 +177,7 @@ jobs:
           lines=['## Official park data retrieval',f"Catalogue: {facts.get('status','unknown')}. Last-known facts retained: {facts.get('lastKnownCatalogueUsed',False)}.",f"Official source errors: {len(facts.get('sourceErrors',[]))}.",f"Menus verified: {food.get('updated',0)}/{food.get('checked',0)}; failed venue requests: {len(food.get('errors',[]))}.",f"Holiday retrieval: {os.environ['CALENDAR_OUTCOME']}.",f"Publishing cached facts and reports: {os.environ['PUBLISH_OUTCOME']}."]
           with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as target:target.write('\n\n'.join(lines)+'\n')
           failures=[key for key in ['FACTS_OUTCOME','MENUS_OUTCOME','CALENDAR_OUTCOME','PUBLISH_OUTCOME'] if os.environ[key]!='success']
-          if facts.get('status')=='failed' or failures:
+          if facts.get('status')=='failed' or food.get('status')=='failed' or failures:
               print('Retrieval failed. Last confirmed facts were published; this run does not claim a successful refresh.')
               raise SystemExit(1)
           PY
