@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {clockMinute,parkTimeBounds,componentMinute,linkedWishWindow,bindClockParts} from '../web/time-input.js';
+import {clockMinute,parkTimeBounds,componentMinute,bindClockParts} from '../web/time-input.js';
 class Field extends EventTarget {constructor(value=''){super();this.value=value;this.required=false;this.disabled=false;this.min='';this.max='';}}
 function clock(value,bounds={min:480,max:1319}){
  const canonical=new Field(value),hour=new Field(),minute=new Field();let currentBounds=bounds,changes=0;canonical.addEventListener('change',()=>changes++);
@@ -29,6 +29,8 @@ test('partial opening hours set component endpoints and never roll past closing'
 test('optional slots remain blank while required blank fields receive a valid clock',()=>{
  const optional=clock('');assert.equal(optional.hour.value,'');assert.equal(optional.minute.value,'');optional.minute.dispatchEvent(new Event('blur'));assert.equal(optional.canonical.value,'');optional.key(optional.hour,'ArrowUp');assert.equal(optional.canonical.value,'08:00');const required=clock('');required.canonical.required=true;required.controller.commit('hour');assert.equal(required.canonical.value,'08:00');
 });
-test('wish start/end autofill two-hour windows clipped to the official day',()=>{
- const bounds={min:540,max:1260};assert.deepEqual(linkedWishWindow('earliest',660,{},bounds),{earliest:660,latest:780});assert.deepEqual(linkedWishWindow('latest',900,{},bounds),{earliest:780,latest:900});assert.deepEqual(linkedWishWindow('earliest',1230,{},bounds),{earliest:1230,latest:1260});assert.deepEqual(linkedWishWindow('latest',570,{},bounds),{earliest:540,latest:570});const atClose=linkedWishWindow('earliest',1260,{},bounds),atOpen=linkedWishWindow('latest',540,{},bounds);assert.ok(atClose.earliest<atClose.latest);assert.ok(atOpen.earliest<atOpen.latest);
+test('wish defaults use published park hours and fall back to the actual visit when hours are unknown',()=>{
+ const park={operatingCalendar:{day:{windows:[[570,1230]]}}},visit={min:660,max:1110};
+ assert.deepEqual(parkTimeBounds(park,'day',visit),{min:570,max:1230});
+ assert.deepEqual(parkTimeBounds(park,'unknown',visit),visit);
 });

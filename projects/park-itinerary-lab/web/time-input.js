@@ -8,12 +8,13 @@ export function clockMinute(value){
   const [hour,minute]=value.split(':').map(Number);
   return hour<24&&minute<60?hour*60+minute:null;
 }
-export function parkTimeBounds(park,date){
+export function parkTimeBounds(park,date,fallback=DEFAULT_BOUNDS){
   const windows=park?.operatingCalendar?.[date]?.windows;
   const known=Array.isArray(windows)?windows.filter(pair=>Array.isArray(pair)&&pair.length===2&&Number.isInteger(pair[0])&&Number.isInteger(pair[1])&&pair[0]<pair[1]):[];
-  const min=known.length?Math.max(DEFAULT_BOUNDS.min,Math.min(...known.map(pair=>pair[0]))):DEFAULT_BOUNDS.min;
-  const max=known.length?Math.min(DEFAULT_BOUNDS.max,Math.max(...known.map(pair=>pair[1]))):DEFAULT_BOUNDS.max;
-  return max>min?{min,max}:DEFAULT_BOUNDS;
+  if(!known.length)return fallback;
+  const min=Math.max(DEFAULT_BOUNDS.min,Math.min(...known.map(pair=>pair[0])));
+  const max=Math.min(DEFAULT_BOUNDS.max,Math.max(...known.map(pair=>pair[1])));
+  return max>min?{min,max}:fallback;
 }
 export function clampClock(value,bounds=DEFAULT_BOUNDS){
   const number=typeof value==='string'?clockMinute(value):value;
@@ -25,28 +26,6 @@ export function componentMinute(value,part,next,bounds=DEFAULT_BOUNDS){
   const result=part==='hour'?Math.max(Math.floor(bounds.min/60),Math.min(Math.floor(bounds.max/60),number))*60+minute:hour*60+Math.max(0,Math.min(59,number));
   return clampClock(result,bounds);
 }
-/** Suggest the opposite end only when the user edits a linked range. */
-export function linkedWishWindow(changed,value,pair,bounds=DEFAULT_BOUNDS){
-  const selected=clampClock(value,bounds);
-  if(changed==='earliest'){
-    const earliest=Math.min(selected,bounds.max-1);
-    return {earliest,latest:Math.min(bounds.max,earliest+120)};
-  }
-  const latest=Math.max(selected,bounds.min+1);
-  return {earliest:Math.max(bounds.min,latest-120),latest};
-}
-
-export function linkClockFields(edited, start, end, bounds) {
-  const value = clockMinute(edited.value);
-  if (value === null) return null;
-  const pair = linkedWishWindow(edited === start ? 'earliest' : 'latest', value, {}, bounds);
-  for (const [field, minute] of [[start, pair.earliest], [end, pair.latest]]) {
-    field.value = clockText(minute);
-    controls.get(field)?.sync();
-  }
-  return pair;
-}
-
 /** Bind real events separately so keyboard and direct entry use the same constraints. */
 export function bindClockParts(canonical,hourInput,minuteInput,{getBounds=()=>DEFAULT_BOUNDS}={}){
   let syncing=false;
@@ -216,6 +195,7 @@ export function enhanceTimeInputs(root,{getBounds=()=>DEFAULT_BOUNDS}={}){
       element.type='number';element.step='1';element.inputMode='numeric';element.className='clock-component';element.dataset.timePart=part;
       if(input.id)element.id=`${input.id}-${part}`;
       element.setAttribute('aria-label',`${labelText}（${title}）`);element.setAttribute('autocomplete','off');element.required=input.required;
+      if(input.getAttribute('aria-required')==='true')element.setAttribute('aria-required','true');
     }
     separator.className='clock-separator';separator.textContent=':';separator.setAttribute('aria-hidden','true');box.append(hour,separator,minute);
     input.type='hidden';input.dataset.clampedTime='true';input.insertAdjacentElement('afterend',box);

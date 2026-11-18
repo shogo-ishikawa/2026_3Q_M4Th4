@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {bindClockParts, bindTimeReels, clockMinute, linkClockFields} from '../web/time-input.js';
+import {bindClockParts, bindTimeReels, clockMinute} from '../web/time-input.js';
 import {validateSavedState} from '../web/storage.js';
 
 class Option {
@@ -63,17 +63,6 @@ test('opening a blank reel leaves an optional slot unset until confirmed', () =>
   assert.equal(minutes.selected(), 30);
   assert.deepEqual(applied, []);
 });
-test('editing either canonical field propagates a 2-hour preference clipped to park limits', () => {
-  const start = {value: '19:45'}, end = {value: ''};
-  assert.deepEqual(linkClockFields(start, start, end, bounds), {earliest: 1185, latest: 1215});
-  assert.equal(end.value, '20:15');
-  end.value = '10:15';
-  linkClockFields(end, start, end, bounds);
-  assert.equal(start.value, '09:30');
-  end.value = '';
-  assert.equal(linkClockFields(end, start, end, bounds), null);
-  assert.equal(start.value, '09:30');
-});
 test('saved day-link preference is optional for older plans and must be boolean when present', () => {
   const state = {parkId:'land', settings:{date:'2026-11-18',entry:570,exit:1215,speed:70,budget:10000,selections:[]}};
   for (const value of [undefined, false, true]) {
@@ -85,16 +74,16 @@ test('saved day-link preference is optional for older plans and must be boolean 
   assert.throws(() => validateSavedState(state), /連動/);
 });
 
-test('two-digit direct entry updates its linked field immediately and accepts a partial first digit', () => {
+test('two-digit direct entry accepts a partial first digit and leaves an independent endpoint in place', () => {
   const field = value => Object.assign(new EventTarget(), {value, required:false, disabled:false});
   const start = field('11:30'), end = field('14:00'), hours = field(''), minutes = field('');
   bindClockParts(start, hours, minutes, {getBounds: () => bounds});
-  start.addEventListener('change', () => linkClockFields(start, start, end, bounds));
+  bindClockParts(end, field(''), field(''), {getBounds: () => bounds});
   hours.value = '1';
   hours.dispatchEvent(new Event('input'));
   assert.equal(start.value, '11:30');
   hours.value = '15';
   hours.dispatchEvent(new Event('input'));
   assert.equal(start.value, '15:30');
-  assert.equal(end.value, '17:30');
+  assert.equal(end.value, '14:00');
 });
