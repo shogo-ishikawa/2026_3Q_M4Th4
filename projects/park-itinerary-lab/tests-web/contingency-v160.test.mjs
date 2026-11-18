@@ -46,6 +46,20 @@ test('fixed shows, owned DPA and fixed breaks keep their actual times in a delay
  assert.equal(validatePlan(p,s,r).valid,true);
 });
 
+test('time-varying estimates for fixed shows and parades are checked at the show time',()=>{
+ for(const category of ['show','parade']){
+  const activity= {id:'land-show',name:'公演',node:'show',category,duration:5,showTimes:[600],showTimesDate:'2026-11-18',baseWait:30,windows:[[540,1260]]};
+  const p=park([activity]),s=settings({exit:650,crowdMode:'estimate',waitBufferMode:'auto',waitBufferMinutes:5,queueDelayMinutes:15,selections:[{id:'land-show',weight:3,required:true}]});
+  const result=solveItinerary(p,s),queue=result.rows.find(row=>row.kind==='queue');
+  assert.equal(result.status,'feasible');assert.equal(result.visits[0].start,600);
+  assert.equal(queue.estimatedMinutes,30);assert.equal(queue.start,570);assert.equal(queue.end,600);
+  assert.equal(queue.bufferMinutes,0);assert.equal(queue.delayMinutes,0);
+  assert.equal(validatePlan(p,s,result).valid,true);
+  const changed=structuredClone(result);changed.rows.find(row=>row.kind==='queue').estimatedMinutes--;
+  assert.equal(validatePlan(p,s,changed).valid,false);
+ }
+});
+
 test('JSON round trips and repeated replans retain an already started buffered queue',()=>{
  const p=park(),s=settings({exit:700}),original=solveItinerary(p,s);
  let prior=original,profile={...s,replanFrom:545,queueDelayMinutes:15};

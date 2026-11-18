@@ -887,7 +887,9 @@ export function validatePlan(park, settings, result, options = {}) {
         if (fixed && !showTimes(activity, timeSelection, settings).includes(item.start)) errors.push('開演時刻と一致しません。');
         const queue = rows.find(candidate => candidate.kind === 'queue' && candidate.activityId === item.activityId);
         const admission = queue?.start ?? item.start;
-        const estimate = item.dpa ? {minutes:Math.round(finite(activity.dpa.wait, 10)), source:'dpa'} : estimateWait(activity, admission, walkingSettings, (settings.history || []).filter(record => (record.activityId || record.activity_id) === activity.id));
+        // Fixed entertainment is forecast at its show time before its queue is placed backwards.
+        const estimateAt = fixed ? item.start : admission;
+        const estimate = item.dpa ? {minutes:Math.round(finite(activity.dpa.wait, 10)), source:'dpa'} : estimateWait(activity, estimateAt, walkingSettings, (settings.history || []).filter(record => (record.activityId || record.activity_id) === activity.id));
         const allowance = queueAllowance(activity, estimate, item.dpa ? 'dpa' : 'normal', settings);
         if (queue?.bufferMinutes !== undefined || queue?.delayMinutes !== undefined || allowance.bufferMinutes || allowance.delayMinutes) {
           if (!queue || queue.end !== item.start || queue.end - queue.start !== allowance.totalMinutes || queue.estimatedMinutes !== allowance.estimatedMinutes || queue.bufferMinutes !== allowance.bufferMinutes || queue.delayMinutes !== allowance.delayMinutes) errors.push('待ち時間と計画用の余裕が設定と一致しません。');
