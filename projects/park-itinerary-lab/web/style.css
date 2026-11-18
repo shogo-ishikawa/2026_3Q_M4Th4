@@ -605,6 +605,11 @@ body[data-park=sea] .header-account { color: #fff; }
   white-space: nowrap;
 }
 .account-signout { padding: 0 3px; min-height: 44px; border: 0; background: transparent; color: inherit; font: inherit; }
+@media (max-width: 400px) {
+  #appShell .site-header .brand { min-height: 44px; gap: 3px; padding-right: 7px; }
+  #appShell .site-header .brand-logo { width: 44px; height: 42px; object-fit: cover; }
+  #appShell .site-header .brand-name { font-size: 1rem; }
+}
 body[data-park=sea] .account-signout { color: #fff; }
 .account-sync { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
 .account-sync p, .legacy-import p { margin: 0; color: #465267; font-size: 13px; overflow-wrap: anywhere; }
