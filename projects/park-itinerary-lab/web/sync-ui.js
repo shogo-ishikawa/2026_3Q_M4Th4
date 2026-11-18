@@ -1,5 +1,18 @@
-import {readFirebaseConfig, connectFirebase, syncErrorMessage} from './firebase-sync.js?v=2.2.0';
-import {createPlanSync} from './named-sync.js?v=2.2.0';
+import {readFirebaseConfig, connectFirebase, syncErrorMessage} from './firebase-sync.js?v=2.2.1';
+import {createPlanSync} from './named-sync.js?v=2.2.1';
+
+// This fingerprint selects a header label. Access to saved plans is enforced by Firestore rules.
+const OWNER_UID_SHA256 = '59a9ddcef0808ba4c057a9015e2cbd352cd8fd39cb53d8490d90644d1153efba';
+
+async function isOwnerAccount(uid) {
+  try {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(uid));
+    const hex = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+    return hex === OWNER_UID_SHA256;
+  } catch {
+    return false;
+  }
+}
 
 function startLogin() {
   const byId = id => document.getElementById(id);
@@ -9,6 +22,8 @@ function startLogin() {
   const retry = byId('retryLogin');
   const status = byId('loginStatus');
   const syncStatus = byId('syncStatus');
+  const greeting = byId('accountGreeting');
+  const adminLabel = byId('adminLabel');
   let adapter, unsubscribe, uid, planner;
   let starting = false, leaving = false, syncInFlight = null;
   let editsDuringSync = false, refreshAfterUpload = false;
@@ -19,6 +34,8 @@ function startLogin() {
     for (const dialog of shell.querySelectorAll('dialog[open]')) dialog.close();
     shell.inert = true;
     shell.hidden = true;
+    greeting.textContent = '';
+    adminLabel.hidden = true;
     gate.hidden = false;
     login.disabled = true;
   }
@@ -117,17 +134,20 @@ function startLogin() {
       status.textContent = '同じGoogleアカウントでほかの端末からも開けます。';
       return;
     }
+    const name = user.displayName?.trim();
+    greeting.textContent = name ? `${name}さん、良い一日を！` : '良い一日を！';
+    byId('accountName').textContent = name || 'Google アカウント';
     if (uid === user.uid) return;
     uid = user.uid;
     try {
-      const {initialiseApp} = await import('./app.js?v=2.2.0');
+      const {initialiseApp} = await import('./app.js?v=2.2.1');
       if (leaving) return;
       plans.setAccount(uid, adapter);
-      byId('accountName').textContent = user.displayName || 'Google アカウント';
       status.textContent = '施設情報を読み込んでいます…';
       const app = initialiseApp({plans, syncAfterEdit: () => sync({afterEdit: true}), refreshLibrary: () => sync()});
-      await app.ready;
+      const [, isOwner] = await Promise.all([app.ready, isOwnerAccount(uid)]);
       if (leaving) return;
+      adminLabel.hidden = !isOwner;
       planner = app;
       shell.inert = false;
       shell.hidden = false;

@@ -573,6 +573,37 @@ body[data-park=sea] .install-action{border-color:#bbdbf4;background:#123f65;colo
 .login-card .login-status { min-height: 1.6em; margin: 12px 0 0; font-size: 13px; color: #4d5568; }
 .login-card #retryLogin { margin-top: 12px; }
 .site-header nav { flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+#appShell .site-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: "brand account" "brand links";
+  gap: 0 18px;
+  padding-block: 8px;
+}
+#appShell .site-header .brand { grid-area: brand; }
+#appShell .site-header nav { grid-area: links; flex-direction: row; }
+.header-account {
+  grid-area: account;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px 10px;
+  text-align: end;
+  overflow-wrap: anywhere;
+  font-size: .9375rem;
+  font-weight: 650;
+  line-height: 1.5;
+}
+body[data-park=sea] .header-account { color: #fff; }
+#adminLabel {
+  padding: 1px 8px;
+  border-radius: 4px;
+  background: #fff1f1;
+  color: #a22230;
+  font-size: .875rem;
+  white-space: nowrap;
+}
 .account-signout { padding: 0 3px; min-height: 44px; border: 0; background: transparent; color: inherit; font: inherit; }
 body[data-park=sea] .account-signout { color: #fff; }
 .account-sync { display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap; padding: 12px; border: 1px solid var(--line); border-radius: 10px; }
@@ -585,6 +616,8 @@ body[data-park=sea] .account-signout { color: #fff; }
 .legacy-import label { display: flex; align-items: center; gap: 8px; min-height: 44px; overflow-wrap: anywhere; }
 .legacy-import input { width: 18px; height: 18px; flex-shrink: 0; }
 @media (max-width: 540px) {
+  #appShell .site-header { grid-template-areas: "brand account" "links links"; gap: 4px 8px; }
+  .header-account { font-size: .875rem; }
   .site-header nav { row-gap: 0; }
   .account-sync .small-button, .legacy-import .small-button { min-height: 44px; }
 }
