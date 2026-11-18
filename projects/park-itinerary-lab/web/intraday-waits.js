@@ -1,4 +1,5 @@
-import {predictModelWait} from './wait-model.js';
+import {visitDayContext} from './calendar-features.js?v=1.14.0';
+import {predictModelWait} from './wait-model.js?v=1.14.0';
 import {validateLiveSnapshot} from './wait-data.js';
 
 const MIN_FACILITIES = 3;
@@ -43,7 +44,7 @@ export function adjustedIntradayMinutes(expectedMinutes, targetMinute, signal) {
 }
 
 /** Compare posted waits with model estimates for the same rides at their observation times. */
-export function deriveIntradayAdjustment(park, settings) {
+export function deriveIntradayAdjustment(park, settings, visitContext) {
   if (settings.replanFrom == null || settings.replanFrom === '' || settings.crowdMode === 'manual' || settings.liveMode === 'off') return null;
   const snapshot = settings.liveData;
   const model = settings.waitModel;
@@ -54,13 +55,15 @@ export function deriveIntradayAdjustment(park, settings) {
   if (nowLocal.slice(0,10) !== settings.date) return null;
   const facilities = new Map(park.activities.map(activity => [activity.id, activity]));
   const samples = [];
+  if (visitContext === undefined && model.visitFactors?.length)
+    visitContext = visitDayContext(settings.date,park,settings.calendarData || model.calendarData,now);
   for (const ride of snapshot.rides) {
     const activity = facilities.get(ride.activityId);
     if (activity?.category !== 'attraction' || !ride.isOpen || !postedWait(ride.wait) || !freshAge(ride.updatedAt, now)) continue;
     const observationTime = localTime(Date.parse(ride.updatedAt));
     if (observationTime.slice(0,10) !== settings.date) continue;
     const windows = activity.dailySchedules?.[settings.date]?.windows;
-    const prediction = predictModelWait(windows ? {...activity, windows} : activity, clockMinute(observationTime), settings, model);
+    const prediction = predictModelWait(windows ? {...activity, windows} : activity, clockMinute(observationTime), settings, model, visitContext);
     if (prediction) samples.push({activityId:ride.activityId, observed:ride.wait, expected:prediction.minutes});
   }
   return summariseIntradayResiduals(samples, clockMinute(nowLocal));

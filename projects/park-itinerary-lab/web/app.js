@@ -1,15 +1,19 @@
-import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, fetchPublishedModel, prepareLiveForReplan, prepareWeatherForVisit } from './wait-data.js?v=1.13.0';
-import {attachDayProgress} from './day-progress-ui.js';
+import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, fetchPublishedModel, prepareLiveForReplan, prepareWeatherForVisit } from './wait-data.js?v=1.14.0';
+import {visitDayDetails} from './visit-day-view.js';
+import {WISH_PRESETS, presetFacilities, presetStartsPlan, addPresetWishes} from './wishlist-presets.js';
+import {attachItineraryImage} from './itinerary-image.js';
+import {attachOnsiteNavigation} from './onsite-navigation.js';
+import {attachDayProgress} from './day-progress-ui.js?v=1.14.0';
 import {baseVisitId, repeatVisitId, isRepeatVisit, expandRepeatVisits, resolveDpaVisit} from './repeat-visits.js';
-import { restsBesideFood, settledReplanWishes } from './planner.js?v=1.13.0';
-import { enhanceTimeInputs, parkTimeBounds, clampClock } from './time-input.js?v=1.13.0';
-import { estimateParkCrowd } from './wait-model.js?v=1.13.0';
+import { restsBesideFood, settledReplanWishes } from './planner.js?v=1.14.0';
+import { enhanceTimeInputs, parkTimeBounds, clampClock } from './time-input.js?v=1.14.0';
+import { estimateParkCrowd } from './wait-model.js?v=1.14.0';
 import { weatherForMinute } from './weather.js';
-import { forecastCardHtml, forecastSourcesHtml } from './weather-view.js?v=1.13.0';
-import { activityAvailable, operationPauseInfo } from './operation-windows.js?v=1.13.0';
+import { forecastCardHtml, forecastSourcesHtml } from './weather-view.js?v=1.14.0';
+import { activityAvailable, operationPauseInfo } from './operation-windows.js?v=1.14.0';
 import { contingencySettings, compareContingency } from './contingency.js';
-import { renderParkMap } from './map-view.js?v=1.13.0';
-import { listSavedPlans, saveNamedPlan, loadSavedPlan, renameSavedPlan, deleteSavedPlan, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=1.13.0';
+import { renderParkMap } from './map-view.js?v=1.14.0';
+import { listSavedPlans, saveNamedPlan, loadSavedPlan, renameSavedPlan, deleteSavedPlan, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=1.14.0';
 
 const CATEGORY = {attraction:'アトラクション',show:'ショー',parade:'パレード',restaurant:'レストラン',cafe:'カフェ',snack:'スナック',popcorn:'ポップコーン',greeting:'グリーティング',shop:'お土産'};
 const FOOD = new Set(['restaurant','cafe','snack','popcorn']);
@@ -243,6 +247,22 @@ export function noPlanExplanation(result,park) {
   return 'すべての条件に収まる案は見つかりませんでした。下の項目から条件を開けます。';
 }
 
+const omissionSettingLabels = {
+  budget:'総予算を見直す',foodBudget:'フードの上限を見直す',dpaBudget:'DPA予算を見直す',exitTime:'退園予定を見直す',
+  visitDate:'訪問日を確認',refreshLiveWaits:'運営状況の更新へ',avoidConsecutiveFood:'フードの間隔を見直す',catalogueSearch:'ほかの施設を探す',
+};
+const omissionWishLabels = {
+  weight:'重要度を見直す',required:'必須の指定を確認',earliest:'希望の時間帯を見直す',confirmedAccess:'利用条件を確認',
+  dpaStart:'DPAの利用枠を確認',nodeOverride:'鑑賞場所を確認',showTimes:'開演時刻を確認',
+};
+
+export function omissionAction(omitted) {
+  const field=omitted.conflictField;
+  if (Object.hasOwn(omissionSettingLabels,field)) return {field,label:omissionSettingLabels[field]};
+  const wishField=Object.hasOwn(omissionWishLabels,field)?field:omitted.required?'required':'weight';
+  return {field:wishField,wishId:baseVisitId(omitted.id),label:omissionWishLabels[wishField]};
+}
+
 // A search may time out. Suggest concrete edits without claiming any one wish caused the failure.
 export function noPlanActions(result,park) {
   if(result?.status!=='no-plan')return [];
@@ -254,10 +274,11 @@ export function noPlanActions(result,park) {
     if(!wish?.required&&wish?.dpaMode!=='owned')continue;
     if(omitted.conflictField==='avoidConsecutiveFood')continue;
     const activity=activities.get(baseVisitId(wish.id));
-    const field=omitted.conflictField||(wish.dpaMode==='owned'?'dpaStart':ENTERTAINMENT.has(activity?.category)?'showTimes':FOOD.has(activity?.category)?'earliest':'required');
+    const wishField=Object.hasOwn(omissionWishLabels,omitted.conflictField)?omitted.conflictField:null;
+    const field=wishField||(wish.dpaMode==='owned'?'dpaStart':ENTERTAINMENT.has(activity?.category)?'showTimes':FOOD.has(activity?.category)?'earliest':'required');
     actions.push({wishId:baseVisitId(wish.id),field,label:(omitted.name||activity?.name)+'の条件'});
   }
-  if((result.omissions||[]).some(item=>item.required&&item.conflictField==='required'))actions.push({field:'visitDate',label:'訪問日'});
+  if((result.omissions||[]).some(item=>item.required&&['required','visitDate'].includes(item.conflictField)))actions.push({field:'visitDate',label:'訪問日'});
   if((result.omissions||[]).some(item=>item.conflictField==='avoidConsecutiveFood'))actions.push({field:'avoidConsecutiveFood',label:'フードを連続して入れない設定'});
   if(settings.fixedBreaks?.length)actions.push({field:'breakEditor',label:'指定した休憩'});
   if((result.omissions||[]).some(item=>item.required&&FOOD.has(activities.get(item.id)?.category)))actions.push({field:'foodBudget',label:'フードの上限'});
@@ -355,7 +376,7 @@ export const PARK_COPY = {
 export function initialiseApp() {
   let contingencyWorker = null, contingencyResult = null, contingencyBase = null, contingencyRequest = 0;
   let catalogue, calendarData, externalPanel, preparation = null, worker = null, requestId = 0, searchStarted = 0, progressTimer = null, latestPreview = null, wishlistGenre = 'all', lastBreakSuggestionResult = null, workflowView = 'wishlist', openedPlanId = null;
-  let purchaseDraft, progressEditor;
+  let purchaseDraft, progressEditor, itineraryImage, onsiteCard;
   const modelCache=new Map();
   const restUndo=new WeakMap();
   // An invalid edit stays with its wish when the user switches genre or opens another card.
@@ -366,7 +387,7 @@ export function initialiseApp() {
   const byId = id => activities().find(a => a.id === baseVisitId(id || ''));
   const setStatus = (message,error = false) => { $('status').textContent=message; $('status').classList.toggle('is-error',error); };
   const safely = action => async(...args) => { try {await action(...args);}catch(error){setStatus(error.message || '入力を確認してもう一度試してください。',true);} };
-  const setSolveDisabled = disabled => {for(const button of document.querySelectorAll('[data-start-plan]'))button.disabled=disabled;};
+  const setSolveDisabled = disabled => {for(const button of document.querySelectorAll('[data-start-plan]'))button.disabled=disabled;onsiteCard?.refresh();};
   const numberInput = (id,min,max,step=1) => {
     const input=$(id),value=Number(input.value);
     if(input.value.trim()!==''&&Number.isFinite(value)&&value>=min&&value<=max&&Number.isInteger(value/step))return value;
@@ -403,12 +424,25 @@ export function initialiseApp() {
   }
   function showWorkflow(name,{focus=false,scroll=false}={}) {
     workflowView=setWorkflowTab(document,name,{focus});
+    onsiteCard?.refresh();
     if(scroll)$('workflowTabs').scrollIntoView({block:'start',behavior:'smooth'});
   }
   function updateDayOverview(){
     const s=state.settings,speed=s.speed===50?'ゆっくり':s.speed===90?'早め':'普通';
     const crowd=crowdExplanation(currentPark(),s);
     $('crowdLevelStatus').textContent=crowd.detail;
+    const details=visitDayDetails(currentPark(),s);
+    $('visitDayFacts').hidden=!details;
+    if(details){
+      $('visitDayFactSummary').textContent=details.facts.join(' · ');
+      $('visitDayForecastUse').textContent=details.forecast;
+      $('visitDaySupport').hidden=!details.support;
+      $('visitDaySupportText').textContent=details.support;
+      const links=details.sources.filter(source=>safeLink(source.url)!=='#').map(source=>
+        `<a href="${safeLink(source.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(source.label)} ↗</a>`);
+      if(details.report)links.push(`<a href="${escapeHtml(details.report)}">この日の予測の精度 →</a>`);
+      $('visitDayFactSources').innerHTML=links.join(' ');
+    }
     $('dayOverview').textContent=`${money(s.budget)} · 混雑 ${crowd.summary} · 歩く速さ ${speed} · ${s.restEvery&&s.restMinutes?'休憩は自動':'自動休憩なし'}`;
     $('livePlanStatus').textContent=s.liveNotice||'';$('livePlanStatus').hidden=!s.liveNotice;
   }
@@ -454,7 +488,12 @@ export function initialiseApp() {
     if(settings.entry>=settings.exit)throw inputError('退園予定は入園予定より後にしてください。','exitTime');
     if(settings.souvenirReserve>settings.budget)throw inputError('お土産に残す金額を予算上限以下にしてください。','souvenirReserve');
     settings.purchases=Array.isArray(state.settings.purchases)?state.settings.purchases:[];
-    if($('replanEnabled').checked){settings.replanFrom=timeInput('replanTime');settings.currentNode=$('currentNode').value;if(settings.replanFrom<settings.entry||settings.replanFrom>=settings.exit)throw inputError('組み替え開始は入園予定から退園予定より前の時刻にしてください。','replanTime');}else{delete settings.replanFrom;delete settings.currentNode;}
+    if($('replanEnabled').checked){
+      settings.replanFrom=timeInput('replanTime');
+      if(settings.replanFrom<settings.entry||settings.replanFrom>=settings.exit)throw inputError('組み替え開始は入園予定から退園予定より前の時刻にしてください。','replanTime');
+      if($('currentNode').value)settings.currentNode=$('currentNode').value;
+      else delete settings.currentNode;
+    }else{delete settings.replanFrom;delete settings.currentNode;}
     if(settings.weatherMode==='manual'){settings.weatherForecast=null;settings.weatherNotice='天気は手動の設定を使います。';}
     else if(state.settings.weatherMode==='manual'){settings.weatherForecast=null;settings.weatherNotice='プランを考えると訪問日の予報を取得します。';}
     state.settings=settings;for(const selection of settings.selections)rememberOwnedPurchase(selection);return settings;
@@ -501,10 +540,10 @@ export function initialiseApp() {
     $('landTab').tabIndex=state.parkId==='land'?0:-1;$('seaTab').tabIndex=state.parkId==='sea'?0:-1;
     $('officialMapLink').href=park.mapUrl || park.officialUrl;$('officialParkLink').href=park.officialUrl;
     const short=state.parkId==='sea'?'tds':'tdl';$('dailyLink').href=`https://www.tokyodisneyresort.jp/${short}/daily/calendar/${s.date.replaceAll('-','')}/`;
-    $('currentNode').replaceChildren();
+    $('currentNode').replaceChildren(new Option('しおりの順路から推定',''));
     for(const node of selectableNodes(park)){const option=document.createElement('option');option.value=node.id;option.textContent=node.name || node.id;$('currentNode').append(option);}
     if(s.currentNode&&park.nodes.some(node=>node.id===s.currentNode&&node.routingOnly)){const option=document.createElement('option');option.value=s.currentNode;option.textContent='現在地点（保存した位置）';$('currentNode').append(option);}
-    $('currentNode').value=s.currentNode || park.entryNode;
+    $('currentNode').value=s.currentNode || '';
     const breakNode=$('breakNode').value;$('breakNode').replaceChildren();
     for(const node of selectableNodes(park)){const option=document.createElement('option');option.value=node.id;option.textContent=node.name||node.id;$('breakNode').append(option);}
     $('breakNode').value=selectableNodes(park).some(n=>n.id===breakNode)?breakNode:park.entryNode;renderFixedBreaks();
@@ -564,41 +603,55 @@ export function initialiseApp() {
     }
     return wish;
   }
-  function addSelection(id, suggestMeal = false) {
-    const a=byId(id);if(!a)return;if(selected(id)){toggleWantedSelection(state.settings,{id});markResultStale();renderCatalogue();renderWishlist();renderMap();setStatus('');return;}if(activitySchedule(a,state.settings.date).closed){setStatus(`${a.name}は訪問日に休止予定です。別の日や施設を選んでください。`,true);return;}
-    if(!selected(id)){
-      const s=newWish(a);
-      if(suggestMeal && a.category==='restaurant'){
-        const late=state.settings.entry>=900;
-        const from=Math.max(state.settings.entry,late?1020:660),until=Math.min(state.settings.exit,late?1200:840);
-        if(until-from>=s.duration){s.earliest=from;s.latest=until;}
-      }
-      toggleWantedSelection(state.settings,s);if(wishlistGenre!=='all')wishlistGenre=genreOf(a.category);markResultStale();renderCatalogue();renderWishlist();renderMap();setStatus('');
+  function addSelection(id) {
+    const a=byId(id);
+    if(!a)return;
+    if(!selected(id)&&activitySchedule(a,state.settings.date).closed){
+      setStatus(`${a.name}は訪問日に休止予定です。別の日や施設を選んでください。`,true);
+      return;
     }
+    const adding=!selected(id);
+    toggleWantedSelection(state.settings,adding?newWish(a):{id});
+    if(adding&&wishlistGenre!=='all')wishlistGenre=genreOf(a.category);
+    markResultStale();renderCatalogue();renderWishlist();renderMap();setStatus('');
   }
-  function suggestedSelection() {
-    state.settings.selections=[];
-    const presets=state.parkId==='land' ? [
-      [['美女と野獣','プーさんのハニーハント','ビッグサンダー・マウンテン','カリブの海賊'],4],
-      [['ハングリーベア・レストラン','チャイナボイジャー','トゥモローランド・テラス'],1],
-      [['ル・プティポッパー','ビレッジペイストリー','スキッパーズ・ギャレー'],1],
-      [['グランドエンポーリアム','ワールドバザール・コンフェクショナリー'],1],
-    ] : [
-      [['アナとエルサのフローズンジャーニー','ソアリン','トイ・ストーリー・マニア','センター・オブ・ジ・アース'],4],
-      [['ヴォルケイニア・レストラン','ユカタン・ベースキャンプ・グリル','カスバ・フードコート'],1],
-      [['シーサイドスナック','リフレッシュメント・ステーション','サルタンズ・オアシス'],1],
-      [['エンポーリオ','マクダックス・デパートメントストア'],1],
-    ];
-    const date=state.settings.date;
-    const available=activities().filter(a=>(!a.access||a.access==='normal')&&activityAvailable(a,date));
-    for(const [names,count] of presets){let added=0;for(const name of names){const activity=available.find(a=>a.name.includes(name));if(activity&&!selected(activity.id)){addSelection(activity.id,true);added++;if(added===count)break;}}}
-    wishlistGenre='all';renderWishlist();markResultStale();setStatus('おすすめの希望を追加しました。');
+  function renderWishPresets() {
+    const fresh=presetStartsPlan(state);
+    $('wishPresetHelp').textContent=fresh?'テーマを選ぶと、その希望でしおりを作成します。':'テーマを選ぶと、今の希望に施設を追加します。';
+    $('wishPresetFeedback').textContent='';
+    $('wishPresetChoices').innerHTML=WISH_PRESETS.map(({id,label})=>{
+      const facilities=presetFacilities(currentPark(),state.settings,id);
+      const preview=facilities.slice(0,2).map(a=>a.name).join('、');
+      return `<button type="button" data-wish-preset="${id}"${facilities.length?'':' disabled'}><strong>${label}</strong><span>${preview?escapeHtml(preview)+(facilities.length>2?' ほか':''):'この日の候補はありません'}</span></button>`;
+    }).join('');
+  }
+  function addWishPreset(presetId) {
+    const fresh=presetStartsPlan(state);
+    const settings=state.settings, facilities=presetFacilities(currentPark(),settings,presetId);
+    if(!facilities.length)return;
+    const added=addPresetWishes(settings,facilities,a=>{
+      const wish=newWish(a);
+      if(a.category==='restaurant'){
+        const late=settings.entry>=900;
+        const from=Math.max(settings.entry,late?1020:660),until=Math.min(settings.exit,late?1200:840);
+        if(until-from>=wish.duration){wish.earliest=from;wish.latest=until;}
+      }
+      return wish;
+    });
+    if(added){
+      wishlistGenre='all';
+      markResultStale();renderCatalogue();renderWishlist();renderMap();
+    }
+    if(fresh)return startSearch();
+    $('wishPresetFeedback').textContent=added?`${added}件を希望に追加しました。`:'このテーマの候補はすべて希望に入っています。';
+    $('wishPresetChoices').querySelector(`[data-wish-preset="${presetId}"]`)?.focus({preventScroll:true});
   }
   function wishTimeDefaults() {
     const {date,entry,exit}=state.settings;
     return parkTimeBounds(currentPark(),date,{min:entry,max:exit});
   }
   function renderWishlist() {
+    renderWishPresets();
     const all=state.settings.selections,bounds=parkTimeBounds(currentPark(),state.settings.date);
     const wishDefaults=wishTimeDefaults();
     for(const s of all)for(const key of ['earliest','latest'])if(Number.isInteger(s[key]))s[key]=clampClock(s[key],bounds);
@@ -684,6 +737,8 @@ export function initialiseApp() {
   function renderResult() {
     if (state.resultDirty || (contingencyBase && contingencyBase !== state.result)) clearContingency();
     progressEditor?.refresh();
+    itineraryImage?.refresh(state.result, state.resultDirty);
+    onsiteCard?.refresh();
     const result=state.result;$('results').hidden=!result;$('scheduleEmpty').hidden=!!result;renderSources();if(!result)return;renderFixedBreaks();
     const t=result.totals||{},c=result.coverage||{};
     $('resultState').textContent=state.resultDirty?'前の条件で作った計画':result.status==='feasible'?'見つかった計画':result.status==='no-plan'?'条件を見直そう':'入力を確認';
@@ -730,7 +785,12 @@ export function initialiseApp() {
       return `${notice}<article class="timeline-row kind-${escapeHtml(kind)}"><div class="timeline-time">${timeText(row.start)}<small>– ${timeText(row.end)}</small></div><div class="timeline-body${forecast?' has-forecast':''}"><h4>${escapeHtml(name)}${row.dpa?`<span class="dpa-pill">${dpaLabel}</span>`:''}</h4><p>${escapeHtml(details.join(' · '))}</p>${forecast ? forecastCardHtml(forecast) : ''}${visitActions}${kind==='rest'&&canEditRest&&!row.preserved&&!(row.start<state.settings.replanFrom)&&(row.fixedBreakId||row.autoBreakId)?`<button class="remove-timeline-rest" data-remove-rest-index="${index}" type="button" aria-label="${timeText(row.start)}の休憩だけ外す">この休憩だけ外す</button>`:''}</div></article>`;
     }).join('');
     const omissions=result.omissions||[];$('omissionTitle').textContent=`入らなかった希望 · ${omissions.length}件`;
-    $('omissionList').innerHTML=omissions.length?omissions.map(o=>`<div class="omission-item"><span>↗</span><div><strong>${escapeHtml(o.name || byId(o.id)?.name || o.id)}${o.required?' · 必須':''}</strong><p>${escapeHtml(o.reason||'時間・予算・利用枠の条件に合わせて他の希望を優先しました。')}</p></div></div>`).join(''):'<p class="field-note">希望をすべて予定に取り入れられました。</p>';
+    const showOmissionActions=!state.resultDirty&&!result.diagnostics?.running&&!worker&&!preparation;
+    $('omissionList').innerHTML=omissions.length?omissions.map(o=>{
+      const name=o.name||byId(o.id)?.name||o.id,action=omissionAction(o);
+      const button=showOmissionActions?`<button class="omission-action" type="button" data-plan-field="${escapeHtml(action.field)}" data-plan-wish="${escapeHtml(action.wishId||'')}" aria-label="${escapeHtml(name+'：'+action.label)}">${escapeHtml(action.label)}</button>`:'';
+      return `<div class="omission-item"><div><strong>${escapeHtml(name)}${o.required?' · 必須':''}</strong><p>${escapeHtml(o.reason||'時間・予算・利用枠の条件に合わせて他の希望を優先しました。')}</p>${button}</div></div>`;
+    }).join(''):'<p class="field-note">希望をすべて予定に取り入れられました。</p>';
     const d=result.diagnostics||{};
     $('delayPlanNotice').textContent=`待ち時間に含めた余裕は合計${t.bufferMinutes || 0}分${t.delayMinutes ? `、追加の混雑想定は合計${t.delayMinutes}分` : ''}です。`;
     $('searchContingency').disabled=state.resultDirty||result.status!=='feasible'||!!worker||!!preparation;
@@ -852,10 +912,11 @@ export function initialiseApp() {
         wishlistGenre=genreOf(byId(wishId)?.category)||'all';renderWishlist();
         card=cards().find(item=>item.dataset.wishId===wishId);
       }
+      if(field==='weight')target=card?.querySelector('[data-weight][aria-pressed="true"]')||card?.querySelector('[data-weight]');
       if(!target?.isConnected)target=[...(card?.querySelectorAll('[data-field]')||[])].find(item=>item.dataset.field===field)
         ||card?.querySelector('[data-field="required"]');
     }else if(field){
-      target=$(field);
+      target=field==='refreshLiveWaits'?$('externalDataPanel').querySelector('[data-external="refresh"]'):$(field);
       if($('workflowWishlist').contains(target))showWorkflow('wishlist');
       if($('workflowSchedule').contains(target))showWorkflow('schedule');
     }
@@ -897,7 +958,7 @@ export function initialiseApp() {
     const extra=Number($('contingencyDelay').value),profile=contingencySettings(state.result.settings||state.settings,extra);
     contingencyBase=state.result;const request=++contingencyRequest;
     const initialPlan=profile.replanFrom!=null?state.result:null;
-    contingencyWorker=new Worker(new URL('./planner-worker.js?v=1.13.0',import.meta.url),{type:'module'});
+    contingencyWorker=new Worker(new URL('./planner-worker.js?v=1.14.0',import.meta.url),{type:'module'});
     $('searchContingency').disabled=true;$('cancelContingency').hidden=false;
     $('contingencyStatus').textContent=`通常の待ち列がさらに${extra}分長い場合を探索しています。`;
     contingencyWorker.onmessage=event=>{
@@ -947,7 +1008,7 @@ export function initialiseApp() {
     if(preparingRequest!==requestId)return;
     preparation=null;state.settings=prepared;if(state.result){state.resultDirty=true;renderResult();}writeSettings();externalPanel?.refresh();
     searchStarted=performance.now();
-    try{worker=new Worker(new URL('./planner-worker.js?v=1.13.0',import.meta.url),{type:'module'});}catch{stopSearch();showPlanError(new Error('探索を起動できませんでした。ページを再読み込みしてもう一度お試しください。'));return;}
+    try{worker=new Worker(new URL('./planner-worker.js?v=1.14.0',import.meta.url),{type:'module'});}catch{stopSearch();showPlanError(new Error('探索を起動できませんでした。ページを再読み込みしてもう一度お試しください。'));return;}
     setSolveDisabled(true);$('cancelSearch').hidden=false;$('searchProgress').hidden=false;$('progressBar').value=0;$('progressText').textContent='最初の計画を探しています…';
     const thisRequest=requestId;
     worker.onmessage=event=>{
@@ -1000,6 +1061,15 @@ export function initialiseApp() {
       root:document, context:()=>({park:currentPark(),settings:state.settings,session:state}),
       apply:applyVisitProgress, syncClocks:syncTimeEditors,
       replan(at) {
+        $('replanEnabled').checked=true;$('replanTime').value=timeText(at);syncTimeEditors();
+        return startSearch();
+      }
+    });
+    onsiteCard=attachOnsiteNavigation({
+      root:document, editor:progressEditor, busy:()=>!!worker||!!preparation,
+      context:()=>({park:currentPark(),settings:state.settings,result:state.result,dirty:state.resultDirty,visible:workflowView==='schedule'}),
+      replan(at) {
+        if(state.settings.replanFrom!==at)$('currentNode').value='';
         $('replanEnabled').checked=true;$('replanTime').value=timeText(at);syncTimeEditors();
         return startSearch();
       }
@@ -1110,7 +1180,11 @@ export function initialiseApp() {
       setStatus(existing?'購入履歴を更新しました。':'購入履歴に追加しました。次の探索で購入間隔と支出へ反映します。');
     }));
     $('purchaseHistory').addEventListener('click',event=>{const button=event.target.closest('[data-remove-purchase]');if(!button)return;const removed=state.settings.purchases.splice(Number(button.dataset.removePurchase),1)[0];const selection=selected(removed?.id);if(selection?.dpaMode==='owned')changeDpaMode(selection,'none');refreshPurchaseEditor();renderWishlist();renderPurchaseHistory();markResultStale();setStatus('購入履歴を外しました。この施設の取得済みDPA指定も通常利用へ戻しています。');});
-    $('addSuggested').addEventListener('click',safely(suggestedSelection));$('clearSelection').addEventListener('click',()=>{state.settings.selections=[];markResultStale();renderWishlist();renderCatalogue();renderMap();});
+    $('wishPresetChoices').addEventListener('click',safely(event=>{
+      const button=event.target.closest('[data-wish-preset]');
+      if(button)return addWishPreset(button.dataset.wishPreset);
+    }));
+    $('clearSelection').addEventListener('click',()=>{state.settings.selections=[];markResultStale();renderWishlist();renderCatalogue();renderMap();});
     for(const id of ['visitDate','crowdMode','crowdLevel','weather','weatherMode']){
       $(id).addEventListener('change',safely(()=>{
         const previousDate=state.settings.date;
@@ -1137,7 +1211,7 @@ export function initialiseApp() {
       button.addEventListener('pointerdown',event=>{if(document.activeElement?.matches('input,select,textarea'))event.preventDefault();});
       button.addEventListener('click',startSearch);
     }
-    $('noPlanActions').addEventListener('click',event=>{
+    $('results').addEventListener('click',event=>{
       const button=event.target.closest('[data-plan-field]');if(!button)return;
       const target=revealPlanField({field:button.dataset.planField,wishId:button.dataset.planWish});
       target?.focus({preventScroll:true});target?.scrollIntoView({block:'center'});
@@ -1154,6 +1228,7 @@ export function initialiseApp() {
     $('importHistory').addEventListener('click',()=>$('historyFile').click());$('historyFile').addEventListener('change',safely(async()=>{const file=$('historyFile').files[0];if(!file)return;if(file.size>10000000)throw Error('待ち時間CSVは10MB以下で指定してください。');state.history=parseHistoryCsv(await file.text());state.settings.history=state.history;updateCrowd();externalPanel?.refresh();markResultStale();setStatus(`${state.history.length}件の待ち時間を読み込みました。再探索すると計画へ反映します。`);$('historyFile').value='';}));
     $('exportCatalogue').addEventListener('click',safely(downloadCatalogue));$('importCatalogue').addEventListener('click',()=>$('catalogueFile').click());$('catalogueFile').addEventListener('change',safely(async()=>{const file=$('catalogueFile').files[0];if(!file)return;if(file.size>5000000)throw Error('施設JSONは5MB以下で指定してください。');const next=validateCatalogue(JSON.parse(await file.text()));stopSearch();catalogue=next;state.result=null;state.settings.selections=state.settings.selections.filter(s=>byId(s.id));updateContext();setStatus('施設情報を更新しました。時間・料金を確認して再探索してください。');$('catalogueFile').value='';}));
     $('refreshCatalogue').addEventListener('click',safely(async()=>{stopSearch();await loadCatalogue(true);stopSearch();state.result=null;updateContext();setStatus('配布中の施設情報を読み直しました。');}));
+    itineraryImage=attachItineraryImage(document,()=>({plan:state.result,park:currentPark(),settings:state.result?.settings||state.settings}),safely,()=>showWorkflow('schedule'));
     $('exportJson').addEventListener('click',safely(()=>{readSettings();downloadPlanJson(state);}));$('exportCsv').addEventListener('click',safely(()=>downloadScheduleCsv(state.result,currentPark())));$('exportIcs').addEventListener('click',safely(()=>downloadCalendar(state.result,currentPark(),state.result.settings||state.settings)));$('exportHtml').addEventListener('click',safely(()=>downloadOfflineHtml(state.result,currentPark(),state.result.settings||state.settings)));$('printPlan').addEventListener('click',()=>window.print());
   }
   async function start() {

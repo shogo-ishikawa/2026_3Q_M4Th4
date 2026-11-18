@@ -1,5 +1,5 @@
 """Exercise the built Pages app, including its worker, on a mobile Chrome viewport."""
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
@@ -42,7 +42,8 @@ def activity_rows(plan):
 def check_mobile(page, url):
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
-    page.clock.set_fixed_time(datetime.fromisoformat('2026-11-19T09:15:00+09:00'))
+    midnight = datetime.fromisoformat('2026-11-19T00:00:00+09:00')
+    page.clock.set_fixed_time(midnight + timedelta(hours=9, minutes=15))
     page.context.route('**/*', lambda route: route.continue_() if route.request.url.startswith(url + '/') else route.abort())
     page.goto(url + '/park-itinerary-lab/')
     expect(page.locator('#solveButton')).to_be_enabled(timeout=30_000)
@@ -62,9 +63,18 @@ def check_mobile(page, url):
 
     queue = next(row for row in plan['result']['rows'] if row['kind'] == 'queue' and row['activityId'] == first)
     at = queue['start'] + 1
+    page.clock.set_fixed_time(midnight + timedelta(minutes=at))
     page.locator(f'[data-report-visit="{first}"][data-report-status="queue"]').click()
     set_time(page, 'progressClock', at)
-    page.locator('#progressRemaining').fill('20')
+    page.get_by_role('group', name='残り時間の候補').get_by_role('button', name='20分', exact=True).click()
+    expect(page.locator('#progressRemaining')).to_have_value('20')
+    expect(page.locator('#progressEstimate')).to_contain_text('に終了予定')
+    # The now card resumes a pending edit without discarding or submitting it.
+    page.locator('#dayProgressEditor summary').click()
+    page.locator('#onsiteReplan').click()
+    expect(page.locator('#progressRemaining')).to_be_visible()
+    expect(page.locator('#progressRemaining')).to_have_value('20')
+    expect(page.locator('#progressList button')).to_have_count(0)
     # Apply the edited form directly through the main replan action.
     plan = solve(page, page.locator('#progressReplan'))
     queued, next_visit = activity_rows(plan)
@@ -73,9 +83,12 @@ def check_mobile(page, url):
     assert next_visit['activityId'] == second and next_visit['start'] >= queued['end']
 
     finished = queued['end'] - 1
-    page.locator(f'[data-report-visit="{first}"][data-report-status="done"]').click()
+    page.clock.set_fixed_time(midnight + timedelta(minutes=finished))
+    page.locator('#onsiteFinish').click()
+    expect(page.locator('#progressStatus')).to_have_value('done')
     set_time(page, 'progressClock', finished)
-    set_time(page, 'progressDoneAt', finished)
+    expect(page.locator('#progressEstimate')).to_contain_text('に体験を終えたと記録')
+    # A tracked ride uses the report clock when the optional actual time is blank.
     plan = solve(page, page.locator('#progressReplan'))
     recorded, next_visit = activity_rows(plan)
     assert recorded['userProgress'] == 'done' and recorded['activityId'] == first and recorded['end'] == finished

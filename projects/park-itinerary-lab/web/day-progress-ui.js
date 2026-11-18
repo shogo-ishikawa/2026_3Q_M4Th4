@@ -78,23 +78,33 @@ export function attachDayProgress({root, context, apply, replan, syncClocks}) {
   const occurrence = get('progressOccurrence'), status = get('progressStatus');
   const clock = get('progressClock'), remaining = get('progressRemaining'), finish = get('progressFinish');
   const message = get('progressMessage'), list = get('progressList');
-  let parkRef, lastDay, evidenceRef, savedSettings, sessionRef, dirty = false;
+  const chips = [...get('progressRemainingField').querySelectorAll('[data-remaining]')];
+  let parkRef, lastDay, evidenceRef, savedSettings, sessionRef, wishKey;
+  // Changing only the start time must never create a visit record.
+  let dirty = false, clockDraft = false, estimateEdited = false;
+  const hasDraft = () => dirty || clockDraft;
+  const showReset = () => { get('progressReset').hidden = !hasDraft(); };
   const activity = () => context().park.activities.find(a => a.id === facilitySelect.value);
   const occurrenceId = () => occurrence.value === '2' ? repeatVisitId(facilitySelect.value) : facilitySelect.value;
   const readMinute = input => clockMinute(input.value);
   const duration = () => context().settings.selections.find(s => s.id === facilitySelect.value)?.duration ?? activity()?.duration ?? 10;
+  // Moving the report clock alone cannot shift an already recorded finish.
+  function useRecordedEstimate(record, at) {
+    if (estimateEdited || !active(record?.status) || record.status !== status.value || !Number.isInteger(at)) return;
+    const left = record.endsAt - at - (record.status === 'queue' ? duration() : 0);
+    remaining.value = left >= 0 && record.endsAt > at ? String(left) : '';
+    get('progressEstimateMode').value = left < 0 && record.endsAt > at ? 'finish' : 'remaining';
+  }
   function fillStatus() {
     const {park, settings} = context(), record = ownVisits(settings, park)[occurrenceId()];
-    const at = readMinute(clock) ?? suggestedReportTime(settings);
-    get('progressDoneAt').value = record?.status === 'done' && Number.isInteger(record.endsAt) ? clockText(record.endsAt) :
-      active(record?.status) && status.value === 'done' ? clockText(at) : '';
+    get('progressDoneAt').value = record?.status === 'done' && Number.isInteger(record.endsAt) ? clockText(record.endsAt) : '';
     get('progressHere').checked = false;
     get('progressFirstConfirmed').checked = false;
-    get('progressEstimateMode').value = active(record?.status) && record.status === status.value ? 'finish' : 'remaining';
+    get('progressEstimateMode').value = 'remaining';
     remaining.value = '';
     finish.value = active(record?.status) ? clockText(record.endsAt) : '';
-    // Choosing a saved visit shouldn't silently reuse an obsolete remaining-time estimate.
-    if (record?.status === 'riding' && record.endsAt > at) remaining.value = record.endsAt - at;
+    estimateEdited = false;
+    useRecordedEstimate(record, readMinute(clock));
     toggleFields();
     syncClocks();
   }
@@ -111,14 +121,27 @@ export function attachDayProgress({root, context, apply, replan, syncClocks}) {
       (!ongoing && status.value !== 'done') || ownVisits(settings,park)[facilitySelect.value]?.status === 'done';
     get('progressRelease').hidden = !active(record?.status);
     get('progressClear').hidden = !record;
+    for (const chip of chips) chip.setAttribute('aria-pressed', String(remaining.value === chip.dataset.remaining));
     const at = readMinute(clock);
     let summary = '';
     if (ongoing && Number.isInteger(at) && (remaining.value !== '' || mode === 'finish')) {
       try {
         const end = remainingVisitEnd({status:status.value,at,mode,duration:duration(),remaining:Number(remaining.value),finish:readMinute(finish)});
-        if (end > at && end <= settings.exit)
-          summary = (status.value === 'queue' && mode === 'remaining' ? '体験時間' + duration() + '分を含めて' : '') + clockText(end) + 'から次の予定を組みます。';
+        if (end > at && end <= settings.exit) {
+          const facility = activity();
+          const arrival = facility?.endNode && facility.endNode !== facility.node &&
+            park.nodes?.find(node => node.id === facility.endNode)?.name;
+          const start = arrival ? arrival + 'の降り場から' : 'この施設の出口から';
+          summary = (status.value === 'queue' && mode === 'remaining' ? '体験時間' + duration() + '分を含めて' : '') +
+            clockText(end) + 'に終了予定。' + start + '次の予定を組みます。';
+        } else if (end > settings.exit) summary = '終了見込みが退園予定（' + clockText(settings.exit) + '）を過ぎます。';
+        else if (end <= at) summary = '組み替え開始より後の終了時刻を指定してください。';
       } catch { /* Keep the form editable until the user confirms the estimate. */ }
+    }
+    if (!summary && active(record?.status) && Number.isInteger(at)) {
+      if (ongoing && record.endsAt <= at) summary = '前回の終了見込みは' + clockText(record.endsAt) + 'でした。まだ続く場合は残り時間を入力してください。';
+      if (status.value === 'done' && !get('progressDoneAt').value)
+        summary = '終了時刻を省略すると' + clockText(at) + 'に体験を終えたと記録します。';
     }
     get('progressEstimate').textContent = summary;
   }
@@ -130,16 +153,20 @@ export function attachDayProgress({root, context, apply, replan, syncClocks}) {
     occurrence.value = isRepeatVisit(id) ? '2' : '1';
     get('progressOccurrenceField').hidden = facility.category !== 'attraction';
     const record = ownVisits(settings,park)[id];
-    status.value = state || record?.status || 'done';
+    status.value = state || record?.status || '';
     fillStatus();
   }
   function refresh() {
     const {park,settings,session} = context();
-    if (park !== parkRef || lastDay !== settings.date || session !== sessionRef) {
-      parkRef = park; lastDay = settings.date; sessionRef = session; dirty = false;
+    const changedDay = park !== parkRef || lastDay !== settings.date || session !== sessionRef;
+    const wantedIds = settings.selections.map(s => s.id);
+    const key = wantedIds.join('|');
+    if (changedDay || key !== wishKey) {
+      const priorId = occurrenceId();
+      parkRef = park; lastDay = settings.date; sessionRef = session; wishKey = key;
       facilitySelect.replaceChildren();
       const groups = new Map();
-      const wanted = new Set(settings.selections.map(s => s.id));
+      const wanted = new Set(wantedIds);
       for (const a of park.activities) {
         const groupName = wanted.has(a.id) ? '希望の施設' : 'その他の施設';
         if (!groups.has(groupName)) {
@@ -148,9 +175,17 @@ export function attachDayProgress({root, context, apply, replan, syncClocks}) {
         groups.get(groupName).append(new Option(a.name, a.id));
       }
       for (const name of ['希望の施設', 'その他の施設']) if (groups.has(name)) facilitySelect.append(groups.get(name));
-      clock.value = clockText(suggestedReportTime(settings));
-      chooseFacility(facilitySelect.value);
-      message.textContent = '';
+      if (changedDay) {
+        dirty = false; clockDraft = false; showReset();
+        clock.value = clockText(suggestedReportTime(settings));
+        const current = Object.keys(ownVisits(settings,park)).find(id => active(ownVisits(settings,park)[id].status));
+        chooseFacility(current || facilitySelect.value);
+        message.textContent = '';
+        message.classList.remove('is-error');
+      } else {
+        // Rebuilding wish groups must not replace an off-plan visit being edited.
+        facilitySelect.value = baseVisitId(priorId);
+      }
     }
     const progress = settings.dayProgress;
     if (progress === evidenceRef && savedSettings === settings) return;
@@ -171,12 +206,15 @@ export function attachDayProgress({root, context, apply, replan, syncClocks}) {
   function open(id, state) {
     refresh();
     const {settings} = context();
-    if (id || !dirty) {
+    if (id || !hasDraft()) {
       clock.value = clockText(suggestedReportTime(settings));
       if (id) chooseFacility(id,state);
       else fillStatus();
-      dirty = !!state;
+      dirty = !!state; clockDraft = false; showReset();
     }
+    resumeDraft();
+  }
+  function resumeDraft() {
     editor.open = true;
     editor.scrollIntoView({block:'nearest'});
     status.focus({preventScroll:true});
@@ -190,11 +228,11 @@ export function attachDayProgress({root, context, apply, replan, syncClocks}) {
       const patch = reviseDayProgress(park,settings,{id,status:requested,at,end,doneAt:readMinute(get('progressDoneAt')),
         confirmFirst:get('progressFirstConfirmed').checked,here:requested === 'done' && get('progressHere').checked});
       apply(patch, id, requested);
-      chooseFacility(id,requested === 'clear' ? 'done' : requested);
+      chooseFacility(id,requested === 'clear' ? undefined : requested);
       refresh();
       message.textContent = requested === 'clear' ? 'この体験記録を取り消しました。' : '体験状況を記録しました。後で開き直すには「名前を付けて保存」から新規保存または上書き保存してください。';
       message.classList.remove('is-error');
-      dirty = false;
+      dirty = false; clockDraft = false; showReset();
       if (!override) get('progressReplan').focus({preventScroll:true});
       return true;
     } catch (error) {
@@ -206,22 +244,45 @@ export function attachDayProgress({root, context, apply, replan, syncClocks}) {
   editor.addEventListener('toggle', () => {
     if (!editor.open) return;
     refresh();
-    if (!dirty) {
+    if (!hasDraft()) {
       clock.value = clockText(suggestedReportTime(context().settings));
-      toggleFields();syncClocks();
+      fillStatus();
     }
   });
   function markDraft(event) {
     // Changing only the replan clock must not record a visit to the selected facility.
-    if (!/^progressClock(?:-hour|-minute)?$/.test(event.target.id || '')) dirty = true;
+    message.textContent = '';
+    message.classList.remove('is-error');
+    if (/^progressClock(?:-hour|-minute)?$/.test(event.target.id || '')) clockDraft = true;
+    else dirty = true;
+    showReset();
   }
   editor.addEventListener('input', markDraft);
   editor.addEventListener('change', markDraft);
   facilitySelect.addEventListener('change', () => chooseFacility(facilitySelect.value));
   occurrence.addEventListener('change', () => chooseFacility(occurrenceId()));
   status.addEventListener('change', fillStatus);
-  get('progressEstimateMode').addEventListener('change', toggleFields);
-  for (const input of [clock, remaining, finish]) input.addEventListener('input', toggleFields);
+  function editEstimate() { estimateEdited = true; toggleFields(); }
+  get('progressEstimateMode').addEventListener('change', editEstimate);
+  remaining.addEventListener('input', editEstimate);
+  finish.addEventListener('input', editEstimate);
+  get('progressDoneAt').addEventListener('input', toggleFields);
+  clock.addEventListener('input', () => {
+    const {park,settings} = context();
+    useRecordedEstimate(ownVisits(settings,park)[occurrenceId()], readMinute(clock));
+    toggleFields();
+  });
+  for (const chip of chips) chip.addEventListener('click', () => {
+    remaining.value = chip.dataset.remaining;
+    remaining.dispatchEvent(new Event('input', {bubbles:true}));
+  });
+  get('progressReset').addEventListener('click', () => {
+    dirty = false; clockDraft = false; showReset();
+    clock.value = clockText(suggestedReportTime(context().settings));
+    chooseFacility(occurrenceId());
+    message.textContent = '入力を戻しました。';
+    message.classList.remove('is-error');
+  });
   get('progressApply').addEventListener('click', () => commit());
   get('progressRelease').addEventListener('click', () => commit('pending'));
   get('progressClear').addEventListener('click', () => commit('clear'));
@@ -233,11 +294,12 @@ export function attachDayProgress({root, context, apply, replan, syncClocks}) {
       message.textContent = '組み替え開始は入園から退園前までの時刻にしてください。';
       return;
     }
+    clockDraft = false; showReset();
     replan(at);
   });
   list.addEventListener('click', event => {
     const button = event.target.closest('[data-edit-progress]');
     if (button) open(button.dataset.editProgress);
   });
-  return {open,refresh};
+  return {open,refresh,hasDraft,resumeDraft};
 }

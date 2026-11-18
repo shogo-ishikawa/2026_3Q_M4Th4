@@ -199,7 +199,11 @@ def parse_opening_calendar(html, park_id):
     for node in parser.root.walk():
         if node.tag != 'a':
             continue
-        match = re.search('/'+slug+r'/daily/calendar/(\d{4})(\d{2})(\d{2})/', node.attrs.get('href',''))
+        source = urljoin(ORIGIN, node.attrs.get('href', ''))
+        link = urlsplit(source)
+        if link.scheme != 'https' or link.hostname != 'www.tokyodisneyresort.jp':
+            continue
+        match = re.fullmatch('/'+slug+r'/daily/calendar/(\d{4})(\d{2})(\d{2})/?', link.path)
         if not match:
             continue
         opening = next((n for n in node.walk() if n.has_class('openTime')), None)
@@ -211,8 +215,35 @@ def parse_opening_calendar(html, park_id):
             continue
         schedule = daily_schedule(opening)
         if schedule['windows']:
-            result[day] = {'windows':schedule['windows'],'sourceUrl':urljoin(ORIGIN,node.attrs['href'])}
+            row = {'windows':schedule['windows'], 'sourceUrl':source}
+            price = next((n.text().strip() for n in node.walk() if n.has_class('ticketStatus')), '')
+            amount = re.fullmatch(r'[￥¥]\s*([1-9]\d{0,2}(?:,\d{3})+|[1-9]\d{3,4})', price)
+            if amount and 1000 <= int(amount[1].replace(',', '')) <= 99999:
+                row['adultOneDayYen'] = int(amount[1].replace(',', ''))
+            if day not in result or 'adultOneDayYen' in row:
+                result[day] = row
     return result
+
+
+def record_calendar(park, entries, checked_at):
+    """Only record prospective fares, retaining announcements available before each visit."""
+    hours = park.setdefault('operatingCalendar', {})
+    fares = park.setdefault('ticketCalendar', {})
+    today = datetime.fromisoformat(checked_at.replace('Z', '+00:00')).astimezone(ZoneInfo('Asia/Tokyo')).date().isoformat()
+    for day, entry in entries.items():
+        hours[day] = {k:v for k,v in entry.items() if k != 'adultOneDayYen'}
+        price = entry.get('adultOneDayYen')
+        if day < today or price is None:
+            continue
+        previous = fares.get(day, {})
+        if previous.get('adultOneDayYen') == price:
+            continue
+        revisions = list(previous.get('earlierAdultFares', []))
+        if 'adultOneDayYen' in previous:
+            revisions.append({k:previous[k] for k in ('adultOneDayYen','adultKnownSince','sourceUrl')})
+        fares[day] = {**previous, 'adultOneDayYen':price, 'adultKnownSince':checked_at, 'sourceUrl':entry['sourceUrl']}
+        if revisions:
+            fares[day]['earlierAdultFares'] = revisions
 
 
 def url_key(url):
@@ -391,7 +422,7 @@ def apply_official_updates(catalogue, bundle, selected_date, checked_on=None):
             current['checkedOn']=checked_on
             report['events'].append({'parkId':park['id'],'id':current['id'],'name':current['name']})
         if park['id'] in bundle.get('calendars',{}):
-            park.setdefault('operatingCalendar',{}).update(bundle['calendars'][park['id']])
+            record_calendar(park, bundle['calendars'][park['id']], datetime.now(timezone.utc).isoformat())
             park['calendarCheckedOn']=checked_on
     days = sorted({day for park in updated['parks'] for activity in park['activities'] for day in activity.get('dailySchedules',{})})
     updated.update({'pipelineVersion':2,'fetchedAt':datetime.now(timezone.utc).isoformat().replace('+00:00','Z'),'sourcesChecked':bundle.get('sourcesChecked',[]),'scheduleCoverage':{'startDate':days[0] if days else None,'endDate':days[-1] if days else None},'updateStatus':'partial' if bundle.get('errors') else 'complete'})
@@ -411,7 +442,7 @@ def seed_dynamic_catalogue(base, previous):
             for key in dynamic:
                 if key.startswith('menu') and old.get('menuCheckedOn','')<activity.get('menuCheckedOn',''):continue
                 if key in old:activity[key]=copy.deepcopy(old[key])
-        for key in ['operatingCalendar','closuresCheckedOn','calendarCheckedOn']:
+        for key in ['operatingCalendar','ticketCalendar','closuresCheckedOn','calendarCheckedOn']:
             if key in old_park:park[key]=copy.deepcopy(old_park[key])
         events=park.setdefault('events',[])
         for old in old_park.get('events',[]):

@@ -4,7 +4,7 @@ import {attachDayProgress, remainingVisitEnd, reviseDayProgress, suggestedReport
 import {repeatVisitId} from '../web/repeat-visits.js';
 import {changeDpaMode, dpaEditor, noPlanActions, resetForNewVisitDay} from '../web/app.js';
 
-const park = {id:'land',activities:[{id:'a',category:'attraction',node:'entrance',endNode:'exit',duration:10},
+const park = {id:'land',nodes:[{id:'exit',name:'到着駅'}],activities:[{id:'a',category:'attraction',node:'entrance',endNode:'exit',duration:10},
   {id:'b',category:'attraction',node:'b',duration:20}]};
 const settings = {date:'2026-11-19',entry:540,exit:1260,selections:[]};
 const update = (s, edit) => ({...s,...reviseDayProgress(park,s,{id:'a',at:660,...edit})});
@@ -62,10 +62,15 @@ test('the main progress action saves valid edits, rejects incomplete waits, and 
     value = ''; textContent = ''; checked = false; dataset = {};
     classList = {add(){},remove(){}};
     replaceChildren() {}
+    querySelectorAll() { return chips; }
+    setAttribute(key,value) { this[key]=value; }
     append() {}
     focus() {}
     scrollIntoView() {}
   }
+  const chips = [5,10,20,30].map(minutes=>{
+    const chip = new Field(); chip.dataset.remaining = String(minutes); return chip;
+  });
   const elements = new Map();
   const field = id => {
     if (!elements.has(id)) elements.set(id,new Field());
@@ -89,13 +94,40 @@ test('the main progress action saves valid edits, rejects incomplete waits, and 
   assert.equal(replans,0);
   assert.equal(writes,0);
   assert.match(field('progressMessage').textContent,/残り時間/);
-  field('progressRemaining').value='20';
+  chips[2].dispatchEvent(new Event('click'));
+  assert.equal(field('progressRemaining').value,'20');
+  assert.equal(chips[2]['aria-pressed'],'true');
+  assert.equal(chips[1]['aria-pressed'],'false');
+  assert.match(field('progressEstimate').textContent,/11:30に終了予定。到着駅の降り場/);
+  assert.ok(editor.hasDraft());
+  editor.resumeDraft();
+  assert.equal(field('progressRemaining').value,'20');
+  assert.equal(field('progressClock').value,'11:00');
   field('progressReplan').dispatchEvent(new Event('click'));
   assert.equal(replans,1);
   assert.equal(writes,1);
   assert.equal(current.dayProgress.visits.a.endsAt,690);
+  assert.equal(editor.hasDraft(),false);
+  field('progressClock').value='11:05';
+  field('progressClock').dispatchEvent(new Event('input'));
+  assert.equal(field('progressRemaining').value,'15');
+  assert.match(field('progressEstimate').textContent,/11:30に終了予定/);
   field('progressReplan').dispatchEvent(new Event('click'));
   assert.equal(replans,2);
+  assert.equal(writes,1);
+  editor.open('a','done');
+  field('progressClock').value='11:35';
+  field('progressClock').dispatchEvent(new Event('input'));
+  assert.equal(field('progressDoneAt').value,'');
+  assert.match(field('progressEstimate').textContent,/11:35に体験を終えた/);
+  field('progressReset').dispatchEvent(new Event('click'));
+  assert.equal(editor.hasDraft(),false);
+  assert.equal(field('progressStatus').value,'queue');
+  assert.equal(writes,1);
+  editor.open('b');
+  assert.equal(field('progressStatus').value,'');
+  field('progressApply').dispatchEvent(new Event('click'));
+  assert.match(field('progressMessage').textContent,/体験状況を選んで/);
   assert.equal(writes,1);
 });
 

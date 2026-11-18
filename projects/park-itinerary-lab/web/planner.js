@@ -1,12 +1,14 @@
 import {baseVisitId, canStartVisit, compactRepeatSelections, expandRepeatVisits, facilityForVisit} from './repeat-visits.js';
+import {clockText, parkTimeBounds} from './time-input.js';
 import {applyProgressToPrefix, progressEntries} from './day-progress-plan.js';
-import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.13.0';
-import { weatherAtMinute, calendarContext } from './calendar-features.js';
-import { predictModelWait, estimateParkCrowd, calendarCrowdLevel } from './wait-model.js?v=1.13.0';
-import { liveWaitFor, currentRideStatus } from './wait-data.js?v=1.13.0';
-import {deriveIntradayAdjustment, applyIntradayAdjustment, describeIntradayAdjustment} from './intraday-waits.js';
+import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.14.0';
+import { weatherAtMinute, calendarContext, visitDayContext } from './calendar-features.js?v=1.14.0';
+import { predictModelWait, estimateParkCrowd, calendarCrowdLevel } from './wait-model.js?v=1.14.0';
+import { liveWaitFor, currentRideStatus } from './wait-data.js?v=1.14.0';
+import {deriveIntradayAdjustment, applyIntradayAdjustment, describeIntradayAdjustment} from './intraday-waits.js?v=1.14.0';
 /* Browser itinerary search. Every returned plan is checked; the search does not claim global optimality. */
 const resolvedCrowd = Symbol('park crowd');
+const visitContext = Symbol('dated park factors');
 const intradayAdjustment = Symbol('same-day wait adjustment');
 const FOOD = new Set(['restaurant', 'cafe', 'snack', 'popcorn']);
 const FIXED = new Set(['show', 'parade']);
@@ -145,7 +147,7 @@ export function estimateWait(activity, start, settings, history = []) {
   const live = liveWaitFor(activity, start, settings, { now: settings.waitAsOf ?? Date.now() });
   if (live?.isOpen) return live;
   const predictionActivity = activity.dailySchedules?.[settings.date]?.windows ? {...activity,windows:activity.dailySchedules[settings.date].windows} : activity;
-  const prediction = predictModelWait(predictionActivity, start, settings, settings.waitModel);
+  const prediction = predictModelWait(predictionActivity, start, settings, settings.waitModel, settings[visitContext]);
   if (prediction) return applyIntradayAdjustment(prediction, start, settings[intradayAdjustment], predictionActivity);
   const measured = historicalWait(activity, start, settings, history);
   if (measured) return measured;
@@ -180,7 +182,9 @@ export function estimateWait(activity, start, settings, history = []) {
 /** Prepare a fresh set of settings for the browser planner or the shared daily forecast. */
 export function setWaitForecastContext(park, settings, recordReference) {
   settings.activeEvents = (park.events || []).filter(event => event.startDate <= settings.date && settings.date <= event.endDate);
-  settings[intradayAdjustment] = deriveIntradayAdjustment(park, settings);
+  settings[visitContext] = settings.waitModel?.visitFactors?.length
+    ? visitDayContext(settings.date,park,settings.calendarData || settings.waitModel.calendarData,settings.waitAsOf ?? Date.now()) : null;
+  settings[intradayAdjustment] = deriveIntradayAdjustment(park, settings, settings[visitContext]);
   if (settings.crowdLevel !== 'auto') return null;
   const crowd = estimateParkCrowd(park, settings, recordReference);
   settings[resolvedCrowd] = crowd;
@@ -816,13 +820,50 @@ function finishRows(state, context) {
   return rows;
 }
 
+// Try appending one wish after the existing visits, keeping their times and tickets.
+// Each trial changes one limit. A found option must still allow a walk back to the exit.
+function appendWithOneChange(selection, activity, context, best) {
+  if (!best || !canStartVisit(selection.id, best.visited)) return null;
+  const settings=context.settings;
+  function fits(change, needsDpa=false) {
+    const trial={...context,settings:{...settings,...change}};
+    return scheduledOptions(best,activity,selection,trial).some(child =>
+      (!needsDpa || child.visits.at(-1).method==='dpa') && canFinish(recoveryBeforeExit(child,trial),trial));
+  }
+  const priceText=n => n.toLocaleString('ja-JP')+'円';
+  const foodExtra=best.foodCost+selection.cost-settings.foodBudget;
+  if (FOOD.has(activity.category) && foodExtra>0 && fits({foodBudget:settings.foodBudget+foodExtra}))
+    return {field:'foodBudget',reason:`フードの上限をあと${priceText(foodExtra)}増やすと、今の予定のあとに追加できる組合せがあります。`};
+  if (selection.dpaMode==='consider' && activity.dpa && selection.dpaAvailableWindows?.length) {
+    const dpaExtra=best.dpaCost+ceil100(activity.dpa.price)-settings.dpaBudget;
+    if (dpaExtra>0 && fits({dpaBudget:settings.dpaBudget+dpaExtra},true) && !fits({}))
+      return {field:'dpaBudget',reason:`入力済みのDPA候補枠を使うと、DPA予算をあと${priceText(dpaExtra)}増やして今の予定のあとに追加できます。購入前に空きをご確認ください。`};
+  }
+  const shopCost=best.shoppingCost+(activity.category==='shop'?selection.cost:0);
+  const reserve=Math.max(0,finite(settings.souvenirReserve)-shopCost);
+  const totalExtra=best.cost+selection.cost+reserve-settings.budget;
+  if (totalExtra>0 && fits({budget:settings.budget+totalExtra}))
+    return {field:'budget',reason:`総予算をあと${priceText(totalExtra)}増やすと、今の予定のあとに追加できる組合せがあります。`};
+  const hours=context.park.operatingCalendar?.[settings.date]?.windows;
+  const open=Array.isArray(hours) && hours.find(pair => Array.isArray(pair) && pair.length===2 &&
+    pair.every(Number.isInteger) && pair[0]<=settings.exit && settings.exit<pair[1]);
+  if (!open) return null;
+  const latestExit=Math.min(open[1],parkTimeBounds(context.park,settings.date).max);
+  // Two inexpensive trials; the displayed extension is sufficient for this order, not a minimum.
+  for (const exit of new Set([Math.min(settings.exit+15,latestExit),Math.min(settings.exit+30,latestExit)])) {
+    if (exit>settings.exit && fits({exit}) && !fits({}))
+      return {field:'exitTime',reason:`退園予定を${clockText(exit)}にすると（${exit-settings.exit}分延長）、今の予定のあとに追加して出口まで戻れます。`};
+  }
+  return null;
+}
+
 function omissionFor(selection, context, best) {
   const activity = context.map.get(selection.id);
   const conflict=(conflictField,reason)=>({id:selection.id,name:activity.name,weight:selection.weight,required:selection.required,conflictField,reason});
   const date=context.settings.date;
-  if (!activityAvailable(activity,date)) return conflict('required','訪問日は休止・開催期間外です。訪問日か必須の指定を見直してください。');
+  if (!activityAvailable(activity,date)) return conflict('visitDate','訪問日は休止・開催期間外です。別の営業日を選ぶときは訪問日を変更できます。');
   if (currentRideStatus(facilityForVisit(activity),context.settings,{now:context.settings.waitAsOf})?.isOpen===false)
-    return conflict('required','運営停止の再開を確認できていません。当日の情報を更新するか必須の指定を見直してください。');
+    return conflict('refreshLiveWaits','運営停止の再開を確認できていません。最新の掲示を取得してから、もう一度予定を組めます。');
   if (selection.dpaMode==='owned' && usedDpaWindow(context, selection.id, selection.dpaStart, selection.dpaEnd))
     return conflict('dpaStart','このDPAの利用枠は体験履歴で使用済みです。2回目の待ち列か、当日の体験記録を確認してください。');
   if (selection.dpaMode==='owned' && context.initial.time>=selection.dpaEnd)
@@ -833,6 +874,8 @@ function omissionFor(selection, context, best) {
     return conflict('showTimes','訪問日の公演時刻が未入力です。公式時刻を確認して入力してください。');
   if (!accessAllowed(activity, selection, selection.dpaMode === 'owned' ? 'dpa' : 'normal') && selection.dpaMode !== 'consider')
     return conflict('confirmedAccess','訪問日の予約・エントリーなどの利用条件を確認してください。');
+  const addition=appendWithOneChange(selection,activity,context,best);
+  if (addition) return conflict(addition.field,addition.reason);
   const earliest=Math.max(context.initial.time,selection.earliest??0);
   const latest=Math.min(context.settings.exit,selection.latest??context.settings.exit);
   const windows=activityWindows(activity,selection,context.settings,context.park);
@@ -852,12 +895,21 @@ function omissionFor(selection, context, best) {
                            : remainingFood.filter(wish => wish.required).length;
     if (foodCount > maxFood) return conflict('avoidConsecutiveFood','フードの間に入れる体験が足りません。食事以外の希望を追加するか「フードを連続して入れない」をオフにしてください。');
   }
-  let reason = '移動・時間・予算の組合せで今回は採用されませんでした。';
-  if (!Number.isFinite(context.graph.distances[context.initial.node]?.[activity.node])) reason = '現在地からつながる歩行経路がありません。';
-  else if (selection.cost > context.settings.budget - context.initial.cost) reason = '残りの予算を超えています。';
-  else if (!scheduledOptions(context.initial, activity, selection, context).length) reason = '指定の時間帯・待ち時間・取得済み枠では退園に間に合いません。';
-  else if (selection.dpaMode === 'consider' && !(selection.dpaAvailableWindows || []).length) reason += ' DPAの空き枠が未入力のため通常待機だけで検討しました。';
-  return { id: selection.id, name: activity.name, weight: selection.weight, required: selection.required, reason };
+  // This lower bound still holds if all optional future visits change order.
+  if (FOOD.has(activity.category) && context.initial.foodCost+selection.cost>context.settings.foodBudget) {
+    const extra=context.initial.foodCost+selection.cost-context.settings.foodBudget;
+    return conflict('foodBudget',`この希望に指定した金額を含めると、フードの上限を少なくとも${extra.toLocaleString('ja-JP')}円超えます。`);
+  }
+  if (selection.cost+context.initial.cost>context.settings.budget) {
+    const extra=selection.cost+context.initial.cost-context.settings.budget;
+    return conflict('budget',`この希望に指定した金額を含めると、総予算を少なくとも${extra.toLocaleString('ja-JP')}円超えます。`);
+  }
+  if (!Number.isFinite(context.graph.distances[context.initial.node]?.[activity.node])) return conflict('catalogueSearch','現在地からつながる歩行経路がありません。ほかの施設を候補にできます。');
+  if (!scheduledOptions(context.initial, activity, selection, context).length) return conflict('earliest','現在の出発時刻・場所から、この希望を次に入れられる時間帯が見つかりませんでした。');
+  if (selection.dpaMode === 'consider' && !(selection.dpaAvailableWindows || []).length) return conflict('dpaStart','DPAの空き枠が未入力のため通常待機だけで検討しました。');
+  if (selection.required) return conflict('required','指定した条件ですべての必須の希望を含む案が見つかりませんでした。');
+  if (selection.weight>=5) return conflict('required','この施設の重要度はすでに最高です。優先して計画するには「必ず入れる」を選べます。');
+  return conflict('weight','今の条件では他の希望が優先されました。この施設を優先したい場合は重要度を見直せます。');
 }
 
 function resultFrom(state, context, diagnostics, quick = false) {

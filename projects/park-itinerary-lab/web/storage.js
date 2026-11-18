@@ -1,7 +1,7 @@
-import {validateWaitModel} from './wait-model.js?v=1.13.0';
+import {validateWaitModel} from './wait-model.js?v=1.14.0';
 import {weatherForMinute,formatWeatherDetails} from './weather.js';
 import {baseVisitId, isRepeatVisit} from './repeat-visits.js';
-import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=1.13.0';
+import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=1.14.0';
 /** Portable schedules: the shared link contains preferences, never a browser's saved history. */
 const STORAGE_KEY = 'park-itinerary-lab:v1';
 const PLANS_KEY = 'park-itinerary-lab:plans:v1';
@@ -514,7 +514,7 @@ const csvCell = value => {
   if (/^[\s]*[=+\-@\t\r]/.test(string)) string = "'" + string;
   return '"' + string.replaceAll('"', '""') + '"';
 };
-function checkedRows(plan) {
+export function checkedRows(plan) {
   if (!plan || !Array.isArray(plan.rows) || plan.rows.length > 5000) fail('保存する予定表を先に作成してください。');
   for (const row of plan.rows) if (!validTime(row.start) || !validTime(row.end) || row.start > row.end || !text(row.name, 500)) fail('予定表の時刻と名前を確認してください。');
   return plan.rows;
