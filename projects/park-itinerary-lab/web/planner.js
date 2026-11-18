@@ -325,9 +325,24 @@ function autoRestDue(state, activity, context) {
 }
 
 function prefixSourceRows(initialPlan,settings) {
-  const cutoff=toMinutes(settings.replanFrom),priorRows=initialPlan?.rows||[];
+  const cutoff=toMinutes(settings.replanFrom);
+  // A failed replan can carry a previous prefix but cannot supply any new visits.
+  const rows=initialPlan?.rows||[];
+  const recorded=initialPlan?.status==='no-plan'?rows.filter(row=>row.preserved):rows;
+  const priorRows=recorded.map(row=>row.kind||!row.type?row:{...row,kind:row.type});
   const startedVisitIds=new Set(priorRows.filter(item=>item.start<cutoff&&['queue','activity'].includes(item.kind)).map(item=>item.activityId));
   return priorRows.filter(item=>item.kind!=='exit'&&(item.start<cutoff||(startedVisitIds.has(item.activityId)&&['queue','activity'].includes(item.kind))));
+}
+/** Visits already accounted for when checking the remaining wishes in the editor. */
+export function settledReplanWishes(park,settings,previous) {
+  if (!Number.isInteger(settings.replanFrom)) return new Set();
+  const settled = new Set(settings.completedIds || []);
+  const source = replanSource(park,settings,previous);
+  if (!source || source.settings?.date !== settings.date || !['feasible','no-plan'].includes(source.status)) return settled;
+  for (const row of prefixSourceRows(source,settings)) {
+    if (row.kind === 'activity' && row.activityId) settled.add(row.activityId);
+  }
+  return settled;
 }
 function preservedPrefix(initialPlan,settings) {
   const cutoff=toMinutes(settings.replanFrom);

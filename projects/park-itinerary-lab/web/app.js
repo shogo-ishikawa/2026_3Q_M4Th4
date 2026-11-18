@@ -1,4 +1,5 @@
 import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, fetchPublishedModel, prepareLiveForReplan, prepareWeatherForVisit } from './wait-data.js';
+import { settledReplanWishes } from './planner.js?v=1.9.0';
 import { enhanceTimeInputs, parkTimeBounds, linkClockFields, clampClock } from './time-input.js?v=1.9.0';
 import { weatherForMinute } from './weather.js';
 import { forecastCardHtml, forecastSourcesHtml } from './weather-view.js?v=1.9.0';
@@ -248,23 +249,26 @@ const DPA_CHOICES = [
   ['unavailable', '売り切れ'],
 ];
 
-export function dpaEditor(activity, selection, park, purchase) {
+export function dpaEditor(activity, selection, park, purchase, purchaseLimit) {
   if (!activity.dpa) return '';
   const mode = selection.dpaMode || 'none';
-  const owned = mode === 'owned', showSlot = owned || mode === 'consider';
+  const owned = mode === 'owned';
+  const disabledCandidate = mode === 'consider' && purchaseLimit === 0;
+  const showSlot = owned || (mode === 'consider' && !disabledCandidate);
   const id = escapeHtml(activity.id);
   const radios = DPA_CHOICES.map(([value, label]) =>
     `<label><input type="radio" name="dpa-${id}" id="dpa-${id}-${value}" data-field="dpaMode" value="${value}"${mode === value ? ' checked' : ''}><span>${label}</span></label>`
   ).join('');
   const timeField = (key, label) =>
     `<label>${label}<input type="time" data-field="${key}" value="${selection[key] == null ? '' : timeText(selection[key])}" aria-required="true"></label>`;
-  const extraSlots = mode === 'consider' ? (selection.dpaAvailableWindows || []).filter(([start, end]) => start !== selection.dpaStart || end !== selection.dpaEnd) : [];
+  const extraSlots = mode === 'consider' && !disabledCandidate ? (selection.dpaAvailableWindows || []).filter(([start, end]) => start !== selection.dpaStart || end !== selection.dpaEnd) : [];
   const slotLabels = owned ? ['取得した枠の開始', '取得した枠の終了'] : ['販売中の枠の開始', '販売中の枠の終了'];
   const note = owned ? '公式アプリの購入内容を入力してください。この枠を必ず予定に入れます。'
-    : mode === 'consider' ? '公式アプリで確認した枠を入力してください。予算内で通常利用と比べます。'
+    : disabledCandidate ? '購入件数の上限が0件のため通常の待ち列を使います。'
+    : mode === 'consider' ? '公式アプリで確認した枠を入力してください。予算と件数の上限内で通常利用と比べます。'
     : mode === 'unavailable' ? 'この施設はDPAを使わずに計画します。' : '';
   const location = showSlot && activity.category === 'parade' ?
-    `<label class="full-field">DPAの集合・鑑賞場所<select data-field="nodeOverride" required><option value="">公式アプリの場所を選ぶ</option>${selectableNodes(park).map(n => `<option value="${escapeHtml(n.id)}"${selection.nodeOverride === n.id ? ' selected' : ''}>${escapeHtml(n.name || n.id)}</option>`).join('')}</select></label>` : '';
+    `<label class="full-field">DPAの集合・鑑賞場所<select data-field="nodeOverride" aria-required="true"><option value="">公式アプリの場所を選ぶ</option>${selectableNodes(park).map(n => `<option value="${escapeHtml(n.id)}"${selection.nodeOverride === n.id ? ' selected' : ''}>${escapeHtml(n.name || n.id)}</option>`).join('')}</select></label>` : '';
   return `<fieldset class="dpa-editor" aria-label="${escapeHtml(activity.name)}のディズニー・プレミアアクセス"><legend><abbr title="ディズニー・プレミアアクセス">DPA</abbr> <span>${money(activity.dpa.price)}／人</span></legend>
     <div class="dpa-choices">${radios}</div>
     ${note ? `<p class="dpa-help">${note}</p>` : ''}
@@ -535,7 +539,7 @@ export function initialiseApp() {
         <label>この時刻までに終了<input type="time" data-field="latest" value="${s.latest == null ? '' : timeText(s.latest)}"></label>
         <label class="check-field window-link-field"><input type="checkbox" data-field="timeWindowLinked"${s.timeWindowLinked !== false ? ' checked' : ''}>2時間枠で連動</label>`;
       const ownedDpa=s.dpaMode==='owned',required=ownedDpa||s.required;
-      const dpa=dpaEditor(a,s,currentPark(),state.settings.purchases.find(p=>p.id===s.id));
+      const dpa=dpaEditor(a,s,currentPark(),state.settings.purchases.find(p=>p.id===s.id),state.settings.dpaPurchaseLimit);
       const groupTitle=['snack','popcorn'].includes(a.category)&&byId(list[index-1]?.id)?.category!==a.category?`<h3 class="catalogue-group-title">${CATEGORY[a.category]}</h3>`:'';
       const pauseInfo=a.id==='sea-attraction-230'?operationPauseInfo(currentPark(),a,s,state.settings):null;
       return `${groupTitle}<article class="wish-card genre-${genreOf(a.category)}" data-wish-id="${escapeHtml(s.id)}"><div class="wish-heading"><div><p class="wish-category">${escapeHtml(CATEGORY[a.category]||a.category)} / ${escapeHtml(a.area||'')}</p><h4>${escapeHtml(a.name)}</h4></div><button class="remove-wish" data-remove="${escapeHtml(s.id)}" type="button" aria-label="${escapeHtml(a.name)}を希望から外す">×</button></div>${foodLinks(a)}${schedule.closed?'<p class="schedule-note">訪問日は休止予定です。別の日や施設を検討してください。</p>':''}<div class="wish-main-controls"><div class="weight-control${required?' is-required':''}"><span>${required?'必須 <strong>必ず入れる条件</strong>':`重要度 <strong>${s.weight} · ${escapeHtml(WEIGHT_LABELS[s.weight]||'行きたい')}</strong>`}</span><div class="weight-buttons" role="group" aria-label="${escapeHtml(a.name)}の重要度">${weightButtons({...s,required})}</div></div><label class="check-field"><input type="checkbox" data-field="required"${required?' checked':''}${ownedDpa?' disabled':''}>必ず入れる</label></div><div class="wish-fields">${timed ? wishTimes : ''}${paid?`<label>${a.category==='shop'?'使いたい金額':'フードの予算'}<input type="number" min="0" max="1000000" step="100" data-field="cost" value="${escapeHtml(s.cost ?? a.cost ?? 0)}" aria-label="${escapeHtml(a.name)}の予算（円）"></label>`:''}<label>体験・滞在（待ち時間を除く）<input type="number" min="1" max="360" step="1" data-field="duration" value="${escapeHtml(s.duration ?? a.duration)}" aria-label="${escapeHtml(a.name)}の滞在時間（分）"></label><label>待ち時間（手動時）<input type="number" min="0" max="360" step="5" data-field="manualWait" value="${escapeHtml(s.manualWait ?? a.baseWait)}" aria-label="${escapeHtml(a.name)}の待ち時間（分）"></label></div>${timed ? '' : `<details class="wish-details"${s.earliest != null || s.latest != null ? ' open' : ''}><summary>希望の時間帯</summary><div class="wish-fields">${wishTimes}</div></details>`}${show?`<div class="schedule-note">公演時刻：${scheduleCurrent?`${escapeHtml(schedule.date)}の公式時刻を表示しています。`:'訪問日の公式情報を確認して入力してください。必須にしていない公演は時刻が未入力でも他の希望を計画できます。'}${a.showTimesDate?` 収録データの確認日 ${escapeHtml(a.showTimesDate)}`:''}${a.scheduleNote?` ${escapeHtml(a.scheduleNote)}`:''}</div><label class="full-field">訪問日の開演時刻（例 11:00, 13:30）<input type="text" data-field="showTimes" value="${escapeHtml((s.showTimes||[]).map(timeText).join(', '))}" placeholder="11:00, 13:30"></label><label class="check-field section-gap"><input type="checkbox" data-field="confirmSchedule"${s.confirmSchedule?' checked':''}>この日の公演時刻を確認した</label>`:''}${a.access&&a.access!=='normal'?`<div class="access-note"><label><input type="checkbox" data-field="confirmedAccess"${s.confirmedAccess?' checked':''}>${a.access==='entry'?'エントリー受付の結果・入場条件を確認した':'予約・利用条件を確認した'}</label></div>`:''}${pauseInfo?`<div class="gondola-note"><label class="check-field"><input type="checkbox" data-setting="gondolaAvoidHarbourShows"${state.settings.gondolaAvoidHarbourShows!==false?' checked':''}>ショー上演中を避ける目安</label><p>${escapeHtml(pauseInfo.note)}</p><p data-pause-summary${pauseInfo.windows.length?'':' hidden'}>${pauseWindowSummary(pauseInfo)}</p><label class="full-field">確認した休止時間（例 12:00-13:00）<input type="text" data-field="pauseWindows" value="${escapeHtml((s.pauseWindows||[]).map(pair=>pair.map(timeText).join('-')).join(', '))}" placeholder="12:00-13:00, 19:00-20:00"></label></div>`:''}${dpa}<details class="wish-details"><summary>営業時間を調整する</summary><p class="wish-foot">${escapeHtml(a.dailySchedules?.[state.settings.date]?state.settings.date:a.operatingDate||a.windowsDate||'収録データ')}の営業時間を基準に計算します。訪問日の営業に合わせて変更できます。</p><div class="wish-fields"><label>営業開始<input type="time" data-field="windowStart" value="${timeText(s.windows?.[0]?.[0] ?? schedule.windows?.[0]?.[0] ?? state.settings.entry)}"></label><label>営業終了<input type="time" data-field="windowEnd" value="${timeText(s.windows?.[0]?.[1] ?? schedule.windows?.[0]?.[1] ?? state.settings.exit)}"></label></div></details></article>`;
@@ -669,7 +673,9 @@ export function initialiseApp() {
     Object.assign(state.settings,settings);if(settings.waitModel?.parkId===state.parkId)modelCache.set(state.parkId,settings.waitModel);markResultStale();writeSettings();updateCrowd();renderCatalogue();renderMap();externalPanel?.refresh();syncTimeEditors();
   }
   function checkSelectionDetails() {
-    const invalid=$('wishlist').querySelector('input:invalid, select:invalid, textarea:invalid');
+    const settled=settledReplanWishes(currentPark(),state.settings,state.result);
+    const invalid=[...$('wishlist').querySelectorAll('input:invalid, select:invalid, textarea:invalid')]
+      .find(control=>!settled.has(control.closest('[data-wish-id]')?.dataset.wishId));
     if(invalid){
       const field=invalid.closest('.clamped-time')?.previousElementSibling||invalid;
       const id=invalid.closest('[data-wish-id]')?.dataset.wishId;
@@ -680,8 +686,10 @@ export function initialiseApp() {
     }
     if(!state.settings.selections.length)throw inputError('行きたい場所を一つ以上選んでください。','catalogueSearch');
     for(const wish of state.settings.selections){
+      if(settled.has(wish.id))continue;
       const activity=byId(wish.id);
-      const draft=wishDrafts.get(wish)?.entries().next().value;
+      const drafts=wishDrafts.get(wish);
+      const draft=drafts&&[...drafts].find(([key])=>!(state.settings.dpaPurchaseLimit===0&&wish.dpaMode==='consider'&&['dpaStart','dpaEnd','nodeOverride'].includes(key)));
       if(draft)throw inputError(`${activity?.name||'希望'}：${draft[1].label}。 ${draft[1].message}`,draft[0],wish.id);
       const problem=wishInputProblem(wish,activity,state.settings.date,state.settings.dpaPurchaseLimit);
       if(problem)throw problem;
@@ -947,7 +955,11 @@ export function initialiseApp() {
       });
     }
     document.querySelector('.settings-panel').addEventListener('input',()=>markResultStale());
-    document.querySelector('.settings-panel').addEventListener('change',safely(()=>{readSettings();markResultStale();}));
+    document.querySelector('.settings-panel').addEventListener('change',safely(event=>{
+      readSettings();
+      if(event.target.id==='dpaPurchaseLimit')renderWishlist();
+      markResultStale();
+    }));
     for(const button of document.querySelectorAll('[data-start-plan]')){
       // Submit on click before an editor blur can move the button under the pointer.
       button.addEventListener('pointerdown',event=>{if(document.activeElement?.matches('input,select,textarea'))event.preventDefault();});
