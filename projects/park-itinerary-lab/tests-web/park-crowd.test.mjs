@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {WAIT_BASE_FEATURE_NAMES} from '../web/calendar-features.js';
 import {calendarDayOutlook, calendarDayPreview, CROWD_LABELS} from '../web/calendar-outlook.js';
-import {cachedForecastForDate, prepareWeatherForVisit, warmCalendarWeather} from '../web/weather.js?v=2.2.0';
+import {cachedForecastForDate, prepareWeatherForVisit, warmCalendarWeather} from '../web/weather.js?v=2.2.1';
 import {estimateParkCrowd} from '../web/wait-model.js';
 import {solveItinerary,validatePlan} from '../web/planner.js';
 

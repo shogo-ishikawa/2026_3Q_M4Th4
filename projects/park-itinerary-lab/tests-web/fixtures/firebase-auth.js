@@ -30,7 +30,8 @@ export async function getIdTokenResult(user) {
 }
 export async function signInWithPopup(auth) {
   const uid = sessionStorage.getItem('tdroute-fixture-next-account') || 'visitor-one';
-  localStorage.setItem(key, JSON.stringify({uid, displayName:uid, signInProvider:'google.com', providerData:[{providerId:'google.com'}]}));
+  const displayName = sessionStorage.getItem('tdroute-fixture-display-name') ?? uid;
+  localStorage.setItem(key, JSON.stringify({uid, displayName, signInProvider:'google.com', providerData:[{providerId:'google.com'}]}));
   auth.notify();
 }
 export async function signOut(auth) {

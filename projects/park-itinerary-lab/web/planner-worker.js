@@ -1,4 +1,4 @@
-import { solveItinerary } from './planner.js?v=2.2.0';
+import { solveItinerary } from './planner.js?v=2.2.1';
 
 self.onmessage = event => {
   const input = event.data || {};

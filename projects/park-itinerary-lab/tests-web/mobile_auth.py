@@ -1,5 +1,7 @@
 """Exercise the login gate and the planner against a synthetic Google identity and private store."""
+import hashlib
 import json
+import re
 from pathlib import Path
 import runpy
 import shutil
@@ -9,10 +11,11 @@ from playwright.sync_api import expect
 TESTS = Path(__file__).resolve().parent
 PROJECT = TESTS.parent
 APP_PATH = '/park-itinerary-lab/'
+FIXTURE_OWNER_UID = 'visitor-one'
 
 
 def make_test_site(built_site, site):
-    """Replace only the external identity/store connection, never an application auth decision."""
+    """Configure synthetic identities and storage while preserving the app’s real login and display checks."""
     app = site / 'park-itinerary-lab'
     shutil.copytree(built_site / 'park-itinerary-lab', app, ignore=shutil.ignore_patterns('downloads'))
     config = {
@@ -22,6 +25,16 @@ def make_test_site(built_site, site):
     (app / 'firebase-config.json').write_text(json.dumps(config), encoding='utf-8')
     for name in ('firebase-auth.js', 'firebase-firestore.js'):
         shutil.copyfile(TESTS / 'fixtures' / name, app / 'assets/firebase' / name)
+    # Compare against a synthetic owner's fingerprint in this temporary site.
+    sync_ui = app / 'sync-ui.js'
+    fingerprint = hashlib.sha256(FIXTURE_OWNER_UID.encode('utf-8')).hexdigest()
+    source, count = re.subn(
+        r"const OWNER_UID_SHA256 = '[0-9a-f]{64}';",
+        f"const OWNER_UID_SHA256 = '{fingerprint}';",
+        sync_ui.read_text(encoding='utf-8'),
+    )
+    assert count == 1, 'Expected one owner fingerprint in the built app'
+    sync_ui.write_text(source, encoding='utf-8')
     # The PWA verifies each file; use the production packager for the changed test-only assets.
     shutil.copyfile(PROJECT / 'web/sw.js', app / 'sw.js')
     worker = runpy.run_path(str(PROJECT / 'scripts/package-web.py'))['public_worker'](app)
@@ -50,18 +63,44 @@ def wire_device(context, store):
     context.expose_function('fixturePlanStore', store.request)
 
 
-def sign_in(page, uid='visitor-one'):
-    page.evaluate("uid => sessionStorage.setItem('tdroute-fixture-next-account', uid)", uid)
+def sign_in(page, uid='visitor-one', display_name=None):
+    display_name = uid if display_name is None else display_name
+    page.evaluate('''([uid, name]) => {
+      sessionStorage.setItem('tdroute-fixture-next-account', uid);
+      sessionStorage.setItem('tdroute-fixture-display-name', name);
+    }''', [uid, display_name])
     page.locator('#googleSignIn').click()
     expect(page.locator('#appShell')).to_be_visible(timeout=30_000)
     expect(page.locator('#loginGate')).to_be_hidden()
-    expect(page.locator('#accountName')).to_contain_text(uid)
+    name = display_name.strip()
+    greeting = f'{name}さん、良い一日を！' if name else '良い一日を！'
+    expect(page.locator('#accountGreeting')).to_be_visible()
+    expect(page.locator('#accountGreeting')).to_have_text(greeting)
+    admin = page.locator('#adminLabel')
+    if uid == FIXTURE_OWNER_UID:
+        expect(admin).to_be_visible()
+        expect(admin).to_have_text('管理者画面')
+    else:
+        expect(admin).to_be_hidden()
     expect(page.locator('#solveButton')).to_be_enabled(timeout=30_000)
+
+
+def check_header_layout(page):
+    desktop = page.viewport_size
+    for width in (320, desktop['width']):
+        page.set_viewport_size({'width': width, 'height': desktop['height']})
+        for selector in ('#accountGreeting', '#adminLabel'):
+            bounds = page.locator(selector).bounding_box()
+            assert bounds and bounds['x'] >= 0 and bounds['x'] + bounds['width'] <= width + 1, (selector, bounds)
+            logout = page.locator('#signOut').bounding_box()
+            assert bounds['y'] + bounds['height'] <= logout['y'] + 1, (selector, bounds, logout)
 
 
 def assert_locked(page):
     expect(page.locator('#loginGate')).to_be_visible()
     expect(page.locator('#appShell')).to_be_hidden()
+    expect(page.locator('#accountGreeting')).to_be_hidden()
+    expect(page.locator('#adminLabel')).to_be_hidden()
     expect(page.locator('#solveButton')).to_be_hidden()
 
 
@@ -95,7 +134,9 @@ def check_login_and_sync(browser, origin, store):
         page.reload()
         expect(page.locator('#googleSignIn')).to_be_enabled()
         assert_locked(page)
-        sign_in(page)
+        profile_name = '海と空 <旅の仲間>'
+        sign_in(page, FIXTURE_OWNER_UID, profile_name)
+        check_header_layout(page)
 
         page.locator('#seaTab').click()
         page.locator('#savePlan').click()
@@ -107,7 +148,7 @@ def check_login_and_sync(browser, origin, store):
         another = mirror.new_page()
         another.goto(app)
         assert_locked(another)
-        sign_in(another)
+        sign_in(another, FIXTURE_OWNER_UID, profile_name)
         open_plans(another)
         other_item = another.locator('[data-saved-plan]').filter(has_text='二台で開くしおり')
         expect(other_item).to_be_visible(timeout=15_000)
@@ -135,7 +176,7 @@ def check_login_and_sync(browser, origin, store):
         page.reload()
         expect(page.locator('#googleSignIn')).to_be_enabled()
         assert_locked(page)
-        sign_in(page, 'visitor-two')
+        sign_in(page, 'visitor-two', profile_name)
         open_plans(page)
         expect(page.locator('[data-saved-plan]')).to_have_count(0)
         expect(page.locator('#landTab')).to_have_attribute('aria-selected', 'true')
@@ -163,6 +204,10 @@ def check_login_and_sync(browser, origin, store):
         another.reload()
         open_plans(another)
         expect(another.locator('[data-saved-plan]')).to_have_count(0)
+
+        another.locator('#signOut').click()
+        assert_locked(another)
+        sign_in(another, 'visitor-without-name', '')
     finally:
         device.close()
         mirror.close()

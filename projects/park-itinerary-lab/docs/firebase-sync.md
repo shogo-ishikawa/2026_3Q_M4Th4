@@ -1,6 +1,6 @@
 # Googleログインとしおり同期の初期設定
 
-TDRoute専用のFirebaseプロジェクトを使います。アプリを開くにはGoogleログインが必要です。名前を付けて保存したしおりは本人のアカウントに同期します。しおりを待ち時間の学習データに提供する処理はありません。
+TDRoute専用のFirebaseプロジェクトを使います。Web版とホーム画面版のどちらも、プランの作成にはGoogleログインが必要です。使い方と精度レポートはログイン前にも読めます。名前を付けて保存したしおりは本人のアカウントに同期します。しおりを待ち時間の学習データに提供する処理はありません。
 
 ## Firebaseコンソール
 
@@ -8,6 +8,14 @@ TDRoute専用のFirebaseプロジェクトを使います。アプリを開く�
 2. 「Authentication」からログイン方法の「Google」を有効にし、サポートメールを設定します。「Authentication」→「設定」→「承認済みドメイン」に `shogo-ishikawa.github.io` を追加します。ドメインはホスト名のみを入力します。配布ZIPの `run.py` からもログインを試す場合は、起動時に表示される `127.0.0.1` を追加します。ブラウザで `localhost` を使う開発環境は、その名前も追加してください。
 3. 「Firestore Database」でデータベースを作成します。Standardエディションの `(default)` を本番モードで作り、日本向けには東京の `asia-northeast1` を選びます。保存場所は作成後に変更できません。しおりのコレクションは初回保存時に作られます。
 4. 「プロジェクトの設定」→「全般」→「マイアプリ」でウェブアプリ（`</>`）を登録します。ウェブページは既存のGitHub Pagesで配信します。Firebase Hostingの追加は不要です。
+
+## 管理者が確認できる情報
+
+Firebase Authenticationの利用者一覧ではメールアドレス、利用者ID（UID）、ログイン方法、登録日時、最終ログイン日時を確認できます。Googleから提供された表示名やプロフィール写真のURLも、利用者レコードを読み取る権限があれば取得できます。
+
+TDRouteはログイン中の本人にGoogleの表示名であいさつします。運営者本人の画面には赤字で「管理者画面」と表示します。この表示はアカウントを見分けるためのもので、Firebase上のアクセス権はIAMが管理します。Firestoreのデータを閲覧できる運営者は、コンソールから同期済みのしおり本文も確認できます。
+
+[Firebase Authenticationの利用者管理](https://firebase.google.com/docs/auth/admin/manage-users?hl=ja) ／ [FirestoreのIAM権限](https://firebase.google.com/docs/firestore/security/iam?hl=ja)
 
 ## しおりのアクセス権
 
