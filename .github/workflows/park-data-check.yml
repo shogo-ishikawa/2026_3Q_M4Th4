@@ -28,6 +28,9 @@ on:
 permissions:
   contents: write
 
+env:
+  PARK_OFFICIAL_HTTP: curl
+
 concurrency:
   group: ${{ github.event_name == 'pull_request' && format('park-catalogue-check-{0}', github.event.pull_request.number) || 'park-data-publication' }}
   cancel-in-progress: false

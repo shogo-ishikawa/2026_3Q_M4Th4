@@ -2,6 +2,10 @@
 from __future__ import annotations
 
 import time
+import os
+from pathlib import Path
+import subprocess
+import tempfile
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -35,10 +39,13 @@ def fetch_html(url, *, timeout=25, retries=1, max_bytes=8_000_000, opener=None, 
     open_url = opener or build_opener(OfficialRedirects()).open
     for attempt in range(retries + 1):
         try:
-            request = Request(url, headers={'User-Agent': USER_AGENT, 'Accept': 'text/html,application/xhtml+xml'})
-            with open_url(request, timeout=timeout) as response:
-                official_url(response.url)
-                raw = response.read(max_bytes + 1)
+            if opener is None and os.environ.get('PARK_OFFICIAL_HTTP') == 'curl':
+                raw = curl_bytes(url, timeout, max_bytes)
+            else:
+                request = Request(url, headers={'User-Agent': USER_AGENT, 'Accept': 'text/html,application/xhtml+xml'})
+                with open_url(request, timeout=timeout) as response:
+                    official_url(response.url)
+                    raw = response.read(max_bytes + 1)
             if len(raw) > max_bytes:
                 raise ValueError('Official page is larger than the supported limit')
             html = raw.decode('utf-8')
@@ -57,3 +64,40 @@ def fetch_html(url, *, timeout=25, retries=1, max_bytes=8_000_000, opener=None, 
             if attempt == retries:
                 raise
         pause(delay)
+
+
+def curl_bytes(url, timeout, max_bytes):
+    """Use the hosted runner's standard curl/TLS stack; no browser impersonation.
+
+    Redirects are followed one at a time so their origin can be checked before
+    another request. Certificate verification remains enabled.
+    """
+    from urllib.parse import urljoin
+    started = time.monotonic()
+    with tempfile.TemporaryDirectory(prefix='park-official-') as folder:
+        body, headers = Path(folder)/'body', Path(folder)/'headers'
+        for _ in range(4):
+            official_url(url)
+            remaining = max(1, timeout - (time.monotonic()-started))
+            result = subprocess.run(['curl','--silent','--show-error','--compressed','--proto','=https',
+                                     '--connect-timeout',str(min(10,remaining)),'--max-time',str(remaining),
+                                     '--max-filesize',str(max_bytes),'--user-agent',USER_AGENT,
+                                     '--header','Accept: text/html,application/xhtml+xml',
+                                     '--dump-header',str(headers),'--output',str(body),'--write-out','%{http_code}',url],
+                                    capture_output=True, text=True, timeout=remaining+3)
+            if result.returncode == 28:
+                raise TimeoutError('Official curl request timed out')
+            if result.returncode:
+                raise URLError('Official curl request failed: '+result.stderr.strip()[:200])
+            status = int(result.stdout)
+            fields = dict(line.split(':',1) for line in headers.read_text().splitlines() if ':' in line)
+            fields = {key.lower():value.strip() for key,value in fields.items()}
+            if status in {301,302,303,307,308}:
+                url = official_url(urljoin(url, fields.get('location','')))
+                continue
+            if status >= 400:
+                raise HTTPError(url,status,'Official HTTP error',{'Retry-After':fields.get('retry-after','')},None)
+            if status != 200:
+                raise ValueError('Unexpected official HTTP status')
+            return body.read_bytes()
+        raise ValueError('Too many official redirects')
