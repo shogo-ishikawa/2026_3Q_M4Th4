@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-18T13:10:11.650Z",
+  "updatedAt": "2026-11-18T15:22:12.621Z",
   "parks": [
     {
       "schemaVersion": 2,
@@ -2520,6 +2520,26 @@
         "weatherProvenance": "past-weather-forecast",
         "failedDays": 0,
         "privateCacheRetained": false
+      },
+      "lastBootstrapAttempt": {
+        "provider": "themeparks-wiki",
+        "accessMode": "anonymous",
+        "attemptedAt": "2026-11-18T15:22:12.621Z",
+        "requestedDays": null,
+        "observedDays": 6,
+        "lastObservedDate": "2026-11-18",
+        "historyRequestsSelected": 12,
+        "historyRequestsPending": 0,
+        "coverage": {
+          "parkId": "land",
+          "accessibleFrom": "2026-11-13",
+          "throughDate": "2026-11-18",
+          "archiveFrom": "2021-07-04",
+          "archiveRecordedThrough": "2026-11-16"
+        },
+        "weatherProvenance": "past-weather-forecast",
+        "failedDays": 0,
+        "privateCacheRetained": false
       }
     },
     {
@@ -4966,6 +4986,26 @@
         "coverage": {
           "parkId": "sea",
           "accessibleFrom": "2026-11-12",
+          "throughDate": "2026-11-18",
+          "archiveFrom": "2021-07-04",
+          "archiveRecordedThrough": "2026-11-16"
+        },
+        "weatherProvenance": "past-weather-forecast",
+        "failedDays": 0,
+        "privateCacheRetained": false
+      },
+      "lastBootstrapAttempt": {
+        "provider": "themeparks-wiki",
+        "accessMode": "anonymous",
+        "attemptedAt": "2026-11-18T15:22:12.621Z",
+        "requestedDays": null,
+        "observedDays": 6,
+        "lastObservedDate": "2026-11-18",
+        "historyRequestsSelected": 12,
+        "historyRequestsPending": 0,
+        "coverage": {
+          "parkId": "sea",
+          "accessibleFrom": "2026-11-13",
           "throughDate": "2026-11-18",
           "archiveFrom": "2021-07-04",
           "archiveRecordedThrough": "2026-11-16"
