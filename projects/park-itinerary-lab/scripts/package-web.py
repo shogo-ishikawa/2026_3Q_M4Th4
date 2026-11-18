@@ -7,7 +7,7 @@ import json
 def build_archive():
     root = Path(__file__).resolve().parents[1]
     version = 'v' + json.loads((root / 'version.json').read_text(encoding='utf-8'))['version']
-    destination = root / 'web/downloads' / f'ParkItineraryLab_{version}.zip'
+    destination = root / 'web/downloads' / f'TDRoute_{version}.zip'
     destination.parent.mkdir(exist_ok=True)
     allowed_roots = {'web', 'src', 'tests', 'tests-web', 'configs', 'data', 'docs', 'requirements', 'scripts'}
     excluded = {'__pycache__', 'node_modules', 'downloads', 'outputs', 'uploads', 'dist', '.pytest_cache', '.ipynb_checkpoints'}

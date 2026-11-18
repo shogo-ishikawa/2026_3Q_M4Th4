@@ -1,6 +1,7 @@
 import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, fetchPublishedModel, prepareLiveForReplan, prepareWeatherForVisit } from './wait-data.js';
 import { enhanceTimeInputs, parkTimeBounds, linkedWishWindow, clampClock } from './time-input.js';
-import { weatherForMinute, formatWeatherDetails } from './weather.js';
+import { weatherForMinute } from './weather.js';
+import { forecastCardHtml, forecastSourcesHtml } from './weather-view.js';
 import { operationPauseInfo } from './operation-windows.js';
 import { contingencySettings, compareContingency } from './contingency.js';
 import { renderParkMap } from './map-view.js';
@@ -105,8 +106,13 @@ export function foodLinks(activity) {
   if(!FOOD.has(activity.category))return '';
   const menuUrl=safeLink(activity.menuUrl||activity.sourceUrl);
   const items=menuNames(activity).slice(0,3).map(escapeHtml).filter(Boolean);
-  return `<div class="food-information"><p>${items.length?items.join(' / '):'販売メニューと場所は公式ページで確認できます。'}</p><div><a href="${safeLink(activity.sourceUrl)}" target="_blank" rel="noopener noreferrer">店舗・売り場 ↗</a><a href="${menuUrl}" target="_blank" rel="noopener noreferrer">メニューを見る ↗</a></div>${activity.menuCheckedOn?`<small>メニュー確認 ${escapeHtml(activity.menuCheckedOn)}</small>`:''}</div>`;
+  return `<div class="food-information">${items.length?`<p>${items.join(' / ')}</p>`:''}<a href="${menuUrl}" target="_blank" rel="noopener noreferrer">メニュー ↗</a></div>`;
 }
+
+export const PARK_COPY = {
+  land:['夢と魔法の1日を、','いちばん輝く順番で。'],
+  sea:['イマジネーションの海を巡る、','最高の旅のスケジュール。'],
+};
 
 export function initialiseApp() {
   let contingencyWorker = null, contingencyResult = null, contingencyBase = null, contingencyRequest = 0;
@@ -116,7 +122,7 @@ export function initialiseApp() {
   const currentPark = () => catalogue.parks.find(p => p.id === state.parkId) || catalogue.parks[0];
   const activities = () => currentPark().activities;
   const byId = id => activities().find(a => a.id === id);
-  const setStatus = (message,error = false) => { $('status').textContent=message; $('status').classList.toggle('is-error',error);if($('workflowStatus')){$('workflowStatus').textContent=message;$('workflowStatus').classList.toggle('is-error',error);} };
+  const setStatus = (message,error = false) => { $('status').textContent=message; $('status').classList.toggle('is-error',error); };
   const safely = action => async(...args) => { try {await action(...args);}catch(error){setStatus(error.message || '入力を確認してもう一度試してください。',true);} };
   const numberInput = (id,min,max,step=1) => {const n=Number($(id).value);if(!Number.isFinite(n)||n<min||n>max||!Number.isInteger(n/step))throw Error(`${$(id).closest('label')?.textContent.trim().split('\n')[0] || id}を確認してください。`);return n;};
   const selected = id => state.settings.selections.find(s => s.id === id);
@@ -135,7 +141,7 @@ export function initialiseApp() {
   }
   function updateDayOverview(){
     const s=state.settings,speed=s.speed===50?'ゆっくり':s.speed===90?'早め':'普通';
-    $('dayOverview').textContent=`予算 ${money(s.budget)} · 歩く速さ ${speed} · ${s.restEvery&&s.restMinutes?`約${s.restEvery}分ごとに休憩`:'自動休憩なし'}`;
+    $('dayOverview').textContent=`${money(s.budget)} · 歩く速さ ${speed} · ${s.restEvery&&s.restMinutes?'休憩は自動':'自動休憩なし'}`;
     $('livePlanStatus').textContent=s.liveNotice||'';$('livePlanStatus').hidden=!s.liveNotice;
   }
   function renderSavedPlans(){
@@ -144,7 +150,7 @@ export function initialiseApp() {
     $('savedPlanList').innerHTML=plans.length?plans.map(plan=>`<article class="saved-plan-card${plan.id===openedPlanId?' is-open':''}" data-saved-plan="${escapeHtml(plan.id)}"><div><strong>${escapeHtml(plan.name)}</strong><p>${plan.parkId==='sea'?'シー':'ランド'} · ${escapeHtml(plan.date)} · ${plan.hasSchedule?'しおりあり':'希望の条件'} · ${plan.updatedAt?escapeHtml(new Date(plan.updatedAt).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})):'以前の保存'}</p></div><div class="saved-plan-actions"><button type="button" data-load-saved="${escapeHtml(plan.id)}">開く</button><button type="button" data-rename-saved="${escapeHtml(plan.id)}">名前を変更</button><button type="button" data-delete-saved="${escapeHtml(plan.id)}">削除</button></div><div class="saved-plan-rename" hidden><label>計画の名前<input type="text" maxlength="80" value="${escapeHtml(plan.name)}" data-saved-name="${escapeHtml(plan.id)}"></label><button type="button" data-commit-rename="${escapeHtml(plan.id)}">変更を保存</button></div></article>`).join(''):'<p class="field-note">保存した計画はまだありません。名前を付けて保存するとここに並びます。</p>';
   }
   function showSavedPlans(forSaving=false){
-    $('savedPlansPanel').open=true;renderSavedPlans();
+    $('savedPlansPanel').hidden=false;$('savedPlansPanel').open=true;renderSavedPlans();
     if(forSaving){if(!$('planName').value.trim())$('planName').value=`${state.settings.date} ${state.parkId==='sea'?'シー':'ランド'}`;$('planName').focus();}
     $('savedPlansPanel').scrollIntoView({block:'start',behavior:'smooth'});
   }
@@ -204,6 +210,9 @@ export function initialiseApp() {
   function updateContext() {
     const park=currentPark(),s=state.settings;if(calendarData&&!s.calendarData)s.calendarData=calendarData;if(s.waitModel?.parkId===park.id)modelCache.set(park.id,s.waitModel);else if(modelCache.has(park.id))s.waitModel=modelCache.get(park.id);
     document.body.dataset.park=state.parkId;
+    document.title=`TDRoute — ${park.name}`;
+    const copy=PARK_COPY[state.parkId]||PARK_COPY.land;
+    $('pageTitle').innerHTML=`<span>${copy[0]}</span><em>${copy[1]}</em>`;
     $('landTab').setAttribute('aria-selected',String(state.parkId==='land'));$('seaTab').setAttribute('aria-selected',String(state.parkId==='sea'));
     $('landTab').tabIndex=state.parkId==='land'?0:-1;$('seaTab').tabIndex=state.parkId==='sea'?0:-1;
     $('officialMapLink').href=park.mapUrl || park.officialUrl;$('officialParkLink').href=park.officialUrl;
@@ -217,7 +226,7 @@ export function initialiseApp() {
     $('breakNode').value=selectableNodes(park).some(n=>n.id===breakNode)?breakNode:park.entryNode;renderFixedBreaks();
     const purchaseId=$('purchaseActivity').value;$('purchaseActivity').replaceChildren();for(const a of park.activities.filter(a=>a.dpa)){const option=document.createElement('option');option.value=a.id;option.textContent=a.name;$('purchaseActivity').append(option);}$('purchaseActivity').value=park.activities.some(a=>a.id===purchaseId&&a.dpa)?purchaseId:park.activities.find(a=>a.dpa)?.id||'';if(byId($('purchaseActivity').value)?.dpa)$('purchaseCost').value=byId($('purchaseActivity').value).dpa.price;renderPurchaseHistory();
     $('dataVersion').textContent=`施設・イベントの確認日：${catalogue.updatedAt || park.updatedAt || 'データ内の出典を確認'} / データ版 ${catalogue.version || '—'}。フードの予算は変更できます。施設・休止・イベントは毎朝6:15に更新を確認し、学習モデルは毎日21:55に再学習します。${catalogue.fetchedAt?` 最終取得 ${new Date(catalogue.fetchedAt).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'})}`:''}${catalogueRefreshNotice(catalogue)}`;
-    updateDayOverview();updateCrowd();renderCatalogue();renderWishlist();renderMap();renderResult();syncTimeEditors();
+    updateDayOverview();updateCrowd();renderCatalogue();renderWishlist();renderMap();renderResult();renderSources();syncTimeEditors();
     document.dispatchEvent(new CustomEvent('park-context-change',{detail:{park,settings:state.settings,history:state.history}}));
   }
   function renderPurchaseHistory(){if(!catalogue)return;const purchases=state.settings.purchases||[];$('purchaseHistory').innerHTML=purchases.length?purchases.map((p,index)=>`<div class="purchase-item"><strong>${escapeHtml(byId(p.id)?.name||p.id)}</strong><p>購入 ${timeText(p.purchasedAt)} · 利用 ${timeText(p.start)}–${timeText(p.end)} · ${money(p.cost)}</p><button type="button" data-remove-purchase="${index}">履歴から外す</button></div>`).join(''):'<p class="field-note">購入履歴はまだありません。</p>';}
@@ -226,9 +235,21 @@ export function initialiseApp() {
     const s=state.settings,events=(currentPark().events||[]).filter(e=>e.startDate<=s.date&&e.endDate>=s.date);
     $('eventBadges').replaceChildren();
     for(const event of events){const span=document.createElement('span');span.textContent=event.name;$('eventBadges').append(span);}
-    const manual=s.crowdMode==='manual';
-    $('crowdExplanation').textContent=manual?'希望ごとの「待ち時間」を使います。当日の表示に合わせて変更できます。':'当日の新しい公開待ち時間、検証で改善した学習モデル、履歴の順で使います。記録がない部分は曜日・時間帯・天気・開催イベントの傾向モデルで補います。';
+    $('crowdExplanation').textContent=s.crowdMode==='manual'?'待ち時間：希望欄の手動設定':'待ち時間：当日の情報・学習モデル・履歴から推定';
     $('historyStatus').textContent=`待ち時間の実績データ：${state.history?.length ? `${state.history.length}件を読込済み` : '未読込'}`;
+  }
+  function renderSources() {
+    if(!catalogue)return;
+    const park=currentPark(),s=state.result?.settings||state.settings,map=park.geographicMap;
+    const stamp=value=>Number.isFinite(Date.parse(value))?new Date(value).toLocaleString('ja-JP',{timeZone:'Asia/Tokyo'}):'未取得';
+    const chosen=new Set(state.settings.selections.map(item=>item.id));
+    const facilities=chosen.size?park.activities.filter(a=>chosen.has(a.id)):park.activities;
+    const warnings=catalogueRefreshNotice(catalogue);
+    $('sourceSummary').textContent=warnings?'一部未更新':'';
+    $('sourceDetails').innerHTML=`<div class="source-grid"><section><h3>施設・営業予定</h3><p>公式情報の取得 ${escapeHtml(stamp(catalogue.fetchedAt))}</p>${warnings?`<p class="source-warning">${escapeHtml(warnings)}</p>`:''}<p>施設名・営業時間・公演時刻・休止は公式情報を使用します。料金や時間帯は訪問日の条件をご確認ください。</p></section><section><h3>地図・徒歩ルート</h3><p>© OpenStreetMap contributors / ODbL 1.0</p><p>通路・水域・建物の形を保って表示方向と配色を調整しています。施設は付近の公開通路上の参考位置です。待ち列内と建物内の距離は含みません。</p><a href="data/${park.id}-geography-LICENCE.md" target="_blank" rel="noopener noreferrer">地図の出典と利用条件 ↗</a>${map?`<p>地図データ取得 ${escapeHtml(map.asOf||'—')}</p>`:''}</section><section><h3>待ち時間と計画値</h3><p>当日の待ち時間・稼働状況はQueue-TimesとThemeParks.wikiを使用します。来園前は学習モデル・履歴・傾向モデルから予測します。</p><p>待ち時間への余裕は計画用の目安です。自動は検証の平均誤差を使い、遅れを防ぐ保証ではありません。</p><p>徒歩・待ち時間・食事と買い物の費用は計画用の目安です。</p></section></div><details class="source-facilities"><summary>${chosen.size?'選択中の':'収録している'}施設の公式情報</summary><div class="source-facility-list">${facilities.map(a=>`<article><a href="${safeLink(a.sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(a.name)} ↗</a><span>${a.operatingDate?`営業確認 ${escapeHtml(a.operatingDate)}`:''}${a.menuCheckedOn?` · メニュー確認 ${escapeHtml(a.menuCheckedOn)}`:''}</span></article>`).join('')}</div></details>`;
+    const infos=(state.result?.rows||[]).filter(row=>['activity','rest'].includes(row.kind||row.type)).map(row=>weatherForMinute(s,Number(row.start)));
+    if(!infos.length)infos.push(weatherForMinute(s,s.entry));
+    $('forecastSources').innerHTML=forecastSourcesHtml(infos);
   }
   function renderCatalogue() {
     const query=$('catalogueSearch').value.trim().toLocaleLowerCase('ja'),category=$('categoryFilter').value;
@@ -237,7 +258,7 @@ export function initialiseApp() {
     $('selectionCount').textContent=`${state.settings.selections.length}件の希望`;
   }
   function addSelection(id) {
-    const a=byId(id);if(!a)return;if(selected(id)){toggleWantedSelection(state.settings,{id});markResultStale();renderCatalogue();renderWishlist();renderMap();setStatus(`${a.name}を希望から外しました。`);return;}if(activitySchedule(a,state.settings.date).closed){setStatus(`${a.name}は訪問日に休止予定です。別の日や施設を選んでください。`,true);return;}
+    const a=byId(id);if(!a)return;if(selected(id)){toggleWantedSelection(state.settings,{id});markResultStale();renderCatalogue();renderWishlist();renderMap();setStatus('');return;}if(activitySchedule(a,state.settings.date).closed){setStatus(`${a.name}は訪問日に休止予定です。別の日や施設を選んでください。`,true);return;}
     if(!selected(id)){
       const s={id,weight:3,required:false,timeWindowLinked:true,dpaMode:'none',manualWait:Number(a.baseWait)||0,cost:Math.ceil((Number(a.cost)||0)/100)*100,duration:a.duration};
       if(FOOD.has(a.category)){
@@ -245,7 +266,7 @@ export function initialiseApp() {
         if(a.category==='snack'||a.category==='popcorn'||a.category==='cafe'){s.earliest=state.settings.entry;s.latest=state.settings.exit;}
       }
       if(ENTERTAINMENT.has(a.category)){const schedule=activitySchedule(a,state.settings.date);s.showTimes=schedule.showTimes.slice();s.confirmSchedule=schedule.confirmed;}
-      toggleWantedSelection(state.settings,s);if(wishlistGenre!=='all')wishlistGenre=genreOf(a.category);markResultStale();renderCatalogue();renderWishlist();renderMap();setStatus(`${a.name}を希望に追加しました。`);
+      toggleWantedSelection(state.settings,s);if(wishlistGenre!=='all')wishlistGenre=genreOf(a.category);markResultStale();renderCatalogue();renderWishlist();renderMap();setStatus('');
     }
   }
   function suggestedSelection() {
@@ -264,7 +285,7 @@ export function initialiseApp() {
     const date=state.settings.date;
     const available=activities().filter(a=>(!a.access||a.access==='normal')&&!activitySchedule(a,date).closed&&(!a.startDate||a.startDate<=date)&&(!a.endDate||date<=a.endDate));
     for(const [names,count] of presets){let added=0;for(const name of names){const activity=available.find(a=>a.name.includes(name));if(activity&&!selected(activity.id)){addSelection(activity.id);added++;if(added===count)break;}}}
-    wishlistGenre='all';renderWishlist();markResultStale();setStatus('人気のアトラクションと食事、おやつ、お土産を組み合わせました。重要度を調整して一日の計画を試してみましょう。');
+    wishlistGenre='all';renderWishlist();markResultStale();setStatus('おすすめの希望を追加しました。');
   }
   function renderWishlist() {
     const all=state.settings.selections,bounds=parkTimeBounds(currentPark(),state.settings.date);
@@ -279,7 +300,7 @@ export function initialiseApp() {
       const dpa=a.dpa;
       const groupTitle=['snack','popcorn'].includes(a.category)&&byId(list[index-1]?.id)?.category!==a.category?`<h3 class="catalogue-group-title">${CATEGORY[a.category]}</h3>`:'';
       const pauseInfo=a.id==='sea-attraction-230'?operationPauseInfo(currentPark(),a,s,state.settings):null;
-      return `${groupTitle}<article class="wish-card genre-${genreOf(a.category)}" data-wish-id="${escapeHtml(s.id)}"><div class="wish-heading"><div><p class="wish-category">${escapeHtml(CATEGORY[a.category]||a.category)} / ${escapeHtml(a.area||'')}</p><h4>${escapeHtml(a.name)}</h4></div><button class="remove-wish" data-remove="${escapeHtml(s.id)}" type="button" aria-label="${escapeHtml(a.name)}を希望から外す">×</button></div>${foodLinks(a)}${schedule.closed?'<p class="schedule-note">訪問日は休止予定です。別の日や施設を検討してください。</p>':''}<div class="wish-main-controls"><div class="weight-control${s.required?' is-required':''}"><span>${s.required?'必須 <strong>必ず入れる条件</strong>':`重要度 <strong>${s.weight} · ${escapeHtml(WEIGHT_LABELS[s.weight]||'行きたい')}</strong>`}</span><div class="weight-buttons" role="group" aria-label="${escapeHtml(a.name)}の重要度">${weightButtons(s)}</div></div><label class="check-field"><input type="checkbox" data-field="required"${s.required?' checked':''}>必ず入れる</label></div><div class="wish-fields">${timed?`<label>この時刻から<input type="time" data-field="earliest" value="${timeText(s.earliest ?? state.settings.entry)}"></label><label>この時刻までに終了<input type="time" data-field="latest" value="${timeText(s.latest ?? state.settings.exit)}"></label><label class="check-field window-link-field"><input type="checkbox" data-field="timeWindowLinked"${s.timeWindowLinked!==false?' checked':''}>2時間枠で連動<span>開始・終了の変更で相手側も調整します。開閉園で短くなる場合があります。</span></label>`:''}${paid?`<label>${a.category==='shop'?'使いたい金額':'フードの予算'}<input type="number" min="0" max="1000000" step="100" data-field="cost" value="${escapeHtml(s.cost ?? a.cost ?? 0)}" aria-label="${escapeHtml(a.name)}の予算（円）"></label>`:''}<label>体験・滞在（待ち時間を除く）<input type="number" min="1" max="360" step="1" data-field="duration" value="${escapeHtml(s.duration ?? a.duration)}" aria-label="${escapeHtml(a.name)}の滞在時間（分）"></label><label>待ち時間（手動時）<input type="number" min="0" max="360" step="5" data-field="manualWait" value="${escapeHtml(s.manualWait ?? a.baseWait)}" aria-label="${escapeHtml(a.name)}の待ち時間（分）"></label></div>${show?`<div class="schedule-note">公演時刻：${scheduleCurrent?`${escapeHtml(schedule.date)}の公式時刻を表示しています。`:'訪問日の公式情報を確認して入力してください。'}${a.showTimesDate?` 収録データの確認日 ${escapeHtml(a.showTimesDate)}`:''}${a.scheduleNote?` ${escapeHtml(a.scheduleNote)}`:''}</div><label class="full-field">訪問日の開演時刻（例 11:00, 13:30）<input type="text" data-field="showTimes" value="${escapeHtml((s.showTimes||[]).map(timeText).join(', '))}" placeholder="11:00, 13:30"></label><label class="check-field section-gap"><input type="checkbox" data-field="confirmSchedule"${s.confirmSchedule?' checked':''}>この日の公演時刻を確認した</label>`:''}${a.access&&a.access!=='normal'?`<div class="access-note"><label><input type="checkbox" data-field="confirmedAccess"${s.confirmedAccess?' checked':''}>${a.access==='entry'?'エントリー受付の結果・入場条件を確認した':'予約・利用条件を確認した'}</label></div>`:''}${pauseInfo?`<div class="gondola-note"><label class="check-field"><input type="checkbox" data-setting="gondolaAvoidHarbourShows"${state.settings.gondolaAvoidHarbourShows!==false?' checked':''}>ショー上演中を避ける目安</label><p>${escapeHtml(pauseInfo.note)}</p>${pauseInfo.windows.length?`<p>避ける時間帯：${pauseInfo.windows.map(pair=>`${timeText(pair[0])}–${timeText(pair[1])}`).join(' / ')}</p>`:''}<label class="full-field">確認した休止時間（例 12:00-13:00）<input type="text" data-field="pauseWindows" value="${escapeHtml((s.pauseWindows||[]).map(pair=>pair.map(timeText).join('-')).join(', '))}" placeholder="12:00-13:00, 19:00-20:00"></label><p class="wish-foot">ショー前後の準備時間は当日の稼働状況で確認できます。</p></div>`:''}${greeting?'<p class="wish-foot">グリーティングの実施時間や対象キャラクターは公式情報で確認できます。</p>':''}${dpa?`<details class="wish-details"${s.dpaMode&&s.dpaMode!=='none'?' open':''}><summary>DPA・時間指定を設定　${money(dpa.price)}</summary><label class="full-field">DPAをどう使う？<select data-field="dpaMode"><option value="none"${s.dpaMode==='none'?' selected':''}>通常の待ち列で利用</option><option value="consider"${s.dpaMode==='consider'?' selected':''}>購入できる枠を候補にする</option><option value="owned"${s.dpaMode==='owned'?' selected':''}>取得済みの枠を使う</option><option value="unavailable"${s.dpaMode==='unavailable'?' selected':''}>利用しない・売り切れ</option></select></label><div class="wish-fields"><label>利用・入場開始<input type="time" data-field="dpaStart" value="${s.dpaStart==null?'':timeText(s.dpaStart)}"></label><label>利用・入場終了<input type="time" data-field="dpaEnd" value="${s.dpaEnd==null?'':timeText(s.dpaEnd)}"></label><label>取得済み：購入した時刻<input type="time" data-field="dpaPurchasedAt" value="${s.dpaPurchasedAt==null?'':timeText(s.dpaPurchasedAt)}"></label></div>${a.category==='parade'?`<label class="full-field">DPAの集合・鑑賞場所<select data-field="nodeOverride"><option value="">公式アプリの場所を選ぶ</option>${selectableNodes(currentPark()).map(n=>`<option value="${escapeHtml(n.id)}"${s.nodeOverride===n.id?' selected':''}>${escapeHtml(n.name||n.id)}</option>`).join('')}</select></label>`:''}<p class="wish-foot">公式アプリで確認した取得済み枠・購入可能な枠を入力します。取得済みの予定は必ず含めます。アトラクションとショーの購入間隔を別々に考慮します。</p></details>`:''}<details class="wish-details"><summary>営業時間を調整する</summary><p class="wish-foot">${escapeHtml(a.dailySchedules?.[state.settings.date]?state.settings.date:a.operatingDate||a.windowsDate||'収録データ')}の営業時間を基準に計算します。訪問日の営業に合わせて変更できます。</p><div class="wish-fields"><label>営業開始<input type="time" data-field="windowStart" value="${timeText(s.windows?.[0]?.[0] ?? schedule.windows?.[0]?.[0] ?? state.settings.entry)}"></label><label>営業終了<input type="time" data-field="windowEnd" value="${timeText(s.windows?.[0]?.[1] ?? schedule.windows?.[0]?.[1] ?? state.settings.exit)}"></label></div></details><p class="wish-foot"><a href="${safeLink(a.sourceUrl)}" target="_blank" rel="noopener noreferrer">施設・時間・利用条件を公式情報で確認 ↗</a>${a.operatingDate?` · 営業時間確認 ${escapeHtml(a.operatingDate)}`:''}</p></article>`;
+      return `${groupTitle}<article class="wish-card genre-${genreOf(a.category)}" data-wish-id="${escapeHtml(s.id)}"><div class="wish-heading"><div><p class="wish-category">${escapeHtml(CATEGORY[a.category]||a.category)} / ${escapeHtml(a.area||'')}</p><h4>${escapeHtml(a.name)}</h4></div><button class="remove-wish" data-remove="${escapeHtml(s.id)}" type="button" aria-label="${escapeHtml(a.name)}を希望から外す">×</button></div>${foodLinks(a)}${schedule.closed?'<p class="schedule-note">訪問日は休止予定です。別の日や施設を検討してください。</p>':''}<div class="wish-main-controls"><div class="weight-control${s.required?' is-required':''}"><span>${s.required?'必須 <strong>必ず入れる条件</strong>':`重要度 <strong>${s.weight} · ${escapeHtml(WEIGHT_LABELS[s.weight]||'行きたい')}</strong>`}</span><div class="weight-buttons" role="group" aria-label="${escapeHtml(a.name)}の重要度">${weightButtons(s)}</div></div><label class="check-field"><input type="checkbox" data-field="required"${s.required?' checked':''}>必ず入れる</label></div><div class="wish-fields">${timed?`<label>この時刻から<input type="time" data-field="earliest" value="${timeText(s.earliest ?? state.settings.entry)}"></label><label>この時刻までに終了<input type="time" data-field="latest" value="${timeText(s.latest ?? state.settings.exit)}"></label><label class="check-field window-link-field"><input type="checkbox" data-field="timeWindowLinked"${s.timeWindowLinked!==false?' checked':''}>2時間枠で連動</label>`:''}${paid?`<label>${a.category==='shop'?'使いたい金額':'フードの予算'}<input type="number" min="0" max="1000000" step="100" data-field="cost" value="${escapeHtml(s.cost ?? a.cost ?? 0)}" aria-label="${escapeHtml(a.name)}の予算（円）"></label>`:''}<label>体験・滞在（待ち時間を除く）<input type="number" min="1" max="360" step="1" data-field="duration" value="${escapeHtml(s.duration ?? a.duration)}" aria-label="${escapeHtml(a.name)}の滞在時間（分）"></label><label>待ち時間（手動時）<input type="number" min="0" max="360" step="5" data-field="manualWait" value="${escapeHtml(s.manualWait ?? a.baseWait)}" aria-label="${escapeHtml(a.name)}の待ち時間（分）"></label></div>${show?`<div class="schedule-note">公演時刻：${scheduleCurrent?`${escapeHtml(schedule.date)}の公式時刻を表示しています。`:'訪問日の公式情報を確認して入力してください。'}${a.showTimesDate?` 収録データの確認日 ${escapeHtml(a.showTimesDate)}`:''}${a.scheduleNote?` ${escapeHtml(a.scheduleNote)}`:''}</div><label class="full-field">訪問日の開演時刻（例 11:00, 13:30）<input type="text" data-field="showTimes" value="${escapeHtml((s.showTimes||[]).map(timeText).join(', '))}" placeholder="11:00, 13:30"></label><label class="check-field section-gap"><input type="checkbox" data-field="confirmSchedule"${s.confirmSchedule?' checked':''}>この日の公演時刻を確認した</label>`:''}${a.access&&a.access!=='normal'?`<div class="access-note"><label><input type="checkbox" data-field="confirmedAccess"${s.confirmedAccess?' checked':''}>${a.access==='entry'?'エントリー受付の結果・入場条件を確認した':'予約・利用条件を確認した'}</label></div>`:''}${pauseInfo?`<div class="gondola-note"><label class="check-field"><input type="checkbox" data-setting="gondolaAvoidHarbourShows"${state.settings.gondolaAvoidHarbourShows!==false?' checked':''}>ショー上演中を避ける目安</label><p>${escapeHtml(pauseInfo.note)}</p>${pauseInfo.windows.length?`<p>避ける時間帯：${pauseInfo.windows.map(pair=>`${timeText(pair[0])}–${timeText(pair[1])}`).join(' / ')}</p>`:''}<label class="full-field">確認した休止時間（例 12:00-13:00）<input type="text" data-field="pauseWindows" value="${escapeHtml((s.pauseWindows||[]).map(pair=>pair.map(timeText).join('-')).join(', '))}" placeholder="12:00-13:00, 19:00-20:00"></label></div>`:''}${dpa?`<details class="wish-details"${s.dpaMode&&s.dpaMode!=='none'?' open':''}><summary>DPA・時間指定を設定　${money(dpa.price)}</summary><label class="full-field">DPAをどう使う？<select data-field="dpaMode"><option value="none"${s.dpaMode==='none'?' selected':''}>通常の待ち列で利用</option><option value="consider"${s.dpaMode==='consider'?' selected':''}>購入できる枠を候補にする</option><option value="owned"${s.dpaMode==='owned'?' selected':''}>取得済みの枠を使う</option><option value="unavailable"${s.dpaMode==='unavailable'?' selected':''}>利用しない・売り切れ</option></select></label><div class="wish-fields"><label>利用・入場開始<input type="time" data-field="dpaStart" value="${s.dpaStart==null?'':timeText(s.dpaStart)}"></label><label>利用・入場終了<input type="time" data-field="dpaEnd" value="${s.dpaEnd==null?'':timeText(s.dpaEnd)}"></label><label>取得済み：購入した時刻<input type="time" data-field="dpaPurchasedAt" value="${s.dpaPurchasedAt==null?'':timeText(s.dpaPurchasedAt)}"></label></div>${a.category==='parade'?`<label class="full-field">DPAの集合・鑑賞場所<select data-field="nodeOverride"><option value="">公式アプリの場所を選ぶ</option>${selectableNodes(currentPark()).map(n=>`<option value="${escapeHtml(n.id)}"${s.nodeOverride===n.id?' selected':''}>${escapeHtml(n.name||n.id)}</option>`).join('')}</select></label>`:''}<p class="wish-foot">取得済みの枠は必ず予定に含めます。</p></details>`:''}<details class="wish-details"><summary>営業時間を調整する</summary><p class="wish-foot">${escapeHtml(a.dailySchedules?.[state.settings.date]?state.settings.date:a.operatingDate||a.windowsDate||'収録データ')}の営業時間を基準に計算します。訪問日の営業に合わせて変更できます。</p><div class="wish-fields"><label>営業開始<input type="time" data-field="windowStart" value="${timeText(s.windows?.[0]?.[0] ?? schedule.windows?.[0]?.[0] ?? state.settings.entry)}"></label><label>営業終了<input type="time" data-field="windowEnd" value="${timeText(s.windows?.[0]?.[1] ?? schedule.windows?.[0]?.[1] ?? state.settings.exit)}"></label></div></details></article>`;
     }).join(''):all.length?'<p class="empty-message">このジャンルの希望はまだありません。施設カードから追加できます。</p>':'<p class="empty-message">地図や施設カードから行きたい場所を選んでください。</p>';
     syncTimeEditors();
   }
@@ -302,25 +323,25 @@ export function initialiseApp() {
   function renderMap(){ if(catalogue)renderParkMap($('parkMap'),currentPark(),{plan:state.result,selectedIds:state.settings.selections.map(s=>s.id),onSelect:addSelection}); }
   function renderResult() {
     if (state.resultDirty || (contingencyBase && contingencyBase !== state.result)) clearContingency();
-    const result=state.result;$('results').hidden=!result;$('scheduleEmpty').hidden=!!result;if(!result)return;renderFixedBreaks();
+    const result=state.result;$('results').hidden=!result;$('scheduleEmpty').hidden=!!result;renderSources();if(!result)return;renderFixedBreaks();
     const t=result.totals||{},c=result.coverage||{};
     $('resultState').textContent=state.resultDirty?'前の条件で作った計画':result.status==='feasible'?'見つかった計画':result.status==='no-plan'?'条件を見直そう':'入力を確認';
     const percent=Number(c.percent)||0;
     $('resultSummary').innerHTML=`<div class="metric"><strong>${Math.round(percent)}<small>%</small></strong><span>希望の重要度を反映</span></div><div class="metric"><strong>${escapeHtml(c.count ?? result.visits?.length ?? 0)}<small> / ${escapeHtml(c.totalCount ?? state.settings.selections.length)}</small></strong><span>予定に入った希望</span></div><div class="metric"><strong>${(Number(t.walkingMetres||0)/1000).toFixed(1)}<small> km</small></strong><span>歩く距離の目安</span></div><div class="metric"><strong>${Math.round(Number(t.cost)||0).toLocaleString('ja-JP')}<small>円</small></strong><span>予定の支出合計</span></div>`;
     const planSettings=result.settings||state.settings;
-    $('resultExplanation').textContent=result.status==='feasible'?`${state.resultDirty?'条件を変更しています。現在の希望で再探索してください。 ':''}${planSettings.date} ${timeText(planSettings.entry)}–${timeText(planSettings.exit)} の計画。重要度 ${c.weight ?? t.score ?? 0} / ${c.totalWeight ?? 0}。フード ${money(t.foodCost)} · DPA ${money(t.dpaCost)} · お土産 ${money(t.shoppingCost)}。残り ${money(t.budgetRemaining)}（お土産への配分 ${money(t.souvenirAllocation)}）。探索で見つかった実行可能な案です。`:'時間や予算に収まる計画が見つかりませんでした。必須の希望・食事の時間帯・公演枠を見直してください。';
+    $('resultExplanation').textContent=result.status==='feasible'?`${state.resultDirty?'条件を変更しています。現在の希望で再探索してください。 ':''}${planSettings.date} ${timeText(planSettings.entry)}–${timeText(planSettings.exit)} の計画。重要度 ${c.weight ?? t.score ?? 0} / ${c.totalWeight ?? 0}。フード ${money(t.foodCost)} · DPA ${money(t.dpaCost)} · お土産 ${money(t.shoppingCost)}。残り ${money(t.budgetRemaining)}（お土産への配分 ${money(t.souvenirAllocation)}）。`:'時間や予算に収まる計画が見つかりませんでした。必須の希望・食事の時間帯・公演枠を見直してください。';
     $('timeline').innerHTML=(result.rows||[]).map((row,index)=>{
       const kind=row.kind||row.type||'activity',a=byId(row.activityId),duration=Number(row.end)-Number(row.start);
       const name=row.name || ({walk:'徒歩で移動',wait:'時間を調整',queue:'待ち列',rest:'ひと休み',exit:'退園へ'}[kind]) || a?.name || '予定';
-      const details=[];if(row.fixedBreakId)details.push('指定した休憩');if(row.waitSource)details.push(WAIT_LABELS[row.waitSource]||row.waitSource);if(row.metres)details.push(`${Math.round(row.metres)} m`);if(duration>=0)details.push(`${duration}分`);if(Number(row.cost)>0)details.push(money(row.cost));if(a?.area)details.push(a.area);
+      const details=[];if(row.fixedBreakId)details.push('指定した休憩');if(row.metres)details.push(`${Math.round(row.metres)} m`);if(duration>=0)details.push(`${duration}分`);if(Number(row.cost)>0)details.push(money(row.cost));if(a?.area)details.push(a.area);
       if (kind === 'queue' && (row.bufferMinutes || row.delayMinutes)) details.push(`見込み${row.estimatedMinutes}分＋余裕${row.bufferMinutes || 0}分${row.delayMinutes ? `＋混雑想定${row.delayMinutes}分` : ''}`);
       const forecast=['activity','rest'].includes(kind)?weatherForMinute(planSettings,Number(row.start)):null;
-      return `<article class="timeline-row kind-${escapeHtml(kind)}"><div class="timeline-time">${timeText(row.start)}<small>– ${timeText(row.end)}</small></div><div class="timeline-body"><h4>${escapeHtml(name)}${row.dpa?'<span class="dpa-pill">DPA</span>':''}</h4><p>${escapeHtml(details.join(' · '))}</p>${forecast?`<p class="timeline-weather">${escapeHtml(formatWeatherDetails(forecast))}${forecast.sourceUrl?` <a href="${safeLink(forecast.sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(forecast.provider||'予報の出典')} ↗</a>`:''}</p>`:''}${kind==='rest'&&!row.preserved&&(row.fixedBreakId||row.autoBreakId)?`<button class="remove-timeline-rest" data-remove-rest-index="${index}" type="button" aria-label="${timeText(row.start)}の休憩を外して再探索">この休憩を外す</button>`:''}${row.walkingFactor>1?'<p class="walking-note">混雑・時間帯・天気を加えた移動時間の目安</p>':''}${a?`<a class="row-link" href="${safeLink(a.sourceUrl)}" target="_blank" rel="noopener noreferrer">公式 ↗</a>`:''}</div></article>`;
+      return `<article class="timeline-row kind-${escapeHtml(kind)}"><div class="timeline-time">${timeText(row.start)}<small>– ${timeText(row.end)}</small></div><div class="timeline-body${forecast?' has-forecast':''}"><h4>${escapeHtml(name)}${row.dpa?'<span class="dpa-pill">DPA</span>':''}</h4><p>${escapeHtml(details.join(' · '))}</p>${forecast ? forecastCardHtml(forecast) : ''}${kind==='rest'&&!row.preserved&&(row.fixedBreakId||row.autoBreakId)?`<button class="remove-timeline-rest" data-remove-rest-index="${index}" type="button" aria-label="${timeText(row.start)}の休憩を外して再探索">この休憩を外す</button>`:''}</div></article>`;
     }).join('');
     const omissions=result.omissions||[];$('omissionTitle').textContent=`入らなかった希望 · ${omissions.length}件`;
     $('omissionList').innerHTML=omissions.length?omissions.map(o=>`<div class="omission-item"><span>↗</span><div><strong>${escapeHtml(o.name || byId(o.id)?.name || o.id)}${o.required?' · 必須':''}</strong><p>${escapeHtml(o.reason||'時間・予算・利用枠の条件に合わせて他の希望を優先しました。')}</p></div></div>`).join(''):'<p class="field-note">希望をすべて予定に取り入れられました。</p>';
     const d=result.diagnostics||{};
-    $('delayPlanNotice').textContent=`待ち時間に含めた余裕は合計${t.bufferMinutes || 0}分${t.delayMinutes ? `、追加の混雑想定は合計${t.delayMinutes}分` : ''}です。各待ち列の内訳はしおりで確認できます。`;
+    $('delayPlanNotice').textContent=`待ち時間に含めた余裕は合計${t.bufferMinutes || 0}分${t.delayMinutes ? `、追加の混雑想定は合計${t.delayMinutes}分` : ''}です。`;
     $('searchContingency').disabled=state.resultDirty||result.status!=='feasible'||!!worker||!!preparation;
     const notes=Array.isArray(d.notes)?d.notes:[String(d.notes||'')];
     $('diagnosticList').innerHTML=`<p>${escapeHtml(SEARCH_LABELS[planSettings.searchMethod||'beam'])} · 探索時間 ${(Number(d.elapsedMs||0)/1000).toFixed(2)}秒 · 調べた状態 ${Number(d.expanded||0).toLocaleString('ja-JP')}件。${d.timedOut?'設定した探索時間で打ち切りました。':'設定した範囲の探索を終えました。'}厳密な最適性の証明は行っていません。</p><p>待ち時間：${escapeHtml((d.waitSources?.length?d.waitSources:[d.waitSource||'trend']).map(key=>WAIT_LABELS[key]||key).join('・'))}。移動 ${t.walkMinutes||0}分 · 待ち時間 ${t.waitMinutes||0}分 · 休憩 ${t.restMinutes||0}分。</p><ul>${notes.filter(Boolean).map(n=>`<li>${escapeHtml(typeof n==='object'?JSON.stringify(n):n)}</li>`).join('')}</ul><p>DPAの候補は購入できる枠を入力したものです。購入前に公式アプリの販売状況を確認し、取得後は希望を「取得済み」に更新してください。</p>`;
@@ -406,7 +427,7 @@ export function initialiseApp() {
     preparation=new AbortController();showWorkflow('schedule',{focus:true,scroll:true});$('scheduleEmptyText').textContent='天気と当日の情報を確認して、希望をつなぐ順序を探しています。';
     $('solveButton').disabled=true;$('cancelSearch').hidden=false;$('searchProgress').hidden=false;$('progressBar').value=0;
     $('progressText').textContent=input.weatherMode==='manual'?'計画の条件を確認しています…':'訪問日の天気予報を取得しています…';
-    setStatus(input.weatherMode==='manual'?'設定した天気で探索を準備しています。':'パーク周辺の天気予報を取得してから計画します。');
+    setStatus(input.weatherMode==='manual'?'計画を準備中…':'天気予報を取得中…');
     let prepared;
     try{let base=input;if(!base.waitModel||base.waitModel.parkId!==park.id){const model=await fetchPublishedModel(park,{signal:preparation.signal,timeoutMs:5000});if(model)base={...base,waitModel:model};}prepared=await prepareWeatherForPlan(base,park,{signal:preparation.signal});prepared=await prepareLiveForReplan(prepared,park,{signal:preparation.signal});}
     catch(error){if(preparingRequest!==requestId)return;stopSearch();throw error;}
@@ -422,13 +443,13 @@ export function initialiseApp() {
         const p=message.progress||{};if(message.result)latestPreview=message.result;
         $('progressText').textContent=`組合せを探索中 · 重要度 ${p.bestScore??'—'} · ${p.visits??0}件の希望`;
       }else if(message.type==='result'){
-        state.result=message.result;state.resultDirty=false;latestPreview=state.result;stopSearch();renderResult();renderMap();setStatus(state.result.status==='feasible'?'一日の計画ができました。採用された希望と費用を見比べてください。':'条件を満たす計画が見つかりませんでした。必須条件や時間帯を見直してください。',state.result.status!=='feasible');
+        state.result=message.result;state.resultDirty=false;latestPreview=state.result;stopSearch();renderResult();renderMap();setStatus(state.result.status==='feasible'?'':'条件を満たす計画が見つかりませんでした。必須条件や時間帯を見直してください。',state.result.status!=='feasible');
       }else if(message.type==='error'){stopSearch();setStatus(message.message||message.error||'計画の計算に失敗しました。',true);}
     };
     worker.onerror=error=>{if(thisRequest!==requestId)return;stopSearch();setStatus(error.message||'探索を開始できませんでした。ページを読み直してください。',true);};
     progressTimer=setInterval(()=>{$('progressBar').value=Math.min(98,(performance.now()-searchStarted)/(state.settings.searchSeconds*1000)*100);},120);
     worker.postMessage({type:'solve',requestId:thisRequest,park:currentPark(),settings:state.settings,history:state.history,initialPlan:state.settings.replanFrom!=null?state.result:null});
-    setStatus('希望の重要度を保ちながら移動と時間帯の組合せを探しています。');
+    setStatus('計画を探索中…');
   }
   async function loadCatalogue(fresh=false) {
     const response=await fetch(`data/parks.json${fresh?`?refresh=${Date.now()}`:''}`,{cache:fresh?'reload':'default'});
@@ -443,7 +464,7 @@ export function initialiseApp() {
   function switchPark(id) {
     if(id===state.parkId)return;stopSearch();readSettings();openedPlanId=null;$('overwritePlan').hidden=true;state.parkStates[state.parkId]={settings:state.settings,result:state.result,resultDirty:!!state.resultDirty};
     const saved=state.parkStates[id];state.parkId=id;state.settings=saved?.settings||{...defaultSettings(),date:state.settings.date};state.result=saved?.result||null;state.resultDirty=!!saved?.resultDirty;
-    $('catalogueSearch').value='';wishlistGenre='all';writeSettings();updateContext();showWorkflow(state.result?'schedule':'wishlist');setStatus(`${currentPark().name}の計画へ切り替えました。`);
+    $('catalogueSearch').value='';wishlistGenre='all';writeSettings();updateContext();showWorkflow(state.result?'schedule':'wishlist');setStatus('');
   }
   function downloadCatalogue(){const blob=new Blob([JSON.stringify(catalogue,null,2)],{type:'application/json;charset=utf-8'}),a=document.createElement('a'),url=URL.createObjectURL(blob);a.href=url;a.download=`ParkItinerary_catalogue_${catalogue.updatedAt||'custom'}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
   function attachEvents() {
@@ -500,7 +521,7 @@ export function initialiseApp() {
     $('exportJson').addEventListener('click',safely(()=>{readSettings();downloadPlanJson(state);}));$('exportCsv').addEventListener('click',safely(()=>downloadScheduleCsv(state.result,currentPark())));$('exportIcs').addEventListener('click',safely(()=>downloadCalendar(state.result,currentPark(),state.result.settings||state.settings)));$('exportHtml').addEventListener('click',safely(()=>downloadOfflineHtml(state.result,currentPark(),state.result.settings||state.settings)));$('printPlan').addEventListener('click',()=>window.print());
   }
   async function start() {
-    try{$('solveButton').disabled=true;setStatus('最新の施設情報と予測モデルを確認しています。');await loadCatalogue();const shared=await readSharedState(location.hash);if(shared)state=cleanState(shared);const context=await Promise.all([fetchPublishedCalendar({timeoutMs:5000}),fetchPublishedModel(currentPark(),{timeoutMs:5000})]);calendarData=context[0];if(calendarData)state.settings.calendarData=calendarData;if(context[1])state.settings.waitModel=context[1];writeSettings();attachEvents();showWorkflow(state.result?'schedule':'wishlist');renderSavedPlans();$('solveButton').disabled=false;externalPanel=initialiseExternalData({container:$('externalDataPanel'),getContext:()=>({park:currentPark(),settings:state.settings,history:state.history}),onUpdate:applyDataUpdate,beforeAction:readSettings});updateContext();setStatus(shared?'共有された希望を読み込みました。必要に応じて調整し、プランを考えましょう。':'行きたい場所を選び、一日の条件を決めましょう。');}
+    try{$('solveButton').disabled=true;setStatus('施設情報を確認中…');await loadCatalogue();const shared=await readSharedState(location.hash);if(shared)state=cleanState(shared);const context=await Promise.all([fetchPublishedCalendar({timeoutMs:5000}),fetchPublishedModel(currentPark(),{timeoutMs:5000})]);calendarData=context[0];if(calendarData)state.settings.calendarData=calendarData;if(context[1])state.settings.waitModel=context[1];writeSettings();attachEvents();showWorkflow(state.result?'schedule':'wishlist');renderSavedPlans();$('solveButton').disabled=false;externalPanel=initialiseExternalData({container:$('externalDataPanel'),getContext:()=>({park:currentPark(),settings:state.settings,history:state.history}),onUpdate:applyDataUpdate,beforeAction:readSettings});updateContext();setStatus(shared?'共有された希望を読み込みました。':'');}
     catch(error){setStatus(error.message||'起動に失敗しました。ページを再読み込みしてください。',true);$('solveButton').disabled=true;}
   }
   start();

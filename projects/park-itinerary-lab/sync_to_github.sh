@@ -21,6 +21,6 @@ if git -C "$checkout_dir/repo" diff --cached --quiet; then
   echo '変更はありません。'
   exit 0
 fi
-git -C "$checkout_dir/repo" commit -m 'Update Park Itinerary Lab'
+git -C "$checkout_dir/repo" commit -m 'Update TDRoute'
 git -C "$checkout_dir/repo" push origin HEAD:main
 echo 'アップロードしました。GitHub Actionsで確認とPagesの更新が始まります。'

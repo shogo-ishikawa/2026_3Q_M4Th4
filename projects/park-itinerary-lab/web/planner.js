@@ -5,6 +5,9 @@ import { liveWaitFor, currentRideStatus } from './wait-data.js';
 /* Browser itinerary search. Every returned plan is checked; the search does not claim global optimality. */
 const FOOD = new Set(['restaurant', 'cafe', 'snack', 'popcorn']);
 const FIXED = new Set(['show', 'parade']);
+const DINING_RECOVERY_MINUTES = 20;
+const DINING_BREAK_GAP = 30;
+const LONG_ATTRACTION_QUEUE = 45;
 const now = () => typeof performance !== 'undefined' ? performance.now() : Date.now();
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const ceil100 = value => Math.ceil(value / 100) * 100;
@@ -283,6 +286,32 @@ function row(kind, start, end, name, extra = {}) {
   return { kind, type: kind, start, end, duration: end - start, name, cost: 0, dpa: false, ...extra };
 }
 
+function recoveryEnds(rows) {
+  return rows.filter(item => item.kind === 'rest' ||
+    (item.kind === 'activity' && FOOD.has(item.category) && item.end - item.start >= DINING_RECOVERY_MINUTES)).map(item => item.end);
+}
+
+function autoRestDue(state, activity, context) {
+  const settings = context.settings;
+  if (!settings.restEvery || !settings.restMinutes || FOOD.has(activity.category)) return false;
+  // Eating already provides a pause. Even a short snack should not be followed
+  // immediately by another automatic stop.
+  const latestFood = state.rows.filter(item => item.kind === 'activity' && FOOD.has(item.category)).at(-1);
+  if (latestFood && state.time - latestFood.end < DINING_BREAK_GAP) return false;
+  // Leave room for a nearby requested meal, even if a short visit is next.
+  const mealSoon = context.selected.some(selection => !state.visited.has(selection.id) &&
+    FOOD.has(context.map.get(selection.id)?.category) && Number.isFinite(selection.earliest) &&
+    Math.abs(selection.earliest - state.time) < DINING_BREAK_GAP);
+  if (mealSoon) return false;
+  const fixedRest = settings.fixedBreaks[state.breakIndex];
+  if (fixedRest && fixedRest.start - state.time <= DINING_BREAK_GAP) return false;
+  const previous = state.rows.filter(item => item.kind === 'activity').at(-1);
+  const queue = previous && state.rows.filter(item => item.kind === 'queue' && item.activityId === previous.activityId).at(-1);
+  const elapsed = state.time - state.lastRest;
+  return elapsed >= settings.restEvery || (previous?.category === 'attraction' &&
+    queue && queue.end - queue.start >= LONG_ATTRACTION_QUEUE && elapsed >= Math.min(settings.restEvery, 60));
+}
+
 function prefixSourceRows(initialPlan,settings) {
   const cutoff=toMinutes(settings.replanFrom),priorRows=initialPlan?.rows||[];
   const startedVisitIds=new Set(priorRows.filter(item=>item.start<cutoff&&['queue','activity'].includes(item.kind)).map(item=>item.activityId));
@@ -348,7 +377,8 @@ function contextFor(park, settings, initialPlan) {
     cost: spent, foodCost: sourceRows.filter(item => FOOD.has(item.category)).reduce((sum, item) => sum + finite(item.cost), 0),
     dpaCost: Math.max(prefixDpa, paidDpa), shoppingCost: sourceRows.filter(item => item.category === 'shop').reduce((sum, item) => sum + finite(item.cost), 0),
     walk: prefix.filter(item => item.kind === 'walk').reduce((sum, item) => sum + finite(item.metres), 0),
-    lastRest: beginning, purchases: settings.purchases.map(copy),
+    lastRest: prefix.length ? Math.max(Math.min(settings.entry, ...prefix.map(item => item.start)), ...recoveryEnds(prefix)) : beginning,
+    purchases: settings.purchases.map(copy),
     required: completedSelections.filter(item => item.required).length,
   };
   for (const item of prefix.filter(item => item.fixedBreakId)) {
@@ -430,7 +460,16 @@ export function queueAllowance(activity, estimate, method, settings) {
   return {estimatedMinutes:estimate.minutes, bufferMinutes:buffer, delayMinutes:delay, totalMinutes:estimate.minutes + buffer + delay};
 }
 
-function scheduledOptions(state, baseActivity, selection, context) {
+function requiredVisitsStillReachable(state, context) {
+  // This optimistic look-ahead only decides whether an automatic rest should
+  // wait. Actual fixed rests and all reservation conditions are checked again
+  // by the normal search and the independent validator.
+  const after = {...state, breakIndex:context.settings.fixedBreaks.length};
+  return context.selected.filter(selection => selection.required && !state.visited.has(selection.id))
+    .every(selection => scheduledOptions(after, context.map.get(selection.id), selection, context, false).length > 0);
+}
+
+function scheduledOptions(state, baseActivity, selection, context, allowAutoRest = true) {
   if (!activityAvailable(baseActivity, context.settings.date)||currentRideStatus(baseActivity,context.settings,{now:context.settings.waitAsOf})?.isOpen===false) return [];
   const settings = context.settings, graph = context.graph;
   const methods = [];
@@ -449,6 +488,7 @@ function scheduledOptions(state, baseActivity, selection, context) {
     }
   }
   const options = [];
+  let triedRest = false;
   for (const method of methods) {
     const activity = { ...baseActivity, node: method.method === 'dpa' ? (selection.nodeOverride || baseActivity.node) : baseActivity.node };
   const metres = graph.distances[state.node]?.[activity.node] ?? Infinity;
@@ -456,9 +496,10 @@ function scheduledOptions(state, baseActivity, selection, context) {
   const rows = [];
   let departure = state.time, lastRest = state.lastRest;
   const autoBreakId=`${state.node}:${activity.id}`;
-  if (settings.restEvery && settings.restMinutes && departure - lastRest >= settings.restEvery&&!settings.excludedAutoBreaks.includes(autoBreakId)) {
+  if (allowAutoRest && autoRestDue(state, activity, context) && !settings.excludedAutoBreaks.includes(autoBreakId)) {
     rows.push(row('rest', departure, departure + settings.restMinutes, 'ひと休み', { node: state.node,autoBreakId }));
     departure += settings.restMinutes; lastRest = departure;
+    triedRest = true;
   }
   const walkMinutes=walkingMinutes(metres,departure,settings);
   const arrival = departure + walkMinutes;
@@ -522,7 +563,7 @@ function scheduledOptions(state, baseActivity, selection, context) {
         start: window[0], end: window[1], cost: method.price, owned: false,
       });
       const visited = new Set(state.visited); visited.add(activity.id);
-      options.push({
+      const child = {
         key, time: end, node: endNode, rows: state.rows.concat(extra), breakIndex: state.breakIndex,
         visits: state.visits.concat({ id: activity.id, activityId: activity.id, name: activity.name,
           node: activity.node, endNode, category: activity.category, start, end, queueStart, arrival,
@@ -530,12 +571,17 @@ function scheduledOptions(state, baseActivity, selection, context) {
         visited, score: state.score + selection.weight, cost: state.cost + activityCost,
         foodCost: state.foodCost + (FOOD.has(activity.category) ? selection.cost : 0),
         shoppingCost: state.shoppingCost + (activity.category === 'shop' ? selection.cost : 0),
-        dpaCost: state.dpaCost + method.price, walk: state.walk + metres, lastRest,
+        dpaCost: state.dpaCost + method.price, walk: state.walk + metres,
+        lastRest: FOOD.has(activity.category) && selection.duration >= DINING_RECOVERY_MINUTES ? end : lastRest,
         purchases, required: state.required + (selection.required ? 1 : 0),
-      });
+      };
+      if (allowAutoRest && rows.some(item => item.autoBreakId) && !requiredVisitsStillReachable(child, context)) continue;
+      options.push(child);
     }
   }
-  return options;
+  // Automatic recovery can wait when it would miss this visit's confirmed
+  // admission window. Manual rests remain hard reservations above.
+  return !options.length && triedRest ? scheduledOptions(state, baseActivity, selection, context, false) : options;
 }
 
 function tieValue(state, context) {

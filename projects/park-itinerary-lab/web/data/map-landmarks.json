@@ -1,0 +1,99 @@
+{
+  "licence": "ODbL-1.0",
+  "attribution": "© OpenStreetMap contributors",
+  "source": "https://api.openstreetmap.org/api/0.6/map",
+  "extractedOn": "2026-11-18",
+  "limitations": [
+    "Symbols identify landmarks. Their size and shape do not represent building footprints. Walking geometry is unchanged."
+  ],
+  "landmarks": [
+    {
+      "parkId": "land",
+      "name": "シンデレラ城",
+      "symbol": "castle",
+      "osmType": "way",
+      "osmId": 217727348,
+      "coordinates": [
+        139.8808485,
+        35.6320522
+      ],
+      "meaning": "illustrative-landmark-symbol"
+    },
+    {
+      "parkId": "land",
+      "name": "ビッグサンダー・マウンテン",
+      "symbol": "mountain",
+      "osmType": "node",
+      "osmId": 12058560113,
+      "coordinates": [
+        139.8834647,
+        35.6326199
+      ],
+      "meaning": "illustrative-landmark-symbol"
+    },
+    {
+      "parkId": "land",
+      "name": "美女と野獣の城",
+      "symbol": "castle-small",
+      "osmType": "node",
+      "osmId": 12883893925,
+      "coordinates": [
+        139.8782215,
+        35.6311924
+      ],
+      "meaning": "illustrative-landmark-symbol"
+    },
+    {
+      "parkId": "sea",
+      "name": "プロメテウス火山",
+      "symbol": "volcano",
+      "osmType": "node",
+      "osmId": 859682628,
+      "coordinates": [
+        139.8845468,
+        35.6256963
+      ],
+      "meaning": "illustrative-landmark-symbol"
+    },
+    {
+      "parkId": "sea",
+      "name": "タワー・オブ・テラー",
+      "symbol": "tower",
+      "osmType": "node",
+      "osmId": 12091087402,
+      "coordinates": [
+        139.8882684,
+        35.6240957
+      ],
+      "meaning": "illustrative-landmark-symbol"
+    },
+    {
+      "parkId": "sea",
+      "name": "S.S.コロンビア号",
+      "symbol": "ship",
+      "osmType": "node",
+      "osmId": 12098378561,
+      "coordinates": [
+        139.8864669,
+        35.6231504
+      ],
+      "meaning": "illustrative-landmark-symbol"
+    },
+    {
+      "parkId": "sea",
+      "name": "キング・トリトンズ・キャッスル",
+      "symbol": "palace",
+      "osmType": "node",
+      "osmId": 13727535319,
+      "coordinates": [
+        139.8829561,
+        35.6269873
+      ],
+      "meaning": "illustrative-landmark-symbol"
+    }
+  ],
+  "sources": {
+    "land": "https://api.openstreetmap.org/api/0.6/map?bbox=139.870,35.628,139.885,35.641",
+    "sea": "https://api.openstreetmap.org/api/0.6/map?bbox=139.878,35.621,139.895,35.634"
+  }
+}

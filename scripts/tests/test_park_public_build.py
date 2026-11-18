@@ -32,7 +32,7 @@ class ParkPublicBuildTests(unittest.TestCase):
             for name in builder.PARK_WEB_FILES:
                 self.assertEqual((public / name).read_bytes(), (project / 'web' / name).read_bytes())
             self.assertFalse((public / 'student-original.ipynb').exists())
-            self.assertEqual(archive.name, 'ParkItineraryLab_v1.0.0.zip')
+            self.assertEqual(archive.name, 'TDRoute_v1.0.0.zip')
             with ZipFile(archive) as bundle:
                 expected = {f'v1.0.0/web/{name}' for name in builder.PARK_WEB_FILES}
                 expected.update({'v1.0.0/README.md', 'v1.0.0/version.json'})
