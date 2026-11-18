@@ -9,6 +9,7 @@ on:
       - 'projects/park-itinerary-lab/scripts/collect_weather.py'
       - 'projects/park-itinerary-lab/scripts/archive_wait_history.py'
       - 'projects/park-itinerary-lab/scripts/seed_wait_model.py'
+      - 'projects/park-itinerary-lab/scripts/nightly_wait_training.py'
       - 'projects/park-itinerary-lab/scripts/bootstrap_wait_history.py'
       - 'projects/park-itinerary-lab/scripts/train_wait_model.py'
       - 'projects/park-itinerary-lab/web/wait-model.js'
@@ -60,40 +61,19 @@ jobs:
         if: always() && steps.prepare.outcome == 'success'
         continue-on-error: true
         run: python projects/park-itinerary-lab/scripts/collect_weather.py --output data-publish/weather-forecast.json
-      - name: Archive public observations and prepare private training input
-        if: steps.collect.outcome == 'success' && (github.event_name != 'schedule' || github.event.schedule == '55 12 * * *')
-        run: |
-          python projects/park-itinerary-lab/scripts/archive_wait_history.py --data-dir data-publish
-          python - <<'PY'
-          import json,os,pathlib,re,shutil
-          target=pathlib.Path(os.environ['RUNNER_TEMP'])/'park-training';target.mkdir(exist_ok=True)
-          data=pathlib.Path('data-publish')
-          records=[]
-          for source in sorted((data/'history').glob('????-??.json')):
-              if source.is_symlink() or not re.fullmatch(r"\d{4}-(?:0[1-9]|1[0-2])\.json",source.name):continue
-              records.extend(row for row in json.loads(source.read_text()) if row.get('source')=='queue-times')
-          (target/'queue-observations.json').write_text(json.dumps(records,ensure_ascii=False))
-          shutil.copyfile(data/'wait-model.json',target/'fallback-model.json')
-          for filename in ['catalogue.json','calendar.json']:
-              bundled=pathlib.Path('projects/park-itinerary-lab/web/data')/('parks.json' if filename=='catalogue.json' else filename)
-              if not (data/filename).exists():shutil.copyfile(bundled,data/filename)
-          PY
-      - name: Learn from permitted history without publishing private raw data
+      - name: Archive and train for the latest completed park day
+        if: always() && steps.seed.outcome == 'success'
         env:
           THEMEPARKS_API_KEY: ${{ secrets.THEMEPARKS_API_KEY }}
-        if: steps.collect.outcome == 'success' && (github.event_name != 'schedule' || github.event.schedule == '55 12 * * *')
         run: |
-          python projects/park-itinerary-lab/scripts/bootstrap_wait_history.py --catalogue data-publish/catalogue.json --calendar data-publish/calendar.json --existing-observations "$RUNNER_TEMP/park-training/queue-observations.json" --output-model data-publish/wait-model.json --fallback-model "$RUNNER_TEMP/park-training/fallback-model.json" --private-dir "$RUNNER_TEMP/park-training/private" --max-history-requests 1000
-      - name: Remove private training files
-        if: always()
-        run: python -c 'import os,pathlib,shutil; shutil.rmtree(pathlib.Path(os.environ["RUNNER_TEMP"])/"park-training",ignore_errors=True)'
+          python projects/park-itinerary-lab/scripts/nightly_wait_training.py --data-dir data-publish ${{ github.event_name != 'schedule' && '--force' || '' }}
       - name: Publish data without rebuilding the application
-        if: always() && steps.prepare.outcome == 'success' && steps.seed.outcome == 'success' && (steps.collect.outcome == 'success' || steps.weather.outcome == 'success')
+        if: always() && steps.prepare.outcome == 'success' && steps.seed.outcome == 'success'
         working-directory: data-publish
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for name in live-waits.json observations.json wait-model.json history-index.json weather-forecast.json; do
+          for name in live-waits.json observations.json wait-model.json history-index.json weather-forecast.json training-state.json; do
             if [ -f "$name" ]; then git add "$name"; fi
           done
           if [ -d history ]; then git add history; fi

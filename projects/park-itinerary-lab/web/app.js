@@ -1,12 +1,13 @@
-import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, fetchPublishedModel, prepareLiveForReplan, prepareWeatherForVisit } from './wait-data.js';
-import { restsBesideFood, settledReplanWishes } from './planner.js?v=1.10.0';
-import { enhanceTimeInputs, parkTimeBounds, clampClock } from './time-input.js?v=1.10.0';
+import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, fetchPublishedModel, prepareLiveForReplan, prepareWeatherForVisit } from './wait-data.js?v=1.11.0';
+import { restsBesideFood, settledReplanWishes } from './planner.js?v=1.11.0';
+import { enhanceTimeInputs, parkTimeBounds, clampClock } from './time-input.js?v=1.11.0';
+import { estimateParkCrowd } from './wait-model.js?v=1.11.0';
 import { weatherForMinute } from './weather.js';
-import { forecastCardHtml, forecastSourcesHtml } from './weather-view.js?v=1.10.0';
-import { activityAvailable, operationPauseInfo } from './operation-windows.js?v=1.10.0';
+import { forecastCardHtml, forecastSourcesHtml } from './weather-view.js?v=1.11.0';
+import { activityAvailable, operationPauseInfo } from './operation-windows.js?v=1.11.0';
 import { contingencySettings, compareContingency } from './contingency.js';
-import { renderParkMap } from './map-view.js?v=1.10.0';
-import { listSavedPlans, saveNamedPlan, loadSavedPlan, renameSavedPlan, deleteSavedPlan, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=1.10.0';
+import { renderParkMap } from './map-view.js?v=1.11.0';
+import { listSavedPlans, saveNamedPlan, loadSavedPlan, renameSavedPlan, deleteSavedPlan, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=1.11.0';
 
 const CATEGORY = {attraction:'アトラクション',show:'ショー',parade:'パレード',restaurant:'レストラン',cafe:'カフェ',snack:'スナック',popcorn:'ポップコーン',greeting:'グリーティング',shop:'お土産'};
 const FOOD = new Set(['restaurant','cafe','snack','popcorn']);
@@ -29,7 +30,27 @@ const menuNames = activity => Array.isArray(activity.menuItems)?activity.menuIte
 const safeLink = url => { try {const u = new URL(url);return ['https:','http:'].includes(u.protocol)?escapeHtml(u.href):'#';}catch{return '#';} };
 const $ = id => document.getElementById(id);
 const defaultDate = () => { const now = new Date();return new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(now); };
-export const defaultSettings = () => ({date:defaultDate(),entry:540,exit:1260,speed:70,budget:12000,foodBudget:5000,dpaBudget:5000,souvenirReserve:2000,souvenirMode:'reserve',budgetPreference:'balanced',crowdMode:'estimate',crowdLevel:'normal',weather:'sun',weatherMode:'auto',walkCrowdMode:'estimate',waitBufferMode:'auto',waitBufferMinutes:5,queueDelayMinutes:0,gondolaAvoidHarbourShows:true,weatherForecast:null,selections:[],avoidConsecutiveFood:true,restEvery:0,restMinutes:10,searchSeconds:15,searchMethod:'portfolio',fixedBreaks:[],excludedAutoBreaks:[],spentBudget:0,purchases:[],history:[]});
+export const defaultSettings = () => ({date:defaultDate(),entry:540,exit:1260,speed:70,budget:12000,foodBudget:5000,dpaBudget:5000,souvenirReserve:2000,souvenirMode:'reserve',budgetPreference:'balanced',crowdMode:'estimate',crowdLevel:'auto',weather:'sun',weatherMode:'auto',walkCrowdMode:'estimate',waitBufferMode:'auto',waitBufferMinutes:5,queueDelayMinutes:0,gondolaAvoidHarbourShows:true,weatherForecast:null,selections:[],avoidConsecutiveFood:true,restEvery:0,restMinutes:10,searchSeconds:15,searchMethod:'portfolio',fixedBreaks:[],excludedAutoBreaks:[],spentBudget:0,purchases:[],history:[]});
+
+const CROWD_LABELS = {quiet:'比較的すいている',normal:'ふつう',busy:'混み合う'};
+
+export function crowdExplanation(park, settings) {
+  if (settings.crowdLevel !== 'auto') {
+    const label = CROWD_LABELS[settings.crowdLevel] || CROWD_LABELS.normal;
+    return {summary:`${label}（手動）`, detail:`手動で「${label}」を指定しています。`};
+  }
+  const estimate = estimateParkCrowd(park, settings);
+  const label = CROWD_LABELS[estimate.level];
+  const coverage = `${estimate.days}日・${estimate.samples.toLocaleString('ja-JP')}件`;
+  if (estimate.source === 'model') {
+    return {
+      summary:`${label}（学習予測）`,
+      detail:`「${label}」の見込みです。${estimate.rides}施設の予測待ち時間は、同じ施設・時間帯の過去平均と比べて約${estimate.ratio.toFixed(2)}倍です（学習記録 ${coverage}）。`,
+    };
+  }
+  const available = estimate.days ? `${coverage}の記録では、この日の混雑を学習データから判定できません。` : 'この日の推定に使える学習モデルがありません。';
+  return {summary:`${label}（暦の目安）`, detail:`${available}曜日と祝日から「${label}」を目安にします。`};
+}
 
 /** The two planning steps share a location but retain independent panel state. */
 export function setWorkflowTab(root,name,{focus=false}={}) {
@@ -382,7 +403,9 @@ export function initialiseApp() {
   }
   function updateDayOverview(){
     const s=state.settings,speed=s.speed===50?'ゆっくり':s.speed===90?'早め':'普通';
-    $('dayOverview').textContent=`${money(s.budget)} · 歩く速さ ${speed} · ${s.restEvery&&s.restMinutes?'休憩は自動':'自動休憩なし'}`;
+    const crowd=crowdExplanation(currentPark(),s);
+    $('crowdLevelStatus').textContent=crowd.detail;
+    $('dayOverview').textContent=`${money(s.budget)} · 混雑 ${crowd.summary} · 歩く速さ ${speed} · ${s.restEvery&&s.restMinutes?'休憩は自動':'自動休憩なし'}`;
     $('livePlanStatus').textContent=s.liveNotice||'';$('livePlanStatus').hidden=!s.liveNotice;
   }
   function renderSavedPlans(){
@@ -461,7 +484,7 @@ export function initialiseApp() {
       const first=s.dpaAvailableWindows?.[0];
       if(s.dpaMode==='consider'&&first&&s.dpaStart==null&&s.dpaEnd==null)[s.dpaStart,s.dpaEnd]=first;
     }
-    return {parkId:value.parkId,settings:{...defaultSettings(),...value.settings,avoidConsecutiveFood:value.settings.avoidConsecutiveFood??false,waitBufferMode:value.settings.waitBufferMode??'fixed',waitBufferMinutes:value.settings.waitBufferMinutes??0,queueDelayMinutes:value.settings.queueDelayMinutes??0,selections},result:value.result||null,resultDirty:!!value.resultDirty,history:Array.isArray(value.history)?value.history:[],parkStates:{}};
+    return {parkId:value.parkId,settings:{...defaultSettings(),...value.settings,crowdLevel:value.settings.crowdLevel??'normal',avoidConsecutiveFood:value.settings.avoidConsecutiveFood??false,waitBufferMode:value.settings.waitBufferMode??'fixed',waitBufferMinutes:value.settings.waitBufferMinutes??0,queueDelayMinutes:value.settings.queueDelayMinutes??0,selections},result:value.result||null,resultDirty:!!value.resultDirty,history:Array.isArray(value.history)?value.history:[],parkStates:{}};
   }
   function updateContext() {
     clearPlanFeedback();
@@ -503,7 +526,7 @@ export function initialiseApp() {
   }
   function renderPurchaseHistory(){if(!catalogue)return;const purchases=state.settings.purchases||[];$('purchaseHistory').innerHTML=purchases.length?purchases.map((p,index)=>`<div class="purchase-item" id="purchase-record-${escapeHtml(p.id)}" tabindex="-1"><strong>${escapeHtml(byId(p.id)?.name||p.id)}</strong><p>購入 ${timeText(p.purchasedAt)} · 利用 ${timeText(p.start)}–${timeText(p.end)} · ${money(p.cost)}</p><button type="button" data-remove-purchase="${index}">履歴から外す</button></div>`).join(''):'<p class="field-note">購入履歴はまだありません。</p>';}
   function updateCrowd() {
-    $('weatherStatus').textContent=state.settings.weatherNotice||(state.settings.weatherMode==='manual'?'天気は手動の設定を使います。':'プランを考えると訪問日の予報を取得します。');updateDayOverview();
+    $('weatherStatus').textContent=state.settings.weatherNotice||(state.settings.weatherMode==='manual'?'天気は手動の設定を使います。':'プランを考えると訪問日の予報を取得します。');
     const s=state.settings,events=(currentPark().events||[]).filter(e=>e.startDate<=s.date&&e.endDate>=s.date);
     $('eventBadges').replaceChildren();
     for(const event of events){const span=document.createElement('span');span.textContent=event.name;$('eventBadges').append(span);}
@@ -824,7 +847,7 @@ export function initialiseApp() {
     const extra=Number($('contingencyDelay').value),profile=contingencySettings(state.result.settings||state.settings,extra);
     contingencyBase=state.result;const request=++contingencyRequest;
     const initialPlan=profile.replanFrom!=null?state.result:null;
-    contingencyWorker=new Worker(new URL('./planner-worker.js?v=1.10.0',import.meta.url),{type:'module'});
+    contingencyWorker=new Worker(new URL('./planner-worker.js?v=1.11.0',import.meta.url),{type:'module'});
     $('searchContingency').disabled=true;$('cancelContingency').hidden=false;
     $('contingencyStatus').textContent=`通常の待ち列がさらに${extra}分長い場合を探索しています。`;
     contingencyWorker.onmessage=event=>{
@@ -874,7 +897,7 @@ export function initialiseApp() {
     if(preparingRequest!==requestId)return;
     preparation=null;state.settings=prepared;if(state.result){state.resultDirty=true;renderResult();}writeSettings();externalPanel?.refresh();
     searchStarted=performance.now();
-    try{worker=new Worker(new URL('./planner-worker.js?v=1.10.0',import.meta.url),{type:'module'});}catch{stopSearch();showPlanError(new Error('探索を起動できませんでした。ページを再読み込みしてもう一度お試しください。'));return;}
+    try{worker=new Worker(new URL('./planner-worker.js?v=1.11.0',import.meta.url),{type:'module'});}catch{stopSearch();showPlanError(new Error('探索を起動できませんでした。ページを再読み込みしてもう一度お試しください。'));return;}
     setSolveDisabled(true);$('cancelSearch').hidden=false;$('searchProgress').hidden=false;$('progressBar').value=0;$('progressText').textContent='最初の計画を探しています…';
     const thisRequest=requestId;
     worker.onmessage=event=>{

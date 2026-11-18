@@ -1,5 +1,5 @@
 import { weatherAtMinute } from './calendar-features.js';
-import {trainWaitModel, validateWaitModel} from './wait-model.js';
+import {trainWaitModel, validateWaitModel} from './wait-model.js?v=1.11.0';
 import {validateCatalogue} from './storage.js';
 import {prepareWeatherForVisit,forecastSourceLabel,forecastCacheLabel} from './weather.js';
 export {fetchWeather,prepareWeatherForVisit} from './weather.js';

@@ -57,6 +57,32 @@ class HistoricalBootstrapTests(unittest.TestCase):
         opening['observedAtByKind']['queue.STANDBY'] = '2026-11-11T00:04:00Z'
         self.assertEqual(normalise(payload(opening=opening))[0]['time'], 544)
 
+    def test_only_changed_standby_values_receive_the_event_timestamp(self):
+        samples = [
+            {**event('2026-11-11T00:03:00Z', 20), 'changed': ['queue.STANDBY.waitTime']},
+            {**event('2026-11-11T00:07:00Z', 20), 'changed': ['queue.PAID_RETURN_TIME.state']},
+            {**event('2026-11-11T01:05:00Z', 20), 'changed': ['showtimes']},
+            {**event('2026-11-11T01:12:00Z', 35), 'changed': ['queue.STANDBY.waitTime', 'status']},
+        ]
+        rows = normalise(payload(samples))
+        self.assertEqual([(row['observedAt'], row['wait']) for row in rows],
+                         [('2026-11-11T00:03:00Z', 20), ('2026-11-11T01:12:00Z', 35)])
+
+    def test_reopening_with_a_carried_wait_does_not_make_a_new_measurement(self):
+        samples = [
+            {**event('2026-11-11T00:01:00Z', 10, 'DOWN'), 'changed': ['status', 'queue.STANDBY.waitTime']},
+            {**event('2026-11-11T00:13:00Z', 10), 'changed': ['status']},
+            {**event('2026-11-11T00:25:00Z', 15), 'changed': ['queue.STANDBY.waitTime']},
+        ]
+        self.assertEqual([(row['time'], row['wait']) for row in normalise(payload(samples))],
+                         [(565, 15)])
+
+    def test_legacy_event_without_changed_metadata_is_kept(self):
+        self.assertEqual(normalise(payload([event()]))[0]['observedAt'], '2026-11-11T00:03:00Z')
+        for changed in ([], None, 'queue.STANDBY.waitTime', ['queue.SINGLE_RIDER.waitTime']):
+            with self.subTest(changed=changed):
+                self.assertEqual(normalise(payload([{**event(), 'changed': changed}])), [])
+
     def test_closed_unknown_invalid_future_and_other_day_samples_are_excluded(self):
         events = [event(status='CLOSED', wait=0), event(wait=None), event(wait=True), event(wait=700), event('2026-11-11T14:00:00Z'), event('2026-11-10T00:01:00Z')]
         self.assertEqual(normalise(payload(events)), [])

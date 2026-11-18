@@ -1,8 +1,9 @@
-import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.10.0';
+import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.11.0';
 import { weatherAtMinute, calendarContext } from './calendar-features.js';
-import { predictModelWait } from './wait-model.js';
-import { liveWaitFor, currentRideStatus } from './wait-data.js';
+import { predictModelWait, estimateParkCrowd, calendarCrowdLevel } from './wait-model.js?v=1.11.0';
+import { liveWaitFor, currentRideStatus } from './wait-data.js?v=1.11.0';
 /* Browser itinerary search. Every returned plan is checked; the search does not claim global optimality. */
+const resolvedCrowd = Symbol('park crowd');
 const FOOD = new Set(['restaurant', 'cafe', 'snack', 'popcorn']);
 const FIXED = new Set(['show', 'parade']);
 const DINING_RECOVERY_MINUTES = 20;
@@ -78,9 +79,13 @@ export function graphDistances(park) {
 export function walkingFactor(start,settings={}) {
   if(settings.walkCrowdMode!=='estimate')return 1;
   const calendar=calendarContext(settings.date,settings.calendarData);
-  const level={quiet:1,normal:1.08,busy:1.2}[settings.crowdLevel]??1.08;
+  const auto = settings.crowdLevel === 'auto';
+  const assumption = auto ? settings[resolvedCrowd]?.level ?? calendarCrowdLevel(calendar) : settings.crowdLevel;
+  const level={quiet:1,normal:1.08,busy:1.2}[assumption]??1.08;
   const peak=(start>=480&&start<630)||(start>=1200&&start<1320)?1.08:1;
-  const holiday=calendar?.isHoliday?1.08:[0,6].includes(calendar?.weekday)?1.04:1;
+  // The learned index already includes day, events and weather. A calendar fallback includes the day only.
+  if (auto && settings[resolvedCrowd]?.source === 'model') return Math.round(level*peak*1000)/1000;
+  const holiday=auto?1:calendar?.isHoliday?1.08:[0,6].includes(calendar?.weekday)?1.04:1;
   const weather=weatherAtMinute(settings.date,start,settings).weather==='rain'?1.08:1;
   const event=(settings.activeEvents||[]).length?1.04:1;
   return Math.round(Math.min(1.8,level*peak*holiday*weather*event)*1000)/1000;
@@ -159,8 +164,12 @@ export function estimateWait(activity, start, settings, history = []) {
   const calendarFactor = calendar.isHoliday ? 1.25 : weekend ? 1.18 : calendar.beforeHoliday ? 1.08 : 1;
   const eventFactor = (settings.activeEvents || []).reduce((factor, event) => factor *
     Math.max(0.5, Math.min(1.8, finite(typeof event === 'object' ? event.multiplier : 1, 1))), 1);
-  return { minutes: Math.max(0, Math.round(finite(activity.baseWait) * level * calendarFactor *
-    weather * timeFactor * Math.min(1.6, eventFactor))), source: 'trend', samples: 0 };
+  // For unmodelled rides, the park's learned index replaces the day multipliers.
+  // Modelled rides, live observations and user history already returned above.
+  const crowd = settings[resolvedCrowd];
+  const dayFactor = crowd?.source === 'model' ? Math.max(0.7, Math.min(1.35, crowd.ratio))
+    : level * calendarFactor * weather * Math.min(1.6, eventFactor);
+  return { minutes: Math.max(0, Math.round(finite(activity.baseWait) * timeFactor * dayFactor)), source: 'trend', samples: 0 };
 }
 
 function normalise(park, settings) {
@@ -216,6 +225,7 @@ function normalise(park, settings) {
   if (result.fixedBreaks.some((item, index, all) => index && all[index - 1].start + all[index - 1].duration > item.start)) throw new RangeError('追加した休憩の時間が重なっています。');
   result.history = Array.isArray(settings.history) ? settings.history.slice(0, 100000) : [];
   result.activeEvents = (park.events || []).filter(event => event.startDate <= settings.date && settings.date <= event.endDate);
+  if (settings.crowdLevel === 'auto') result[resolvedCrowd] = estimateParkCrowd(park, settings);
   const activities = new Map(park.activities.map(activity => [activity.id, activity]));
   const input = settings.selections || [];
   if (!Array.isArray(input) || input.length > 200) throw new RangeError('希望する施設は200件以内にしてください。');
@@ -791,7 +801,7 @@ function resultFrom(state, context, diagnostics, quick = false) {
   const walk = rows.filter(item => item.kind === 'walk').reduce((sum, item) => sum + finite(item.metres), 0);
   const sumMinutes = kind => rows.filter(item => item.kind === kind).reduce((sum, item) => sum + item.end - item.start, 0);
   const waitSources = [...new Set(rows.filter(item => item.kind === 'activity').map(item => item.waitSource).filter(Boolean))];
-  diagnostics = { ...diagnostics, waitSources, waitSource: waitSources.length ? waitSources.join(',') : diagnostics.waitSource };
+  diagnostics = { ...diagnostics, ...(context.settings[resolvedCrowd] ? {crowdEstimate:context.settings[resolvedCrowd]} : {}), waitSources, waitSource: waitSources.length ? waitSources.join(',') : diagnostics.waitSource };
   const omissions = selections.filter(item => !visited.has(item.id)).map(selection => quick ? {
     id: selection.id, name: context.map.get(selection.id).name, weight: selection.weight, required: selection.required, reason: '探索中のため、まだ採用されていません。',
   } : omissionFor(selection, context, state));
@@ -987,6 +997,9 @@ export function solveItinerary(park, rawSettings, options = {}) {
     '重要度の合計を優先し、同点では待ち時間・移動・待機の合計を短くする案を比べます。予算上限を守り、徒歩距離だけで訪問順を決めません。最適性の証明は行いません。',
     '待ち時間は手動指定、当日の新しい外部データ、検証で改善した学習モデル、履歴、傾向モデルの順に使います。施設ごとの出典は予定表に表示します。',
     '通常の待ち時間に計画用の余裕を加えます。自動設定は採用された学習モデルの検証MAEを5分単位に切り上げ、最大30分を目安にします。MAEは遅れを防ぐ保証ではありません。公演・DPAの集合時間は変えません。',
+    ...(settings[resolvedCrowd] ? [settings[resolvedCrowd].source === 'model'
+      ? `パーク全体の混雑は、${settings[resolvedCrowd].rides}施設の予測待ち時間を同じ施設・時間帯の過去平均と比べた目安です。`
+      : 'パーク全体の混雑は、比較できる学習記録が足りないため曜日・祝日を目安にしています。'] : []),
     settings.walkCrowdMode==='estimate'?'移動時間は歩く速さに混雑の想定・時間帯・休日・天気・イベントの影響を加えた目安です。通路の距離は変えません。':'移動時間は設定した歩く速さと通路の距離から計算しています。',
     ...(settings.selections.some(item=>item.id==='sea-attraction-230')?[settings.gondolaAvoidHarbourShows?'ゴンドラは指定した休止枠と、日付を確認できたハーバーショーの上演中を避けます。前後の準備・再開時刻は当日の稼働状況で確認します。':'ゴンドラは指定した休止枠を避けます。ショー上演中を避ける目安は使用していません。']:[]),
     'DPAの購入案は入力した空き枠と購入履歴から計算しています。在庫は公式アプリで確認してください。',
@@ -1010,6 +1023,7 @@ export function validatePlan(park, settings, result, options = {}) {
   const selectionMap = new Map((settings.selections || []).map(item => [item.id, item]));
   const entry = toMinutes(settings.entry), exit = toMinutes(settings.exit), speed = Number(settings.speed ?? 65);
   const walkingSettings={...settings,activeEvents:(park.events||[]).filter(event=>event.startDate<=settings.date&&settings.date<=event.endDate)};
+  if (settings.crowdLevel === 'auto') walkingSettings[resolvedCrowd] = estimateParkCrowd(park, settings);
   const rows = result.rows || [];
   const cutoff=settings.replanFrom===undefined||settings.replanFrom===''?null:toMinutes(settings.replanFrom);
   const sourcePlan=replanSource(park,settings,options.initialPlan);

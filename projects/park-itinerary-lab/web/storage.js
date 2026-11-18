@@ -1,6 +1,6 @@
-import {validateWaitModel} from './wait-model.js';
+import {validateWaitModel} from './wait-model.js?v=1.11.0';
 import {weatherForMinute,formatWeatherDetails} from './weather.js';
-import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=1.10.0';
+import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=1.11.0';
 /** Portable schedules: the shared link contains preferences, never a browser's saved history. */
 const STORAGE_KEY = 'park-itinerary-lab:v1';
 const PLANS_KEY = 'park-itinerary-lab:plans:v1';
@@ -184,7 +184,7 @@ export function validateSavedState(state) {
       breakIds.add(rest.id);
     }
   }
-  for (const [key, options] of Object.entries({crowdMode:['estimate', 'manual'], crowdLevel:['quiet', 'normal', 'busy'], weather:['sun', 'cloud', 'rain'], budgetPreference:['balanced', 'food', 'dpa']})) if (settings[key] !== undefined && !options.includes(settings[key])) fail('混雑や予算の条件を選び直してください。');
+  for (const [key, options] of Object.entries({crowdMode:['estimate', 'manual'], crowdLevel:['auto', 'quiet', 'normal', 'busy'], weather:['sun', 'cloud', 'rain'], budgetPreference:['balanced', 'food', 'dpa']})) if (settings[key] !== undefined && !options.includes(settings[key])) fail('混雑や予算の条件を選び直してください。');
   if (!Array.isArray(settings.selections) || settings.selections.length > MAX_ACTIVITIES) fail('希望の一覧を確認してください。');
   const ids = new Set();
   for (const selection of settings.selections) {
