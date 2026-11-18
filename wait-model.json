@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-17T15:31:16.746Z",
+  "updatedAt": "2026-11-18T07:17:16.568Z",
   "parks": [
     {
       "schemaVersion": 2,
@@ -2563,9 +2563,10 @@
       "lastBootstrapAttempt": {
         "provider": "themeparks-wiki",
         "accessMode": "anonymous",
-        "attemptedAt": "2026-11-17T15:31:16.746Z",
+        "attemptedAt": "2026-11-18T07:17:16.568Z",
         "requestedDays": null,
         "observedDays": 6,
+        "lastObservedDate": "2026-11-17",
         "historyRequestsSelected": 12,
         "historyRequestsPending": 0,
         "coverage": {
@@ -2577,7 +2578,7 @@
         },
         "weatherProvenance": "past-weather-forecast",
         "failedDays": 0,
-        "privateCacheRetained": true
+        "privateCacheRetained": false
       }
     },
     {
@@ -5013,9 +5014,10 @@
       "lastBootstrapAttempt": {
         "provider": "themeparks-wiki",
         "accessMode": "anonymous",
-        "attemptedAt": "2026-11-17T15:31:16.746Z",
+        "attemptedAt": "2026-11-18T07:17:16.568Z",
         "requestedDays": null,
         "observedDays": 6,
+        "lastObservedDate": "2026-11-17",
         "historyRequestsSelected": 12,
         "historyRequestsPending": 0,
         "coverage": {
@@ -5027,7 +5029,7 @@
         },
         "weatherProvenance": "past-weather-forecast",
         "failedDays": 0,
-        "privateCacheRetained": true
+        "privateCacheRetained": false
       }
     }
   ]
