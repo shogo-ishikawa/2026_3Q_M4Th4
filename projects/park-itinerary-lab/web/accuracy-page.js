@@ -1,4 +1,4 @@
-import {scoreForecastAccuracy} from './forecast-accuracy.js?v=1.12.2';
+import {scoreForecastAccuracy} from './forecast-accuracy.js?v=1.13.0';
 
 const dataRoot = 'https://raw.githubusercontent.com/shogo-ishikawa/2026_3Q_M4Th4/park-wait-data/';
 const parks = {land: '東京ディズニーランド', sea: '東京ディズニーシー'};
@@ -220,6 +220,20 @@ function waitSection(metrics, provider) {
   return block;
 }
 
+function intradaySection(comparison) {
+  if (comparison?.source !== 'queue-times' || !(comparison.expected > 0) ||
+      !Number.isInteger(comparison.matched) || comparison.matched < 0 || comparison.matched > comparison.expected) return null;
+  const block = section('当日補正を加えた予測の精度');
+  const metrics = tag('dl', null, 'metrics');
+  metrics.append(term('当初の予測のMAE', minutes(comparison.originalMae)),
+    term('当日補正後のMAE', minutes(comparison.correctedMae)),
+    term('照合できた枠', comparison.matched + ' / ' + comparison.expected),
+    term('照合率', percentage(comparison.coverage)));
+  block.append(metrics, tag('p', '対象は、時間枠の中央まで75分以上105分未満の時点で当日補正を発行できた施設です。' +
+    '収集時のQueue-Timesの掲示値とその時間枠の事前予測から補正し、当初の予測と補正後の予測を同じ枠の掲示値の中央値で比べました。', 'note'));
+  return block;
+}
+
 const statusText = {
   future: '当日の掲示待ち時間が集まると確認できます。',
   'no-forecast': 'この日の事前予測は保存されていません。精度を算出するには、予測時点の記録が必要です。',
@@ -261,6 +275,8 @@ function showReport(report, {result, queueTimes = result, savedDaily, historyCom
   if (historyComparison && queueMatched) report.append(tag('p', '同じ枠を両方の情報源が記録することがあります。照合件数と誤差は情報源ごとに集計しています。', 'note'));
   if (result.provider === 'themeparks-wiki') report.append(waitSection(historyComparison, 'ThemeParks.wiki'));
   if (queueMatched) report.append(waitSection(queueTimes.overall, 'Queue-Times'));
+  const intraday = intradaySection(queueTimes.intradayComparison);
+  if (intraday) report.append(intraday);
   if (historyComparison && result.provider !== 'themeparks-wiki') report.append(waitSection(historyComparison, 'ThemeParks.wiki'));
   if (queueTimes.crowd?.forecastLevel || queueTimes.crowd?.observedLevel || historyComparison?.crowd?.observedLevel) {
     report.append(crowdSection(queueTimes.crowd, historyComparison, queueMatched));

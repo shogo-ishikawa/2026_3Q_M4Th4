@@ -1,4 +1,5 @@
 /** Dated interruptions are separate from a facility's full-day opening hours. */
+import {baseVisitId} from './repeat-visits.js';
 export const GONDOLA_ID='sea-attraction-230';
 // Official programme durations. No extra preparation/reopening buffer is inferred.
 const HARBOUR_SHOWS=new Map([
@@ -36,7 +37,7 @@ export function operationPauseInfo(park,activity,selection={},settings={}) {
   const items=[];
   for(const window of normalisePauseWindows(activity.dailySchedules?.[settings.date]?.pauseWindows||[]))items.push({window,kind:'dated-operation',label:'日付付きの休止時間',sourceUrl:activity.dailySchedules?.[settings.date]?.sourceUrl||activity.dailyScheduleSourceUrl||activity.sourceUrl});
   for(const window of normalisePauseWindows(selection.pauseWindows||[]))items.push({window,kind:'user-confirmed',label:'指定した休止時間'});
-  if(activity.id===GONDOLA_ID&&settings.gondolaAvoidHarbourShows!==false){
+  if(baseVisitId(activity.id)===GONDOLA_ID&&settings.gondolaAvoidHarbourShows!==false){
     for(const show of park?.activities||[]){
       const programme=HARBOUR_SHOWS.get(show.id);if(!programme||!activityAvailable(show,settings.date))continue;
       const chosen=(settings.selections||[]).find(item=>item.id===show.id);
@@ -48,7 +49,7 @@ export function operationPauseInfo(park,activity,selection={},settings={}) {
   }
   const hasInferredShowWindows=items.some(item=>item.kind==='show-avoidance');
   return {windows:mergeWindows(items.map(item=>item.window)),items,hasInferredShowWindows,
-    note:activity.id===GONDOLA_ID?'ショー上演中を避ける目安です。前後の準備・再開時刻は公式情報では確定できないため、当日の稼働状況を更新して確認します。':''};
+    note:baseVisitId(activity.id)===GONDOLA_ID?'ショー上演中を避ける目安です。前後の準備・再開時刻は公式情報では確定できないため、当日の稼働状況を更新して確認します。':''};
 }
 export function subtractPauseWindows(windows,pauses) {
   let result=windows.map(pair=>pair.slice());

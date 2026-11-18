@@ -354,3 +354,21 @@ body[data-park=sea] .hero h1{font-size:clamp(24px,2.35vw,36px);line-height:1.6}
   font-variant-numeric: tabular-nums;
 }
 .budget-input > span { font-size: 12px; }
+
+.day-progress { margin-bottom: 14px; }
+.day-progress > summary { cursor:pointer; color:var(--ink); font-weight:700; }
+.day-progress > summary span { margin-left:8px; font-weight:400; font-size:.8rem; color:var(--muted); }
+.progress-content { display:grid; gap:12px; padding-top:14px; }
+.progress-fields { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,180px),1fr)); gap:10px 14px; }
+.progress-content label:not(.check-field), .progress-content .time-field, .repeat-wish { display:grid; gap:4px; font-size:.85rem; font-weight:600; }
+.progress-content :is(select,input[type=number]), .repeat-wish select { min-width:0; max-width:100%; }
+.progress-actions,.visit-actions { display:flex; flex-wrap:wrap; gap:6px; }
+.progress-actions button,.visit-actions button,#progressList button { padding:6px 10px; min-height:36px; color:var(--accent-dark); border:1px solid var(--line); border-radius:8px; background:white; cursor:pointer; font:inherit; }
+.visit-actions { margin-top:6px; }
+.visit-actions button { font-size:.79rem; }
+.repeat-wish { grid-template-columns:auto auto; justify-content:start; align-items:center; gap:8px; margin-block:8px; }
+#progressList { margin:0; padding:0; list-style:none; display:flex; flex-wrap:wrap; gap:6px; }
+#progressList:empty,.progress-content .field-note:empty { display:none; }
+#progressReplan { justify-self:start; }
+.progress-content [hidden] { display:none; }
+@media print { .day-progress,.visit-actions { display:none !important; } }
