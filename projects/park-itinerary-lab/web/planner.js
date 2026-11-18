@@ -179,6 +179,10 @@ function normalise(park, settings) {
   result.gondolaAvoidHarbourShows=settings.gondolaAvoidHarbourShows!==false;
   result.restEvery = numberIn(settings.restEvery ?? 120, '休憩の間隔', 0, 600, true);
   result.restMinutes = numberIn(settings.restMinutes ?? 10, '休憩の長さ', 0, 120, true);
+  result.waitBufferMode = settings.waitBufferMode ?? 'fixed';
+  if (!['fixed', 'auto'].includes(result.waitBufferMode)) throw new RangeError('待ち時間の余裕の設定を確認してください。');
+  result.waitBufferMinutes = numberIn(settings.waitBufferMinutes ?? 0, '待ち時間の余裕', 0, 30, true);
+  result.queueDelayMinutes = numberIn(settings.queueDelayMinutes ?? 0, '追加の混雑の想定', 0, 60, true);
   result.walkCrowdMode=settings.walkCrowdMode??'off';
   if(!['estimate','off'].includes(result.walkCrowdMode))throw new RangeError('移動時間の計算方法を確認してください。');
   if(!Array.isArray(settings.excludedAutoBreaks||[])||(settings.excludedAutoBreaks||[]).length>60||(settings.excludedAutoBreaks||[]).some(key=>typeof key!=='string'||!key||key.length>220))throw new RangeError('外す自動休憩を確認してください。');
@@ -416,6 +420,16 @@ function dpaAvailable(activity, date) {
     (!activity.dpa.endDate || date <= activity.dpa.endDate);
 }
 
+/** A planning allowance, never a confidence interval or a change to the forecast. */
+export function queueAllowance(activity, estimate, method, settings) {
+  const eligible = method === 'normal' && !FIXED.has(activity.category) && activity.category !== 'shop' && estimate.minutes > 0;
+  let buffer = eligible ? Number(settings.waitBufferMinutes ?? 0) : 0;
+  const mae = settings.waitModel?.validation?.modelMae;
+  if (eligible && settings.waitBufferMode === 'auto' && estimate.source === 'ml' && Number.isFinite(mae) && mae >= 0) buffer = Math.min(30, Math.ceil(mae / 5) * 5);
+  const delay = eligible ? Number(settings.queueDelayMinutes ?? 0) : 0;
+  return {estimatedMinutes:estimate.minutes, bufferMinutes:buffer, delayMinutes:delay, totalMinutes:estimate.minutes + buffer + delay};
+}
+
 function scheduledOptions(state, baseActivity, selection, context) {
   if (!activityAvailable(baseActivity, context.settings.date)||currentRideStatus(baseActivity,context.settings,{now:context.settings.waitAsOf})?.isOpen===false) return [];
   const settings = context.settings, graph = context.graph;
@@ -473,7 +487,8 @@ function scheduledOptions(state, baseActivity, selection, context) {
       if (!context.waitCache.has(cacheKey)) context.waitCache.set(cacheKey, estimateWait(activity, queueStart, settings, context.historyById.get(activity.id) || []));
       const waitEstimate = context.waitCache.get(cacheKey);
       const waitSource = method.method === 'dpa' ? 'dpa' : waitEstimate.source;
-      let wait = method.method === 'dpa' ? Math.round(finite(activity.dpa.wait, 10)) : waitEstimate.minutes;
+      const allowance = queueAllowance(activity, method.method === 'dpa' ? {minutes:Math.round(finite(activity.dpa.wait, 10)), source:'dpa'} : waitEstimate, method.method, settings);
+      let wait = allowance.totalMinutes;
       let start = queueStart + wait;
       if (fixed) {
         start = proposed;
@@ -493,7 +508,8 @@ function scheduledOptions(state, baseActivity, selection, context) {
       if (options.some(option => option.key === key)) continue;
       const extra = rows.slice();
       if (queueStart > arrival) extra.push(row('wait', arrival, queueStart, fixed ? '開演前の時間' : '時間帯まで待機', { node: activity.node, activityId: activity.id }));
-      if (wait) extra.push(row('queue', queueStart, start, fixed ? '鑑賞場所へ・入場待ち' : '待ち時間', { node: activity.node, activityId: activity.id, dpa: method.method === 'dpa', waitSource }));
+      if (wait) extra.push(row('queue', queueStart, start, fixed ? '鑑賞場所へ・入場待ち' : '待ち時間', { node: activity.node, activityId: activity.id, dpa: method.method === 'dpa', waitSource,
+        estimatedMinutes:allowance.estimatedMinutes, bufferMinutes:allowance.bufferMinutes, delayMinutes:allowance.delayMinutes }));
       const activityCost = selection.cost + method.price;
       extra.push(row('activity', start, end, activity.name, {
         activityId: activity.id, node: activity.node, endNode, category: activity.category,
@@ -621,6 +637,8 @@ function resultFrom(state, context, diagnostics, quick = false) {
       dpaCost: state?.dpaCost ?? context.initial.dpaCost, shoppingCost: state?.shoppingCost ?? context.initial.shoppingCost,
       walkingMetres: walk, walkMinutes: sumMinutes('walk'), queueMinutes: sumMinutes('queue'),
       waitMinutes: sumMinutes('queue') + sumMinutes('wait'), restMinutes: sumMinutes('rest'),
+      bufferMinutes: rows.filter(item => item.kind === 'queue').reduce((sum, item) => sum + finite(item.bufferMinutes), 0),
+      delayMinutes: rows.filter(item => item.kind === 'queue').reduce((sum, item) => sum + finite(item.delayMinutes), 0),
       burdenMinutes: sumMinutes('walk') + sumMinutes('queue') + sumMinutes('wait'),
       score: weight, finish: rows.length ? rows[rows.length - 1].end : context.initial.time,
       visitCount: selections.filter(item => visited.has(item.id)).length,
@@ -778,6 +796,7 @@ export function solveItinerary(park, rawSettings, options = {}) {
   diagnostics.notes = [
     '重要度の合計を優先し、同点では待ち時間・移動・待機の合計を短くする案を比べます。予算上限を守り、徒歩距離だけで訪問順を決めません。最適性の証明は行いません。',
     '待ち時間は手動指定、当日の新しい外部データ、検証で改善した学習モデル、履歴、傾向モデルの順に使います。施設ごとの出典は予定表に表示します。',
+    '通常の待ち時間に計画用の余裕を加えます。自動設定は採用された学習モデルの検証MAEを5分単位に切り上げ、最大30分を目安にします。MAEは遅れを防ぐ保証ではありません。公演・DPAの集合時間は変えません。',
     settings.walkCrowdMode==='estimate'?'移動時間は歩く速さに混雑の想定・時間帯・休日・天気・イベントの影響を加えた目安です。通路の距離は変えません。':'移動時間は設定した歩く速さと通路の距離から計算しています。',
     ...(settings.selections.some(item=>item.id==='sea-attraction-230')?[settings.gondolaAvoidHarbourShows?'ゴンドラは指定した休止枠と、日付を確認できたハーバーショーの上演中を避けます。前後の準備・再開時刻は当日の稼働状況で確認します。':'ゴンドラは指定した休止枠を避けます。ショー上演中を避ける目安は使用していません。']:[]),
     'DPAの購入案は入力した空き枠と購入履歴から計算しています。在庫は公式アプリで確認してください。',
@@ -868,6 +887,13 @@ export function validatePlan(park, settings, result, options = {}) {
         if (fixed && !showTimes(activity, timeSelection, settings).includes(item.start)) errors.push('開演時刻と一致しません。');
         const queue = rows.find(candidate => candidate.kind === 'queue' && candidate.activityId === item.activityId);
         const admission = queue?.start ?? item.start;
+        // Fixed entertainment is forecast at its show time before its queue is placed backwards.
+        const estimateAt = fixed ? item.start : admission;
+        const estimate = item.dpa ? {minutes:Math.round(finite(activity.dpa.wait, 10)), source:'dpa'} : estimateWait(activity, estimateAt, walkingSettings, (settings.history || []).filter(record => (record.activityId || record.activity_id) === activity.id));
+        const allowance = queueAllowance(activity, estimate, item.dpa ? 'dpa' : 'normal', settings);
+        if (queue?.bufferMinutes !== undefined || queue?.delayMinutes !== undefined || allowance.bufferMinutes || allowance.delayMinutes) {
+          if (!queue || queue.end !== item.start || queue.end - queue.start !== allowance.totalMinutes || queue.estimatedMinutes !== allowance.estimatedMinutes || queue.bufferMinutes !== allowance.bufferMinutes || queue.delayMinutes !== allowance.delayMinutes) errors.push('待ち時間と計画用の余裕が設定と一致しません。');
+        }
         if (!activityWindows(activity, selection, settings, park).some(window => admission >= window[0] && item.end <= window[1])) errors.push('施設の営業時間の外です。');
         if (item.dpa) {
           if (!dpaAvailable(activity, settings.date)) errors.push('この日にはDPAを利用できません。');

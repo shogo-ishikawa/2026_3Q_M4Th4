@@ -1,32 +1,46 @@
 name: Update official park catalogue
 
 on:
-  push:
-    branches: [main]
+  pull_request:
     paths:
       - '.github/workflows/park-data-check.yml'
+      - 'projects/park-itinerary-lab/scripts/official_http.py'
       - 'projects/park-itinerary-lab/scripts/update_park_data.py'
       - 'projects/park-itinerary-lab/scripts/update_food_menus.py'
-      - 'projects/park-itinerary-lab/scripts/update_calendar.py'
-      - 'projects/park-itinerary-lab/web/data/parks.json'
   workflow_dispatch:
     inputs:
       visit_date:
         description: '照合する日付（YYYY-MM-DD、空欄は日本時間の当日）'
         required: false
         type: string
-  schedule:
-    - cron: '15 21 * * *' # 06:15 JST, before park opening
 
 permissions:
   contents: write
 
+env:
+  PARK_OFFICIAL_HTTP: curl
+
 concurrency:
-  group: park-data-publication
+  group: ${{ github.event_name == 'pull_request' && format('park-catalogue-check-{0}', github.event.pull_request.number) || 'park-data-publication' }}
   cancel-in-progress: false
 
 jobs:
+  check-updater:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Check retrieval limits and last-known facts
+        run: |
+          python -m unittest discover -s projects/park-itinerary-lab/tests-web -p test_official_http.py
+          python -m unittest discover -s projects/park-itinerary-lab/tests-web -p test_catalogue_failure.py
   update-catalogue:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
@@ -80,7 +94,7 @@ jobs:
           date=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat()
           # A failed list fetch may also affect venue pages: try once with a bounded shorter timeout.
           fetcher=menus.fetch_text if os.environ['FACTS_OUTCOME']=='success' else lambda url:menus.fetch_text(url,timeout=4)
-          result,report=menus.update_catalogue(json.loads(target.read_text()),date,workers=8,fetcher=fetcher)
+          result,report=menus.update_catalogue(json.loads(target.read_text()),date,workers=4,fetcher=fetcher)
           menus.atomic_json(target,result)
           print(f"Food menus: {report['updated']}/{report['checked']} verified, {len(report['errors'])} failed. Previous verified menu facts are retained on failure.")
           PY
@@ -134,7 +148,7 @@ jobs:
           lines=['## Official park data retrieval',f"Catalogue: {facts.get('status','unknown')}. Last-known facts retained: {facts.get('lastKnownCatalogueUsed',False)}.",f"Official source errors: {len(facts.get('sourceErrors',[]))}.",f"Menus verified: {food.get('updated',0)}/{food.get('checked',0)}; failed venue requests: {len(food.get('errors',[]))}.",f"Holiday retrieval: {os.environ['CALENDAR_OUTCOME']}.",f"Publishing cached facts and reports: {os.environ['PUBLISH_OUTCOME']}."]
           with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as target:target.write('\n\n'.join(lines)+'\n')
           failures=[key for key in ['FACTS_OUTCOME','MENUS_OUTCOME','CALENDAR_OUTCOME','PUBLISH_OUTCOME'] if os.environ[key]!='success']
-          if facts.get('status')=='failed' or failures:
+          if facts.get('status')=='failed' or food.get('status')=='failed' or failures:
               print('Retrieval failed. Last confirmed facts were published; this run does not claim a successful refresh.')
               raise SystemExit(1)
           PY

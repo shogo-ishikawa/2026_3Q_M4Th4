@@ -2,6 +2,7 @@ import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar
 import { enhanceTimeInputs, parkTimeBounds, linkedWishWindow, clampClock } from './time-input.js';
 import { weatherForMinute, formatWeatherDetails } from './weather.js';
 import { operationPauseInfo } from './operation-windows.js';
+import { contingencySettings, compareContingency } from './contingency.js';
 import { renderParkMap } from './map-view.js';
 import { listSavedPlans, saveNamedPlan, loadSavedPlan, renameSavedPlan, deleteSavedPlan, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js';
 
@@ -25,7 +26,7 @@ const menuNames = activity => Array.isArray(activity.menuItems)?activity.menuIte
 const safeLink = url => { try {const u = new URL(url);return ['https:','http:'].includes(u.protocol)?escapeHtml(u.href):'#';}catch{return '#';} };
 const $ = id => document.getElementById(id);
 const defaultDate = () => { const now = new Date();return new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(now); };
-export const defaultSettings = () => ({date:defaultDate(),entry:540,exit:1260,speed:70,budget:12000,foodBudget:5000,dpaBudget:5000,souvenirReserve:2000,souvenirMode:'reserve',budgetPreference:'balanced',crowdMode:'estimate',crowdLevel:'normal',weather:'sun',weatherMode:'auto',walkCrowdMode:'estimate',gondolaAvoidHarbourShows:true,weatherForecast:null,selections:[],restEvery:90,restMinutes:10,searchSeconds:15,searchMethod:'portfolio',fixedBreaks:[],excludedAutoBreaks:[],spentBudget:0,purchases:[],history:[]});
+export const defaultSettings = () => ({date:defaultDate(),entry:540,exit:1260,speed:70,budget:12000,foodBudget:5000,dpaBudget:5000,souvenirReserve:2000,souvenirMode:'reserve',budgetPreference:'balanced',crowdMode:'estimate',crowdLevel:'normal',weather:'sun',weatherMode:'auto',walkCrowdMode:'estimate',waitBufferMode:'auto',waitBufferMinutes:5,queueDelayMinutes:0,gondolaAvoidHarbourShows:true,weatherForecast:null,selections:[],restEvery:90,restMinutes:10,searchSeconds:15,searchMethod:'portfolio',fixedBreaks:[],excludedAutoBreaks:[],spentBudget:0,purchases:[],history:[]});
 
 /** The two planning steps share a location but retain independent panel state. */
 export function setWorkflowTab(root,name,{focus=false}={}) {
@@ -108,6 +109,7 @@ export function foodLinks(activity) {
 }
 
 export function initialiseApp() {
+  let contingencyWorker = null, contingencyResult = null, contingencyBase = null, contingencyRequest = 0;
   let catalogue, calendarData, externalPanel, preparation = null, worker = null, requestId = 0, searchStarted = 0, progressTimer = null, latestPreview = null, wishlistGenre = 'all', lastBreakSuggestionResult = null, workflowView = 'wishlist', openedPlanId = null;
   const modelCache=new Map();
   let state = {parkId:'land',settings:defaultSettings(),result:null,history:[],parkStates:{}};
@@ -151,6 +153,7 @@ export function initialiseApp() {
     openedPlanId=summary.id;renderSavedPlans();$('savedPlanStatus').textContent=`「${summary.name}」を${overwrite?'上書き':'新しく'}保存しました。`;setStatus('名前を付けた計画をこの端末に保存しました。');
   }
   function stopSearch(keepBest = false) {
+    clearContingency();
     requestId++;
     if(preparation){preparation.abort();preparation=null;}
     if(worker){worker.terminate();worker=null;}
@@ -167,6 +170,9 @@ export function initialiseApp() {
   function readSettings() {
     for(const selection of state.settings.selections)rememberOwnedPurchase(selection);
     const settings={...state.settings,date:$('visitDate').value,entry:minute($('entryTime').value),exit:minute($('exitTime').value),weather:$('weather').value,weatherMode:$('weatherMode').value,speed:numberInput('walkSpeed',20,150),restEvery:numberInput('restEvery',0,480),restMinutes:numberInput('restMinutes',0,60),searchSeconds:numberInput('searchSeconds',1,120),searchMethod:$('searchMethod').value,budget:numberInput('budget',0,1000000,100),foodBudget:numberInput('foodBudget',0,1000000,100),dpaBudget:numberInput('dpaBudget',0,1000000,100),souvenirReserve:numberInput('souvenirReserve',0,1000000,100),souvenirMode:$('souvenirMode').value,budgetPreference:$('budgetPreference').value,crowdMode:$('crowdMode').value,crowdLevel:$('crowdLevel').value,history:state.history || [],spentBudget:numberInput('spentBudget',0,1000000,100)};
+    settings.waitBufferMode = $('waitBuffer').value === 'auto' ? 'auto' : 'fixed';
+    settings.waitBufferMinutes = settings.waitBufferMode === 'auto' ? 5 : numberInput('waitBuffer',0,30);
+    settings.queueDelayMinutes = numberInput('queueDelay',0,60);
     if(!/^\d{4}-\d{2}-\d{2}$/.test(settings.date))throw Error('訪問日を指定してください。');
     if(settings.entry>=settings.exit)throw Error('退園予定は入園予定より後にしてください。');
     if(settings.souvenirReserve>settings.budget)throw Error('お土産に残す金額が予算を超えています。');
@@ -178,6 +184,11 @@ export function initialiseApp() {
   }
   function writeSettings() {
     const s=state.settings;const bounds=parkTimeBounds(currentPark(),s.date);s.entry=clampClock(s.entry,bounds);s.exit=clampClock(s.exit,bounds);
+    for (const [id, value] of [['waitBuffer',s.waitBufferMode === 'auto' ? 'auto' : String(s.waitBufferMinutes ?? 0)],['queueDelay',String(s.queueDelayMinutes ?? 0)]]) {
+      const control=$(id);control.querySelector('[data-custom-margin]')?.remove();
+      if (![...control.options].some(option => option.value === value)) {const option=document.createElement('option');option.value=value;option.textContent=`${value}分`;option.dataset.customMargin='true';control.append(option);}
+      control.value=value;
+    }
     $('walkSpeed').querySelector('[data-custom-speed]')?.remove();if(![50,70,90].includes(Number(s.speed))){const option=document.createElement('option');option.value=s.speed;option.textContent=`指定した速さ（${s.speed} m/分）`;option.dataset.customSpeed='true';$('walkSpeed').append(option);}
     $('searchSeconds').querySelector('[data-custom-duration]')?.remove();if(![5,15,30,60,120].includes(Number(s.searchSeconds))){const option=document.createElement('option');option.value=s.searchSeconds;option.textContent=`指定した上限（${s.searchSeconds}秒）`;option.dataset.customDuration='true';$('searchSeconds').append(option);}
     for(const [id,key] of Object.entries({visitDate:'date',weather:'weather',weatherMode:'weatherMode',walkSpeed:'speed',restEvery:'restEvery',restMinutes:'restMinutes',searchSeconds:'searchSeconds',searchMethod:'searchMethod',budget:'budget',foodBudget:'foodBudget',dpaBudget:'dpaBudget',souvenirReserve:'souvenirReserve',souvenirMode:'souvenirMode',budgetPreference:'budgetPreference',crowdMode:'crowdMode',crowdLevel:'crowdLevel',spentBudget:'spentBudget'}))$(id).value=String(s[key] ?? defaultSettings()[key]);
@@ -188,7 +199,7 @@ export function initialiseApp() {
     if(!value || typeof value!=='object'||!catalogue.parks.some(p=>p.id===value.parkId)||!value.settings || !Array.isArray(value.settings.selections))throw Error('この計画データの形式を確認してください。');
     const park=catalogue.parks.find(p=>p.id===value.parkId),ids=new Set(park.activities.map(a=>a.id));
     const selections=value.settings.selections.filter(s=>s&&typeof s==='object'&&ids.has(s.id));
-    return {parkId:value.parkId,settings:{...defaultSettings(),...value.settings,selections},result:value.result||null,resultDirty:!!value.resultDirty,history:Array.isArray(value.history)?value.history:[],parkStates:{}};
+    return {parkId:value.parkId,settings:{...defaultSettings(),...value.settings,waitBufferMode:value.settings.waitBufferMode??'fixed',waitBufferMinutes:value.settings.waitBufferMinutes??0,queueDelayMinutes:value.settings.queueDelayMinutes??0,selections},result:value.result||null,resultDirty:!!value.resultDirty,history:Array.isArray(value.history)?value.history:[],parkStates:{}};
   }
   function updateContext() {
     const park=currentPark(),s=state.settings;if(calendarData&&!s.calendarData)s.calendarData=calendarData;if(s.waitModel?.parkId===park.id)modelCache.set(park.id,s.waitModel);else if(modelCache.has(park.id))s.waitModel=modelCache.get(park.id);
@@ -290,6 +301,7 @@ export function initialiseApp() {
   }
   function renderMap(){ if(catalogue)renderParkMap($('parkMap'),currentPark(),{plan:state.result,selectedIds:state.settings.selections.map(s=>s.id),onSelect:addSelection}); }
   function renderResult() {
+    if (state.resultDirty || (contingencyBase && contingencyBase !== state.result)) clearContingency();
     const result=state.result;$('results').hidden=!result;$('scheduleEmpty').hidden=!!result;if(!result)return;renderFixedBreaks();
     const t=result.totals||{},c=result.coverage||{};
     $('resultState').textContent=state.resultDirty?'前の条件で作った計画':result.status==='feasible'?'見つかった計画':result.status==='no-plan'?'条件を見直そう':'入力を確認';
@@ -301,12 +313,15 @@ export function initialiseApp() {
       const kind=row.kind||row.type||'activity',a=byId(row.activityId),duration=Number(row.end)-Number(row.start);
       const name=row.name || ({walk:'徒歩で移動',wait:'時間を調整',queue:'待ち列',rest:'ひと休み',exit:'退園へ'}[kind]) || a?.name || '予定';
       const details=[];if(row.fixedBreakId)details.push('指定した休憩');if(row.waitSource)details.push(WAIT_LABELS[row.waitSource]||row.waitSource);if(row.metres)details.push(`${Math.round(row.metres)} m`);if(duration>=0)details.push(`${duration}分`);if(Number(row.cost)>0)details.push(money(row.cost));if(a?.area)details.push(a.area);
+      if (kind === 'queue' && (row.bufferMinutes || row.delayMinutes)) details.push(`見込み${row.estimatedMinutes}分＋余裕${row.bufferMinutes || 0}分${row.delayMinutes ? `＋混雑想定${row.delayMinutes}分` : ''}`);
       const forecast=['activity','rest'].includes(kind)?weatherForMinute(planSettings,Number(row.start)):null;
       return `<article class="timeline-row kind-${escapeHtml(kind)}"><div class="timeline-time">${timeText(row.start)}<small>– ${timeText(row.end)}</small></div><div class="timeline-body"><h4>${escapeHtml(name)}${row.dpa?'<span class="dpa-pill">DPA</span>':''}</h4><p>${escapeHtml(details.join(' · '))}</p>${forecast?`<p class="timeline-weather">${escapeHtml(formatWeatherDetails(forecast))}${forecast.sourceUrl?` <a href="${safeLink(forecast.sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(forecast.provider||'予報の出典')} ↗</a>`:''}</p>`:''}${kind==='rest'&&!row.preserved&&(row.fixedBreakId||row.autoBreakId)?`<button class="remove-timeline-rest" data-remove-rest-index="${index}" type="button" aria-label="${timeText(row.start)}の休憩を外して再探索">この休憩を外す</button>`:''}${row.walkingFactor>1?'<p class="walking-note">混雑・時間帯・天気を加えた移動時間の目安</p>':''}${a?`<a class="row-link" href="${safeLink(a.sourceUrl)}" target="_blank" rel="noopener noreferrer">公式 ↗</a>`:''}</div></article>`;
     }).join('');
     const omissions=result.omissions||[];$('omissionTitle').textContent=`入らなかった希望 · ${omissions.length}件`;
     $('omissionList').innerHTML=omissions.length?omissions.map(o=>`<div class="omission-item"><span>↗</span><div><strong>${escapeHtml(o.name || byId(o.id)?.name || o.id)}${o.required?' · 必須':''}</strong><p>${escapeHtml(o.reason||'時間・予算・利用枠の条件に合わせて他の希望を優先しました。')}</p></div></div>`).join(''):'<p class="field-note">希望をすべて予定に取り入れられました。</p>';
     const d=result.diagnostics||{};
+    $('delayPlanNotice').textContent=`待ち時間に含めた余裕は合計${t.bufferMinutes || 0}分${t.delayMinutes ? `、追加の混雑想定は合計${t.delayMinutes}分` : ''}です。各待ち列の内訳はしおりで確認できます。`;
+    $('searchContingency').disabled=state.resultDirty||result.status!=='feasible'||!!worker||!!preparation;
     const notes=Array.isArray(d.notes)?d.notes:[String(d.notes||'')];
     $('diagnosticList').innerHTML=`<p>${escapeHtml(SEARCH_LABELS[planSettings.searchMethod||'beam'])} · 探索時間 ${(Number(d.elapsedMs||0)/1000).toFixed(2)}秒 · 調べた状態 ${Number(d.expanded||0).toLocaleString('ja-JP')}件。${d.timedOut?'設定した探索時間で打ち切りました。':'設定した範囲の探索を終えました。'}厳密な最適性の証明は行っていません。</p><p>待ち時間：${escapeHtml((d.waitSources?.length?d.waitSources:[d.waitSource||'trend']).map(key=>WAIT_LABELS[key]||key).join('・'))}。移動 ${t.walkMinutes||0}分 · 待ち時間 ${t.waitMinutes||0}分 · 休憩 ${t.restMinutes||0}分。</p><ul>${notes.filter(Boolean).map(n=>`<li>${escapeHtml(typeof n==='object'?JSON.stringify(n):n)}</li>`).join('')}</ul><p>DPAの候補は購入できる枠を入力したものです。購入前に公式アプリの販売状況を確認し、取得後は希望を「取得済み」に更新してください。</p>`;
     for(const id of ['exportCsv','exportIcs','exportHtml','printPlan'])$(id).disabled=result.status!=='feasible';
@@ -342,6 +357,47 @@ export function initialiseApp() {
     const invalid=$('wishlist').querySelector(':invalid');if(invalid){showWorkflow('wishlist');invalid.closest('details')?.setAttribute('open','');invalid.reportValidity();throw Error('希望の入力欄を確認してください。');}
     if(!state.settings.selections.length)throw Error('行きたい場所を一つ以上選んでください。');
     for(const s of state.settings.selections){const a=byId(s.id);if(!a)throw Error('施設情報を読み直してください。');if(ENTERTAINMENT.has(a.category)&&(!s.confirmSchedule||!s.showTimes?.length))throw Error(`${a.name}の訪問日の公演時刻を確認して入力してください。`);if(s.dpaMode==='owned'&&(!Number.isInteger(s.dpaStart)||!Number.isInteger(s.dpaEnd)||!Number.isInteger(s.dpaPurchasedAt)))throw Error(`${a.name}の取得済みDPAの開始・終了・購入時刻を入力してください。`);if(a.category==='parade'&&['owned','consider'].includes(s.dpaMode)&&!s.nodeOverride)throw Error(`${a.name}のDPAの集合・鑑賞場所を指定してください。`);if(s.dpaMode==='consider'&&!s.dpaAvailableWindows?.length)throw Error(`${a.name}の購入可能なDPA枠を入力してください。`);if((s.dpaMode==='owned'||s.dpaMode==='consider')&&s.dpaStart>=s.dpaEnd)throw Error(`${a.name}のDPA終了は開始より後にしてください。`);if(s.earliest!=null&&s.latest!=null&&s.earliest>=s.latest)throw Error(`${a.name}の時間帯を確認してください。`);}
+  }
+  function clearContingency() {
+    contingencyRequest++;
+    contingencyWorker?.terminate();contingencyWorker=null;
+    contingencyResult=null;contingencyBase=null;
+    $('contingencyStatus').textContent='';$('contingencyComparison').innerHTML='';
+    $('adoptContingency').hidden=true;$('cancelContingency').hidden=true;
+    $('searchContingency').disabled=!!state.resultDirty||state.result?.status!=='feasible';
+  }
+  function startContingency() {
+    if (worker||preparation||state.resultDirty||state.result?.status!=='feasible') throw Error('現在の条件で計画を作成してから代替案を比べてください。');
+    clearContingency();
+    const extra=Number($('contingencyDelay').value),profile=contingencySettings(state.result.settings||state.settings,extra);
+    contingencyBase=state.result;const request=++contingencyRequest;
+    const initialPlan=profile.replanFrom!=null?state.result:null;
+    contingencyWorker=new Worker(new URL('./planner-worker.js',import.meta.url),{type:'module'});
+    $('searchContingency').disabled=true;$('cancelContingency').hidden=false;
+    $('contingencyStatus').textContent=`通常の待ち列がさらに${extra}分長い場合を探索しています。`;
+    contingencyWorker.onmessage=event=>{
+      if(request!==contingencyRequest||contingencyBase!==state.result)return;
+      const message=event.data;
+      if(message.type==='error'){clearContingency();$('contingencyStatus').textContent=message.message||'代替案を計算できませんでした。';return;}
+      if(message.type!=='result')return;
+      contingencyResult=message.result;contingencyWorker.terminate();contingencyWorker=null;
+      $('searchContingency').disabled=false;$('cancelContingency').hidden=true;
+      const comparison=compareContingency(contingencyBase,contingencyResult);
+      if(!comparison.feasible){$('contingencyStatus').textContent='必須の希望・取得済み枠・固定休憩をすべて守る代替案は見つかりませんでした。追加の混雑想定を減らすか希望条件を見直してください。';return;}
+      $('contingencyStatus').textContent=`待ち列ごとにさらに${extra}分の混雑を想定した代替案です。採用するまで現在のしおりは変わりません。`;
+      const summary=plan=>`<td>${plan.coverage?.count??plan.visits.length}件</td><td>${plan.coverage?.percent??0}%</td><td>${money(plan.totals.cost)}</td><td>${timeText(plan.totals.finish)}</td>`;
+      $('contingencyComparison').innerHTML=`<div class="table-wrap"><table><thead><tr><th>計画</th><th>希望</th><th>重要度の達成率</th><th>費用</th><th>退園</th></tr></thead><tbody><tr><th>現在の案</th>${summary(contingencyBase)}</tr><tr><th>混雑を見込む案</th>${summary(contingencyResult)}</tr></tbody></table></div><p>外れた希望：${escapeHtml(comparison.removed.join('、')||'なし')}<br>新たに入る希望：${escapeHtml(comparison.added.join('、')||'なし')}</p><p class="field-note">必須の希望・取得済みDPA・固定休憩・予算・退園時刻を守って確認した案です。公演とDPAの集合時刻は動かしません。当日の組み替えでは開始済み・完了済みの予定も保持します。</p>`;
+      $('adoptContingency').hidden=false;
+    };
+    contingencyWorker.onerror=()=>{if(request!==contingencyRequest)return;clearContingency();$('contingencyStatus').textContent='代替案の探索でエラーが発生しました。もう一度お試しください。';};
+    contingencyWorker.postMessage({type:'solve',requestId:request,park:currentPark(),settings:profile,history:state.history,initialPlan});
+  }
+  function adoptContingency() {
+    if (!contingencyResult||contingencyResult.status!=='feasible'||contingencyBase!==state.result||state.resultDirty) throw Error('代替案を探索し直してください。');
+    const chosen=contingencyResult;
+    state.settings={...state.settings,...chosen.settings,history:state.history};state.result=chosen;state.resultDirty=false;
+    clearContingency();writeSettings();renderResult();renderMap();
+    setStatus('混雑を見込む代替案を採用しました。必要に応じて名前を付けて保存できます。');
   }
   async function startSearch() {
     if(preparation)return;
@@ -430,6 +486,9 @@ export function initialiseApp() {
     document.querySelector('.settings-panel').addEventListener('input',()=>markResultStale());
     document.querySelector('.settings-panel').addEventListener('change',safely(()=>{readSettings();markResultStale();}));
     $('solveButton').addEventListener('click',safely(startSearch));$('cancelSearch').addEventListener('click',()=>{stopSearch(true);setStatus(latestPreview?'探索を止めて、そこまでで見つかった計画を表示しました。':'探索を止めました。前に作った計画がある場合はそのまま残っています。');});
+    $('searchContingency').addEventListener('click',safely(startContingency));
+    $('adoptContingency').addEventListener('click',safely(adoptContingency));
+    $('cancelContingency').addEventListener('click',()=>{clearContingency();$('contingencyStatus').textContent='代替案の探索を止めました。現在のしおりを引き続き使えます。';});
     $('savePlan').addEventListener('click',safely(()=>{readSettings();showSavedPlans(true);}));
     $('loadPlan').addEventListener('click',safely(()=>showSavedPlans(false)));
     $('sharePlan').addEventListener('click',safely(async()=>{readSettings();$('shareUrl').value=await createShareUrl(state,location.href);$('sharePanel').hidden=false;setStatus('リンクをコピーしてスマホへ送れます。予定表はJSONやスマホ用しおりでも持ち出せます。');}));

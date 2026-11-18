@@ -29,7 +29,7 @@ function shortestPath(from,to) {
 }
 
 test('シーの施設と名前付き地点を残し内部の徒歩交差点を区別する',()=>{
-  assert.equal(catalogue.version,'1.2.0');
+  assert.equal(catalogue.version,'1.3.0');
   assert.equal(sea.activities.length,109);
   assert.ok(sea.nodes.length<1000);
   assert.equal(sea.nodes.filter(node=>!node.routingOnly).length,138);

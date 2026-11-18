@@ -2,6 +2,7 @@
 """Build a small walking graph and an offline map from a bounded OSM extract.
 
 Usage: python scripts/build_sea_geography.py /path/to/overpass.json
+       python scripts/build_sea_geography.py /path/to/osm-map.xml --park land
 The input is OpenStreetMap data (ODbL), not an official park map. No network
 request is made by this script. See web/data/sea-geography-LICENCE.md.
 """
@@ -32,8 +33,34 @@ def normalise(value):
     return re.sub(r"[^\wぁ-んァ-ン一-龥]", "", unicodedata.normalize("NFKC", value)).lower()
 
 
-def build(raw_path, water_map=None):
-    raw = json.loads(raw_path.read_text())
+def read_extract(path):
+    if path.suffix.lower() != '.xml':
+        return json.loads(path.read_text())
+    root = ET.parse(path).getroot()
+    elements = []
+    for item in root:
+        if item.tag not in {'node', 'way', 'relation'}:
+            continue
+        record = {'type':item.tag, 'id':int(item.attrib['id']),
+                  'tags':{tag.attrib['k']:tag.attrib['v'] for tag in item.findall('tag')}}
+        if item.tag == 'node':
+            record.update(lon=float(item.attrib['lon']), lat=float(item.attrib['lat']))
+        elif item.tag == 'way':
+            record['nodes'] = [int(node.attrib['ref']) for node in item.findall('nd')]
+        else:
+            record['members'] = [{'type':m.attrib['type'], 'ref':int(m.attrib['ref']), 'role':m.attrib['role']} for m in item.findall('member')]
+        elements.append(record)
+    meta = root.find('meta')
+    return {'elements':elements, 'osm3s':{'timestamp_osm_base':meta.attrib.get('osm_base') if meta is not None else None}}
+
+
+def build(raw_path, water_map=None, park_id='sea'):
+    if park_id not in {'land', 'sea'}:
+        raise ValueError('Unknown park')
+    graph_version = 'land-osm-2026-11-18' if park_id == 'land' else GRAPH_VERSION
+    extracted_on = '2026-11-18' if park_id == 'land' else '2026-11-17'
+    boundary_id = 1282875870 if park_id == 'land' else 203538370
+    raw = read_extract(raw_path)
     elements = {}
     for item in raw["elements"]:
         key = (item["type"], item["id"])
@@ -71,7 +98,7 @@ def build(raw_path, water_map=None):
                     elements[("node", identifier)] = xml_items[("node", identifier)]
     points = {i: (e["lon"], e["lat"]) for (kind, i), e in elements.items() if kind == "node"}
     ways = {i: e for (kind, i), e in elements.items() if kind == "way"}
-    boundary = [points[i] for i in ways[203538370]["nodes"]]
+    boundary = [points[i] for i in ways[boundary_id]["nodes"]]
 
     def inside(point):
         x, y = point
@@ -142,7 +169,7 @@ def build(raw_path, water_map=None):
 
     catalogue_path = ROOT / "web/data/parks.json"
     catalogue = json.loads(catalogue_path.read_text())
-    park = next(p for p in catalogue["parks"] if p["id"] == "sea")
+    park = next(p for p in catalogue["parks"] if p["id"] == park_id)
     # Semantic IDs are stable for saved plans. Rebuilding does not retain the
     # previous build's internal graph nodes.
     old_nodes = [n for n in park["nodes"] if not n.get("routingOnly")]
@@ -219,6 +246,38 @@ def build(raw_path, water_map=None):
         "マーメイドラグーン": "mermaid", "ミステリアスアイランド": "mysterious",
         "パークエントランス": "plaza", "パークワイド": "harbor-s",
     }
+    if park_id == 'land':
+        # Named OSM landmarks locate stable destinations on the public path
+        # network. They are vicinity references, not surveyed facility gates.
+        references = {
+            'entry': ('way', 230091242), 'world-south': ('node', 12022612272),
+            'world': ('node', 3692911382), 'hub-s': ('node', 12075259717),
+            'hub-w': ('node', 10132719358), 'hub-nw': ('way', 217727348),
+            'hub-e': ('way', 217930860), 'adventure-s': ('node', 12146076250),
+            'adventure': ('way', 71898114), 'west': ('node', 12377676763),
+            'thunder': ('node', 12058560113), 'woodchuck': ('node', 12075259730),
+            'critter': ('way', 97767482), 'haunted': ('way', 72865097),
+            'fantasy': ('node', 12385810200), 'small-world': ('way', 217870337),
+            'pooh': ('way', 217842052), 'beauty': ('way', 754497701),
+            'toon': ('node', 12030803670), 'toon-s': ('node', 12030803670),
+            'tomorrow': ('node', 12074896868), 'star': ('way', 217930682),
+            'monster': ('way', 217930681),
+        }
+        explicit = {
+            **{key: ('way', 72865097) for key in ['land-parade-7003', 'land-parade-7000', 'land-parade-913']},
+            'land-show-951': ('node', 12075259717),
+            'land-show-985': ('way', 71898114),
+            'land-show-7204': ('way', 217930860),
+            'land-attraction-161': ('way', 217930682),
+            'land-attraction-163': ('way', 217930681),
+        }
+        area_fallback = {
+            'ワールドバザール': 'world', 'アドベンチャーランド': 'adventure',
+            'ウエスタンランド': 'west', 'クリッターカントリー': 'critter',
+            'ファンタジーランド': 'fantasy', 'トゥーンタウン': 'toon',
+            'トゥモローランド': 'tomorrow', 'パークエントランス': 'entry',
+            'パークワイド': 'hub-s',
+        }
     anchors, node_records = {}, []
     anchor_report = []
     for old in old_nodes:
@@ -326,14 +385,15 @@ def build(raw_path, water_map=None):
                       "geometry": [xy, xy], "distanceSource": "one-metre-location-rounding-margin"})
     if len(node_records) > 1000:
         raise ValueError(f"Graph has {len(node_records)} nodes; update the graph cap deliberately.")
-    park.update({"nodes": node_records, "edges": edges, "routeGraphVersion": GRAPH_VERSION,
+    park.update({"nodes": node_records, "edges": edges, "routeGraphVersion": graph_version,
                  "coordinateSystem": "local-equirectangular-metres-projected-1000",
                  "distanceSource": "OpenStreetMapの公開徒歩通路に沿う距離。施設は通路上の近傍点。待ち列・建物内の移動は含まない。",
-                 "geographicMap": {"asset": "assets/sea-geographic-map.svg", "dataUrl": "data/sea-geography.json",
+                 "geographicMap": {"asset": f"assets/{park_id}-geographic-map.svg", "dataUrl": f"data/{park_id}-geography.json",
                                    "attribution": "© OpenStreetMap contributors", "attributionUrl": "https://www.openstreetmap.org/copyright",
                                    "licence": "ODbL-1.0", "licenceUrl": "https://opendatacommons.org/licenses/odbl/1-0/",
-                                   "asOf": "2026-11-17", "entryAccuracy": "プラザ付近の通路を入退園の基準点とする"}})
-    catalogue["version"] = "1.2.0"
+                                   "asOf": extracted_on, "entryAccuracy": "メインエントランス付近の通路を入退園の基準点とする" if park_id == 'land' else "プラザ付近の通路を入退園の基準点とする"}})
+    if park_id == 'land':
+        catalogue['version'] = '1.3.0'
     catalogue_path.write_text(json.dumps(catalogue, ensure_ascii=False, indent=2)+"\n")
 
     map_ways, water, buildings = [], [], []
@@ -371,6 +431,11 @@ def build(raw_path, water_map=None):
         return result
 
     for relation in sorted((r for r in elements.values() if r["type"] == "relation" and r.get("tags", {}).get("natural") == "water"), key=lambda r: r["id"]):
+        # The bounded Map API also names neighbouring relations. Ignore water
+        # wholly outside this park before requiring its complete geometry.
+        outer_members = [m for m in relation['members'] if m['type'] == 'way' and m['role'] in {'outer', ''}]
+        if not any(inside(points[i]) for m in outer_members if m['ref'] in ways for i in ways[m['ref']]['nodes'] if i in points):
+            continue
         outer = rings([ways[m["ref"]]["nodes"] for m in relation["members"] if m["type"] == "way" and m["role"] in {"outer", ""}])
         inner = rings([ways[m["ref"]]["nodes"] for m in relation["members"] if m["type"] == "way" and m["role"] == "inner"])
         for ring in outer:
@@ -380,25 +445,25 @@ def build(raw_path, water_map=None):
                           "holes": [{"coordinates": hole, "geometry": [project(p) for p in hole]} for hole in inner],
                           "name": relation.get("tags", {}).get("name", "")})
     geographic = {
-        "version": GRAPH_VERSION, "licence": "ODbL-1.0", "attribution": "© OpenStreetMap contributors",
-        "copyrightUrl": "https://www.openstreetmap.org/copyright", "source": "https://overpass-api.de/api/interpreter",
-        "extractedOn": "2026-11-17", "osmBaseTimestamp": raw.get("osm3s", {}).get("timestamp_osm_base"),
-        "queryBounds": [35.621, 139.878, 35.634, 139.895],
+        "version": graph_version, "licence": "ODbL-1.0", "attribution": "© OpenStreetMap contributors",
+        "copyrightUrl": "https://www.openstreetmap.org/copyright", "source": "https://api.openstreetmap.org/api/0.6/map?bbox=139.870,35.628,139.885,35.641" if park_id == 'land' else "https://overpass-api.de/api/interpreter",
+        "extractedOn": extracted_on, "osmBaseTimestamp": raw.get("osm3s", {}).get("timestamp_osm_base"),
+        "queryBounds": [35.628, 139.870, 35.641, 139.885] if park_id == 'land' else [35.621, 139.878, 35.634, 139.895],
         "supplementaryWaterSource": {"url": "https://api.openstreetmap.org/api/0.6/map?bbox=139.883,35.623,139.889,35.628", "extractedOn": "2026-11-17"} if water_map else None,
-        "uncertainCrossings": [{"osmWayId": 1323365214, "waterOsmWayId": 1286814536, "note": "小さな水路を横切る徒歩通路が登録されているが橋の属性は未登録。徒歩通路としての出典はあるため保持する。"}],
+        "uncertainCrossings": [] if park_id == 'land' else [{"osmWayId": 1323365214, "waterOsmWayId": 1286814536, "note": "小さな水路を横切る徒歩通路が登録されているが橋の属性は未登録。徒歩通路としての出典はあるため保持する。"}],
         "projection": {"type": "local-equirectangular", "origin": [lon0, lat0], "earthRadiusMetres": EARTH,
                        "pixelsPerMetre": scale, "offset": [offset_x, offset_y], "viewBox": [0, 0, 1000, 1000]},
-        "boundary": {"osmWayId": 203538370, "coordinates": boundary, "geometry": [project(p) for p in boundary]},
+        "boundary": {"osmWayId": boundary_id, "coordinates": boundary, "geometry": [project(p) for p in boundary]},
         "water": water, "buildings": buildings, "walkways": map_ways, "anchors": anchor_report,
         "limitations": ["施設の入口や待ち列の位置を保証するものではない。公開徒歩通路上の近傍点を使う。", "独立した通路は推測で接続しない。", "施設内・待ち列の徒歩距離は含まない。", "通行規制や工事は現地の案内に従う。"],
     }
-    (ROOT/"web/data/sea-geography.json").write_text(json.dumps(geographic, ensure_ascii=False, separators=(",", ":"))+"\n")
+    (ROOT/f"web/data/{park_id}-geography.json").write_text(json.dumps(geographic, ensure_ascii=False, separators=(",", ":"))+"\n")
 
     def polygon(coords, fill, stroke="none", width=1):
         return f'<polygon points="{" ".join(",".join(map(str, p)) for p in coords)}" fill="{fill}" stroke="{stroke}" stroke-width="{width}"/>'
 
-    svg = ['<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" role="img" aria-label="東京ディズニーシーの徒歩通路と水域を示す地理地図">',
-           '<title>東京ディズニーシーの地理地図</title><desc>© OpenStreetMap contributors. ODbL 1.0. 2026-11-17取得。</desc>',
+    svg = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" role="img" aria-label="{park["name"]}の徒歩通路と水域を示す地理地図">',
+           f'<title>{park["name"]}の地理地図</title><desc>© OpenStreetMap contributors. ODbL 1.0. {extracted_on}取得。</desc>',
            '<rect width="1000" height="1000" fill="#ddebdc"/>', polygon(geographic["boundary"]["geometry"], "#e9eee3", "#a7b9aa", 2)]
     for item in water:
         # Even-odd rings preserve real islands and shores inside the harbour.
@@ -411,7 +476,7 @@ def build(raw_path, water_map=None):
     svg += ['</g>', '<g fill="#254c61" font-family="sans-serif" font-weight="bold"><path d="M935 82 L945 45 L955 82 L945 72Z"/><text x="945" y="35" text-anchor="middle" font-size="17">N</text></g>',
             f'<path d="M45 927 v8 h{100*scale:.3f} v-8" fill="none" stroke="#254c61" stroke-width="3"/><text x="45" y="958" font-family="sans-serif" font-size="17" fill="#254c61">100 m</text>',
             '<text x="975" y="984" text-anchor="end" font-family="sans-serif" font-size="13" fill="#254c61">© OpenStreetMap contributors · ODbL</text></svg>']
-    (ROOT/"web/assets/sea-geographic-map.svg").write_text("\n".join(svg)+"\n")
+    (ROOT/f"web/assets/{park_id}-geographic-map.svg").write_text("\n".join(svg)+"\n")
     print(json.dumps({"nodes": len(node_records), "edges": len(edges), "anchors": len(anchors), "walkwaySegments": len(map_ways), "waterPolygons": len(water), "maxLandmarkOffsetMetres": max(a["offsetMetres"] for a in anchor_report)}, ensure_ascii=False))
 
 
@@ -419,5 +484,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("extract", type=Path)
     parser.add_argument("--water-map", type=Path, help="Supplementary standard OSM Map API XML with water multipolygon relations")
+    parser.add_argument('--park', choices=['sea', 'land'], default='sea')
     args = parser.parse_args()
-    build(args.extract, args.water_map)
+    build(args.extract, args.water_map, args.park)

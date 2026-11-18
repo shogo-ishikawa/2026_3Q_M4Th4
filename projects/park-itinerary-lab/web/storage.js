@@ -67,7 +67,7 @@ export function validateCatalogue(data) {
     if (!nodes.has(park.entryNode) || !nodes.has(park.exitNode)) fail('入園・退園地点を通路の地点として登録してください。');
     const adjacency = new Map([...nodes].map(key => [key, []]));
     for (const edge of park.edges) {
-      if (!plain(edge) || !nodes.has(edge.from) || !nodes.has(edge.to) || edge.from === edge.to || !finite(edge.metres, 1, 10000)) fail('通路の地点と徒歩距離を確認してください。');
+      if (!plain(edge) || !nodes.has(edge.from) || !nodes.has(edge.to) || edge.from === edge.to || !finite(edge.metres, 0.01, 10000)) fail('通路の地点と徒歩距離を確認してください。');
       if(edge.geometry!==undefined&&(!Array.isArray(edge.geometry)||edge.geometry.length<2||edge.geometry.length>10000||edge.geometry.some(point=>!Array.isArray(point)||point.length!==2||!finite(point[0],0,1000)||!finite(point[1],0,1000))))fail('通路の形状を確認してください。');
       adjacency.get(edge.from).push(edge.to); adjacency.get(edge.to).push(edge.from);
     }
@@ -113,6 +113,7 @@ export function validateSavedState(state) {
   if (!validDate(settings.date) || !validTime(settings.entry) || !validTime(settings.exit) || settings.entry >= settings.exit || !finite(settings.speed, 10, 150) || !integer(settings.budget, 0, 10000000) || settings.budget % 100 !== 0) fail('日付・入退園時刻・歩く速さ・100円単位の予算を確認してください。');
   for (const key of ['foodBudget', 'dpaBudget', 'souvenirReserve', 'spentBudget']) if (!optionalNumber(settings, key, 0, 10000000, true) || (settings[key] !== undefined && settings[key] % 100 !== 0)) fail('費用は100円単位の整数で指定してください。');
   for (const key of ['restEvery', 'restMinutes']) if (!optionalNumber(settings, key, 0, 600, true)) fail('休憩の間隔と長さを確認してください。');
+  if (!optionalNumber(settings, 'waitBufferMinutes', 0, 30, true) || !optionalNumber(settings, 'queueDelayMinutes', 0, 60, true) || (settings.waitBufferMode !== undefined && !['fixed','auto'].includes(settings.waitBufferMode))) fail('待ち時間の余裕と混雑の想定を確認してください。');
   if (!optionalNumber(settings, 'searchSeconds', 0.1, 120) || !optionalNumber(settings, 'replanFrom', settings.entry, settings.exit, true)) fail('探索時間と組み替え開始時刻を確認してください。');
   if (settings.searchMethod !== undefined && !['beam', 'multistart', 'portfolio'].includes(settings.searchMethod)) fail('探索方法を選び直してください。');
   if (settings.weatherMode !== undefined && !['auto', 'manual'].includes(settings.weatherMode)) fail('天気の取得方法を選び直してください。');
@@ -213,6 +214,9 @@ export function validateSavedState(state) {
       if ((row.walkingFactor!==undefined&&(!finite(row.walkingFactor,1,3)||(row.kind||row.type)!=='walk'))||(row.walkingSource!==undefined&&(row.walkingSource!=='congestion-estimate'||(row.kind||row.type)!=='walk'))) fail('混雑を考慮した徒歩時間を確認してください。');
       if(row.routeSource!==undefined&&(!id(row.routeSource)||(row.kind||row.type)!=='walk'))fail('徒歩移動の経路の版を確認してください。');
       if (row.walkSpeed!==undefined&&(!finite(row.walkSpeed,10,150)||(row.kind||row.type)!=='walk')) fail('徒歩移動を計画したときの速さを確認してください。');
+      if (['estimatedMinutes','bufferMinutes','delayMinutes'].some(key => row[key] !== undefined)) {
+        if ((row.kind || row.type) !== 'queue' || !integer(row.estimatedMinutes,0,600) || !integer(row.bufferMinutes,0,30) || !integer(row.delayMinutes,0,60) || row.end-row.start !== row.estimatedMinutes+row.bufferMinutes+row.delayMinutes) fail('待ち時間と余裕の内訳を確認してください。');
+      }
     }
     if (state.result.visits !== undefined && (!Array.isArray(state.result.visits) || state.result.visits.length > MAX_ACTIVITIES || state.result.visits.some(visit => !plain(visit) || !id(visit.activityId || visit.id) || !id(visit.node) || (visit.endNode !== undefined && !id(visit.endNode)) || !validTime(visit.start) || !validTime(visit.end) || visit.start > visit.end))) fail('体験した施設と地点を確認してください。');
   }
@@ -440,7 +444,7 @@ export const formatTime = value => `${String(Math.floor(value / 60)).padStart(2,
 const yen = value => `${Math.round(Number(value) || 0).toLocaleString('ja-JP')}円`;
 const html = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;'}[char]));
 const rowKind = row => row.kind || row.type || '';
-const rowTitle = row => rowKind(row) === 'rest' && !row.name.includes('休憩') ? `休憩 · ${row.name}` : row.name;
+const rowTitle = row => rowKind(row) === 'rest' && !row.name.includes('休憩') ? `休憩 · ${row.name}` : rowKind(row) === 'queue' && (row.bufferMinutes || row.delayMinutes) ? `${row.name}（見込み${row.estimatedMinutes}分${row.bufferMinutes ? `＋余裕${row.bufferMinutes}分` : ''}${row.delayMinutes ? `＋混雑想定${row.delayMinutes}分` : ''}）` : row.name;
 const rowLocation = (row, park) => park?.nodes?.find(node => node.id === (row.node || row.to))?.name || '';
 const rowCategory = row => ({walk:'徒歩', wait:'時間調整', queue:'待ち時間', activity:'体験', rest:'休憩', exit:'退園', location:'現在地'})[rowKind(row)] || rowKind(row);
 const csvCell = value => {

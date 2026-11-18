@@ -15,8 +15,13 @@ from pathlib import Path
 import re
 import tempfile
 import time
+from threading import Lock
 import urllib.parse
 import urllib.request
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from official_http import fetch_html
 
 PROJECT = Path(__file__).resolve().parents[1]
 FOOD = {"restaurant", "cafe", "snack", "popcorn"}
@@ -159,10 +164,7 @@ def parse_menu_items(source: str, menu_url: str, category: str, date: str) -> li
 
 def fetch_text(url: str, timeout: float = 12) -> str:
     url = official_url(url, url)
-    request = urllib.request.Request(url, headers={"User-Agent": "ParkItineraryLab/1.3 (educational official menu link updater)"})
-    with urllib.request.urlopen(request, timeout=timeout) as response:
-        official_url(response.url, url)
-        return response.read(3_000_000).decode("utf-8")
+    return fetch_html(url, timeout=timeout, max_bytes=3_000_000)
 
 
 def refresh_food(activity: dict, date: str, fetcher=fetch_text) -> dict:
@@ -172,12 +174,27 @@ def refresh_food(activity: dict, date: str, fetcher=fetch_text) -> dict:
     return {"menuUrl": menu_url, "menuItems": items, "menuCheckedOn": date, "menuSourceUrl": menu_url, "menuStatus": "verified"}
 
 
-def update_catalogue(catalogue: dict, date: str, *, workers: int = 8, fetcher=fetch_text) -> tuple[dict, dict]:
+def update_catalogue(catalogue: dict, date: str, *, workers: int = 4, fetcher=fetch_text) -> tuple[dict, dict]:
     """Merge only menu fields; on failure retain the last successful observation."""
     items = [activity for park in catalogue["parks"] for activity in park["activities"] if activity.get("category") in FOOD]
-    report = {"checkedOn": date, "checked": len(items), "updated": 0, "errors": []}
+    report = {"checkedOn": date, "checkedAt": dt.datetime.now(dt.timezone.utc).isoformat().replace('+00:00', 'Z'), "checked": len(items), "updated": 0, "errors": []}
+    # Multiple counters can belong to one venue. Share one actual response,
+    # including a failed response, across those counters during this run.
+    requests, lock = {}, Lock()
+    def shared_fetch(url):
+        with lock:
+            owner = url not in requests
+            if owner:
+                requests[url] = concurrent.futures.Future()
+            future = requests[url]
+        if owner:
+            try:
+                future.set_result(fetcher(url))
+            except Exception as error:
+                future.set_exception(error)
+        return future.result()
     with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = {executor.submit(refresh_food, activity, date, fetcher): activity for activity in items}
+        futures = {executor.submit(refresh_food, activity, date, shared_fetch): activity for activity in items}
         for future in concurrent.futures.as_completed(futures):
             activity = futures[future]
             try:
@@ -187,6 +204,7 @@ def update_catalogue(catalogue: dict, date: str, *, workers: int = 8, fetcher=fe
                 if "menuUrl" not in activity:
                     activity.update({"menuUrl": activity["sourceUrl"], "menuItems": [], "menuStatus": "unavailable"})
                 report["errors"].append({"activityId": activity["id"], "reason": str(error)[:250]})
+    report['status'] = 'complete' if not report['errors'] else 'partial' if report['updated'] else 'failed'
     catalogue["foodMenuUpdate"] = report
     return catalogue, report
 
@@ -205,7 +223,7 @@ def main() -> None:
     parser.add_argument("--catalogue", type=Path, default=PROJECT / "web/data/parks.json")
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--date", default=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat())
-    parser.add_argument("--workers", type=int, default=8)
+    parser.add_argument("--workers", type=int, default=4)
     args = parser.parse_args()
     if dt.date.fromisoformat(args.date).isoformat() != args.date or not 1 <= args.workers <= 12:
         parser.error("Use YYYY-MM-DD and 1–12 workers")

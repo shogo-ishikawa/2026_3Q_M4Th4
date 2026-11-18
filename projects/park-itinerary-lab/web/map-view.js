@@ -116,7 +116,7 @@ export function renderParkMap(container, park, {plan = null, selectedIds = [], o
   }).join('');
   const mapAsset = geographic ? park.geographicMap.asset : `assets/${sea ? 'sea' : 'land'}-map.webp`;
   const caption = geographic
-    ? `OpenStreetMapの地理データに沿う徒歩ルートです。施設は付近の公開通路上の点で表しています。建物内や待ち列の移動は含みません。入退園の基準点はプラザ付近です。通行規制は現地の案内をご確認ください。<br><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a> · <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener noreferrer">ODbL</a> · 地図データ取得：${escape(park.geographicMap.asOf)}`
+    ? `OpenStreetMapの地理データに沿う徒歩ルートです。施設は付近の公開通路上の点で表しています。建物内や待ち列の移動は含みません。入退園の基準点は${sea ? 'プラザ' : 'メインエントランス'}付近の通路です。通行規制は現地の案内をご確認ください。<br><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a> · <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener noreferrer">ODbL</a> · 地図データ取得：${escape(park.geographicMap.asOf)}`
     : 'エリアの位置関係をつかむためのイラスト地図です。徒歩ルートと距離は目安です。現地の移動には公式の園内マップをご利用ください。';
   container.innerHTML = `<style>
 .park-map-tools{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin:0 0 10px}.park-map-tools button{border:1px solid #cfdae6;border-radius:9px;background:white;color:#173450;padding:7px 11px;min-height:42px;font-size:14px;font-weight:650}.park-map-tools label{font-size:13px;display:flex;align-items:center;gap:6px;margin-left:auto}.park-map-tools input{width:17px;height:17px}.park-map-scale{font-size:12px;color:#536579;min-width:40px;text-align:center}.park-map-stage{overflow:hidden;border:1px solid #d6e1e8;border-radius:17px;background:${sea ? '#c1e4ee' : '#eaf0d8'}}
