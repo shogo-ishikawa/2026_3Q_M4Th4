@@ -5,6 +5,7 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import base64
 import json
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from threading import Thread
 
 from playwright.sync_api import expect, sync_playwright
@@ -315,17 +316,25 @@ def check_mobile(page, url):
 
 if __name__ == '__main__':
     from mobile_map import check_map_gestures
-    site = Path(__file__).resolve().parents[3] / '_site'
-    assert (site / 'park-itinerary-lab/index.html').is_file(), 'Build the public site first.'
-    with ThreadingHTTPServer(('127.0.0.1', 0), partial(QuietFiles, directory=site)) as server, sync_playwright() as pw:
+    from mobile_auth import PrivateStore, check_login_and_sync, make_test_site, sign_in, wire_device
+
+    built_site = Path(__file__).resolve().parents[3] / '_site'
+    assert (built_site / 'park-itinerary-lab/index.html').is_file(), 'Build the public site first.'
+    with TemporaryDirectory() as folder, ThreadingHTTPServer(('127.0.0.1', 0), partial(QuietFiles, directory=folder)) as server, sync_playwright() as pw:
+        make_test_site(built_site, Path(folder))
         Thread(target=server.serve_forever, daemon=True).start()
         try:
             browser = pw.chromium.launch(channel='chrome', headless=True)
             context = browser.new_context(locale='ja-JP', timezone_id='Asia/Tokyo', viewport={'width':393,'height':851},
                                           has_touch=True, is_mobile=True, service_workers='allow', reduced_motion='reduce')
             origin = f'http://127.0.0.1:{server.server_port}'
+            store = PrivateStore()
+            check_login_and_sync(browser, origin, store)
+            wire_device(context, store)
             map_page = context.new_page()
             map_page.route('**/*', lambda route: route.continue_() if route.request.url.startswith(origin + '/') else route.abort())
+            map_page.goto(origin + '/park-itinerary-lab/')
+            sign_in(map_page, 'mobile-visitor')
             check_map_gestures(map_page, origin + '/park-itinerary-lab/')
             map_page.close()
             check_mobile(context.new_page(), origin)

@@ -1,7 +1,7 @@
-import {validateWaitModel} from './wait-model.js?v=2.1.0';
-import {weatherForMinute,formatWeatherDetails} from './weather.js?v=2.1.0';
+import {validateWaitModel} from './wait-model.js?v=2.2.0';
+import {weatherForMinute,formatWeatherDetails} from './weather.js?v=2.2.0';
 import {baseVisitId, isRepeatVisit} from './repeat-visits.js';
-import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=2.1.0';
+import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=2.2.0';
 /** Portable schedules: the shared link contains preferences, never a browser's saved history. */
 const STORAGE_KEY = 'park-itinerary-lab:v1';
 const PLANS_KEY = 'park-itinerary-lab:plans:v1';
@@ -293,7 +293,7 @@ function planStore(options) {
     return storage;
   } catch {throw new Error('このブラウザでは端末への保存を利用できません。JSONで保存してください。');}
 }
-function planName(value) {
+export function planName(value) {
   if(typeof value!=='string')fail('計画の名前を入力してください。');
   const name=value.trim().normalize('NFC');
   if(!name||name.length>80||/[\u0000-\u001f\u007f]/.test(name))fail('計画の名前は改行を含めず1〜80文字で入力してください。');
@@ -304,11 +304,11 @@ function planStamp(now) {
   if(!Number.isFinite(date.getTime()))fail('保存日時を確認してください。');
   return date.toISOString();
 }
-function planSummary(plan) {
+export function planSummary(plan) {
   return {id:plan.id,name:plan.name,createdAt:plan.createdAt,updatedAt:plan.updatedAt,parkId:plan.state.parkId,date:plan.state.settings.date,hasSchedule:!!plan.state.result?.rows?.length,legacy:plan.legacy===true};
 }
 const TRANSIENT_PLAN_FIELDS=new Set(['liveData','liveSnapshot','liveNotice','waitAsOf','history','waitModel','calendarData']);
-function compactSavedPlan(value) {
+export function compactSavedPlan(value) {
   if(Array.isArray(value))return value.map(compactSavedPlan);
   if(plain(value))return Object.fromEntries(Object.entries(value).filter(([key])=>!TRANSIENT_PLAN_FIELDS.has(key)).map(([key,item])=>[key,compactSavedPlan(item)]));
   return value;
@@ -346,7 +346,7 @@ function writePlanLibrary(storage,library,stamp) {
   try {storage.setItem(PLANS_KEY,encoded);}
   catch {throw new Error('この端末へ保存できません。前の計画は保持しています。不要な計画を削除するかJSONで保存してください。');}
 }
-function newPlanId(plans) {
+export function newPlanId(plans) {
   const used=new Set(plans.map(plan=>plan.id));
   for(let attempt=0;attempt<100;attempt++) {
     const token=globalThis.crypto?.randomUUID?.()||`${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}-${attempt}`;

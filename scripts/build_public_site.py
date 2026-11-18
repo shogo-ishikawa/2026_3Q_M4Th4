@@ -30,6 +30,7 @@ PARK_WEB_FILES = park_packaging['PARK_WEB_FILES']
 
 def build_park_site(output=OUTPUT):
     project = ROOT / 'projects' / 'park-itinerary-lab'
+    park_packaging['check_public_firebase_config'](project / 'web')
     destination = Path(output) / 'park-itinerary-lab'
     destination.mkdir(parents=True, exist_ok=True)
     for name in PARK_WEB_FILES:

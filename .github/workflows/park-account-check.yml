@@ -1,0 +1,39 @@
+name: Check TDRoute account access
+
+on:
+  pull_request:
+    paths:
+      - 'projects/park-itinerary-lab/firebase/**'
+      - 'projects/park-itinerary-lab/web/firebase-sync.js'
+      - 'projects/park-itinerary-lab/web/assets/firebase/**'
+      - '.github/workflows/park-account-check.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'projects/park-itinerary-lab/firebase/**'
+      - 'projects/park-itinerary-lab/web/firebase-sync.js'
+      - 'projects/park-itinerary-lab/web/assets/firebase/**'
+      - '.github/workflows/park-account-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  firestore-rules:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: projects/park-itinerary-lab/firebase
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: projects/park-itinerary-lab/firebase/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - run: npx --yes firebase-tools@15.36.0 emulators:exec --only firestore --project demo-tdroute 'node --test firestore-rules.test.mjs'
