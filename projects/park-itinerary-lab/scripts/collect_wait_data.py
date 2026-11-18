@@ -44,9 +44,12 @@ def normalise(payload: dict, park: dict, mapping: dict, fetched_at: str) -> dict
             unmatched.append({"providerId": provider_id, "name": str(ride.get("name", ""))[:200]})
             continue
         wait = ride.get("wait_time")
+        updated_at = ride.get("last_updated")
+        if not isinstance(updated_at, str):
+            continue
         try:
-            timestamp = dt.datetime.fromisoformat(ride["last_updated"].replace("Z", "+00:00"))
-        except (KeyError, ValueError, TypeError):
+            timestamp = dt.datetime.fromisoformat(updated_at.replace("Z", "+00:00"))
+        except ValueError:
             continue
         if timestamp.tzinfo is None:
             continue
@@ -104,8 +107,6 @@ def main() -> None:
     calendar_path = args.calendar or args.output_dir/'calendar.json'
     calendar = json.loads(calendar_path.read_text()) if calendar_path.exists() else {}
     mappings = json.loads((PROJECT / "web/data/queue-times-map.json").read_text())["parks"]
-    now = dt.datetime.now(dt.timezone.utc)
-    fetched_at = now.isoformat().replace("+00:00", "Z")
     prior_path = args.output_dir / "live-waits.json"
     prior = json.loads(prior_path.read_text()) if prior_path.exists() else {"parks": []}
     observations_path = args.output_dir / "observations.json"
@@ -125,7 +126,9 @@ def main() -> None:
         mapping = mappings[park["id"]]
         try:
             payload = json.loads((args.fixture_dir / f"{park['id']}.json").read_text()) if args.fixture_dir else request_json(f"https://queue-times.com/parks/{mapping['providerParkId']}/queue_times.json")
-            snapshot = normalise(payload, park, mapping, fetched_at)
+            # Each provider timestamp is checked against receipt of its own response.
+            received_at = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
+            snapshot = normalise(payload, park, mapping, received_at)
             incoming.extend(to_observations(snapshot, park, weather, weather_values, calendar))
             print(f"{park['id']}: {len(snapshot['rides'])} mapped rides, {len(snapshot['unmatched'])} unmatched")
         except (OSError, ValueError) as error:
@@ -134,7 +137,8 @@ def main() -> None:
                 raise RuntimeError(f"Could not collect {park['id']}") from error
             print(f"{park['id']}: kept earlier snapshot ({error})")
         snapshots.append(snapshot)
-    document = {"schemaVersion": 1, "catalogueUpdatedAt":catalogue.get("fetchedAt",catalogue.get("updatedAt")), "updatedAt": fetched_at, "attribution": "Powered by Queue-Times.com", "attributionUrl": "https://queue-times.com/", "weatherAttributionUrl": "https://open-meteo.com/", "parks": snapshots}
+    now = dt.datetime.now(dt.timezone.utc)
+    document = {"schemaVersion": 1, "catalogueUpdatedAt":catalogue.get("fetchedAt",catalogue.get("updatedAt")), "updatedAt": now.isoformat().replace("+00:00", "Z"), "attribution": "Powered by Queue-Times.com", "attributionUrl": "https://queue-times.com/", "weatherAttributionUrl": "https://open-meteo.com/", "parks": snapshots}
     prior_path.write_text(json.dumps(document, ensure_ascii=False, indent=2) + "\n")
     rows = merge_observations(existing, incoming, now.astimezone(JST).date())
     observations_path.write_text(json.dumps(rows, ensure_ascii=False, separators=(",", ":")) + "\n")

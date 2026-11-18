@@ -15,9 +15,22 @@ const slotMinutes = 30;
 const jstOffset = 9 * 3600000;
 
 // Missed evenings can issue the next morning, but past dates and started slots cannot be filled.
-export function targetDay(issuedAt) {
+export function targetDay(issuedAt, published, bundledCatalogue) {
   const local = new Date(issuedAt.getTime() + jstOffset);
-  if (local.getUTCHours() * 60 + local.getUTCMinutes() >= 21 * 60 + 55) {
+  const today = local.toISOString().slice(0, 10);
+  let lastClose = 21 * 60 + 55;
+  for (const parkId of ['land', 'sea']) {
+    for (const catalogue of [published, bundledCatalogue]) {
+      const windows = catalogue?.parks?.find(park => park.id === parkId)?.operatingCalendar?.[today]?.windows;
+      const ends = (windows ?? []).filter(w => Array.isArray(w) && w.length === 2)
+        .map(w => w[1]).filter(end => Number.isInteger(end) && end > 0 && end <= 1440);
+      if (ends.length) {
+        lastClose = Math.max(lastClose, ...ends);
+        break;
+      }
+    }
+  }
+  if (local.getUTCHours() * 60 + local.getUTCMinutes() >= lastClose) {
     local.setUTCDate(local.getUTCDate() + 1);
   }
   return local.toISOString().slice(0, 10);
@@ -93,14 +106,16 @@ async function exists(path) {
 }
 
 export async function issueForecast(directory, currentTime = new Date()) {
-  const date = targetDay(currentTime);
+  const [bundledCatalogue, publishedCatalogue] = await Promise.all([
+    readJson(join(bundled, 'parks.json')), readJson(join(directory, 'catalogue.json'), true)
+  ]);
+  const date = targetDay(currentTime, publishedCatalogue, bundledCatalogue);
   const issuedAt = currentTime.toISOString();
   const file = join(directory, 'forecasts', date + '.json');
   if (await exists(file)) return null;
 
-  const [bundledCatalogue, publishedCatalogue, bundledModel, publishedModel, bundledCalendar,
+  const [bundledModel, publishedModel, bundledCalendar,
     publishedCalendar, weatherCache, mapping] = await Promise.all([
-    readJson(join(bundled, 'parks.json')), readJson(join(directory, 'catalogue.json'), true),
     readJson(join(bundled, 'wait-model.json')), readJson(join(directory, 'wait-model.json'), true),
     readJson(join(bundled, 'calendar.json')), readJson(join(directory, 'calendar.json'), true),
     readJson(join(directory, 'weather-forecast.json'), true), readJson(join(bundled, 'queue-times-map.json'))

@@ -13,7 +13,10 @@ on:
       - 'projects/park-itinerary-lab/scripts/bootstrap_wait_history.py'
       - 'projects/park-itinerary-lab/scripts/train_wait_model.py'
       - 'projects/park-itinerary-lab/scripts/issue_wait_forecast.mjs'
+      - 'projects/park-itinerary-lab/scripts/score_daily_waits.py'
       - 'projects/park-itinerary-lab/scripts/score_wait_history.py'
+      - 'projects/park-itinerary-lab/scripts/aggregate_wait_history.mjs'
+      - 'projects/park-itinerary-lab/web/forecast-accuracy.js'
       - 'projects/park-itinerary-lab/web/planner.js'
       - 'projects/park-itinerary-lab/web/wait-model.js'
       - 'projects/park-itinerary-lab/web/data/queue-times-map.json'
@@ -34,7 +37,7 @@ concurrency:
 jobs:
   collect:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -48,56 +51,73 @@ jobs:
       - name: Prepare the separate observations branch
         id: prepare
         run: |
-          if git fetch origin park-wait-data; then
+          data_ref=$(git ls-remote --heads origin refs/heads/park-wait-data)
+          if [ -n "$data_ref" ]; then
+            git fetch origin refs/heads/park-wait-data
             git worktree add -b park-wait-data data-publish FETCH_HEAD
           else
-            git worktree add -b park-wait-data data-publish HEAD
+            git worktree add --detach data-publish HEAD
+            git -C data-publish switch --orphan park-wait-data
           fi
       - name: Seed validated fallback models
         id: seed
         run: python projects/park-itinerary-lab/scripts/seed_wait_model.py --published data-publish/wait-model.json --output data-publish/wait-model.json
       - name: Collect documented current waits
         id: collect
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: python projects/park-itinerary-lab/scripts/collect_wait_data.py --output-dir data-publish
       - name: Refresh the hourly forecast cache
         id: weather
-        if: always() && steps.prepare.outcome == 'success'
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         continue-on-error: true
         run: python projects/park-itinerary-lab/scripts/collect_weather.py --output data-publish/weather-forecast.json
-      - name: Archive and train for the latest completed park day
-        if: always() && steps.seed.outcome == 'success'
-        env:
-          THEMEPARKS_API_KEY: ${{ secrets.THEMEPARKS_API_KEY }}
+      - name: Score frozen forecasts against collected waits after closing
+        id: daily_score
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        run: python projects/park-itinerary-lab/scripts/score_daily_waits.py --data-dir data-publish
+      - name: Archive collected waits and train through the latest completed park day
+        if: ${{ !cancelled() && steps.daily_score.outcome == 'success' && steps.seed.outcome == 'success' }}
         run: |
           python projects/park-itinerary-lab/scripts/nightly_wait_training.py --data-dir data-publish ${{ github.event_name != 'schedule' && '--force' || '' }}
       - name: Record the forecast for future park hours
         id: forecast
         if: ${{ !cancelled() && steps.seed.outcome == 'success' }}
         run: node projects/park-itinerary-lab/scripts/issue_wait_forecast.mjs --data-dir data-publish
-      - name: Compare earlier forecasts with posted wait history
+      - name: Supplement the local report with recent provider history
+        id: external_score
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        continue-on-error: true
         env:
           THEMEPARKS_API_KEY: ${{ secrets.THEMEPARKS_API_KEY }}
-        run: python projects/park-itinerary-lab/scripts/score_wait_history.py --data-dir data-publish
+        run: timeout 3m python projects/park-itinerary-lab/scripts/score_wait_history.py --data-dir data-publish
       - name: Publish data without rebuilding the application
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         working-directory: data-publish
         env:
           SEED_STATUS: ${{ steps.seed.outcome }}
+          COLLECT_STATUS: ${{ steps.collect.outcome }}
+          WEATHER_STATUS: ${{ steps.weather.outcome }}
           FORECAST_STATUS: ${{ steps.forecast.outcome }}
+          EXTERNAL_SCORE_STATUS: ${{ steps.external_score.outcome }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          if [ "$COLLECT_STATUS" = success ]; then git add live-waits.json observations.json; fi
+          if [ "$WEATHER_STATUS" = success ] && [ -f weather-forecast.json ]; then git add weather-forecast.json; fi
           if [ "$SEED_STATUS" = success ]; then
-            for name in live-waits.json observations.json wait-model.json history-index.json weather-forecast.json training-state.json; do
+            for name in wait-model.json history-index.json training-state.json; do
               if [ -f "$name" ]; then git add "$name"; fi
             done
             if [ -d history ]; then git add history; fi
           fi
-          # Stage only public per-day scores and their retry marker, including partial successes.
-          for name in accuracy-history/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].json accuracy-history/state.json; do
-            if [ -f "$name" ]; then git add "$name"; fi
-          done
+          # Score writers publish each completed file atomically, even if another park or date fails.
+          shopt -s nullglob
+          reports=(accuracy-{daily,history}/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].json)
+          if (( ${#reports[@]} )); then git add -- "${reports[@]}"; fi
+          if [ -f accuracy-history/state.json ]; then git add accuracy-history/state.json; fi
+          if [ "$EXTERNAL_SCORE_STATUS" = failure ]; then
+            echo "::warning::Supplementary provider history is unavailable. See the local daily report and the history step log."
+          fi
           if [ "$FORECAST_STATUS" = success ] && [ -d forecasts ]; then git add forecasts; fi
           if ! git diff --cached --quiet; then
             git commit -m 'Update park observations, models and forecasts'

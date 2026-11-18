@@ -21,6 +21,9 @@ test('nightly issuance targets the next JST day from 21:55, also covers midnight
   assert.equal(day('2026-11-30T12:54:59.999Z'), '2026-11-30');
   assert.equal(day('2026-11-30T12:55:00Z'), '2026-12-01');
   assert.equal(day('2026-11-30T15:00:00Z'), '2026-12-01');
+  const lateHours = {parks:[{id:'sea', operatingCalendar:{'2026-11-30':{windows:[[540, 1340]]}}}]};
+  assert.equal(targetDay(new Date('2026-11-30T13:19:00Z'), lateHours), '2026-11-30');
+  assert.equal(targetDay(new Date('2026-11-30T13:20:00Z'), null, lateHours), '2026-12-01');
 });
 
 test('a frozen standard day matches the common planner and only uses pre-existing crowd references', async () => {

@@ -1,7 +1,7 @@
-import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.12.1';
+import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.12.2';
 import { weatherAtMinute, calendarContext } from './calendar-features.js';
-import { predictModelWait, estimateParkCrowd, calendarCrowdLevel } from './wait-model.js?v=1.12.1';
-import { liveWaitFor, currentRideStatus } from './wait-data.js?v=1.12.1';
+import { predictModelWait, estimateParkCrowd, calendarCrowdLevel } from './wait-model.js?v=1.12.2';
+import { liveWaitFor, currentRideStatus } from './wait-data.js?v=1.12.2';
 /* Browser itinerary search. Every returned plan is checked; the search does not claim global optimality. */
 const resolvedCrowd = Symbol('park crowd');
 const FOOD = new Set(['restaurant', 'cafe', 'snack', 'popcorn']);

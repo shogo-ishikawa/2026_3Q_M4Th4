@@ -16,7 +16,7 @@ function median(values) {
 }
 
 function emptyMetrics() {
-  return {expected:0, matched:0, coverage:null, mae:null, bias:null, within10:null, meanPredicted:null, meanObserved:null,
+  return {expected:0, matched:0, samples:0, coverage:null, mae:null, bias:null, within10:null, meanPredicted:null, meanObserved:null,
     baselineMatched:0, comparableMae:null, baselineMae:null};
 }
 
@@ -34,6 +34,7 @@ function measure(slots) {
     observed += slot.observed;
     if (Math.abs(error) <= 10) within++;
     result.matched++;
+    result.samples += slot.posts.size;
     if (slot.reference !== null) {
       result.baselineMatched++;
       comparable += Math.abs(error);
