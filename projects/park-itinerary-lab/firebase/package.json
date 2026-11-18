@@ -1,0 +1,9 @@
+{
+  "name": "tdroute-firestore-rules-tests",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@firebase/rules-unit-testing": "6.0.0",
+    "firebase": "13.4.0"
+  }
+}

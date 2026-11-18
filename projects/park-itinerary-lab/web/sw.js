@@ -1,5 +1,5 @@
-/* TDRoute の公開画面だけを版ごとに保存する。個人のしおりはアプリが端末内で管理する。 */
-const VERSION = '2.1.0';
+/* TDRoute の公開画面だけを版ごとに保存する。個人のしおりや認証の応答はここには保存しない。 */
+const VERSION = '2.2.0';
 const BUILD_ID = 'source';
 const INTEGRITY = {};
 const scope = self.registration.scope;
@@ -8,6 +8,8 @@ const cacheName = cachePrefix + VERSION + ':' + BUILD_ID;
 
 const OFFLINE_FILES = [
   'index.html', 'guide.html', 'accuracy.html', 'style.css', 'accuracy.css', 'manifest.webmanifest',
+  'sync-ui.js', 'named-sync.js', 'firebase-sync.js', 'firebase-config.json',
+  'assets/firebase/firebase-app.js', 'assets/firebase/firebase-auth.js', 'assets/firebase/firebase-firestore.js',
   'pwa.js', 'app.js', 'planner.js', 'planner-worker.js', 'contingency.js',
   'accuracy-page.js', 'forecast-accuracy.js', 'forecast-calendar.js', 'calendar-outlook.js',
   'onsite-navigation.js', 'visit-day-view.js', 'wishlist-presets.js', 'itinerary-image.js',

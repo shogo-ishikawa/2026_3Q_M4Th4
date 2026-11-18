@@ -31,6 +31,12 @@ class ParkPublicBuildTests(unittest.TestCase):
                 path = project / 'web' / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text(f'public asset: {name}', encoding='utf-8')
+            config_path = project / 'web/firebase-config.json'
+            config_path.write_text('{"type":"service_account","private_key":"fixture"}')
+            with self.assertRaisesRegex(ValueError, 'web app configuration'):
+                builder.build_park_site(root / 'output')
+            self.assertFalse((root / 'output/park-itinerary-lab/firebase-config.json').exists())
+            config_path.write_text('{}')
             (project / 'web/sw.js').write_text("const BUILD_ID = 'source';\nconst INTEGRITY = {};\n")
             (project / 'version.json').write_text('{"version":"1.0.0"}')
             (project / 'README.md').write_text('パークの計画', encoding='utf-8')

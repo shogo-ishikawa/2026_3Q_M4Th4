@@ -1,0 +1,10 @@
+{
+  "indexes": [],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "plans",
+      "fieldPath": "payload",
+      "indexes": []
+    }
+  ]
+}

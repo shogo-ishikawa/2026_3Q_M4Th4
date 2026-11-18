@@ -12,6 +12,9 @@ INVENTORY = 'DISTRIBUTION_FILES.json'
 
 PARK_WEB_FILES = ('index.html', 'pwa.js', 'sw.js', 'manifest.webmanifest', 'style.css', 'app.js', 'planner.js', 'planner-worker.js',
                   'accuracy.html', 'accuracy.css', 'accuracy-page.js', 'forecast-accuracy.js',
+                  'sync-ui.js', 'named-sync.js', 'firebase-sync.js', 'firebase-config.json',
+                  'assets/firebase/firebase-app.js', 'assets/firebase/firebase-auth.js',
+                  'assets/firebase/firebase-firestore.js', 'assets/firebase/LICENSE.txt', 'assets/firebase/SOURCES.md',
                   'forecast-calendar.js', 'calendar-outlook.js',
                   'onsite-navigation.js', 'visit-day-view.js', 'wishlist-presets.js', 'itinerary-image.js', 'ticket-calendar.js', 'ticket-calendar-seed.js',
                   'day-progress-ui.js', 'day-progress-plan.js', 'repeat-visits.js', 'intraday-waits.js',
@@ -27,6 +30,19 @@ PARK_WEB_FILES = ('index.html', 'pwa.js', 'sw.js', 'manifest.webmanifest', 'styl
                   'assets/pwa/startup-750x1334.jpg', 'assets/pwa/startup-1125x2436.jpg', 'assets/pwa/startup-828x1792.jpg',
                   'assets/pwa/startup-1170x2532.jpg', 'assets/pwa/startup-1179x2556.jpg', 'assets/pwa/startup-1206x2622.jpg',
                   'assets/pwa/startup-1284x2778.jpg', 'assets/pwa/startup-1290x2796.jpg', 'assets/pwa/startup-1320x2868.jpg')
+
+
+def check_public_firebase_config(web):
+    config = json.loads((web / 'firebase-config.json').read_text(encoding='utf-8'))
+    if config == {}:
+        return  # A release candidate can be tested before its dedicated project exists.
+    required = {'apiKey', 'authDomain', 'projectId', 'appId'}
+    optional = {'messagingSenderId', 'storageBucket', 'databaseURL', 'measurementId'}
+    if (not isinstance(config, dict) or not required.issubset(config)
+            or set(config) - required - optional
+            or any(not isinstance(value, str) or not value.strip() or len(value) > 255
+                   or 'PRIVATE KEY' in value for value in config.values())):
+        raise ValueError('firebase-config.json must contain only the Firebase web app configuration')
 
 
 def public_worker(web):
@@ -64,6 +80,7 @@ def source_files(root):
 
 
 def build_archive(root=PROJECT, destination=None, worker=None):
+    check_public_firebase_config(root / 'web')
     version = 'v' + json.loads((root / 'version.json').read_text(encoding='utf-8'))['version']
     if destination is None:
         destination = root / 'web/downloads' / f'TDRoute_{version}.zip'
