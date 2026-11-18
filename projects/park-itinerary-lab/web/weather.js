@@ -327,7 +327,7 @@ export async function prepareWeatherForVisit(settings,park,{signal,fetchWeatherI
   try{
     const forecast=await fetchWeatherImpl(settings.date,{signal,park});checkAbort(signal);
     if(forecast.date!==settings.date)throw new Error('指定した日付と予報の日付が一致しません。');
-    const duringVisit=forecast.hours.filter(hour=>hour.minute<settings.exit&&(hour.endMinute??hour.minute+60)>settings.entry);
+    const duringVisit=forecast.hours.filter(hour=>weatherRowInterval(hour,settings.date,settings.entry,settings.exit));
     if(!duringVisit.length)throw new Error('滞在時間帯の予報がありません。');
     if(forecast.provider!=='jma'&&!duringVisit.some(row=>Number.isFinite(row.temperature)))throw new Error('気温を含む予報を取得できませんでした。');
     const profile=summarise(forecast,duringVisit);
