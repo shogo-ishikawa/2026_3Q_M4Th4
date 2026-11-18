@@ -1,11 +1,11 @@
 import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, fetchPublishedModel, prepareLiveForReplan, prepareWeatherForVisit } from './wait-data.js';
-import { enhanceTimeInputs, parkTimeBounds, linkedWishWindow, clampClock } from './time-input.js';
+import { enhanceTimeInputs, parkTimeBounds, linkClockFields, clampClock } from './time-input.js?v=1.8.0';
 import { weatherForMinute } from './weather.js';
-import { forecastCardHtml, forecastSourcesHtml } from './weather-view.js?v=1.7.0';
+import { forecastCardHtml, forecastSourcesHtml } from './weather-view.js?v=1.8.0';
 import { operationPauseInfo } from './operation-windows.js';
 import { contingencySettings, compareContingency } from './contingency.js';
-import { renderParkMap } from './map-view.js?v=1.7.0';
-import { listSavedPlans, saveNamedPlan, loadSavedPlan, renameSavedPlan, deleteSavedPlan, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=1.7.0';
+import { renderParkMap } from './map-view.js?v=1.8.0';
+import { listSavedPlans, saveNamedPlan, loadSavedPlan, renameSavedPlan, deleteSavedPlan, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=1.8.0';
 
 const CATEGORY = {attraction:'アトラクション',show:'ショー',parade:'パレード',restaurant:'レストラン',cafe:'カフェ',snack:'スナック',popcorn:'ポップコーン',greeting:'グリーティング',shop:'お土産'};
 const FOOD = new Set(['restaurant','cafe','snack','popcorn']);
@@ -23,6 +23,7 @@ const escapeHtml = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'
 const money = n => `${Math.round(Number(n) || 0).toLocaleString('ja-JP')}円`;
 const minute = text => { if (!/^\d{2}:\d{2}$/.test(text)) throw Error('時刻を入力してください。'); const [h,m] = text.split(':').map(Number); if(h>23||m>59)throw Error('時刻を確認してください。'); return h*60+m; };
 const timeText = value => Number.isFinite(Number(value)) ? `${String(Math.floor(Number(value)/60)).padStart(2,'0')}:${String(Math.round(Number(value)%60)).padStart(2,'0')}` : '—';
+const pauseWindowSummary = info => '避ける時間帯：'+info.windows.map(([start,end])=>timeText(start)+'–'+timeText(end)).join(' / ');
 const menuNames = activity => Array.isArray(activity.menuItems)?activity.menuItems.filter(item=>item&&typeof item.name==='string').map(item=>item.name):[];
 const safeLink = url => { try {const u = new URL(url);return ['https:','http:'].includes(u.protocol)?escapeHtml(u.href):'#';}catch{return '#';} };
 const $ = id => document.getElementById(id);
@@ -109,6 +110,127 @@ export function foodLinks(activity) {
   return `<div class="food-information">${items.length?`<p>${items.join(' / ')}</p>`:''}<a href="${menuUrl}" target="_blank" rel="noopener noreferrer">メニュー ↗</a></div>`;
 }
 
+// A problem identifies an editable field even when its wish is on a different tab.
+const inputError = (message,field,wishId) => Object.assign(new Error(message),{field,wishId});
+
+/** Preserve typed and pasted wish values before a genre change replaces the card. */
+export function bindWishEditors(root,commit,markEdited) {
+  const lastEdits=new WeakMap();
+  function handleEdit(event){
+    const input=event.target,editable=input.dataset.field&&['text','number'].includes(input.type);
+    if(event.type==='input')markEdited();
+    if(!editable){
+      if(event.type==='change')commit(event);
+      return;
+    }
+    const bad=!!input.validity?.badInput,previous=lastEdits.get(input);
+    if(previous&&previous.value===input.value&&previous.bad===bad)return;
+    if(event.type==='focusout'&&!previous&&input.value===input.defaultValue&&!bad)return;
+    lastEdits.set(input,{value:input.value,bad});
+    commit(event);
+  }
+  for(const event of ['input','change','focusout'])root.addEventListener(event,handleEdit);
+}
+
+export function wishInputProblem(wish,activity) {
+  if(!activity)return inputError('施設情報を読み直してから行きたい場所を選び直してください。','catalogueSearch');
+  const problem=(field,message)=>inputError(activity.name+'：'+message,field,wish.id);
+  if(ENTERTAINMENT.has(activity.category)){
+    if(!wish.showTimes?.length)return problem('showTimes','訪問日の開演時刻を入力してください。');
+    if(!wish.confirmSchedule)return problem('confirmSchedule','開演時刻を確認して「この日の公演時刻を確認した」にチェックしてください。');
+    if(wish.showTimes.length>30)return problem('showTimes','開演時刻は30件以内にしてください。');
+  }
+  if(['owned','consider'].includes(wish.dpaMode)){
+    const candidate=wish.dpaMode==='consider'?wish.dpaAvailableWindows?.[0]:null;
+    const legacy=candidate&&wish.dpaStart==null&&wish.dpaEnd==null;
+    const start=legacy?candidate[0]:wish.dpaStart,end=legacy?candidate[1]:wish.dpaEnd;
+    if(!Number.isInteger(start))return problem('dpaStart','DPAの利用・入場開始時刻を入力してください。');
+    if(!Number.isInteger(end))return problem('dpaEnd','DPAの利用・入場終了時刻を入力してください。');
+    if(start>=end)return problem('dpaEnd','DPAの終了時刻は開始時刻より後にしてください。');
+    if(wish.dpaMode==='owned'&&!Number.isInteger(wish.dpaPurchasedAt))return problem('dpaPurchasedAt','取得済みDPAの購入時刻を入力してください。');
+    if(wish.dpaMode==='owned'&&wish.dpaPurchasedAt>start)return problem('dpaPurchasedAt','DPAの購入時刻は利用開始までの時刻を入力してください。');
+    if(wish.dpaMode==='consider'&&!candidate)return problem('dpaStart','購入候補の開始・終了時刻を確認してください。');
+    if(activity.category==='parade'&&!wish.nodeOverride)return problem('nodeOverride','DPAの集合・鑑賞場所を選んでください。');
+  }
+  if(wish.earliest!=null&&wish.latest!=null&&wish.earliest>=wish.latest)return problem('latest','希望時間帯の終了を開始より後にしてください。');
+  return null;
+}
+
+// Costs for unvisited required stops give a lower bound, including during a replan.
+export function noPlanExplanation(result,park) {
+  const settings=result.settings||{},missing=new Set((result.omissions||[]).map(item=>item.id));
+  const foodIds=new Set(park.activities.filter(a=>FOOD.has(a.category)).map(a=>a.id));
+  const requiredFood=(settings.selections||[]).filter(item=>missing.has(item.id)&&foodIds.has(item.id)&&item.required)
+    .reduce((sum,item)=>sum+(Number(item.cost)||0),0);
+  const paidDpa=(settings.purchases||[]).reduce((sum,item)=>sum+(Number(item.cost)||0),0);
+  const spent=Math.max(settings.spentBudget||0,paidDpa);
+  if(spent>settings.budget)return `支払い済みの${money(spent)}が予算上限の${money(settings.budget)}を超えています。予算と支払い記録を確認してください。`;
+  if(requiredFood>settings.foodBudget)return `必須のフードだけで${money(requiredFood)}かかります。フードの上限（${money(settings.foodBudget)}）か各施設の予算を見直してください。`;
+  if(result.diagnostics?.timedOut)return '探索時間内にすべての条件を満たす案は見つかりませんでした。探索時間を延ばすか、下の項目から条件を見直してください。';
+  return 'すべての条件に収まる案は見つかりませんでした。下の項目から条件を開けます。';
+}
+
+// A search may time out. Suggest concrete edits without claiming any one wish caused the failure.
+export function noPlanActions(result,park) {
+  if(result?.status!=='no-plan')return [];
+  const settings=result.settings||{},actions=[];
+  const activities=new Map(park.activities.map(a=>[a.id,a]));
+  for(const omitted of result.omissions||[]){
+    const wish=settings.selections?.find(item=>item.id===omitted.id);
+    if(!wish?.required&&wish?.dpaMode!=='owned')continue;
+    const activity=activities.get(wish.id);
+    const field=wish.dpaMode==='owned'?'dpaStart':ENTERTAINMENT.has(activity?.category)?'showTimes':FOOD.has(activity?.category)?'earliest':'required';
+    actions.push({wishId:wish.id,field,label:(activity?.name||omitted.name)+'の条件'});
+  }
+  if(settings.fixedBreaks?.length)actions.push({field:'breakEditor',label:'指定した休憩'});
+  if((result.omissions||[]).some(item=>item.required&&FOOD.has(activities.get(item.id)?.category)))actions.push({field:'foodBudget',label:'フードの上限'});
+  actions.push({field:'budget',label:'予算上限'},{field:'exitTime',label:'退園予定'});
+  if(result.diagnostics?.timedOut)actions.push({field:'searchSeconds',label:'探索する時間'});
+  return actions;
+}
+
+const DPA_CHOICES = [
+  ['none', '使わない'],
+  ['consider', '購入候補'],
+  ['owned', '取得済み'],
+  ['unavailable', '売り切れ'],
+];
+
+export function dpaEditor(activity, selection, park, purchase) {
+  if (!activity.dpa) return '';
+  const mode = selection.dpaMode || 'none';
+  const owned = mode === 'owned', showSlot = owned || mode === 'consider';
+  const id = escapeHtml(activity.id);
+  const radios = DPA_CHOICES.map(([value, label]) =>
+    `<label><input type="radio" name="dpa-${id}" id="dpa-${id}-${value}" data-field="dpaMode" value="${value}"${mode === value ? ' checked' : ''}><span>${label}</span></label>`
+  ).join('');
+  const timeField = (key, label) =>
+    `<label>${label}<input type="time" data-field="${key}" value="${selection[key] == null ? '' : timeText(selection[key])}" aria-required="true"></label>`;
+  const extraSlots = mode === 'consider' ? (selection.dpaAvailableWindows || []).filter(([start, end]) => start !== selection.dpaStart || end !== selection.dpaEnd) : [];
+  const slotLabels = owned ? ['取得した枠の開始', '取得した枠の終了'] : ['販売中の枠の開始', '販売中の枠の終了'];
+  const note = owned ? '公式アプリの購入内容を入力してください。この枠を必ず予定に入れます。'
+    : mode === 'consider' ? '公式アプリで確認した枠を入力してください。予算内で通常利用と比べます。'
+    : mode === 'unavailable' ? 'この施設はDPAを使わずに計画します。' : '';
+  const location = showSlot && activity.category === 'parade' ?
+    `<label class="full-field">DPAの集合・鑑賞場所<select data-field="nodeOverride" required><option value="">公式アプリの場所を選ぶ</option>${selectableNodes(park).map(n => `<option value="${escapeHtml(n.id)}"${selection.nodeOverride === n.id ? ' selected' : ''}>${escapeHtml(n.name || n.id)}</option>`).join('')}</select></label>` : '';
+  return `<fieldset class="dpa-editor" aria-label="${escapeHtml(activity.name)}のディズニー・プレミアアクセス"><legend><abbr title="ディズニー・プレミアアクセス">DPA</abbr> <span>${money(activity.dpa.price)}／人</span></legend>
+    <div class="dpa-choices">${radios}</div>
+    ${note ? `<p class="dpa-help">${note}</p>` : ''}
+    ${showSlot ? `<div class="wish-fields dpa-times">${timeField('dpaStart', slotLabels[0])}${timeField('dpaEnd', slotLabels[1])}${owned ? timeField('dpaPurchasedAt', '購入した時刻') : ''}</div>${location}` : ''}
+    ${extraSlots.length ? `<p class="dpa-help">ほかの購入候補枠　${extraSlots.map(([start, end]) => `${timeText(start)}–${timeText(end)}`).join('、')}</p>` : ''}
+    ${purchase && !owned ? `<p class="dpa-help">支払済みに${money(purchase.cost)}を計上しています。<button type="button" class="text-button" data-open-purchase="${id}">購入履歴を確認</button></p>` : ''}
+  </fieldset>`;
+}
+
+/** Purchased records are facts for the day, separate from a wish's current DPA mode. */
+export function changeDpaMode(selection, mode, purchase) {
+  selection.dpaMode = mode;
+  for (const key of ['dpaStart', 'dpaEnd', 'dpaPurchasedAt', 'dpaAvailableWindows', 'nodeOverride', 'viewingNode']) delete selection[key];
+  if (mode === 'owned' && purchase) {
+    Object.assign(selection, {dpaStart:purchase.start, dpaEnd:purchase.end, dpaPurchasedAt:purchase.purchasedAt});
+  }
+}
+
 export const PARK_COPY = {
   land:['夢と魔法の1日を、','いちばん輝く順番で。'],
   sea:['イマジネーションの海を巡る、','最高の旅のスケジュール。'],
@@ -118,13 +240,25 @@ export function initialiseApp() {
   let contingencyWorker = null, contingencyResult = null, contingencyBase = null, contingencyRequest = 0;
   let catalogue, calendarData, externalPanel, preparation = null, worker = null, requestId = 0, searchStarted = 0, progressTimer = null, latestPreview = null, wishlistGenre = 'all', lastBreakSuggestionResult = null, workflowView = 'wishlist', openedPlanId = null;
   const modelCache=new Map();
+  // An invalid edit stays with its wish when the user switches genre or opens another card.
+  const wishDrafts=new WeakMap();
   let state = {parkId:'land',settings:defaultSettings(),result:null,history:[],parkStates:{}};
   const currentPark = () => catalogue.parks.find(p => p.id === state.parkId) || catalogue.parks[0];
   const activities = () => currentPark().activities;
   const byId = id => activities().find(a => a.id === id);
   const setStatus = (message,error = false) => { $('status').textContent=message; $('status').classList.toggle('is-error',error); };
   const safely = action => async(...args) => { try {await action(...args);}catch(error){setStatus(error.message || '入力を確認してもう一度試してください。',true);} };
-  const numberInput = (id,min,max,step=1) => {const n=Number($(id).value);if(!Number.isFinite(n)||n<min||n>max||!Number.isInteger(n/step))throw Error(`${$(id).closest('label')?.textContent.trim().split('\n')[0] || id}を確認してください。`);return n;};
+  const setSolveDisabled = disabled => {for(const button of document.querySelectorAll('[data-start-plan]'))button.disabled=disabled;};
+  const numberInput = (id,min,max,step=1) => {
+    const input=$(id),value=Number(input.value);
+    if(input.value.trim()!==''&&Number.isFinite(value)&&value>=min&&value<=max&&Number.isInteger(value/step))return value;
+    const name=input.labels?.[0]?.firstChild?.textContent.trim()||'数値';
+    throw inputError(`${name}は${min}〜${max}の${step===1?'整数':step+'単位'}で入力してください。`,id);
+  };
+  const timeInput = id => {
+    try{return minute($(id).value);}
+    catch{throw inputError('時刻を時・分まで入力してください。',id);}
+  };
   const selected = id => state.settings.selections.find(s => s.id === id);
 
   function syncTimeEditors(){
@@ -164,29 +298,28 @@ export function initialiseApp() {
     if(preparation){preparation.abort();preparation=null;}
     if(worker){worker.terminate();worker=null;}
     clearInterval(progressTimer);progressTimer=null;
-    $('solveButton').disabled=false;$('cancelSearch').hidden=true;$('searchProgress').hidden=true;$('scheduleEmptyText').textContent=state.result?'':'まだ計画は作成されていません。希望を選び、プランを考えてみましょう。';
+    setSolveDisabled(false);$('cancelSearch').hidden=true;$('searchProgress').hidden=true;$('scheduleEmptyText').textContent=state.result?'':'まだ計画は作成されていません。希望を選び、プランを考えてみましょう。';
     if(keepBest && latestPreview){state.result=latestPreview;state.resultDirty=false;renderResult();renderMap();}
   }
-  function markResultStale(){if(worker||preparation){stopSearch();setStatus('条件を変更したため探索を止めました。新しい条件でプランを考えてください。');}if(state.result){state.resultDirty=true;renderResult();}}
+  function markResultStale(){clearPlanFeedback();if(worker||preparation){stopSearch();setStatus('条件を変更したため探索を止めました。新しい条件でプランを考えてください。');}if(state.result){state.resultDirty=true;renderResult();}}
   function rememberOwnedPurchase(selection){
     if(selection.dpaMode!=='owned'||!Number.isInteger(selection.dpaStart)||!Number.isInteger(selection.dpaEnd)||!Number.isInteger(selection.dpaPurchasedAt)||selection.dpaStart>=selection.dpaEnd||selection.dpaPurchasedAt>selection.dpaStart)return;
     const activity=byId(selection.id);if(!activity?.dpa)return;const purchases=state.settings.purchases||[];const existing=purchases.find(p=>p.id===selection.id);const purchase={id:selection.id,kind:activity.dpa.kind||'attraction',purchasedAt:selection.dpaPurchasedAt,start:selection.dpaStart,end:selection.dpaEnd,cost:existing?.cost ?? activity.dpa.price};
     if(existing)Object.assign(existing,purchase);else purchases.push(purchase);state.settings.purchases=purchases;renderPurchaseHistory();
   }
   function readSettings() {
-    for(const selection of state.settings.selections)rememberOwnedPurchase(selection);
-    const settings={...state.settings,date:$('visitDate').value,entry:minute($('entryTime').value),exit:minute($('exitTime').value),weather:$('weather').value,weatherMode:$('weatherMode').value,speed:numberInput('walkSpeed',20,150),restEvery:numberInput('restEvery',0,480),restMinutes:numberInput('restMinutes',0,60),searchSeconds:numberInput('searchSeconds',1,120),searchMethod:$('searchMethod').value,budget:numberInput('budget',0,1000000,100),foodBudget:numberInput('foodBudget',0,1000000,100),dpaBudget:numberInput('dpaBudget',0,1000000,100),souvenirReserve:numberInput('souvenirReserve',0,1000000,100),souvenirMode:$('souvenirMode').value,budgetPreference:$('budgetPreference').value,crowdMode:$('crowdMode').value,crowdLevel:$('crowdLevel').value,history:state.history || [],spentBudget:numberInput('spentBudget',0,1000000,100)};
+    const settings={...state.settings,date:$('visitDate').value,entry:timeInput('entryTime'),exit:timeInput('exitTime'),weather:$('weather').value,weatherMode:$('weatherMode').value,speed:numberInput('walkSpeed',20,150),restEvery:numberInput('restEvery',0,480),restMinutes:numberInput('restMinutes',0,60),searchSeconds:numberInput('searchSeconds',1,120),searchMethod:$('searchMethod').value,budget:numberInput('budget',0,1000000,100),foodBudget:numberInput('foodBudget',0,1000000,100),dpaBudget:numberInput('dpaBudget',0,1000000,100),souvenirReserve:numberInput('souvenirReserve',0,1000000,100),souvenirMode:$('souvenirMode').value,budgetPreference:$('budgetPreference').value,crowdMode:$('crowdMode').value,crowdLevel:$('crowdLevel').value,history:state.history || [],spentBudget:numberInput('spentBudget',0,1000000,100)};
     settings.waitBufferMode = $('waitBuffer').value === 'auto' ? 'auto' : 'fixed';
     settings.waitBufferMinutes = settings.waitBufferMode === 'auto' ? 5 : numberInput('waitBuffer',0,30);
     settings.queueDelayMinutes = numberInput('queueDelay',0,60);
-    if(!/^\d{4}-\d{2}-\d{2}$/.test(settings.date))throw Error('訪問日を指定してください。');
-    if(settings.entry>=settings.exit)throw Error('退園予定は入園予定より後にしてください。');
-    if(settings.souvenirReserve>settings.budget)throw Error('お土産に残す金額が予算を超えています。');
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(settings.date))throw inputError('訪問日を指定してください。','visitDate');
+    if(settings.entry>=settings.exit)throw inputError('退園予定は入園予定より後にしてください。','exitTime');
+    if(settings.souvenirReserve>settings.budget)throw inputError('お土産に残す金額を予算上限以下にしてください。','souvenirReserve');
     settings.purchases=Array.isArray(state.settings.purchases)?state.settings.purchases:[];
-    if($('replanEnabled').checked){settings.replanFrom=minute($('replanTime').value);settings.currentNode=$('currentNode').value;if(settings.replanFrom<settings.entry||settings.replanFrom>=settings.exit)throw Error('組み替え開始は入園から退園までの間にしてください。');}else{delete settings.replanFrom;delete settings.currentNode;}
+    if($('replanEnabled').checked){settings.replanFrom=timeInput('replanTime');settings.currentNode=$('currentNode').value;if(settings.replanFrom<settings.entry||settings.replanFrom>=settings.exit)throw inputError('組み替え開始は入園予定から退園予定より前の時刻にしてください。','replanTime');}else{delete settings.replanFrom;delete settings.currentNode;}
     if(settings.weatherMode==='manual'){settings.weatherForecast=null;settings.weatherNotice='天気は手動の設定を使います。';}
     else if(state.settings.weatherMode==='manual'){settings.weatherForecast=null;settings.weatherNotice='プランを考えると訪問日の予報を取得します。';}
-    state.settings=settings;return settings;
+    state.settings=settings;for(const selection of settings.selections)rememberOwnedPurchase(selection);return settings;
   }
   function writeSettings() {
     const s=state.settings;const bounds=parkTimeBounds(currentPark(),s.date);s.entry=clampClock(s.entry,bounds);s.exit=clampClock(s.exit,bounds);
@@ -199,15 +332,21 @@ export function initialiseApp() {
     $('searchSeconds').querySelector('[data-custom-duration]')?.remove();if(![5,15,30,60,120].includes(Number(s.searchSeconds))){const option=document.createElement('option');option.value=s.searchSeconds;option.textContent=`指定した上限（${s.searchSeconds}秒）`;option.dataset.customDuration='true';$('searchSeconds').append(option);}
     for(const [id,key] of Object.entries({visitDate:'date',weather:'weather',weatherMode:'weatherMode',walkSpeed:'speed',restEvery:'restEvery',restMinutes:'restMinutes',searchSeconds:'searchSeconds',searchMethod:'searchMethod',budget:'budget',foodBudget:'foodBudget',dpaBudget:'dpaBudget',souvenirReserve:'souvenirReserve',souvenirMode:'souvenirMode',budgetPreference:'budgetPreference',crowdMode:'crowdMode',crowdLevel:'crowdLevel',spentBudget:'spentBudget'}))$(id).value=String(s[key] ?? defaultSettings()[key]);
     $('weatherStatus').textContent=s.weatherNotice||(s.weatherMode==='manual'?'天気は手動の設定を使います。':'プランを考えると訪問日の予報を取得します。取得できない場合は選択した天気で計画します。');
+    $('visitTimeLinked').checked=s.visitTimeLinked===true;
     $('entryTime').value=timeText(s.entry);$('exitTime').value=timeText(s.exit);$('replanEnabled').checked=Number.isInteger(s.replanFrom);$('replanTime').value=timeText(s.replanFrom ?? 840);renderPurchaseHistory();renderFixedBreaks();updateDayOverview();syncTimeEditors();
   }
   function cleanState(value) {
     if(!value || typeof value!=='object'||!catalogue.parks.some(p=>p.id===value.parkId)||!value.settings || !Array.isArray(value.settings.selections))throw Error('この計画データの形式を確認してください。');
     const park=catalogue.parks.find(p=>p.id===value.parkId),ids=new Set(park.activities.map(a=>a.id));
     const selections=value.settings.selections.filter(s=>s&&typeof s==='object'&&ids.has(s.id));
+    for(const s of selections){
+      const first=s.dpaAvailableWindows?.[0];
+      if(s.dpaMode==='consider'&&first&&s.dpaStart==null&&s.dpaEnd==null)[s.dpaStart,s.dpaEnd]=first;
+    }
     return {parkId:value.parkId,settings:{...defaultSettings(),...value.settings,waitBufferMode:value.settings.waitBufferMode??'fixed',waitBufferMinutes:value.settings.waitBufferMinutes??0,queueDelayMinutes:value.settings.queueDelayMinutes??0,selections},result:value.result||null,resultDirty:!!value.resultDirty,history:Array.isArray(value.history)?value.history:[],parkStates:{}};
   }
   function updateContext() {
+    clearPlanFeedback();
     const park=currentPark(),s=state.settings;if(calendarData&&!s.calendarData)s.calendarData=calendarData;if(s.waitModel?.parkId===park.id)modelCache.set(park.id,s.waitModel);else if(modelCache.has(park.id))s.waitModel=modelCache.get(park.id);
     document.body.dataset.park=state.parkId;
     document.title=`TDRoute — ${park.name}`;
@@ -229,7 +368,7 @@ export function initialiseApp() {
     updateDayOverview();updateCrowd();renderCatalogue();renderWishlist();renderMap();renderResult();renderSources();syncTimeEditors();
     document.dispatchEvent(new CustomEvent('park-context-change',{detail:{park,settings:state.settings,history:state.history}}));
   }
-  function renderPurchaseHistory(){if(!catalogue)return;const purchases=state.settings.purchases||[];$('purchaseHistory').innerHTML=purchases.length?purchases.map((p,index)=>`<div class="purchase-item"><strong>${escapeHtml(byId(p.id)?.name||p.id)}</strong><p>購入 ${timeText(p.purchasedAt)} · 利用 ${timeText(p.start)}–${timeText(p.end)} · ${money(p.cost)}</p><button type="button" data-remove-purchase="${index}">履歴から外す</button></div>`).join(''):'<p class="field-note">購入履歴はまだありません。</p>';}
+  function renderPurchaseHistory(){if(!catalogue)return;const purchases=state.settings.purchases||[];$('purchaseHistory').innerHTML=purchases.length?purchases.map((p,index)=>`<div class="purchase-item" id="purchase-record-${escapeHtml(p.id)}" tabindex="-1"><strong>${escapeHtml(byId(p.id)?.name||p.id)}</strong><p>購入 ${timeText(p.purchasedAt)} · 利用 ${timeText(p.start)}–${timeText(p.end)} · ${money(p.cost)}</p><button type="button" data-remove-purchase="${index}">履歴から外す</button></div>`).join(''):'<p class="field-note">購入履歴はまだありません。</p>';}
   function updateCrowd() {
     $('weatherStatus').textContent=state.settings.weatherNotice||(state.settings.weatherMode==='manual'?'天気は手動の設定を使います。':'プランを考えると訪問日の予報を取得します。');updateDayOverview();
     const s=state.settings,events=(currentPark().events||[]).filter(e=>e.startDate<=s.date&&e.endDate>=s.date);
@@ -297,28 +436,61 @@ export function initialiseApp() {
       const a=byId(s.id);if(!a)return '';
       const timed=FOOD.has(a.category),show=ENTERTAINMENT.has(a.category),greeting=a.category==='greeting',paid=FOOD.has(a.category)||a.category==='shop';
       const schedule=activitySchedule(a,state.settings.date),scheduleCurrent=schedule.confirmed;
-      const dpa=a.dpa;
+      const wishTimes = `<label>この時刻から<input type="time" data-field="earliest" value="${s.earliest == null ? '' : timeText(s.earliest)}"></label>
+        <label>この時刻までに終了<input type="time" data-field="latest" value="${s.latest == null ? '' : timeText(s.latest)}"></label>
+        <label class="check-field window-link-field"><input type="checkbox" data-field="timeWindowLinked"${s.timeWindowLinked !== false ? ' checked' : ''}>2時間枠で連動</label>`;
+      const ownedDpa=s.dpaMode==='owned',required=ownedDpa||s.required;
+      const dpa=dpaEditor(a,s,currentPark(),state.settings.purchases.find(p=>p.id===s.id));
       const groupTitle=['snack','popcorn'].includes(a.category)&&byId(list[index-1]?.id)?.category!==a.category?`<h3 class="catalogue-group-title">${CATEGORY[a.category]}</h3>`:'';
       const pauseInfo=a.id==='sea-attraction-230'?operationPauseInfo(currentPark(),a,s,state.settings):null;
-      return `${groupTitle}<article class="wish-card genre-${genreOf(a.category)}" data-wish-id="${escapeHtml(s.id)}"><div class="wish-heading"><div><p class="wish-category">${escapeHtml(CATEGORY[a.category]||a.category)} / ${escapeHtml(a.area||'')}</p><h4>${escapeHtml(a.name)}</h4></div><button class="remove-wish" data-remove="${escapeHtml(s.id)}" type="button" aria-label="${escapeHtml(a.name)}を希望から外す">×</button></div>${foodLinks(a)}${schedule.closed?'<p class="schedule-note">訪問日は休止予定です。別の日や施設を検討してください。</p>':''}<div class="wish-main-controls"><div class="weight-control${s.required?' is-required':''}"><span>${s.required?'必須 <strong>必ず入れる条件</strong>':`重要度 <strong>${s.weight} · ${escapeHtml(WEIGHT_LABELS[s.weight]||'行きたい')}</strong>`}</span><div class="weight-buttons" role="group" aria-label="${escapeHtml(a.name)}の重要度">${weightButtons(s)}</div></div><label class="check-field"><input type="checkbox" data-field="required"${s.required?' checked':''}>必ず入れる</label></div><div class="wish-fields">${timed?`<label>この時刻から<input type="time" data-field="earliest" value="${timeText(s.earliest ?? state.settings.entry)}"></label><label>この時刻までに終了<input type="time" data-field="latest" value="${timeText(s.latest ?? state.settings.exit)}"></label><label class="check-field window-link-field"><input type="checkbox" data-field="timeWindowLinked"${s.timeWindowLinked!==false?' checked':''}>2時間枠で連動</label>`:''}${paid?`<label>${a.category==='shop'?'使いたい金額':'フードの予算'}<input type="number" min="0" max="1000000" step="100" data-field="cost" value="${escapeHtml(s.cost ?? a.cost ?? 0)}" aria-label="${escapeHtml(a.name)}の予算（円）"></label>`:''}<label>体験・滞在（待ち時間を除く）<input type="number" min="1" max="360" step="1" data-field="duration" value="${escapeHtml(s.duration ?? a.duration)}" aria-label="${escapeHtml(a.name)}の滞在時間（分）"></label><label>待ち時間（手動時）<input type="number" min="0" max="360" step="5" data-field="manualWait" value="${escapeHtml(s.manualWait ?? a.baseWait)}" aria-label="${escapeHtml(a.name)}の待ち時間（分）"></label></div>${show?`<div class="schedule-note">公演時刻：${scheduleCurrent?`${escapeHtml(schedule.date)}の公式時刻を表示しています。`:'訪問日の公式情報を確認して入力してください。'}${a.showTimesDate?` 収録データの確認日 ${escapeHtml(a.showTimesDate)}`:''}${a.scheduleNote?` ${escapeHtml(a.scheduleNote)}`:''}</div><label class="full-field">訪問日の開演時刻（例 11:00, 13:30）<input type="text" data-field="showTimes" value="${escapeHtml((s.showTimes||[]).map(timeText).join(', '))}" placeholder="11:00, 13:30"></label><label class="check-field section-gap"><input type="checkbox" data-field="confirmSchedule"${s.confirmSchedule?' checked':''}>この日の公演時刻を確認した</label>`:''}${a.access&&a.access!=='normal'?`<div class="access-note"><label><input type="checkbox" data-field="confirmedAccess"${s.confirmedAccess?' checked':''}>${a.access==='entry'?'エントリー受付の結果・入場条件を確認した':'予約・利用条件を確認した'}</label></div>`:''}${pauseInfo?`<div class="gondola-note"><label class="check-field"><input type="checkbox" data-setting="gondolaAvoidHarbourShows"${state.settings.gondolaAvoidHarbourShows!==false?' checked':''}>ショー上演中を避ける目安</label><p>${escapeHtml(pauseInfo.note)}</p>${pauseInfo.windows.length?`<p>避ける時間帯：${pauseInfo.windows.map(pair=>`${timeText(pair[0])}–${timeText(pair[1])}`).join(' / ')}</p>`:''}<label class="full-field">確認した休止時間（例 12:00-13:00）<input type="text" data-field="pauseWindows" value="${escapeHtml((s.pauseWindows||[]).map(pair=>pair.map(timeText).join('-')).join(', '))}" placeholder="12:00-13:00, 19:00-20:00"></label></div>`:''}${dpa?`<details class="wish-details"${s.dpaMode&&s.dpaMode!=='none'?' open':''}><summary>DPA・時間指定を設定　${money(dpa.price)}</summary><label class="full-field">DPAをどう使う？<select data-field="dpaMode"><option value="none"${s.dpaMode==='none'?' selected':''}>通常の待ち列で利用</option><option value="consider"${s.dpaMode==='consider'?' selected':''}>購入できる枠を候補にする</option><option value="owned"${s.dpaMode==='owned'?' selected':''}>取得済みの枠を使う</option><option value="unavailable"${s.dpaMode==='unavailable'?' selected':''}>利用しない・売り切れ</option></select></label><div class="wish-fields"><label>利用・入場開始<input type="time" data-field="dpaStart" value="${s.dpaStart==null?'':timeText(s.dpaStart)}"></label><label>利用・入場終了<input type="time" data-field="dpaEnd" value="${s.dpaEnd==null?'':timeText(s.dpaEnd)}"></label><label>取得済み：購入した時刻<input type="time" data-field="dpaPurchasedAt" value="${s.dpaPurchasedAt==null?'':timeText(s.dpaPurchasedAt)}"></label></div>${a.category==='parade'?`<label class="full-field">DPAの集合・鑑賞場所<select data-field="nodeOverride"><option value="">公式アプリの場所を選ぶ</option>${selectableNodes(currentPark()).map(n=>`<option value="${escapeHtml(n.id)}"${s.nodeOverride===n.id?' selected':''}>${escapeHtml(n.name||n.id)}</option>`).join('')}</select></label>`:''}<p class="wish-foot">取得済みの枠は必ず予定に含めます。</p></details>`:''}<details class="wish-details"><summary>営業時間を調整する</summary><p class="wish-foot">${escapeHtml(a.dailySchedules?.[state.settings.date]?state.settings.date:a.operatingDate||a.windowsDate||'収録データ')}の営業時間を基準に計算します。訪問日の営業に合わせて変更できます。</p><div class="wish-fields"><label>営業開始<input type="time" data-field="windowStart" value="${timeText(s.windows?.[0]?.[0] ?? schedule.windows?.[0]?.[0] ?? state.settings.entry)}"></label><label>営業終了<input type="time" data-field="windowEnd" value="${timeText(s.windows?.[0]?.[1] ?? schedule.windows?.[0]?.[1] ?? state.settings.exit)}"></label></div></details></article>`;
+      return `${groupTitle}<article class="wish-card genre-${genreOf(a.category)}" data-wish-id="${escapeHtml(s.id)}"><div class="wish-heading"><div><p class="wish-category">${escapeHtml(CATEGORY[a.category]||a.category)} / ${escapeHtml(a.area||'')}</p><h4>${escapeHtml(a.name)}</h4></div><button class="remove-wish" data-remove="${escapeHtml(s.id)}" type="button" aria-label="${escapeHtml(a.name)}を希望から外す">×</button></div>${foodLinks(a)}${schedule.closed?'<p class="schedule-note">訪問日は休止予定です。別の日や施設を検討してください。</p>':''}<div class="wish-main-controls"><div class="weight-control${required?' is-required':''}"><span>${required?'必須 <strong>必ず入れる条件</strong>':`重要度 <strong>${s.weight} · ${escapeHtml(WEIGHT_LABELS[s.weight]||'行きたい')}</strong>`}</span><div class="weight-buttons" role="group" aria-label="${escapeHtml(a.name)}の重要度">${weightButtons({...s,required})}</div></div><label class="check-field"><input type="checkbox" data-field="required"${required?' checked':''}${ownedDpa?' disabled':''}>必ず入れる</label></div><div class="wish-fields">${timed ? wishTimes : ''}${paid?`<label>${a.category==='shop'?'使いたい金額':'フードの予算'}<input type="number" min="0" max="1000000" step="100" data-field="cost" value="${escapeHtml(s.cost ?? a.cost ?? 0)}" aria-label="${escapeHtml(a.name)}の予算（円）"></label>`:''}<label>体験・滞在（待ち時間を除く）<input type="number" min="1" max="360" step="1" data-field="duration" value="${escapeHtml(s.duration ?? a.duration)}" aria-label="${escapeHtml(a.name)}の滞在時間（分）"></label><label>待ち時間（手動時）<input type="number" min="0" max="360" step="5" data-field="manualWait" value="${escapeHtml(s.manualWait ?? a.baseWait)}" aria-label="${escapeHtml(a.name)}の待ち時間（分）"></label></div>${timed ? '' : `<details class="wish-details"${s.earliest != null || s.latest != null ? ' open' : ''}><summary>希望の時間帯</summary><div class="wish-fields">${wishTimes}</div></details>`}${show?`<div class="schedule-note">公演時刻：${scheduleCurrent?`${escapeHtml(schedule.date)}の公式時刻を表示しています。`:'訪問日の公式情報を確認して入力してください。'}${a.showTimesDate?` 収録データの確認日 ${escapeHtml(a.showTimesDate)}`:''}${a.scheduleNote?` ${escapeHtml(a.scheduleNote)}`:''}</div><label class="full-field">訪問日の開演時刻（例 11:00, 13:30）<input type="text" data-field="showTimes" value="${escapeHtml((s.showTimes||[]).map(timeText).join(', '))}" placeholder="11:00, 13:30"></label><label class="check-field section-gap"><input type="checkbox" data-field="confirmSchedule"${s.confirmSchedule?' checked':''}>この日の公演時刻を確認した</label>`:''}${a.access&&a.access!=='normal'?`<div class="access-note"><label><input type="checkbox" data-field="confirmedAccess"${s.confirmedAccess?' checked':''}>${a.access==='entry'?'エントリー受付の結果・入場条件を確認した':'予約・利用条件を確認した'}</label></div>`:''}${pauseInfo?`<div class="gondola-note"><label class="check-field"><input type="checkbox" data-setting="gondolaAvoidHarbourShows"${state.settings.gondolaAvoidHarbourShows!==false?' checked':''}>ショー上演中を避ける目安</label><p>${escapeHtml(pauseInfo.note)}</p><p data-pause-summary${pauseInfo.windows.length?'':' hidden'}>${pauseWindowSummary(pauseInfo)}</p><label class="full-field">確認した休止時間（例 12:00-13:00）<input type="text" data-field="pauseWindows" value="${escapeHtml((s.pauseWindows||[]).map(pair=>pair.map(timeText).join('-')).join(', '))}" placeholder="12:00-13:00, 19:00-20:00"></label></div>`:''}${dpa}<details class="wish-details"><summary>営業時間を調整する</summary><p class="wish-foot">${escapeHtml(a.dailySchedules?.[state.settings.date]?state.settings.date:a.operatingDate||a.windowsDate||'収録データ')}の営業時間を基準に計算します。訪問日の営業に合わせて変更できます。</p><div class="wish-fields"><label>営業開始<input type="time" data-field="windowStart" value="${timeText(s.windows?.[0]?.[0] ?? schedule.windows?.[0]?.[0] ?? state.settings.entry)}"></label><label>営業終了<input type="time" data-field="windowEnd" value="${timeText(s.windows?.[0]?.[1] ?? schedule.windows?.[0]?.[1] ?? state.settings.exit)}"></label></div></details></article>`;
     }).join(''):all.length?'<p class="empty-message">このジャンルの希望はまだありません。施設カードから追加できます。</p>':'<p class="empty-message">地図や施設カードから行きたい場所を選んでください。</p>';
+    for(const card of $('wishlist').querySelectorAll('[data-wish-id]')){
+      const drafts=wishDrafts.get(selected(card.dataset.wishId));
+      if(!drafts?.size)continue;
+      for(const input of card.querySelectorAll('[data-field]')){
+        const draft=drafts.get(input.dataset.field);
+        if(draft)input.value=draft.value;
+      }
+    }
     syncTimeEditors();
   }
   function updateSelection(event) {
     const target=event.target,card=target.closest('[data-wish-id]');if(!card)return;if(target.dataset.setting==='gondolaAvoidHarbourShows'){state.settings.gondolaAvoidHarbourShows=target.checked;markResultStale();renderWishlist();return;}if(!target.dataset.field)return;
     const s=selected(card.dataset.wishId);if(!s)return;
     const key=target.dataset.field;
+    if(key==='dpaMode'){
+      changeDpaMode(s,target.value,state.settings.purchases.find(p=>p.id===s.id));
+      renderWishlist();
+      $(`dpa-${s.id}-${s.dpaMode}`)?.focus({preventScroll:true});
+      markResultStale();
+      return;
+    }
+    const previousStart=s.dpaStart,previousEnd=s.dpaEnd;
     if(target.type==='checkbox')s[key]=target.checked;
     else if(['earliest','latest','dpaStart','dpaEnd','dpaPurchasedAt'].includes(key)){if(!target.value){delete s[key];}else{s[key]=minute(target.value);}}
     else if(['windowStart','windowEnd'].includes(key)){const a=byId(s.id);const window=(s.windows?.[0]||activitySchedule(a,state.settings.date).windows?.[0]||[state.settings.entry,state.settings.exit]).slice();window[key==='windowStart'?0:1]=minute(target.value);if(window[0]>=window[1])throw Error('営業終了を開始より後にしてください。');s.windows=[window];}
-    else if(key==='pauseWindows'){s.pauseWindows=target.value.split(/[,、]+/).map(value=>value.trim()).filter(Boolean).map(value=>{const pair=value.split(/[-–〜]/).map(value=>minute(value.trim()));if(pair.length!==2||pair[0]>=pair[1]||pair[0]<480||pair[1]>1319)throw Error('休止時間は08:00〜21:59の開始-終了で入力してください。');return pair;});renderWishlist();}
+    else if(key==='pauseWindows'){s.pauseWindows=target.value.split(/[,、]+/).map(value=>value.trim()).filter(Boolean).map(value=>{const pair=value.split(/[-–〜]/).map(value=>minute(value.trim()));if(pair.length!==2||pair[0]>=pair[1]||pair[0]<480||pair[1]>1319)throw Error('休止時間は08:00〜21:59の開始-終了で入力してください。');return pair;});
+      const info=operationPauseInfo(currentPark(),byId(s.id),s,state.settings),note=card.querySelector('[data-pause-summary]');
+      note.textContent=pauseWindowSummary(info);note.hidden=!info.windows.length;
+    }
     else if(key==='showTimes'){s.showTimes=target.value.split(/[,、\s]+/).filter(Boolean).map(minute);}
-    else if(target.type==='number'){const value=Number(target.value);if(!Number.isInteger(value)||value<Number(target.min||0)||value>Number(target.max||1000000)||(key==='cost'&&value%100!==0))throw Error('金額は100円単位、時間は0以上の整数で入力してください。');s[key]=value;}
+    else if(target.type==='number'){const value=Number(target.value);if(target.value===''||!Number.isInteger(value)||value<Number(target.min)||value>Number(target.max)||target.validity?.stepMismatch)throw Error(`${target.min}〜${target.max}の${target.step==='1'?'整数':target.step+'単位'}で入力してください。`);s[key]=value;}
     else s[key]=target.value;
-    if(['earliest','latest'].includes(key)&&s.timeWindowLinked!==false&&Number.isInteger(s[key])){Object.assign(s,linkedWishWindow(key,s[key],s,parkTimeBounds(currentPark(),state.settings.date)));for(const name of ['earliest','latest'])card.querySelector(`[data-field="${name}"]`).value=timeText(s[name]);syncTimeEditors();}
-    if(['dpaStart','dpaEnd','dpaMode'].includes(key))s.dpaAvailableWindows=s.dpaMode==='consider'&&Number.isInteger(s.dpaStart)&&Number.isInteger(s.dpaEnd)?[[s.dpaStart,s.dpaEnd]]:[];
-    if(['dpaStart','dpaEnd','dpaMode','dpaPurchasedAt'].includes(key))rememberOwnedPurchase(s);
-    if(key==='dpaMode'){if(s.dpaMode==='owned')s.required=true;renderWishlist();}if(key==='required')renderWishlist();markResultStale();
+    if (['earliest','latest'].includes(key) && s.timeWindowLinked !== false) {
+      const start = card.querySelector('[data-field="earliest"]');
+      const end = card.querySelector('[data-field="latest"]');
+      const pair = linkClockFields(target, start, end, parkTimeBounds(currentPark(), state.settings.date));
+      if (pair) Object.assign(s, pair);
+    }
+    if(s.dpaMode==='consider'&&['dpaStart','dpaEnd'].includes(key)){
+      const alternatives=(s.dpaAvailableWindows||[]).filter(([start,end])=>start!==previousStart||end!==previousEnd);
+      const valid=Number.isInteger(s.dpaStart)&&Number.isInteger(s.dpaEnd)&&s.dpaStart<s.dpaEnd;
+      s.dpaAvailableWindows=valid?[[s.dpaStart,s.dpaEnd],...alternatives.filter(([start,end])=>start!==s.dpaStart||end!==s.dpaEnd)]:alternatives;
+    }
+    if(['dpaStart','dpaEnd','dpaPurchasedAt'].includes(key))rememberOwnedPurchase(s);
+    if(key==='nodeOverride'&&!s.nodeOverride)delete s.nodeOverride;
+    if(key==='required')renderWishlist();if(event.type!=='input')markResultStale();
   }
   function renderMap(){ if(catalogue)renderParkMap($('parkMap'),currentPark(),{plan:state.result,selectedIds:state.settings.selections.map(s=>s.id),onSelect:addSelection}); }
   function renderResult() {
@@ -329,14 +501,21 @@ export function initialiseApp() {
     const percent=Number(c.percent)||0;
     $('resultSummary').innerHTML=`<div class="metric"><strong>${Math.round(percent)}<small>%</small></strong><span>希望の重要度を反映</span></div><div class="metric"><strong>${escapeHtml(c.count ?? result.visits?.length ?? 0)}<small> / ${escapeHtml(c.totalCount ?? state.settings.selections.length)}</small></strong><span>予定に入った希望</span></div><div class="metric"><strong>${(Number(t.walkingMetres||0)/1000).toFixed(1)}<small> km</small></strong><span>歩く距離の目安</span></div><div class="metric"><strong>${Math.round(Number(t.cost)||0).toLocaleString('ja-JP')}<small>円</small></strong><span>予定の支出合計</span></div>`;
     const planSettings=result.settings||state.settings;
-    $('resultExplanation').textContent=result.status==='feasible'?`${state.resultDirty?'条件を変更しています。現在の希望で再探索してください。 ':''}${planSettings.date} ${timeText(planSettings.entry)}–${timeText(planSettings.exit)} · フード ${money(t.foodCost)} · DPA ${money(t.dpaCost)} · お土産 ${money(t.shoppingCost)}。残り ${money(t.budgetRemaining)}${t.souvenirAllocation?` · お土産へ ${money(t.souvenirAllocation)}`:''}。`:'時間や予算に収まる計画が見つかりませんでした。必須の希望・食事の時間帯・公演枠を見直してください。';
+    const actions=state.resultDirty?[]:noPlanActions(result,currentPark());
+    $('noPlanActions').hidden=!actions.length;
+    $('noPlanActions').innerHTML=actions.map(item=>`<button type="button" data-plan-field="${escapeHtml(item.field)}" data-plan-wish="${escapeHtml(item.wishId||'')}">${escapeHtml(item.label)}を確認</button>`).join('');
+    $('resultSummary').hidden=result.status==='no-plan';
+    $('resultExplanation').textContent=result.status==='feasible'?`${state.resultDirty?'条件を変更しています。現在の希望で再探索してください。 ':''}${planSettings.date} ${timeText(planSettings.entry)}–${timeText(planSettings.exit)} · フード ${money(t.foodCost)} · DPA ${money(t.dpaCost)} · お土産 ${money(t.shoppingCost)}。残り ${money(t.budgetRemaining)}${t.souvenirAllocation?` · お土産へ ${money(t.souvenirAllocation)}`:''}。`:state.resultDirty?'前の条件で探索した結果です。変更した条件でプランを考えてください。':noPlanExplanation(result,currentPark());
     $('timeline').innerHTML=(result.rows||[]).map((row,index)=>{
       const kind=row.kind||row.type||'activity',a=byId(row.activityId),duration=Number(row.end)-Number(row.start);
       const name=row.name || ({walk:'徒歩で移動',wait:'時間を調整',queue:'待ち列',rest:'ひと休み',exit:'退園へ'}[kind]) || a?.name || '予定';
       const details=[];if(row.fixedBreakId)details.push('指定した休憩');if(row.metres)details.push(`${Math.round(row.metres)} m`);if(duration>=0)details.push(`${duration}分`);if(Number(row.cost)>0)details.push(money(row.cost));if(a?.area)details.push(a.area);
       if (kind === 'queue' && (row.bufferMinutes || row.delayMinutes)) details.push(`見込み${row.estimatedMinutes}分＋余裕${row.bufferMinutes || 0}分${row.delayMinutes ? `＋混雑想定${row.delayMinutes}分` : ''}`);
+      const admission=row.dpa&&(kind==='queue'?row.start:result.visits?.find(visit=>visit.id===row.activityId)?.queueStart??row.start);
+      const purchase=row.dpa&&result.purchases?.find(p=>p.id===row.activityId&&p.start<=admission&&admission<p.end);
+      const dpaLabel=purchase?.owned===true?'DPA 取得済み':purchase?.owned===false?'DPA 購入候補':'DPA';
       const forecast=['activity','rest'].includes(kind)?weatherForMinute(planSettings,Number(row.start)):null;
-      return `<article class="timeline-row kind-${escapeHtml(kind)}"><div class="timeline-time">${timeText(row.start)}<small>– ${timeText(row.end)}</small></div><div class="timeline-body${forecast?' has-forecast':''}"><h4>${escapeHtml(name)}${row.dpa?'<span class="dpa-pill">DPA</span>':''}</h4><p>${escapeHtml(details.join(' · '))}</p>${forecast ? forecastCardHtml(forecast) : ''}${kind==='rest'&&!row.preserved&&(row.fixedBreakId||row.autoBreakId)?`<button class="remove-timeline-rest" data-remove-rest-index="${index}" type="button" aria-label="${timeText(row.start)}の休憩を外して再探索">この休憩を外す</button>`:''}</div></article>`;
+      return `<article class="timeline-row kind-${escapeHtml(kind)}"><div class="timeline-time">${timeText(row.start)}<small>– ${timeText(row.end)}</small></div><div class="timeline-body${forecast?' has-forecast':''}"><h4>${escapeHtml(name)}${row.dpa?`<span class="dpa-pill">${dpaLabel}</span>`:''}</h4><p>${escapeHtml(details.join(' · '))}</p>${forecast ? forecastCardHtml(forecast) : ''}${kind==='rest'&&!row.preserved&&(row.fixedBreakId||row.autoBreakId)?`<button class="remove-timeline-rest" data-remove-rest-index="${index}" type="button" aria-label="${timeText(row.start)}の休憩を外して再探索">この休憩を外す</button>`:''}</div></article>`;
     }).join('');
     const omissions=result.omissions||[];$('omissionTitle').textContent=`入らなかった希望 · ${omissions.length}件`;
     $('omissionList').innerHTML=omissions.length?omissions.map(o=>`<div class="omission-item"><span>↗</span><div><strong>${escapeHtml(o.name || byId(o.id)?.name || o.id)}${o.required?' · 必須':''}</strong><p>${escapeHtml(o.reason||'時間・予算・利用枠の条件に合わせて他の希望を優先しました。')}</p></div></div>`).join(''):'<p class="field-note">希望をすべて予定に取り入れられました。</p>';
@@ -375,9 +554,89 @@ export function initialiseApp() {
     Object.assign(state.settings,settings);if(settings.waitModel?.parkId===state.parkId)modelCache.set(state.parkId,settings.waitModel);markResultStale();writeSettings();updateCrowd();renderCatalogue();renderMap();externalPanel?.refresh();syncTimeEditors();
   }
   function checkSelectionDetails() {
-    const invalid=$('wishlist').querySelector(':invalid');if(invalid){showWorkflow('wishlist');invalid.closest('details')?.setAttribute('open','');invalid.reportValidity();throw Error('希望の入力欄を確認してください。');}
-    if(!state.settings.selections.length)throw Error('行きたい場所を一つ以上選んでください。');
-    for(const s of state.settings.selections){const a=byId(s.id);if(!a)throw Error('施設情報を読み直してください。');if(ENTERTAINMENT.has(a.category)&&(!s.confirmSchedule||!s.showTimes?.length))throw Error(`${a.name}の訪問日の公演時刻を確認して入力してください。`);if(s.dpaMode==='owned'&&(!Number.isInteger(s.dpaStart)||!Number.isInteger(s.dpaEnd)||!Number.isInteger(s.dpaPurchasedAt)))throw Error(`${a.name}の取得済みDPAの開始・終了・購入時刻を入力してください。`);if(a.category==='parade'&&['owned','consider'].includes(s.dpaMode)&&!s.nodeOverride)throw Error(`${a.name}のDPAの集合・鑑賞場所を指定してください。`);if(s.dpaMode==='consider'&&!s.dpaAvailableWindows?.length)throw Error(`${a.name}の購入可能なDPA枠を入力してください。`);if((s.dpaMode==='owned'||s.dpaMode==='consider')&&s.dpaStart>=s.dpaEnd)throw Error(`${a.name}のDPA終了は開始より後にしてください。`);if(s.earliest!=null&&s.latest!=null&&s.earliest>=s.latest)throw Error(`${a.name}の時間帯を確認してください。`);}
+    const invalid=$('wishlist').querySelector('input:invalid, select:invalid, textarea:invalid');
+    if(invalid){
+      const field=invalid.closest('.clamped-time')?.previousElementSibling||invalid;
+      const id=invalid.closest('[data-wish-id]')?.dataset.wishId;
+      const label=invalid.getAttribute('aria-label')||invalid.labels?.[0]?.firstChild?.textContent.trim()||'入力欄';
+      const hint=invalid.validity.customError?invalid.validationMessage:invalid.type==='number'?
+        `${invalid.min}〜${invalid.max}の${invalid.step==='1'?'整数':invalid.step+'単位'}で入力してください。`:'値を確認してください。';
+      throw Object.assign(inputError(`${byId(id)?.name||'希望'}：${label}。 ${hint}`,field.dataset.field,id),{control:invalid});
+    }
+    if(!state.settings.selections.length)throw inputError('行きたい場所を一つ以上選んでください。','catalogueSearch');
+    for(const wish of state.settings.selections){
+      const activity=byId(wish.id);
+      const draft=wishDrafts.get(wish)?.entries().next().value;
+      if(draft)throw inputError(`${activity?.name||'希望'}：${draft[1].label}。 ${draft[1].message}`,draft[0],wish.id);
+      const problem=wishInputProblem(wish,activity);
+      if(problem)throw problem;
+    }
+  }
+
+  function checkVisitCommitments() {
+    const {entry,exit,purchases=[],fixedBreaks=[]}=state.settings;
+    for(const purchase of purchases){
+      if(purchase.purchasedAt>=entry)continue;
+      const name=byId(purchase.id)?.name||'購入済みDPA',time=timeText(purchase.purchasedAt);
+      if(selected(purchase.id)?.dpaMode==='owned')throw inputError(`${name}の購入時刻（${time}）が入園予定より前です。購入時刻か入園予定を確認してください。`,'dpaPurchasedAt',purchase.id);
+      throw inputError(`${name}の購入履歴（${time}）が入園予定より前です。入園予定か購入履歴を確認してください。`,'entryTime');
+    }
+    for(const rest of fixedBreaks){
+      const label=rest.label||'指定した休憩',end=rest.start+rest.duration;
+      if(rest.start<entry)throw inputError(`${label}の開始（${timeText(rest.start)}）が入園予定より前です。入園予定か休憩の時刻を見直してください。`,'entryTime');
+      if(end>exit)throw inputError(`${label}の終了（${timeText(end)}）が退園予定を過ぎます。退園予定か休憩の時刻を見直してください。`,'exitTime');
+    }
+  }
+  function clearPlanFeedback() {
+    const invalid=document.querySelector('[data-plan-invalid]');
+    if(invalid){
+      invalid.removeAttribute('data-plan-invalid');invalid.removeAttribute('aria-invalid');
+      const other=(invalid.getAttribute('aria-describedby')||'').split(/\s+/).filter(id=>id&&id!=='planFieldError');
+      if(other.length)invalid.setAttribute('aria-describedby',other.join(' '));else invalid.removeAttribute('aria-describedby');
+    }
+    $('planFieldError')?.remove();
+    $('planFeedback').hidden=true;$('planFeedback').textContent='';
+  }
+  function revealPlanField({field,wishId,control}) {
+    let target=control;
+    if(wishId){
+      showWorkflow('wishlist');
+      const cards=() => [...$('wishlist').querySelectorAll('[data-wish-id]')];
+      let card=cards().find(item=>item.dataset.wishId===wishId);
+      if(!card){
+        wishlistGenre=genreOf(byId(wishId)?.category)||'all';renderWishlist();
+        card=cards().find(item=>item.dataset.wishId===wishId);
+      }
+      if(!target?.isConnected)target=[...(card?.querySelectorAll('[data-field]')||[])].find(item=>item.dataset.field===field)
+        ||card?.querySelector('[data-field="required"]');
+    }else if(field){
+      target=$(field);
+      if($('workflowWishlist').contains(target))showWorkflow('wishlist');
+      if($('workflowSchedule').contains(target))showWorkflow('schedule');
+    }
+    if(!target)return null;
+    for(let node=target;node;node=node.parentElement)if(node.tagName==='DETAILS')node.open=true;
+    if(target.type==='hidden')target=target.nextElementSibling?.querySelector('[data-time-part],input,select,button');
+    if(target?.tagName==='DETAILS')target=target.querySelector('summary');
+    return target;
+  }
+  function showPlanError(error) {
+    clearPlanFeedback();setStatus('');
+    const message=error.message||'計画を作成できませんでした。もう一度お試しください。';
+    const target=revealPlanField(error);
+    if(target){
+      const note=document.createElement('p');
+      note.id='planFieldError';note.className='plan-field-error';note.setAttribute('role','alert');note.textContent=message;
+      const anchor=target.closest('.time-field,label')||target;
+      // The search label has a single fixed-height row. Put its note below the filters.
+      (target.closest('.catalogue-controls')||anchor).after(note);
+      target.dataset.planInvalid='';target.setAttribute('aria-invalid','true');
+      target.setAttribute('aria-describedby',[target.getAttribute('aria-describedby'),'planFieldError'].filter(Boolean).join(' '));
+      target.focus({preventScroll:true});target.scrollIntoView({block:'center'});
+    }else{
+      const notice=$('planFeedback');
+      notice.textContent=message;notice.hidden=false;notice.focus({preventScroll:true});notice.scrollIntoView({block:'center'});
+    }
   }
   function clearContingency() {
     contingencyRequest++;
@@ -393,7 +652,7 @@ export function initialiseApp() {
     const extra=Number($('contingencyDelay').value),profile=contingencySettings(state.result.settings||state.settings,extra);
     contingencyBase=state.result;const request=++contingencyRequest;
     const initialPlan=profile.replanFrom!=null?state.result:null;
-    contingencyWorker=new Worker(new URL('./planner-worker.js?v=1.7.0',import.meta.url),{type:'module'});
+    contingencyWorker=new Worker(new URL('./planner-worker.js?v=1.8.0',import.meta.url),{type:'module'});
     $('searchContingency').disabled=true;$('cancelContingency').hidden=false;
     $('contingencyStatus').textContent=`通常の待ち列がさらに${extra}分長い場合を探索しています。`;
     contingencyWorker.onmessage=event=>{
@@ -421,21 +680,30 @@ export function initialiseApp() {
     setStatus('混雑を見込む代替案を採用しました。必要に応じて名前を付けて保存できます。');
   }
   async function startSearch() {
-    if(preparation)return;
-    readSettings();checkSelectionDetails();externalPanel?.cancel();stopSearch();latestPreview=null;requestId++;
+    if(preparation||worker)return;
+    try{await runSearch();}
+    catch{stopSearch();showPlanError(new Error('探索を開始できませんでした。ページを再読み込みしてもう一度お試しください。'));}
+  }
+  async function runSearch() {
+    // Commit a clock or number that still has focus before reading its value.
+    if(document.activeElement?.matches('input,select,textarea'))document.activeElement.blur();
+    clearPlanFeedback();
+    try{readSettings();checkSelectionDetails();checkVisitCommitments();}
+    catch(error){showPlanError(error);return;}
+    externalPanel?.cancel();stopSearch();latestPreview=null;requestId++;
     const preparingRequest=requestId,park=currentPark(),input=state.settings;
     preparation=new AbortController();showWorkflow('schedule',{focus:true,scroll:true});$('scheduleEmptyText').textContent='天気と当日の情報を確認して、希望をつなぐ順序を探しています。';
-    $('solveButton').disabled=true;$('cancelSearch').hidden=false;$('searchProgress').hidden=false;$('progressBar').value=0;
+    setSolveDisabled(true);$('cancelSearch').hidden=false;$('searchProgress').hidden=false;$('progressBar').value=0;
     $('progressText').textContent=input.weatherMode==='manual'?'計画の条件を確認しています…':'訪問日の天気予報を取得しています…';
     setStatus(input.weatherMode==='manual'?'計画を準備中…':'天気予報を取得中…');
     let prepared;
     try{let base=input;if(!base.waitModel||base.waitModel.parkId!==park.id){const model=await fetchPublishedModel(park,{signal:preparation.signal,timeoutMs:5000});if(model)base={...base,waitModel:model};}prepared=await prepareWeatherForPlan(base,park,{signal:preparation.signal});prepared=await prepareLiveForReplan(prepared,park,{signal:preparation.signal});}
-    catch(error){if(preparingRequest!==requestId)return;stopSearch();throw error;}
+    catch(error){if(preparingRequest!==requestId)return;stopSearch();showPlanError(new Error('計画の準備を完了できませんでした。天気・待ち時間の取得設定を確認してもう一度お試しください。'));return;}
     if(preparingRequest!==requestId)return;
     preparation=null;state.settings=prepared;if(state.result){state.resultDirty=true;renderResult();}writeSettings();externalPanel?.refresh();
     searchStarted=performance.now();
-    try{worker=new Worker(new URL('./planner-worker.js?v=1.7.0',import.meta.url),{type:'module'});}catch(error){stopSearch();throw error;}
-    $('solveButton').disabled=true;$('cancelSearch').hidden=false;$('searchProgress').hidden=false;$('progressBar').value=0;$('progressText').textContent='最初の計画を探しています…';
+    try{worker=new Worker(new URL('./planner-worker.js?v=1.8.0',import.meta.url),{type:'module'});}catch{stopSearch();showPlanError(new Error('探索を起動できませんでした。ページを再読み込みしてもう一度お試しください。'));return;}
+    setSolveDisabled(true);$('cancelSearch').hidden=false;$('searchProgress').hidden=false;$('progressBar').value=0;$('progressText').textContent='最初の計画を探しています…';
     const thisRequest=requestId;
     worker.onmessage=event=>{
       const message=event.data;if(thisRequest!==requestId||(message.requestId!=null&&message.requestId!==thisRequest))return;
@@ -443,10 +711,13 @@ export function initialiseApp() {
         const p=message.progress||{};if(message.result)latestPreview=message.result;
         $('progressText').textContent=`組合せを探索中 · 重要度 ${p.bestScore??'—'} · ${p.visits??0}件の希望`;
       }else if(message.type==='result'){
-        state.result=message.result;state.resultDirty=false;latestPreview=state.result;stopSearch();renderResult();renderMap();setStatus(state.result.status==='feasible'?'':'条件を満たす計画が見つかりませんでした。必須条件や時間帯を見直してください。',state.result.status!=='feasible');
-      }else if(message.type==='error'){stopSearch();setStatus(message.message||message.error||'計画の計算に失敗しました。',true);}
+        state.result=message.result;state.resultDirty=false;latestPreview=state.result;stopSearch();renderResult();renderMap();setStatus('');
+        if(state.result.status==='no-plan'){
+          const heading=$('resultExplanation');heading.tabIndex=-1;heading.focus({preventScroll:true});heading.scrollIntoView({block:'center'});
+        }
+      }else if(message.type==='error'){stopSearch();showPlanError(new Error(message.message||message.error||'計画を計算できませんでした。もう一度お試しください。'));}
     };
-    worker.onerror=error=>{if(thisRequest!==requestId)return;stopSearch();setStatus(error.message||'探索を開始できませんでした。ページを読み直してください。',true);};
+    worker.onmessageerror=worker.onerror=()=>{if(thisRequest!==requestId)return;stopSearch();showPlanError(new Error('探索が中断しました。ページを再読み込みしてもう一度お試しください。'));};
     progressTimer=setInterval(()=>{$('progressBar').value=Math.min(98,(performance.now()-searchStarted)/(state.settings.searchSeconds*1000)*100);},120);
     worker.postMessage({type:'solve',requestId:thisRequest,park:currentPark(),settings:state.settings,history:state.history,initialPlan:state.settings.replanFrom!=null?state.result:null});
     setStatus('計画を探索中…');
@@ -494,19 +765,57 @@ export function initialiseApp() {
     $('catalogue').addEventListener('click',safely(event=>{const button=event.target.closest('[data-add]');if(button)addSelection(button.dataset.add);}));
     $('wishlist').addEventListener('click',safely(event=>{
       const remove=event.target.closest('[data-remove]'),weight=event.target.closest('[data-weight]');
+      const historyLink=event.target.closest('[data-open-purchase]');
+      if(historyLink){
+        const history=$('purchaseHistory'),record=$(`purchase-record-${historyLink.dataset.openPurchase}`);
+        if(record){$('replanSettings').open=true;history.closest('details').open=true;record.focus();}
+      }
       if(remove){state.settings.selections=state.settings.selections.filter(s=>s.id!==remove.dataset.remove);markResultStale();renderWishlist();renderCatalogue();renderMap();}
-      if(weight&&!selected(weight.dataset.for)?.required){selected(weight.dataset.for).weight=Number(weight.dataset.weight);markResultStale();renderWishlist();}
+      if(weight&&!weight.disabled){selected(weight.dataset.for).weight=Number(weight.dataset.weight);markResultStale();renderWishlist();}
     }));
-    $('wishlist').addEventListener('input',()=>markResultStale());
-    $('wishlist').addEventListener('change',event=>{const editor=event.target.dataset.clampedTime?event.target.nextElementSibling?.querySelector('input'):event.target;editor?.setCustomValidity?.('');try{updateSelection(event);}catch(error){editor?.setCustomValidity?.(error.message);setStatus(error.message,true);}});
+    bindWishEditors($('wishlist'),event=>{
+      const input=event.target,field=input.dataset.field,wish=selected(input.closest('[data-wish-id]')?.dataset.wishId);
+      const editor=input.dataset.clampedTime?input.nextElementSibling?.querySelector('[data-time-part],input,select'):input;
+      editor?.setCustomValidity?.('');wishDrafts.get(wish)?.delete(field);
+      try{updateSelection(event);}
+      catch(error){
+        if(field&&wish){
+          if(!wishDrafts.has(wish))wishDrafts.set(wish,new Map());
+          const label=editor?.getAttribute('aria-label')||input.closest('label,.time-field')?.firstChild?.textContent.trim()||'入力欄';
+          wishDrafts.get(wish).set(field,{value:input.value,label,message:error.message});
+        }
+        editor?.setCustomValidity?.(error.message);
+        if(event.type!=='input'){markResultStale();setStatus(error.message,true);}
+      }
+    },markResultStale);
     $('purchaseActivity').addEventListener('change',()=>{const a=byId($('purchaseActivity').value);if(a?.dpa)$('purchaseCost').value=a.dpa.price;});
-    $('addPurchase').addEventListener('click',safely(()=>{const a=byId($('purchaseActivity').value);if(!a?.dpa)throw Error('購入したDPAを選んでください。');const purchasedAt=minute($('purchaseTime').value),start=minute($('purchaseStart').value),end=minute($('purchaseEnd').value),cost=numberInput('purchaseCost',0,1000000,100);if(start>=end)throw Error('利用・入場終了は開始より後にしてください。');if(purchasedAt>start)throw Error('購入時刻は利用開始より前にしてください。');if(state.settings.purchases.some(p=>p.id===a.id))throw Error('この施設の購入履歴は追加済みです。訂正する場合は一度履歴から外してください。');state.settings.purchases.push({id:a.id,kind:a.dpa.kind||'attraction',purchasedAt,start,end,cost});renderPurchaseHistory();markResultStale();setStatus('購入履歴に追加しました。次の探索で購入間隔と支出へ反映します。');}));
-    $('purchaseHistory').addEventListener('click',event=>{const button=event.target.closest('[data-remove-purchase]');if(!button)return;const removed=state.settings.purchases.splice(Number(button.dataset.removePurchase),1)[0];const selection=selected(removed?.id);if(selection?.dpaMode==='owned'){selection.dpaMode='none';renderWishlist();}renderPurchaseHistory();markResultStale();setStatus('購入履歴を外しました。この施設の取得済みDPA指定も通常利用へ戻しています。');});
+    $('addPurchase').addEventListener('click',safely(()=>{const a=byId($('purchaseActivity').value);if(!a?.dpa)throw Error('購入したDPAを選んでください。');const purchasedAt=minute($('purchaseTime').value),start=minute($('purchaseStart').value),end=minute($('purchaseEnd').value),cost=numberInput('purchaseCost',0,1000000,100);if(start>=end)throw Error('利用・入場終了は開始より後にしてください。');if(purchasedAt>start)throw Error('購入時刻は利用開始より前にしてください。');if(state.settings.purchases.some(p=>p.id===a.id))throw Error('この施設の購入履歴は追加済みです。訂正する場合は一度履歴から外してください。');state.settings.purchases.push({id:a.id,kind:a.dpa.kind||'attraction',purchasedAt,start,end,cost});renderPurchaseHistory();renderWishlist();markResultStale();setStatus('購入履歴に追加しました。次の探索で購入間隔と支出へ反映します。');}));
+    $('purchaseHistory').addEventListener('click',event=>{const button=event.target.closest('[data-remove-purchase]');if(!button)return;const removed=state.settings.purchases.splice(Number(button.dataset.removePurchase),1)[0];const selection=selected(removed?.id);if(selection?.dpaMode==='owned')changeDpaMode(selection,'none');renderWishlist();renderPurchaseHistory();markResultStale();setStatus('購入履歴を外しました。この施設の取得済みDPA指定も通常利用へ戻しています。');});
     $('addSuggested').addEventListener('click',safely(suggestedSelection));$('clearSelection').addEventListener('click',()=>{state.settings.selections=[];markResultStale();renderWishlist();renderCatalogue();renderMap();});
     for(const id of ['visitDate','crowdMode','crowdLevel','weather','weatherMode'])$(id).addEventListener('change',safely(()=>{const previousDate=state.settings.date;readSettings();if(id==='visitDate'&&state.settings.date!==previousDate){stopSearch();openedPlanId=null;$('overwritePlan').hidden=true;resetForNewVisitDay(state);for(const selection of state.settings.selections){const activity=byId(selection.id);if(ENTERTAINMENT.has(activity.category)){const schedule=activitySchedule(activity,state.settings.date);selection.showTimes=schedule.showTimes.slice();selection.confirmSchedule=schedule.confirmed;}}writeSettings();setStatus('訪問日を変更しました。前の日付のDPA枠・購入履歴・支払い済み額・当日の組み替えと計画をリセットしています。新しい日付の条件で探索してください。');}updateContext();}));
+    $('visitTimeLinked').addEventListener('change', () => {
+      state.settings.visitTimeLinked = $('visitTimeLinked').checked;
+    });
+    for (const id of ['entryTime', 'exitTime']) {
+      $(id).addEventListener('change', event => {
+        if ($('visitTimeLinked').checked) {
+          linkClockFields(event.target, $('entryTime'), $('exitTime'), parkTimeBounds(currentPark(), $('visitDate').value));
+        }
+      });
+    }
     document.querySelector('.settings-panel').addEventListener('input',()=>markResultStale());
     document.querySelector('.settings-panel').addEventListener('change',safely(()=>{readSettings();markResultStale();}));
-    $('solveButton').addEventListener('click',safely(startSearch));$('cancelSearch').addEventListener('click',()=>{stopSearch(true);setStatus(latestPreview?'探索を止めて、そこまでで見つかった計画を表示しました。':'探索を止めました。前に作った計画がある場合はそのまま残っています。');});
+    for(const button of document.querySelectorAll('[data-start-plan]')){
+      // Submit on click before an editor blur can move the button under the pointer.
+      button.addEventListener('pointerdown',event=>{if(document.activeElement?.matches('input,select,textarea'))event.preventDefault();});
+      button.addEventListener('click',startSearch);
+    }
+    $('noPlanActions').addEventListener('click',event=>{
+      const button=event.target.closest('[data-plan-field]');if(!button)return;
+      const target=revealPlanField({field:button.dataset.planField,wishId:button.dataset.planWish});
+      target?.focus({preventScroll:true});target?.scrollIntoView({block:'center'});
+    });
+    $('cancelSearch').addEventListener('click',()=>{stopSearch(true);setStatus(latestPreview?'探索を止めて、そこまでで見つかった計画を表示しました。':'探索を止めました。前に作った計画がある場合はそのまま残っています。');});
     $('searchContingency').addEventListener('click',safely(startContingency));
     $('adoptContingency').addEventListener('click',safely(adoptContingency));
     $('cancelContingency').addEventListener('click',()=>{clearContingency();$('contingencyStatus').textContent='代替案の探索を止めました。現在のしおりを引き続き使えます。';});
@@ -521,8 +830,8 @@ export function initialiseApp() {
     $('exportJson').addEventListener('click',safely(()=>{readSettings();downloadPlanJson(state);}));$('exportCsv').addEventListener('click',safely(()=>downloadScheduleCsv(state.result,currentPark())));$('exportIcs').addEventListener('click',safely(()=>downloadCalendar(state.result,currentPark(),state.result.settings||state.settings)));$('exportHtml').addEventListener('click',safely(()=>downloadOfflineHtml(state.result,currentPark(),state.result.settings||state.settings)));$('printPlan').addEventListener('click',()=>window.print());
   }
   async function start() {
-    try{$('solveButton').disabled=true;setStatus('施設情報を確認中…');await loadCatalogue();const shared=await readSharedState(location.hash);if(shared)state=cleanState(shared);const context=await Promise.all([fetchPublishedCalendar({timeoutMs:5000}),fetchPublishedModel(currentPark(),{timeoutMs:5000})]);calendarData=context[0];if(calendarData)state.settings.calendarData=calendarData;if(context[1])state.settings.waitModel=context[1];writeSettings();attachEvents();showWorkflow(state.result?'schedule':'wishlist');renderSavedPlans();$('solveButton').disabled=false;externalPanel=initialiseExternalData({container:$('externalDataPanel'),getContext:()=>({park:currentPark(),settings:state.settings,history:state.history}),onUpdate:applyDataUpdate,beforeAction:readSettings});updateContext();setStatus(shared?'共有された希望を読み込みました。':'');}
-    catch(error){setStatus(error.message||'起動に失敗しました。ページを再読み込みしてください。',true);$('solveButton').disabled=true;}
+    try{setSolveDisabled(true);setStatus('施設情報を確認中…');await loadCatalogue();const shared=await readSharedState(location.hash);if(shared)state=cleanState(shared);const context=await Promise.all([fetchPublishedCalendar({timeoutMs:5000}),fetchPublishedModel(currentPark(),{timeoutMs:5000})]);calendarData=context[0];if(calendarData)state.settings.calendarData=calendarData;if(context[1])state.settings.waitModel=context[1];writeSettings();attachEvents();showWorkflow(state.result?'schedule':'wishlist');renderSavedPlans();setSolveDisabled(false);externalPanel=initialiseExternalData({container:$('externalDataPanel'),getContext:()=>({park:currentPark(),settings:state.settings,history:state.history}),onUpdate:applyDataUpdate,beforeAction:readSettings});updateContext();setStatus(shared?'共有された希望を読み込みました。':'');}
+    catch(error){setStatus(error.message||'起動に失敗しました。ページを再読み込みしてください。',true);setSolveDisabled(true);}
   }
   start();
   return {getState:()=>state,showWorkflow,getCatalogue:()=>catalogue,getContext:()=>({park:currentPark(),settings:state.settings,history:state.history}),applyDataUpdate,readSettings,addSelection,renderResult,stopSearch};

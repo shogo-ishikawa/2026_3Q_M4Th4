@@ -1,6 +1,6 @@
 import {validateWaitModel} from './wait-model.js';
 import {weatherForMinute,formatWeatherDetails} from './weather.js';
-import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=1.7.0';
+import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=1.8.0';
 /** Portable schedules: the shared link contains preferences, never a browser's saved history. */
 const STORAGE_KEY = 'park-itinerary-lab:v1';
 const PLANS_KEY = 'park-itinerary-lab:plans:v1';
@@ -120,6 +120,7 @@ export function validateSavedState(state) {
   if (settings.weatherMode !== undefined && !['auto', 'manual'].includes(settings.weatherMode)) fail('天気の取得方法を選び直してください。');
   if (settings.weatherNotice !== undefined && !text(settings.weatherNotice, 1000)) fail('天気の取得結果を確認してください。');
   if (settings.liveNotice !== undefined && !text(settings.liveNotice,1500)) fail('当日の情報の取得結果を確認してください。');
+  if (settings.visitTimeLinked !== undefined && typeof settings.visitTimeLinked !== 'boolean') fail('入退園時刻の連動設定を確認してください。');
   if(settings.gondolaAvoidHarbourShows!==undefined&&typeof settings.gondolaAvoidHarbourShows!=='boolean')fail('ゴンドラのショー時間の設定を確認してください。');
   if (settings.walkCrowdMode !== undefined && !['estimate','off'].includes(settings.walkCrowdMode)) fail('混雑による移動時間の設定を確認してください。');
   if (settings.waitAsOf !== undefined && !integer(settings.waitAsOf,0,253402300799999)) fail('待ち時間を確認した時刻を確認してください。');

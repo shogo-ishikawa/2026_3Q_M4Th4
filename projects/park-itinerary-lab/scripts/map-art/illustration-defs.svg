@@ -1,0 +1,63 @@
+<defs xmlns="http://www.w3.org/2000/svg">
+  <radialGradient id="paper" cx=".42" cy=".4" r=".82">
+    <stop stop-color="#fff9e9"/><stop offset=".7" stop-color="#f7edda"/><stop offset="1" stop-color="#eaddc0"/>
+  </radialGradient>
+  <linearGradient id="ground" x1="0" y1="0" x2=".88" y2="1">
+    <stop stop-color="#d9e3b4"/><stop offset=".47" stop-color="#eadbaf"/><stop offset="1" stop-color="#cfcca4"/>
+  </linearGradient>
+  <linearGradient id="water" x1="0" y1=".1" x2=".65" y2="1">
+    <stop stop-color="#a3ded2"/><stop offset=".32" stop-color="#65bfba"/>
+    <stop offset=".74" stop-color="#3f9eac"/><stop offset="1" stop-color="#31849b"/>
+  </linearGradient>
+  <pattern id="grain" width="17" height="19" patternUnits="userSpaceOnUse">
+    <circle cx="2" cy="2" r=".7" fill="#957847" opacity=".13"/><circle cx="10" cy="12" r="1" fill="#fff9e7" opacity=".27"/>
+    <path d="M5 7l3-.5m5 9l2-.4" stroke="#9b774b" opacity=".08" fill="none" stroke-width=".7"/>
+  </pattern>
+  <pattern id="ripples" width="42" height="33" patternUnits="userSpaceOnUse">
+    <g fill="none" stroke-linecap="round">
+      <path d="M1 6q4 2 9 0t9-.4m2 15q4.5 2 11-.5m2 10 4-.4" stroke="#e4f7df" stroke-width="1.05" opacity=".76"/>
+      <path d="M6 8q4 1 9-.6m9 15 6-.6" stroke="#247c8d" stroke-width=".75" opacity=".45"/>
+    </g>
+  </pattern>
+  <!-- Textures fill only the mapped vegetation or rock polygon. -->
+  <g id="crown">
+    <path d="M-3.2 1.2C-5 .6-4.8-1.3-3.7-2c-.8-2.2 1.3-3.5 2.5-3.2C-.3-7 1.8-6.1 2-4.8c2.1-.8 3.6 1.4 2.5 2.8 1.5 2-.2 4-2.1 3.8C.7 3.3-1.7 3-3.2 1.2Z" fill="#547b56" stroke="#416b50" stroke-width=".4"/>
+    <path d="M-3.4-.8c-1.2-1.5.2-3.1 1.6-3-.1-1.8 2-2.7 3-1 .5.8 1.5.3 2.2 1.1.5.7.6 1.2 0 2C2.7-1 2.1-1.9 1.4-.8c-.6 1-1.6.5-2.3 1.3-1.2.6-2.4-.1-2.5-1.3Z" fill="#86a76b"/>
+    <path d="M-2.9-2.1q-.2-1.3 1.3-1.3M-.9-4.4q.6-1 1.6-.3" fill="none" stroke="#c9ce8e" stroke-width=".75" stroke-linecap="round"/>
+  </g>
+  <pattern id="forest" width="22" height="18" patternUnits="userSpaceOnUse">
+    <rect width="22" height="18" fill="#84a071"/>
+    <g fill="#719061"><ellipse cx="7" cy="8" rx="6" ry="4"/><ellipse cx="17" cy="14" rx="7" ry="4"/></g>
+    <use href="#crown" transform="translate(3 5) scale(1.06)"/><use href="#crown" transform="translate(14 4) scale(.82)"/>
+    <use href="#crown" transform="translate(8 13) scale(.89)"/><use href="#crown" transform="translate(18 15) scale(.96)"/>
+  </pattern>
+  <pattern id="grass" width="14" height="11" patternUnits="userSpaceOnUse">
+    <rect width="14" height="11" fill="#b7c98a"/>
+    <path d="M2 8l1-2 .4 1.3m5-5 1 .7.6-1.3" fill="none" stroke="#829a64" opacity=".7" stroke-width=".55"/>
+    <ellipse cx="8" cy="6" rx="2.2" ry="1.2" fill="#ced69d"/>
+  </pattern>
+  <pattern id="garden" width="13" height="10" patternUnits="userSpaceOnUse">
+    <rect width="13" height="10" fill="#a9bd7c"/><ellipse cx="3" cy="3" rx="1.7" ry="1.3" fill="#92a668"/>
+    <ellipse cx="7" cy="7" rx="2.1" ry="1.4" fill="#becc8b"/><circle cx="11" cy="2" r=".85" fill="#d7c990"/>
+  </pattern>
+  <pattern id="flowers" width="11" height="8" patternUnits="userSpaceOnUse">
+    <rect width="11" height="8" fill="#a0b079"/><circle cx="2.5" cy="2.5" r="1.6" fill="#e7ab8e"/><circle cx="7" cy="6" r="1.4" fill="#d48184"/>
+    <circle cx="9" cy="2" r="1" fill="#f9d896"/>
+  </pattern>
+  <pattern id="scrub" width="13" height="12" patternUnits="userSpaceOnUse">
+    <rect width="13" height="12" fill="#94ae79"/><path d="M1 4q1-4 3-2 2-1 3 2m-1 6q1-4 3-2 2-1 3 2" fill="#aac28b" stroke="#789665" stroke-width=".6"/>
+  </pattern>
+  <pattern id="rock" width="22" height="19" patternUnits="userSpaceOnUse">
+    <rect width="22" height="19" fill="#bb9c7b"/><path d="M1 11l6-6 7 2-1 6-6 1Zm13-7 5-3 3 2-2 5Z" fill="#9e856c"/>
+    <path d="m1 11 6-6 7 2-5 2-3 4Zm13-7 5-3 3 2-5 2Z" fill="#d2b596"/>
+  </pattern>
+  <pattern id="scree" width="13" height="11" patternUnits="userSpaceOnUse">
+    <rect width="13" height="11" fill="#b09a85"/><path d="m1 6 2-3 3 .5-2 3Zm7 4 2-3 2 1-1.5 2Z" fill="#907f70"/><path d="m1 5 2-2 3 .5-2.5 1Z" fill="#dac8a9"/>
+  </pattern>
+  <pattern id="sand" width="12" height="11" patternUnits="userSpaceOnUse">
+    <rect width="12" height="11" fill="#e8cf9e"/><circle cx="4" cy="2" r=".6" fill="#b99f74"/><circle cx="9" cy="7" r=".9" fill="#f9dfad"/>
+  </pattern>
+  <pattern id="roof-lines" width="8" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(-18)">
+    <path d="M0 1h8M4 1v2.8M0 4.5h8M.5 4.5V7" fill="none" stroke="#6d594e" opacity=".23" stroke-width=".55"/>
+  </pattern>
+</defs>

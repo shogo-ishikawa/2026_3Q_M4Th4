@@ -11,7 +11,7 @@ def build_archive():
     destination.parent.mkdir(exist_ok=True)
     allowed_roots = {'web', 'src', 'tests', 'tests-web', 'configs', 'data', 'docs', 'requirements', 'scripts'}
     excluded = {'__pycache__', 'node_modules', 'downloads', 'outputs', 'uploads', 'dist', '.pytest_cache', '.ipynb_checkpoints'}
-    extensions = {'.js', '.mjs', '.py', '.html', '.css', '.json', '.csv', '.md', '.txt', '.toml', '.ipynb', '.sh', '.webp', '.svg'}
+    extensions = {'.js', '.mjs', '.py', '.html', '.css', '.json', '.csv', '.md', '.txt', '.toml', '.ipynb', '.sh', '.webp', '.svg', '.png'}
     files = []
     for path in root.rglob('*'):
         relative = path.relative_to(root)

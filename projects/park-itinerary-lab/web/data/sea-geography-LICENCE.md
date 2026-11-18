@@ -37,7 +37,14 @@ OSM way 1323365214 は小さな水路を横切る徒歩通路です。橋の属�
 
 `map-landmarks.json` のシーの緯度経度もOpenStreetMapを加工したもので、上記のODbL 1.0が適用されます。
 2026年11月18日に標準のOSM Map APIから取得し、地物IDと取得URLをJSONに記録しています。
-城・山・船などの絵は位置を示す独自の記号です。実際の建物の輪郭や大きさを表すものではありません。
-公式ガイドマップの画像は使用していません。
+城・山・船などの挿絵を対応する地点に置いています。建物の敷地は背景の輪郭で読めます。
+
+植生や岩場の位置もOSMから取得しています。2026年11月18日のMap APIの資料から樹木と土地被覆を抽出しました。地物ID・緯度経度は [sea-map-scenery.json](sea-map-scenery.json) に収録し、同じODbL 1.0を適用します。植生の彩色・屋根の質感・ランドマークの挿絵はTDRouteのための表現です。挿絵の大きさは読みやすさに合わせています。
+
+景観データの抽出例：
+
+```sh
+python scripts/extract_map_scenery.py sea /path/to/osm-map.xml --extracted-on YYYY-MM-DD
+```
 
 表示だけの再作成：`python scripts/build_illustrated_maps.py`

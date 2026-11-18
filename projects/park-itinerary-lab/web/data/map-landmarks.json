@@ -90,6 +90,18 @@
         35.6269873
       ],
       "meaning": "illustrative-landmark-symbol"
+    },
+    {
+      "parkId": "sea",
+      "name": "キャラバンカルーセル",
+      "symbol": "carousel",
+      "osmType": "node",
+      "osmId": 13727535320,
+      "coordinates": [
+        139.8833243,
+        35.6281847
+      ],
+      "meaning": "illustrative-landmark-symbol"
     }
   ],
   "sources": {

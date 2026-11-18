@@ -6,6 +6,7 @@ All shorelines, islands, footprints and walkway vertices retain their shape.
 Run this after rebuilding either park's geography.
 """
 from pathlib import Path
+import base64
 import html
 import json
 import math
@@ -14,14 +15,14 @@ ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / 'web/data'
 
 AREA_COLOURS = {
-    'ワールドバザール': '#e9b9a2', 'アドベンチャーランド': '#c7aa7f',
-    'ウエスタンランド': '#bc9370', 'クリッターカントリー': '#b4b48e',
-    'ファンタジーランド': '#d8bfd8', 'トゥーンタウン': '#efd496',
-    'トゥモローランド': '#acc9d9', 'メディテレーニアンハーバー': '#d9af8d',
-    'アメリカンウォーターフロント': '#c4abb0', 'ポートディスカバリー': '#a8bec5',
-    'ロストリバーデルタ': '#a7b38c', 'ファンタジースプリングス': '#c4bedb',
-    'アラビアンコースト': '#e8d1a0', 'マーメイドラグーン': '#d8b9c9',
-    'ミステリアスアイランド': '#b6a9a0',
+    'ワールドバザール': '#cd8d72', 'アドベンチャーランド': '#b69567',
+    'ウエスタンランド': '#b7815d', 'クリッターカントリー': '#a5a76f',
+    'ファンタジーランド': '#bb99bc', 'トゥーンタウン': '#ddb06c',
+    'トゥモローランド': '#91b3be', 'メディテレーニアンハーバー': '#ce9973',
+    'アメリカンウォーターフロント': '#bd9693', 'ポートディスカバリー': '#92abae',
+    'ロストリバーデルタ': '#939f68', 'ファンタジースプリングス': '#b6a0b9',
+    'アラビアンコースト': '#deb574', 'マーメイドラグーン': '#cc9caf',
+    'ミステリアスアイランド': '#a58a75',
 }
 
 
@@ -64,80 +65,155 @@ def polygon(points, **attributes):
     return f'<polygon points="{" ".join(",".join(map(str,p)) for p in points)}" {attrs}/>'
 
 
-def landmark_symbol(kind):
-    """Original tiny upright symbols; the underlying footprint remains visible."""
-    if kind in {'castle', 'castle-small'}:
-        roof = '#7194c6' if kind == 'castle' else '#b88d66'
-        return (f'<g fill="#f6ead5" stroke="#8c7b78" stroke-width="1.2"><path d="M-25 6V-22H-15V-8H-7V-36H7V-8H15V-22H25V6Z"/>'
-                f'<path d="M-29-22L-20-39L-11-22ZM-11-36L0-56L11-36ZM11-22L20-39L29-22Z" fill="{roof}"/>'
-                '<path d="M-4 6V-5Q0-13 4-5V6" fill="#9b7e73"/><path d="M0-56V-65L12-61L0-58" fill="#d6b35b" stroke="#b48b3e"/></g>')
-    if kind in {'mountain', 'volcano'}:
-        volcano = kind == 'volcano'
-        return ('<g stroke="#8b6c54" stroke-width="1.2"><path d="M-37 7L-23-20L-12-22L-4-52L8-48L18-15L29-13L39 7Z" fill="#b18c67"/>'
-                '<path d="M-37 7L-9-11L-4-52L4-18L39 7Z" fill="#d0af87"/>'
-                '<path d="M-4-52L8-48L12-36L1-38Z" fill="#655658"/>'
-                + ('<path d="M4-53Q19-66 6-75Q-4-83 4-91" fill="none" stroke="#c9d3d6" stroke-width="5" opacity=".85"/>' if volcano else '')
-                + '</g>')
-    if kind == 'tower':
-        return '<g fill="#b9a58b" stroke="#776b64" stroke-width="1.3"><path d="M-22 7V-27H-14V-47H-7V-62H7V-47H14V-27H22V7Z"/><path d="M-17-27H17M-10-46H10"/><path d="M-4-36V-29M4-36V-29M-4-18V-11M4-18V-11" stroke="#806a55" stroke-width="4"/></g>'
-    if kind == 'ship':
-        return '<g stroke="#7c8996" stroke-width="1.2"><path d="M-43-4H44L29 12H-28Z" fill="#344e66"/><path d="M-29-4V-20H29V-4Z" fill="#f7f3e7"/><path d="M-20-20V-29H22V-20" fill="#f7f3e7"/><path d="M-10-29V-43H-2V-29M8-29V-43H16V-29" fill="#bd725f"/><path d="M-22-13H25" stroke="#94a7b9" stroke-width="3"/></g>'
-    if kind == 'palace':
-        return '<g stroke="#967b99" stroke-width="1.2"><path d="M-30 7V-9H-21V-25H-12V-13H-5V-33H6V-13H14V-25H23V-9H31V7Z" fill="#d7b5cd"/><path d="M-27-25Q-25-45-17-40Q-11-35-12-25ZM-9-33Q-5-55 2-49Q9-44 10-33ZM12-25Q14-43 23-39Q30-34 28-25Z" fill="#8dc4ca"/><path d="M-4 7V-3Q1-12 6-3V7" fill="#a7d5d7"/></g>'
-    raise ValueError(kind)
+ART = ROOT / 'scripts/map-art'
+
+# Landmark pictures are intentionally a legible size at phone scale. Their
+# ground contact is anchored at the mapped landmark, independently of its POI.
+PICTURE_SIZES = {
+    'castle': (90, 106), 'mountain': (115, 89), 'castle-small': (87, 88),
+    'volcano': (115, 94), 'tower': (84, 87), 'ship': (90, 74),
+    'palace': (79, 74), 'carousel': (70, 57),
+}
+
+
+def ink_colour(base, amount):
+    """Tint with ivory for a sunlit roof, or with umber for the shaded side."""
+    target = (255, 248, 217) if amount > 0 else (68, 54, 56)
+    channels = [int(base[i:i + 2], 16) for i in (1, 3, 5)]
+    return '#' + ''.join(f'{round(c + (t-c)*abs(amount)):02x}' for c, t in zip(channels, target))
+
+
+def roof_gradients():
+    result = []
+    for index, base in enumerate(AREA_COLOURS.values()):
+        for slope, offset in enumerate(('.36', '.64')):
+            result.append(f'<linearGradient id="roof{index}-{slope}" x2="1" y2=".7">'
+                          f'<stop stop-color="{ink_colour(base, .38)}"/>'
+                          f'<stop offset="{offset}" stop-color="{ink_colour(base, .15)}"/>'
+                          f'<stop offset="{offset}" stop-color="{base}"/>'
+                          f'<stop offset="1" stop-color="{ink_colour(base, -.19)}"/></linearGradient>')
+    return ''.join(result)
+
+
+def coordinate_path(rings):
+    return ' '.join('M' + ' L'.join(f'{x},{y}' for x, y in ring) + ' Z' for ring in rings)
+
+
+def scenery_markup(scenery, project_point):
+    surfaces = []
+    rank = ['sand', 'grass', 'forest', 'scrub', 'garden', 'flowers', 'scree', 'rock']
+    for item in sorted(scenery['areas'], key=lambda area: rank.index(area['kind'])):
+        path = coordinate_path([[project_point(p) for p in ring] for ring in item['rings']])
+        ref = f'{item["osmType"]}/{item["osmId"]}'
+        surfaces.append(f'<path data-osm-surface="{ref}" fill="url(#{item["kind"]})" d="{path}" fill-rule="evenodd"/>')
+    trees = []
+    for osm_id, lon, lat in scenery['trees']:
+        x, y = project_point([lon, lat])
+        scale = .55 + (osm_id % 17) * .023
+        trees.append((y, f'<use data-osm-tree="{osm_id}" href="#crown" transform="translate({x} {y}) scale({scale:.3f})"/>'))
+    return surfaces, [label for _, label in sorted(trees)]
+
+
+def illustrated_buildings(park, geography, points):
+    nodes = {n['id']: n for n in park['nodes']}
+    areas = list(AREA_COLOURS)
+    activity_sites = [(nodes[a['node']], areas.index(a['area'])) for a in park['activities']
+                      if a.get('area') in AREA_COLOURS and a['node'] in nodes]
+    result = []
+    for item in geography['buildings']:
+        source = item['geometry']
+        cx = sum(p[0] for p in source) / len(source)
+        cy = sum(p[1] for p in source) / len(source)
+        _, palette = min(activity_sites, key=lambda site: (site[0]['x'] - cx)**2 + (site[0]['y'] - cy)**2)
+        shape = points(source)
+        way = item['osmWayId']
+        base = AREA_COLOURS[areas[palette]]
+        identifier = f'b{way}'
+        # The footprint is drawn at its exact surveyed vertices. The roof,
+        # eaves and shadow are illustrative, with at most a few pixels of lift.
+        footprint = polygon(shape, id=identifier, data_osm_building=way)
+        result += [f'<defs>{footprint}</defs>',
+                   f'<use href="#{identifier}" transform="translate(2.6 3.6)" fill="#685d48" opacity=".27"/>',
+                   f'<use href="#{identifier}" fill="{ink_colour(base, -.34)}" stroke="{ink_colour(base, -.43)}" stroke-width=".85"/>',
+                   f'<g transform="translate(-.65 -1.9)"><use href="#{identifier}" fill="url(#roof{palette}-{way%2})" stroke="{ink_colour(base, -.22)}" stroke-width=".72"/>'
+                   f'<use href="#{identifier}" fill="url(#roof-lines)"/></g>']
+    return result
+
+
+def landmark_picture(item, project_point):
+    kind = item['symbol']
+    width, height = PICTURE_SIZES[kind]
+    x, y = project_point(item['coordinates'])
+    data = base64.b64encode((ART / f'{kind}.png').read_bytes()).decode('ascii')
+    return (f'<g data-landmark-osm="{item["osmType"]}/{item["osmId"]}" transform="translate({x} {y})">'
+            f'<title>{html.escape(item["name"])}</title>'
+            f'<image href="data:image/png;base64,{data}" x="{-width/2:g}" y="{-height*.86:g}" width="{width}" height="{height}" preserveAspectRatio="xMidYMax meet"/></g>')
+
+
+def compass_scale(profile, geography):
+    angle = profile['rotationDegrees']
+    north_x = 924 + 42 * math.sin(math.radians(angle))
+    north_y = 78 - 42 * math.cos(math.radians(angle))
+    length = 100 * geography['projection']['pixelsPerMetre'] * profile['scale']
+    return [f'<g transform="translate(924 78)" stroke="#90714e">'
+            '<circle r="31" fill="#faf1d9" fill-opacity=".9" stroke-width="1.5"/>'
+            '<circle r="26.3" fill="none" stroke-width=".65"/>'
+            f'<g transform="rotate({angle})"><path d="M0-24 5-5 19 0 5 5 0 21-5 5-19 0-5-5Z" fill="#e8cc8b"/>'
+            '<path d="M0-24 5-5 0 0Zm0 24L-5 5 0 21Zm0 0 19 0-14-5Zm0 0-19 0 14 5Z" fill="#396276"/>'
+            '<path d="M0-24 5-5 0-2-3-5Z" fill="#2b536a"/><circle r="2.2" fill="#efe0b7"/></g></g>',
+            f'<text x="{north_x:.2f}" y="{north_y + 5:.2f}" text-anchor="middle" font-family="serif" font-weight="bold" font-size="15" fill="#394f51">N</text>',
+            f'<g transform="translate(42 947)" stroke="#544f3c"><path d="M0-4v8h{length:.3f}v-8" fill="none" stroke-width="1.7"/>'
+            f'<path d="M0 1h{length/2:.3f}" fill="none" stroke-width="5"/></g>',
+            '<text x="42" y="974" font-family="serif" font-size="15" fill="#544f3c">100 m</text>']
 
 
 def build_map(park, geography, landmarks, profile):
     matrix = profile['matrix']
-    points = lambda shape: [transform(p, matrix) for p in shape]
-    sea = park['id'] == 'sea'
+    def points(shape):
+        return [transform(p, matrix) for p in shape]
+    def project_point(p):
+        return transform(project(p, geography['projection']), matrix)
+
     boundary = points(geography['boundary']['geometry'])
-    nodes = {n['id']: n for n in park['nodes']}
-    activities = [a for a in park['activities'] if a.get('area') in AREA_COLOURS and a['node'] in nodes]
-    def area_colour(item):
-        shape = item['geometry']
-        x, y = sum(p[0] for p in shape)/len(shape), sum(p[1] for p in shape)/len(shape)
-        nearby = min(activities, key=lambda a: (nodes[a['node']]['x']-x)**2+(nodes[a['node']]['y']-y)**2)
-        return AREA_COLOURS[nearby['area']]
+    scenery = json.loads((DATA / f'{park["id"]}-map-scenery.json').read_text())
+    surfaces, trees = scenery_markup(scenery, project_point)
+    # Artwork is composited under the real paths. Water holes remain dry land.
     svg = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" role="img" aria-label="{park["name"]}の地理地図" data-display-matrix="{json.dumps(matrix,separators=(",", ":"))}">',
-           f'<title>{park["name"]}の入口を下にした地理地図</title>',
-           f'<desc>© OpenStreetMap contributors. ODbL 1.0. {geography["extractedOn"]}取得。建物と水域の輪郭はOSM地理データ。ランドマークの絵は位置を示す記号です。徒歩通路は元の頂点を保持しています。</desc>',
-           '<defs><linearGradient id="paper" x2="1" y2="1"><stop stop-color="#f7f2e9"/><stop offset="1" stop-color="#edf1e7"/></linearGradient>',
-           '<linearGradient id="water" x2="0" y2="1"><stop stop-color="#a7d9dd"/><stop offset="1" stop-color="#73b8cf"/></linearGradient>',
-           '<pattern id="ripples" width="37" height="24" patternUnits="userSpaceOnUse"><path d="M3 9Q9 6 15 9M22 20Q28 17 34 20" fill="none" stroke="#e4f6f2" stroke-width=".8" opacity=".55"/></pattern>',
-           '<clipPath id="park">'+polygon(boundary)+'</clipPath></defs>',
-           '<rect width="1000" height="1000" fill="url(#paper)"/>',
-           polygon(boundary, fill='#e8ead7' if not sea else '#e5e8dd', stroke='#c0cbb9', stroke_width='2'),
-           '<g clip-path="url(#park)">']
-    for item in geography['water']:
-        rings = [item['geometry']]+[h['geometry'] for h in item.get('holes', [])]
-        path = ' '.join('M'+' L'.join(','.join(map(str,p)) for p in points(ring))+' Z' for ring in rings)
-        svg += [f'<path data-osm-water="{item.get("osmWayId",item.get("osmRelationId"))}" d="{path}" fill="url(#water)" fill-rule="evenodd" stroke="#7db6c5" stroke-width="1.1"/>',
-                f'<path d="{path}" fill="url(#ripples)" fill-rule="evenodd"/>']
-    for item in geography['buildings']:
-        shape = points(item['geometry'])
-        svg += [polygon([[x+2.3,y+3] for x,y in shape], fill='#627376', opacity='.14'),
-                polygon(shape, fill=area_colour(item), stroke='#a99c8b', stroke_width='.7', data_osm_building=item['osmWayId'])]
-    svg.append('<g fill="none" stroke-linejoin="round" stroke-linecap="round">')
+           f'<title>{park["name"]}の園内絵地図</title>',
+           '<desc>© OpenStreetMap contributors · ODbL 1.0。水域・通路・建物・植生は地理データに基づきます。建物の絵は位置を示す目印です。</desc>',
+           (ART / 'illustration-defs.svg').read_text(),
+           '<defs>', roof_gradients(), '<clipPath id="park">' + polygon(boundary) + '</clipPath>',
+           '<g id="walk-lines" fill="none" stroke-linejoin="round" stroke-linecap="round">']
     for item in geography['walkways']:
-        path = ' '.join(','.join(map(str,p)) for p in points(item['geometry']))
-        svg.append(f'<polyline data-osm-way="{item["osmWayId"]}" points="{path}" stroke="#fbf7eb" stroke-width="5.5"/>')
-    svg.append('</g></g>')
-    for item in landmarks:
-        if item['parkId'] != park['id']:
-            continue
-        x, y = transform(project(item['coordinates'], geography['projection']), matrix)
-        size = .75 if item['symbol'] == 'castle-small' else .9
-        svg.append(f'<g data-landmark-osm="{item["osmType"]}/{item["osmId"]}" transform="translate({x} {y}) scale({size})"><title>{html.escape(item["name"])}</title><ellipse cy="8" rx="34" ry="8" fill="#5e7167" opacity=".15"/>{landmark_symbol(item["symbol"])}</g>')
-    north = profile['rotationDegrees']
-    pixels = 100*geography['projection']['pixelsPerMetre']*profile['scale']
-    svg += ['<g fill="#3d5866" stroke="#3d5866"><circle cx="926" cy="68" r="23" fill="#faf8ef" stroke="#b7c4be"/>',
-            f'<g transform="translate(926 68) rotate({north})"><path d="M0-17L7 12L0 6L-7 12Z" stroke-width=".5"/></g>',
-            '<text x="926" y="108" text-anchor="middle" font-family="sans-serif" font-size="15" stroke="none">N</text></g>',
-            f'<path d="M42 944v7h{pixels:.3f}v-7" fill="none" stroke="#3d5866" stroke-width="2"/>',
-            '<text x="42" y="976" font-family="sans-serif" font-size="16" fill="#3d5866">100 m</text></svg>']
-    target = ROOT/f'web/assets/{park["id"]}-geographic-map.svg'
-    target.write_text('\n'.join(svg)+'\n')
+        line = ' '.join(f'{x},{y}' for x,y in points(item['geometry']))
+        svg.append(f'<polyline data-osm-way="{item["osmWayId"]}" points="{line}"/>')
+    svg += ['</g></defs>', '<rect width="1000" height="1000" fill="url(#paper)"/>',
+            '<rect width="1000" height="1000" fill="url(#grain)"/>',
+            '<rect x="13" y="13" width="974" height="974" rx="7" stroke="#ba9d69" stroke-width="1" fill="none" opacity=".7"/>',
+            '<rect x="17" y="17" width="966" height="966" rx="6" stroke="#c4aa78" stroke-width=".65" fill="none" opacity=".65"/>',
+            polygon(boundary, transform='translate(2 4)', fill='#a79f79', opacity='.28'),
+            polygon(boundary, fill='url(#ground)', stroke='#8b9870', stroke_width='1.6'),
+            '<g clip-path="url(#park)">', *surfaces, '<rect width="1000" height="1000" fill="url(#grain)"/>']
+    for index, item in enumerate(geography['water']):
+        rings = [item['geometry']] + [hole['geometry'] for hole in item.get('holes', [])]
+        path = coordinate_path([points(ring) for ring in rings])
+        osm_id = item.get('osmWayId', item.get('osmRelationId'))
+        svg.append(f'<defs><path data-osm-water="{osm_id}" d="{path}" id="w{index}" fill-rule="evenodd" clip-rule="evenodd"/>'
+                   f'<clipPath id="water-clip{index}"><use href="#w{index}"/></clipPath></defs>'
+                   f'<use href="#w{index}" fill="url(#water)" stroke="#568e92" stroke-width="1.2"/>'
+                   f'<use href="#w{index}" fill="url(#ripples)"/>'
+                   f'<use href="#w{index}" clip-path="url(#water-clip{index})" fill="none" stroke="#e4f0c6" stroke-width="4" opacity=".55"/>')
+    svg += [*trees, *illustrated_buildings(park, geography, points), '</g>']
+    svg.append('<g data-layer="walkways" clip-path="url(#park)"><use href="#walk-lines" stroke="#9e8661" stroke-width="3.45"/>'
+               '<use href="#walk-lines" stroke="#fff2ce" stroke-width="2.65"/></g>')
+    svg.extend(landmark_picture(item, project_point) for item in landmarks if item['parkId'] == park['id'])
+    # Keep the road trace visible over the raised illustrations without
+    # cutting through their colours with the full-width outline. The user's
+    # itinerary is drawn above the whole map at full contrast by map-view.js.
+    svg += ['<use data-layer="walkway-trace" href="#walk-lines" clip-path="url(#park)" stroke="#fff6d9" stroke-width="1.6" opacity=".57"/>',
+            *compass_scale(profile, geography), '</svg>']
+    target = ROOT / f'web/assets/{park["id"]}-geographic-map.svg'
+    target.write_text('\n'.join(svg) + '\n')
 
 
 def build():
@@ -168,7 +244,3 @@ export function displayMapPoint(park, point) {
 
 if __name__ == '__main__':
     print(json.dumps(build(),ensure_ascii=False,indent=2))
-
-
-if __name__ == '__main__':
-    build()
