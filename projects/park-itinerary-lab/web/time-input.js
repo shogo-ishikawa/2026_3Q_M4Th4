@@ -25,7 +25,7 @@ export function componentMinute(value,part,next,bounds=DEFAULT_BOUNDS){
   const result=part==='hour'?Math.max(Math.floor(bounds.min/60),Math.min(Math.floor(bounds.max/60),number))*60+minute:hour*60+Math.max(0,Math.min(59,number));
   return clampClock(result,bounds);
 }
-/** This is a preference window, not the park's entry/exit or an acquired DPA slot. */
+/** Link a preference range when the user edits one end. Confirmed slots stay independent. */
 export function linkedWishWindow(changed,value,pair,bounds=DEFAULT_BOUNDS){
   const selected=clampClock(value,bounds);
   if(changed==='earliest'){
@@ -34,6 +34,17 @@ export function linkedWishWindow(changed,value,pair,bounds=DEFAULT_BOUNDS){
   }
   const latest=Math.max(selected,bounds.min+1);
   return {earliest:Math.max(bounds.min,latest-120),latest};
+}
+
+export function linkClockFields(edited, start, end, bounds) {
+  const value = clockMinute(edited.value);
+  if (value === null) return null;
+  const pair = linkedWishWindow(edited === start ? 'earliest' : 'latest', value, {}, bounds);
+  for (const [field, minute] of [[start, pair.earliest], [end, pair.latest]]) {
+    field.value = clockText(minute);
+    controls.get(field)?.sync();
+  }
+  return pair;
 }
 
 /** Bind real events separately so keyboard and direct entry use the same constraints. */
@@ -67,7 +78,11 @@ export function bindClockParts(canonical,hourInput,minuteInput,{getBounds=()=>DE
     if(canonical.value!==previous){canonical.dispatchEvent(new Event('input',{bubbles:true}));canonical.dispatchEvent(new Event('change',{bubbles:true}));}
   }
   for(const [part,input] of [['hour',hourInput],['minute',minuteInput]]){
-    input.addEventListener('input',event=>event.stopPropagation());
+    input.addEventListener('input', event => {
+      event.stopPropagation();
+      // Wait for both digits so a leading 0 or 1 can still be completed.
+      if (/^\d{2}$/.test(input.value)) commit(part);
+    });
     input.addEventListener('change',event=>{event.stopPropagation();commit(part);});
     input.addEventListener('keydown',event=>{
       if(!['ArrowUp','ArrowDown','Home','End'].includes(event.key))return;
@@ -80,6 +95,114 @@ export function bindClockParts(canonical,hourInput,minuteInput,{getBounds=()=>DE
   }
   canonical.addEventListener('change',sync);sync();
   return {sync,commit};
+}
+
+// The selected option sits in the middle of five visible rows. Native scrolling
+// supplies touch momentum and trackpad/wheel support without wrapping the list.
+function reelColumn(list, part, onChange, onConfirm) {
+  let min, max, selected;
+  const rowHeight = () => list.firstElementChild.offsetHeight;
+  function current() {
+    const height = rowHeight();
+    return height ? Math.max(min, Math.min(max, min + Math.round(list.scrollTop / height))) : selected;
+  }
+  function highlight(value) {
+    if (value === selected) return;
+    list.querySelector('[aria-selected="true"]')?.setAttribute('aria-selected', 'false');
+    const option = list.children[value - min];
+    option.setAttribute('aria-selected', 'true');
+    list.setAttribute('aria-activedescendant', option.id);
+    selected = value;
+    onChange(value);
+  }
+  function select(value) {
+    const next = Math.max(min, Math.min(max, value));
+    list.scrollTop = (next - min) * rowHeight();
+    highlight(next);
+  }
+  function setRange(low, high, value) {
+    if (min !== low || max !== high) {
+      min = low; max = high; selected = null;
+      const options = [];
+      for (let i = low; i <= high; i++) {
+        const option = list.ownerDocument.createElement('div');
+        option.id = `time-reel-${part}-${i}`;
+        option.setAttribute('role', 'option');
+        option.setAttribute('aria-selected', 'false');
+        option.dataset.value = String(i);
+        option.textContent = pad(i);
+        options.push(option);
+      }
+      list.replaceChildren(...options);
+    }
+    select(value);
+  }
+  list.addEventListener('scroll', () => highlight(current()));
+  list.addEventListener('click', event => {
+    const option = event.target.closest('[role="option"]');
+    if (option) select(Number(option.dataset.value));
+  });
+  list.addEventListener('keydown', event => {
+    const steps = {ArrowUp: -1, ArrowDown: 1, PageUp: -5, PageDown: 5};
+    if (event.key === 'Enter') onConfirm();
+    else if (event.key === 'Home') select(min);
+    else if (event.key === 'End') select(max);
+    else if (Object.hasOwn(steps, event.key)) select(current() + steps[event.key]);
+    else return;
+    event.preventDefault();
+  });
+  return {setRange, current};
+}
+
+export function bindTimeReels(hours, minutes, value, bounds, onConfirm) {
+  const initial = clampClock(value, bounds);
+  const lowHour = Math.floor(bounds.min / 60), highHour = Math.floor(bounds.max / 60);
+  let selectedMinute = initial % 60;
+  function confirm() {
+    onConfirm(clampClock(hourReel.current() * 60 + minuteReel.current(), bounds));
+  }
+  const minuteReel = reelColumn(minutes, 'minute', value => { selectedMinute = value; }, confirm);
+  const hourReel = reelColumn(hours, 'hour', hour => {
+    const low = hour === lowHour ? bounds.min % 60 : 0;
+    const high = hour === highHour ? bounds.max % 60 : 59;
+    minuteReel.setRange(low, high, selectedMinute);
+  }, confirm);
+  hourReel.setRange(lowHour, highHour, Math.floor(initial / 60));
+  return confirm;
+}
+
+function openTimeReel(input, label, bounds) {
+  const document = input.ownerDocument;
+  const dialog = document.createElement('dialog');
+  dialog.className = 'time-reel';
+  dialog.setAttribute('aria-labelledby', 'time-reel-title');
+  dialog.innerHTML = `<h2 id="time-reel-title"></h2>
+    <div class="reel-headings" aria-hidden="true"><span>時</span><span>分</span></div>
+    <div class="reel-columns">
+      <div class="reel-column" role="listbox" aria-label="時" tabindex="0"></div>
+      <div class="reel-column" role="listbox" aria-label="分" tabindex="0"></div>
+    </div>
+    <div class="reel-actions"><button type="button" data-clear>クリア</button>
+      <button type="button" data-cancel>キャンセル</button><button type="button" data-apply>決定</button></div>`;
+  dialog.querySelector('h2').textContent = label;
+  const [hours, minutes] = dialog.querySelectorAll('.reel-column');
+  function apply(value) {
+    dialog.close();
+    if (!input.isConnected || input.disabled) return;
+    input.value = value;
+    input.dispatchEvent(new Event('input', {bubbles: true}));
+    input.dispatchEvent(new Event('change', {bubbles: true}));
+  }
+  const clear = dialog.querySelector('[data-clear]');
+  clear.hidden = input.required;
+  clear.addEventListener('click', () => apply(''));
+  dialog.querySelector('[data-cancel]').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', () => dialog.remove(), {once: true});
+  document.body.append(dialog);
+  dialog.showModal();
+  const confirm = bindTimeReels(hours, minutes, input.value, bounds, value => apply(clockText(value)));
+  dialog.querySelector('[data-apply]').addEventListener('click', confirm);
+  hours.focus();
 }
 
 /** Retain canonical field IDs and change events for the settings and wish editors. */
@@ -97,8 +220,19 @@ export function enhanceTimeInputs(root,{getBounds=()=>DEFAULT_BOUNDS}={}){
     separator.className='clock-separator';separator.textContent=':';separator.setAttribute('aria-hidden','true');box.append(hour,separator,minute);
     input.type='hidden';input.dataset.clampedTime='true';input.insertAdjacentElement('afterend',box);
     if(label){const field=document.createElement('div');field.className=`time-field ${label.className||''}`.trim();while(label.firstChild)field.append(label.firstChild);label.replaceWith(field);}
-    const controller=bindClockParts(input,hour,minute,{getBounds});controls.set(input,controller);
-    if(!input.required){const clear=document.createElement('button');clear.type='button';clear.className='clock-clear';clear.textContent='×';clear.setAttribute('aria-label',`${labelText}をクリア`);clear.addEventListener('click',()=>{input.value='';controller.sync();input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));hour.focus();});box.append(clear);}
+    const controller=bindClockParts(input,hour,minute,{getBounds});
+    const reel = document.createElement('button');
+    reel.type = 'button'; reel.className = 'clock-reel-button'; reel.textContent = 'リール';
+    reel.setAttribute('aria-label', `${labelText}をリールで選ぶ`);
+    reel.setAttribute('aria-haspopup', 'dialog');
+    reel.addEventListener('click', () => {
+      if (!input.disabled) openTimeReel(input, labelText, getBounds(input) || DEFAULT_BOUNDS);
+    });
+    box.append(reel);
+    controls.set(input, {sync() {
+      controller.sync();
+      reel.disabled = input.disabled;
+    }});
   }
   for(const input of root.querySelectorAll('input[data-clamped-time]'))controls.get(input)?.sync();
 }

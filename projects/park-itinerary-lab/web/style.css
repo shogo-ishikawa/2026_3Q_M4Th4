@@ -212,6 +212,13 @@ body[data-park=sea] .site-header .brand{color:#edd18f}
 }
 @media print{.sources-section{display:none}.forecast-card{break-inside:avoid;background:white}}
 /* Compact controls and summary values leave room for the actual itinerary. */
+/* Keep the action within reach after the last wish. */
+.wishlist-solve-actions{display:flex;justify-content:flex-end;margin-top:20px}
+.wishlist-solve-actions .primary-button{min-height:46px;padding:10px 24px;background:var(--accent);border:1px solid var(--accent);color:#fff;font-size:15px}
+.plan-feedback,.plan-field-error{background:#fff3eb;color:#7b3516;border-left:3px solid #b44f21;border-radius:4px;padding:9px 12px;margin:0;font-size:14px;line-height:1.65}
+.plan-field-error{grid-column:1/-1;scroll-margin-block:15vh}
+[data-plan-invalid]{outline:2px solid #aa4624;outline-offset:2px}
+#noPlanActions{margin:8px 0 16px}
 .main-column>.solve-bar{min-height:0;padding:0;background:transparent;border:0;box-shadow:none}
 .main-column>.solve-bar .solve-actions{width:100%;display:flex;gap:8px}
 .main-column>.solve-bar .primary-button{flex:1;min-height:46px;padding:10px 18px;background:var(--accent);color:white;font-size:15px;border:1px solid var(--accent)}
@@ -225,3 +232,100 @@ body[data-park=sea] .hero h1{font-size:clamp(24px,2.35vw,36px);line-height:1.6}
 .hero .unbroken{white-space:nowrap}
 .forecast-period,.forecast-metric-label{font-size:11px}
 .forecast-value strong{font-size:14px}
+
+.dpa-editor {
+  min-inline-size: 0;
+  margin: 18px 0 0;
+  padding: 10px 14px 12px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+.dpa-editor legend { padding: 0 5px; font-size: 14px; font-weight: 750; }
+.dpa-editor legend span { margin-left: 4px; color: var(--muted); font-size: 13px; font-weight: 550; }
+.dpa-choices { display: flex; flex-wrap: wrap; gap: 5px; }
+.dpa-choices label { position: relative; display: flex; cursor: pointer; }
+.dpa-choices input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.dpa-choices span {
+  display: block; padding: 4px 11px;
+  border: 1px solid var(--line); border-radius: 6px;
+  color: var(--muted); background: var(--paper); font-size: 14px;
+}
+.dpa-choices input:checked + span { color: var(--accent-dark); background: var(--accent-pale); border-color: var(--accent); font-weight: 700; }
+.dpa-choices input:focus-visible + span { outline: 3px solid #ffb649; outline-offset: 2px; }
+.dpa-editor .dpa-help { margin: 8px 0 0; font-size: 14px; color: var(--muted); }
+.dpa-help button { margin-left: 6px; padding: 0; }
+.dpa-editor .wish-fields, .dpa-editor .full-field { margin-top: 9px; }
+@media (max-width: 540px) {
+  .dpa-editor { padding: 8px 10px 10px; }
+  .dpa-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .dpa-choices span { width: 100%; text-align: center; padding: 5px; }
+}
+/* In narrow pairs, native spinners would cover the second digit beside the reel. */
+.time-field { container-type: inline-size; }
+@container (max-width: 165px) {
+  .clamped-time { gap: 2px; padding-inline: 3px; }
+  .clamped-time .clock-component { appearance: textfield; }
+  .clamped-time .clock-component::-webkit-inner-spin-button,
+  .clamped-time .clock-component::-webkit-outer-spin-button { appearance: none; margin: 0; }
+}
+
+/* The reel and direct entry share the same bounded time value. */
+.clock-reel-button {
+  flex: none;
+  align-self: stretch;
+  padding: 0 5px;
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: transparent;
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 650;
+}
+.clock-reel-button:hover { background: var(--accent-pale); }
+.time-reel {
+  --reel-row: 40px;
+  width: min(19rem, calc(100% - 24px));
+  max-height: calc(100dvh - 24px);
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  color: var(--ink);
+  background: #fff;
+  box-shadow: 0 14px 52px #172b4836;
+}
+.time-reel::backdrop { background: rgb(18 32 54 / 38%); }
+.time-reel h2 { margin: 0 0 14px; font-size: 17px; }
+.reel-headings, .reel-columns { display: grid; grid-template-columns: 1fr 1fr; }
+.reel-headings { text-align: center; color: var(--muted); font-size: 13px; }
+.reel-columns {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: linear-gradient(to bottom, transparent 40%, var(--accent-pale) 40% 60%, transparent 60%);
+}
+.reel-column {
+  height: calc(5 * var(--reel-row));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scroll-snap-type: y mandatory;
+  scrollbar-width: thin;
+  text-align: center;
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+.reel-column:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.reel-column::before, .reel-column::after { content: ''; display: block; height: calc(2 * var(--reel-row)); }
+.reel-column [role="option"] { cursor: pointer; height: var(--reel-row); line-height: var(--reel-row); scroll-snap-align: center; }
+.reel-column [aria-selected="true"] { color: var(--accent-dark); font-weight: 800; }
+.reel-actions { display: flex; gap: 6px; justify-content: flex-end; margin-top: 16px; }
+.reel-actions button {
+  padding: 7px 10px;
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fff;
+  color: var(--ink);
+  font-size: 14px;
+}
+.reel-actions [data-clear] { margin-right: auto; }
+.reel-actions [data-apply] { border-color: var(--accent); background: var(--accent); color: white; }
+.day-time-link { margin: 8px 0 0; }

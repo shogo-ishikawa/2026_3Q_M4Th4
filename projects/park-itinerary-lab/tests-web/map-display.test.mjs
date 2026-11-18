@@ -45,6 +45,37 @@ for(const park of catalogue.parks){
   });
   assert.match(svg,/ODbL/);assert.match(svg,/data-landmark-osm=/);
  });
+ test(`${park.id}: every walkway retains its vertices beneath and above the artwork`,()=>{
+  const walkways=[...svg.matchAll(/<polyline data-osm-way="(\d+)" points="([^"]+)"/g)];
+  assert.equal(walkways.length,source.walkways.length);
+  walkways.forEach((match,index)=>{
+   const way=source.walkways[index];
+   assert.equal(Number(match[1]),way.osmWayId);
+   assert.deepEqual(points(match[2]),way.geometry.flatMap(p=>displayMapPoint(park,p)));
+  });
+  assert.ok(svg.indexOf('data-layer="walkways"')<svg.indexOf('data-landmark-osm='));
+  assert.ok(svg.lastIndexOf('data-landmark-osm=')<svg.indexOf('data-layer="walkway-trace"'));
+  const compass=svg.match(/<text x="([^"]+)" y="([^"]+)"[^>]+>N<\/text>/);
+  const rotation=mapDisplayProfiles[park.id].rotationDegrees*Math.PI/180;
+  assert.ok(Math.abs(Number(compass[1])-924-42*Math.sin(rotation))<.01);
+  assert.ok(Math.abs(Number(compass[2])-83+42*Math.cos(rotation))<.01);
+ });
+ test(`${park.id}: scenery and embedded illustrations match their published sources`,()=>{
+  const scenery=JSON.parse(fs.readFileSync(new URL(`../web/data/${park.id}-map-scenery.json`,import.meta.url)));
+  const landmarks=JSON.parse(fs.readFileSync(new URL('../web/data/map-landmarks.json',import.meta.url))).landmarks.filter(l=>l.parkId===park.id);
+  assert.equal(scenery.licence,'ODbL-1.0');
+  const ids=expression=>new Set([...svg.matchAll(expression)].map(match=>match[1]));
+  assert.deepEqual(ids(/data-osm-surface="([^"]+)"/g),new Set(scenery.areas.map(a=>`${a.osmType}/${a.osmId}`)));
+  assert.deepEqual(ids(/data-osm-tree="([^"]+)"/g),new Set(scenery.trees.map(([id])=>String(id))));
+  assert.deepEqual(ids(/data-landmark-osm="([^"]+)"/g),new Set(landmarks.map(l=>`${l.osmType}/${l.osmId}`)));
+  const images=[...svg.matchAll(/<image href="data:image\/png;base64,([^"]+)"/g)];
+  assert.equal(images.length,landmarks.length);
+  images.forEach((image,index)=>{
+   const picture=fs.readFileSync(new URL(`../scripts/map-art/${landmarks[index].symbol}.png`,import.meta.url));
+   assert.deepEqual(Buffer.from(image[1],'base64'),picture);
+  });
+  assert.doesNotMatch(svg,/href="(?:https?:|\/|\.\.)/);
+ });
  test(`${park.id}: background, route and gate agree without changing graph nodes or recorded distances`,()=>{
   const before=structuredClone(park),edge=park.edges[10];
   const row={kind:'walk',name:'Display alignment',routeSource:park.routeGraphVersion,path:[edge.from,edge.to],metres:edge.metres};

@@ -845,16 +845,24 @@ function multiStartSearch(context, tracker, deadline) {
   }
 }
 
+function replanSource(park, settings, previous) {
+  if ((previous?.parkId && previous.parkId !== park.id) ||
+      (previous?.settings?.date && previous.settings.date !== settings.date)) return null;
+  return previous;
+}
+
 /** Time-bounded search over visits, admission methods, breaks and time windows. */
 export function solveItinerary(park, rawSettings, options = {}) {
   const started = now();
   const replan = rawSettings?.replanFrom !== undefined && rawSettings.replanFrom !== '';
+  const initialPlan = replanSource(park, rawSettings, options.initialPlan);
   let input = rawSettings;
-  if (replan && rawSettings.purchases === undefined && options.initialPlan?.purchases?.length) {
-    const priorOwned = options.initialPlan.purchases.filter(purchase => purchase.owned);
+  if (replan && rawSettings.purchases === undefined && initialPlan?.parkId === park.id &&
+      initialPlan.settings?.date === rawSettings.date && initialPlan.purchases?.length) {
+    const priorOwned = initialPlan.purchases.filter(purchase => purchase.owned);
     input = { ...rawSettings, purchases: priorOwned };
   }
-  const settings = normalise(park, input), context = contextFor(park, settings, options.initialPlan);
+  const settings = normalise(park, input), context = contextFor(park, settings, initialPlan);
   const milliseconds = Math.min(settings.searchSeconds * 1000,
     options.deadlineMs === undefined ? Infinity : Math.max(1, Number(options.deadlineMs)));
   context.deadline = started + milliseconds;
@@ -881,7 +889,7 @@ export function solveItinerary(park, rawSettings, options = {}) {
   context.deadline = null;
   const result = resultFrom(tracker.best, context, diagnostics);
   if (tracker.best) {
-    const verification = validatePlan(park, settings, result, {initialPlan:options.initialPlan});
+    const verification = validatePlan(park, settings, result, {initialPlan});
     if (!verification.valid) throw new Error('予定の検証で問題が見つかりました：' + verification.errors.join(' / '));
   }
   options.onProgress?.({ elapsedMs: diagnostics.elapsedMs, bestScore: result.totals.score, visits: result.visits.length, expanded: diagnostics.expanded });
@@ -898,7 +906,7 @@ export function validatePlan(park, settings, result, options = {}) {
   const walkingSettings={...settings,activeEvents:(park.events||[]).filter(event=>event.startDate<=settings.date&&settings.date<=event.endDate)};
   const rows = result.rows || [];
   const cutoff=settings.replanFrom===undefined||settings.replanFrom===''?null:toMinutes(settings.replanFrom);
-  const sourcePlan=options.initialPlan;
+  const sourcePlan=replanSource(park,settings,options.initialPlan);
   const datedSource=sourcePlan?.settings?.date===settings.date&&(!sourcePlan.parkId||sourcePlan.parkId===park.id);
   const sourceRows=cutoff===null?[]:preservedPrefix(sourcePlan,settings);
   const sourceSignatures=new Set(sourceRows.map(rowSignature));
@@ -974,8 +982,17 @@ export function validatePlan(park, settings, result, options = {}) {
         if (item.dpa) {
           if (!dpaAvailable(activity, settings.date)) errors.push('この日にはDPAを利用できません。');
           if (activity.category === 'parade' && (!selection.nodeOverride || !selection.showTimes?.length)) errors.push('パレードDPAの鑑賞地点・時刻が未確認です。');
-          const purchase = (result.purchases || []).find(candidate => candidate.id === item.activityId);
-          if (!purchase || admission < purchase.start || admission >= purchase.end) errors.push('DPAの利用枠の外です。');
+          const owned = selection.dpaMode === 'owned';
+          const ticket = (result.purchases || []).find(purchase => purchase.id === item.activityId &&
+            purchase.owned === owned && purchase.start <= admission && admission < purchase.end);
+          if (!ticket) errors.push('DPAの利用枠の外です。');
+          else if (owned) {
+            if (ticket.start !== toMinutes(selection.dpaStart) || ticket.end !== toMinutes(selection.dpaEnd) ||
+                ticket.purchasedAt !== toMinutes(selection.dpaPurchasedAt)) errors.push('取得済みDPAの購入・利用時刻が設定と一致しません。');
+          } else if (selection.dpaMode !== 'consider' || ticket.cost !== item.dpaCost ||
+              !(selection.dpaAvailableWindows || []).some(([start, end]) => ticket.start === toMinutes(start) && ticket.end === toMinutes(end))) {
+            errors.push('DPAの購入候補の枠または料金が設定と一致しません。');
+          }
         } else if (!activityWindows(activity, selection, settings, park).some(window => admission >= window[0] && item.end <= window[1])) errors.push('施設の営業時間の外です。');
       }
       node = activity.endNode || item.node;
@@ -994,6 +1011,14 @@ export function validatePlan(park, settings, result, options = {}) {
   for (const item of rows.filter(item => item.fixedBreakId && !item.preserved)) if (!(settings.fixedBreaks || []).some(reservation => reservation.id === item.fixedBreakId)) errors.push('設定にない休憩が含まれています。');
   for (const selection of settings.selections || []) if (selection.required && !visited.has(selection.id)) errors.push('必須の希望がありません。');
   const purchased = result.purchases || [];
+  for (const recorded of settings.purchases || []) {
+    const recordedCost = recorded.cost ?? activities.get(recorded.id)?.dpa?.price;
+    if (!purchased.some(ticket => ticket.id === recorded.id && ticket.owned && ticket.cost === recordedCost &&
+        ticket.purchasedAt === toMinutes(recorded.purchasedAt ?? entry) &&
+        ticket.start === toMinutes(recorded.start) && ticket.end === toMinutes(recorded.end))) {
+      errors.push('支払済みDPAの時刻・料金が購入履歴と一致しません。');
+    }
+  }
   const ownedCosts = purchased.filter(item => item.owned).reduce((sum, item) => sum + item.cost, 0);
   const prefix = rows.filter(item => item.kind === 'activity' && item.preserved);
   const prefixNonDpa = prefix.reduce((sum, item) => sum + Math.max(0, item.cost - finite(item.dpaCost)), 0);
