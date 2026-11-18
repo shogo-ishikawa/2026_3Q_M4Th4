@@ -16,12 +16,17 @@ import math
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import threading
 import time
 import urllib.error
 import urllib.parse
 import urllib.request
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from collect_weather import fill_weather, hourly_weather
+from train_wait_model import fit_summary
 
 PROJECT = Path(__file__).resolve().parents[1]
 API = 'https://api.themeparks.wiki/v1'
@@ -173,23 +178,21 @@ def normalise_history(payload: dict, park: dict, mapping: dict[str, str], date: 
     return sorted(buckets.values(), key=lambda item: (item['date'], item['time'], item['activityId']))
 
 
-def weather_lookup(payload: dict) -> dict[str, dict]:
-    hourly = payload.get('hourly') or {}
-    result = {}
-    for index, time in enumerate(hourly.get('time', [])):
-        def value(key):
-            values = hourly.get(key) or []
-            number = values[index] if index < len(values) else None
-            return number if isinstance(number, (int, float)) and not isinstance(number, bool) and math.isfinite(number) else None
-        code = value('weather_code')
-        result[time[:13]] = {'weather': '' if code is None else 'sun' if code == 0 else 'cloud' if code <= 3 or code in (45, 48) else 'rain',
-                            'temperature': value('temperature_2m'), 'precipitation': value('precipitation'),
-                            'weatherSource': 'open-meteo-past-forecast'}
-    return result
-
-
 def enrich_weather(rows: list[dict], lookup: dict[str, dict]) -> list[dict]:
-    return [{**row, **lookup.get(row['date'] + 'T' + str(row['time'] // 60).zfill(2), {})} for row in rows]
+    return [fill_weather(row, lookup.get(f"{row['date']}T{row['time'] // 60:02d}", {}), "open-meteo-past-forecast")
+            for row in rows]
+
+
+def weather_provenance(rows):
+    source = 'open-meteo-past-forecast'
+    provenance = 'unavailable'
+    for row in rows:
+        supplemental = row.get('supplementalWeather')
+        if row.get('weatherSource') == source or (isinstance(supplemental, dict) and supplemental.get('source') == source):
+            return 'past-weather-forecast'
+        if any(row.get(key) not in (None, '') for key in ('weather', 'temperature', 'precipitation')):
+            provenance = 'recorded-only'
+    return provenance
 
 
 def eligible_input(rows, catalogue, end):
@@ -235,7 +238,8 @@ def choose_model(candidate: dict, prior: dict | None) -> dict:
             or candidate.get('days', 0) < prior.get('days', 0)
             or (str(candidate.get('firstDate', '')) > str(prior.get('firstDate', ''))
                 and str(candidate.get('lastDate', '')) <= str(prior.get('lastDate', '')))):
-        return {**prior, 'lastBootstrapAttempt': candidate.get('bootstrap')}
+        attempt = {**candidate.get('bootstrap', {}), 'fit': fit_summary(candidate)}
+        return {**prior, 'lastBootstrapAttempt': attempt}
     return candidate
 
 
@@ -346,12 +350,10 @@ def bootstrap(args, private_dir: Path) -> dict:
             else:
                 payload=request_json('https://historical-forecast-api.open-meteo.com/v1/forecast?'+query)
                 weather_cache.write_text(json.dumps(payload))
-            weather.update(weather_lookup(payload))
+            weather.update(hourly_weather(payload))
         except (OSError,ValueError,IndexError):pass
     # Existing measured/user weather wins. Unknowns remain unknown after provider failures.
-    rows=[{**row,**{key:value for key,value in weather.get(row['date']+'T'+str(row['time']//60).zfill(2),{}).items()
-           if row.get(key) in (None,'') and value not in (None,'')}} for row in rows
-           if isinstance(row,dict) and isinstance(row.get('time'),int) and isinstance(row.get('date'),str)]
+    rows=enrich_weather(rows, weather)
     (private_dir/'normalised-history.json').write_text(json.dumps(rows,ensure_ascii=False))
     before=(end+dt.timedelta(days=1)).isoformat()
     sources=list(SOURCES)+input_sources
@@ -370,7 +372,7 @@ def bootstrap(args, private_dir: Path) -> dict:
             'historySamples':sum(row.get('source')=='themeparks-wiki' for row in park_rows),
             'historyRequestsSelected':len(selected),'historyRequestsPending':pending,
             'coverage':next(item for item in coverage_reports if item['parkId']==model['parkId']),
-            'weatherProvenance':'past-weather-forecast' if weather else 'unavailable',
+            'weatherProvenance':weather_provenance(park_rows),
             'failedDays':sum(report['status']!='ok' for report in latest_reports.values() if report['parkId']==model['parkId']),
             'privateCacheRetained':bool(args.private_dir)}
         prior=next((item for item in previous.get('parks',[]) if item.get('parkId')==model['parkId']),None)

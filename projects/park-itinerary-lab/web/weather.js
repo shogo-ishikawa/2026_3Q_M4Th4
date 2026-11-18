@@ -240,6 +240,6 @@ export async function prepareWeatherForVisit(settings,park,{signal,fetchWeatherI
     return {...clean,weatherMode:'auto',weather:profile.weather,weatherForecast:profile,weatherNotice:`天気予報を取得しました（${settings.date}・${forecastSourceLabel(profile)}）。滞在中の予報を計画に反映します。${forecastCacheLabel(profile)}。${profile.provider==='jma'?'天気は3時間または日単位、降水確率は6時間または日単位です。降水量は未提供です。':''}`};
   }catch(error){
     if(signal?.aborted||error.name==='AbortError')throw error;
-    return {...clean,weatherMode:'auto',weatherNotice:`天気予報を取得できませんでした（${error.message}）。今回は選択中の「${{sun:'晴れ',cloud:'くもり',rain:'雨'}[settings.weather]||'天気'}」で計画します。`};
+    return {...clean,weatherMode:'auto',weatherNotice:`天気予報を取得できませんでした（${error.message}）。今回は「${{sun:'晴れ',cloud:'くもり',rain:'雨'}[settings.weather]||'天気'}」と仮定して計画します。`};
   }
 }

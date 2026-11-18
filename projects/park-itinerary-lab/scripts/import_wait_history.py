@@ -10,9 +10,13 @@ import csv
 import datetime as dt
 import io
 import json
+import sys
 from pathlib import Path
 import urllib.parse
 import urllib.request
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from collect_weather import fill_weather, hourly_weather
 
 PROJECT = Path(__file__).resolve().parents[1]
 WEATHER_ATTRIBUTION = {"name": "Open-Meteo", "url": "https://open-meteo.com/", "kind": "historical-weather", "attribution": "Weather data by Open-Meteo.com (CC BY 4.0)"}
@@ -114,24 +118,6 @@ def request_json(url):
         return json.load(response)
 
 
-def weather_rows(payload):
-    hourly = payload.get("hourly", {})
-    result = {}
-    for index, stamp in enumerate(hourly.get("time", [])):
-        if not isinstance(stamp, str) or len(stamp) < 16:
-            continue
-        code = hourly.get("weather_code", [])[index] if index < len(hourly.get("weather_code", [])) else None
-        weather = "sun" if code == 0 else "cloud" if isinstance(code, (int, float)) and (code <= 3 or code in (45, 48)) else "rain" if isinstance(code, (int, float)) else ""
-        row = {"weather": weather}
-        for field, api_field, limits in (("temperature", "temperature_2m", (-40, 60)), ("precipitation", "precipitation", (0, 200))):
-            values = hourly.get(api_field, [])
-            value = number(values[index], *limits) if index < len(values) else None
-            if value is not None:
-                row[field] = value
-        result[(stamp[:10], stamp[11:13])] = row
-    return result
-
-
 def enrich_weather(rows, output, fetch_json=request_json):
     """Join the timestamp's hourly reanalysis; missing values are never invented."""
     dates = sorted({row["date"] for row in rows})
@@ -151,21 +137,15 @@ def enrich_weather(rows, output, fetch_json=request_json):
                 query = urllib.parse.urlencode({"latitude": 35.632, "longitude": 139.883, "start_date": cursor.isoformat(), "end_date": end.isoformat(), "hourly": "temperature_2m,precipitation,weather_code", "timezone": "Asia/Tokyo"})
                 payload = fetch_json("https://archive-api.open-meteo.com/v1/archive?" + query)
                 cache_file.write_text(json.dumps(payload, ensure_ascii=False))
-            all_weather.update(weather_rows(payload))
+            all_weather.update(hourly_weather(payload))
         except (OSError, ValueError, KeyError) as error:
             errors.append({"startDate": cursor.isoformat(), "endDate": end.isoformat(), "error": str(error)})
         cursor = end + dt.timedelta(days=1)
     matched = 0
     for row in rows:
-        weather = all_weather.get((row["date"], f"{row['time'] // 60:02}"))
+        weather = all_weather.get(f"{row['date']}T{row['time'] // 60:02d}")
         if weather:
-            for key, value in weather.items():
-                if key == "weather" and row.get("weather"):
-                    continue
-                if key in ("temperature", "precipitation") and key in row:
-                    continue
-                row[key] = value
-            row["weatherSource"] = "open-meteo-reanalysis"
+            row.update(fill_weather(row, weather, "open-meteo-reanalysis"))
             matched += 1
     return {"matched": matched, "missing": len(rows) - matched, "errors": errors}
 

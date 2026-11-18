@@ -81,6 +81,49 @@ class CollectorTests(unittest.TestCase):
             rows = json.loads((root / "observations.json").read_text())
             self.assertEqual([item["date"] for item in rows], ["2026-11-17", "2026-11-18"])
 
+    def test_match_hourly_forecast_known_before_the_queue_timestamp(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / 'weather-forecast.json'
+            def forecast(fetched):
+                hours = {'time': ['2026-11-17T12:00', '2026-11-17T13:00'], 'weather_code': [61, 0],
+                         'temperature_2m': [11.2, 13.6], 'precipitation': [7.1, 1.5]}
+                path.write_text(json.dumps({'providers': {'open-meteo': {'fetchedAt': fetched,
+                                            'data': {'timezone': 'Asia/Tokyo', 'hourly': hours}}}}))
+                return collector.cached_weather(path)
+
+            def row(fetched):
+                return collector.to_observations(self.snapshot(), self.park, forecast=forecast(fetched))[0]
+
+            observed = row('2026-11-17T01:10:00Z')
+            self.assertEqual((observed['weather'], observed['temperature'], observed['precipitation']), ('rain', 11.2, 1.5))
+            self.assertEqual(observed['weatherSource'], 'open-meteo-hourly-forecast')
+            self.assertEqual(observed['weatherTime'], '2026-11-17T12:00:00+09:00')
+            self.assertEqual(observed['weatherFetchedAt'], '2026-11-17T01:10:00+00:00')
+            for fetched in ('2026-11-17T03:01:00Z', '2026-11-16T14:00:00Z', 'unknown'):
+                self.assertNotIn('weatherSource', row(fetched))
+
+    def test_matching_current_weather_excludes_short_interval_precipitation_and_stale_values(self):
+        payload = {'timezone': 'Asia/Tokyo', 'current': {'time': '2026-11-17T12:00', 'interval': 900,
+                   'temperature_2m': 14.2, 'weather_code': None, 'precipitation': 15}}
+        with mock.patch.object(collector, 'request_json', return_value=payload):
+            current = collector.current_weather()
+        local = dt.datetime.fromisoformat('2026-11-17T12:07+09:00')
+        row = collector.observation_weather(local, (None, {}), current)
+        self.assertEqual(row['temperature'], 14.2)
+        self.assertEqual(row['weatherSource'], 'open-meteo-current')
+        self.assertNotIn('precipitation', row)
+        self.assertNotIn('weather', row)
+        self.assertEqual(collector.observation_weather(local + dt.timedelta(minutes=8), (None, {}), current), {})
+        self.assertEqual(collector.observation_weather(local - dt.timedelta(minutes=8), (None, {}), current), {})
+
+    def test_precipitation_uses_the_exact_end_of_the_hour_including_midnight(self):
+        hours = {'time': ['2026-11-17T20:00', '2026-11-17T23:00', '2026-11-18T00:00'],
+                 'weather_code': [False, 61, -1], 'temperature_2m': [16, 15, None], 'precipitation': [4.1, 0, 2.2]}
+        indexed = collector.hourly_weather({'hourly': hours})
+        self.assertEqual(indexed['2026-11-17T20'], {'temperature': 16})
+        self.assertEqual(indexed['2026-11-17T23'], {'weather': 'rain', 'temperature': 15, 'precipitation': 2.2})
+        self.assertNotIn('2026-11-18T00', indexed)
+
     def test_half_hour_dedup_and_retention(self):
         row = {"date": "2026-11-17", "activityId": "land-a", "time": 720, "wait": 20}
         rows = collector.merge_observations([row, {**row, "date": "2026-01-01"}], [{**row, "time": 725, "wait": 30}], dt.date(2026, 11, 17))

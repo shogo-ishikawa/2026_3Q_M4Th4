@@ -8,8 +8,12 @@ import argparse
 import datetime as dt
 import json
 import math
+import sys
 from pathlib import Path
 import urllib.request
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from collect_weather import hourly_weather, timestamp, weather_fields
 
 PROJECT = Path(__file__).resolve().parents[1]
 JST = dt.timezone(dt.timedelta(hours=9))
@@ -61,7 +65,51 @@ def normalise(payload: dict, park: dict, mapping: dict, fetched_at: str) -> dict
     return {"schemaVersion": 1, "provider": "queue-times", "parkId": park["id"], "providerParkId": mapping["providerParkId"], "fetchedAt": fetched_at, "sourceUrl": f"https://queue-times.com/parks/{mapping['providerParkId']}/queue_times.json", "attributionUrl": "https://queue-times.com/", "rides": rides, "unmatched": unmatched}
 
 
-def to_observations(snapshot: dict, park: dict, weather: str = "", weather_values: dict | None = None, calendar: dict | None = None) -> list[dict]:
+def cached_weather(path: Path) -> tuple[dt.datetime | None, dict]:
+    try:
+        provider = json.loads(path.read_text())["providers"]["open-meteo"]
+        fetched = timestamp(provider["fetchedAt"])
+        if fetched is not None:
+            return fetched, hourly_weather(provider["data"])
+    except (OSError, ValueError, TypeError, KeyError):
+        pass
+    return None, {}
+
+
+def observation_weather(local: dt.datetime, forecast: tuple, current: dict) -> dict:
+    fetched, hourly = forecast
+    hour = local.replace(minute=0, second=0, microsecond=0)
+    fields = hourly.get(hour.strftime("%Y-%m-%dT%H"))
+    if fields and fetched is not None and dt.timedelta(0) <= local - fetched <= dt.timedelta(hours=12):
+        return {**fields, "weatherSource": "open-meteo-hourly-forecast", "weatherTime": hour.isoformat(),
+                "weatherFetchedAt": fetched.isoformat()}
+    # A current model value represents a 15-minute interval. Its precipitation
+    # accumulation has a different duration to the hourly feature used for prediction.
+    if current and dt.timedelta(0) <= local - current["time"] < dt.timedelta(minutes=15):
+        return {**current["fields"], "weatherSource": "open-meteo-current", "weatherTime": current["time"].isoformat(),
+                "weatherFetchedAt": current["fetchedAt"].isoformat()}
+    return {}
+
+
+def current_weather() -> dict:
+    try:
+        url = "https://api.open-meteo.com/v1/forecast?latitude=35.632&longitude=139.883&current=weather_code,temperature_2m&timezone=Asia%2FTokyo"
+        data = request_json(url)
+        current = data["current"]
+        time = dt.datetime.fromisoformat(current["time"])
+        if data["timezone"] != "Asia/Tokyo" or current.get("interval") != 900:
+            return {}
+        time = time.replace(tzinfo=JST) if time.tzinfo is None else time.astimezone(JST)
+        fields = weather_fields(current.get("weather_code"), current.get("temperature_2m"))
+        if fields:
+            return {"time": time, "fields": fields, "fetchedAt": dt.datetime.now(dt.timezone.utc)}
+    except (OSError, ValueError, TypeError, KeyError):
+        pass
+    return {}
+
+
+def to_observations(snapshot: dict, park: dict, weather: str = "", weather_values: dict | None = None,
+                    calendar: dict | None = None, *, forecast=None, current=None) -> list[dict]:
     result = []
     fetched = dt.datetime.fromisoformat(snapshot["fetchedAt"].replace("Z", "+00:00"))
     for ride in snapshot["rides"]:
@@ -76,6 +124,8 @@ def to_observations(snapshot: dict, park: dict, weather: str = "", weather_value
         for key,minimum,maximum in [('temperature',-60,60),('precipitation',0,500)]:
             value = values.get(key)
             if isinstance(value,(int,float)) and not isinstance(value,bool) and math.isfinite(value) and minimum<=value<=maximum:row[key]=value
+        if forecast is not None:
+            row.update(observation_weather(local, forecast, current))
         opening = park.get('operatingCalendar',{}).get(date,{}).get('windows',[])
         if opening:row['openingMinute']=opening[0][0]
         holiday = next((item for item in (calendar or {}).get('holidays',[]) if item.get('date')==date),None)
@@ -112,16 +162,8 @@ def main() -> None:
     observations_path = args.output_dir / "observations.json"
     existing = json.loads(observations_path.read_text()) if observations_path.exists() else []
     snapshots, incoming = [], []
-    weather = ""
-    weather_values = {}
-    if not args.fixture_dir:
-        try:
-            current = request_json("https://api.open-meteo.com/v1/forecast?latitude=35.632&longitude=139.883&current=weather_code,temperature_2m,precipitation&timezone=Asia%2FTokyo")["current"]
-            code = current["weather_code"]
-            weather = "sun" if code == 0 else "cloud" if code <= 3 or code in (45, 48) else "rain"
-            weather_values={"temperature":current.get("temperature_2m"),"precipitation":current.get("precipitation")}
-        except (OSError, ValueError, KeyError):
-            pass  # Unknown weather is retained as unknown, never fabricated.
+    forecast = cached_weather(args.output_dir / "weather-forecast.json")
+    current = {} if args.fixture_dir else current_weather()
     for park in catalogue["parks"]:
         mapping = mappings[park["id"]]
         try:
@@ -129,7 +171,7 @@ def main() -> None:
             # Each provider timestamp is checked against receipt of its own response.
             received_at = dt.datetime.now(dt.timezone.utc).isoformat().replace("+00:00", "Z")
             snapshot = normalise(payload, park, mapping, received_at)
-            incoming.extend(to_observations(snapshot, park, weather, weather_values, calendar))
+            incoming.extend(to_observations(snapshot, park, calendar=calendar, forecast=forecast, current=current))
             print(f"{park['id']}: {len(snapshot['rides'])} mapped rides, {len(snapshot['unmatched'])} unmatched")
         except (OSError, ValueError) as error:
             snapshot = next((item for item in prior["parks"] if item["parkId"] == park["id"]), None)

@@ -93,7 +93,13 @@ class NightlyTrainingTest(unittest.TestCase):
                 self.assertEqual(park['coefficients'], prior['coefficients'])
                 self.assertEqual(park['lastDate'], prior['lastDate'])
                 self.assertTrue(state['parks'][park['parkId']]['retainedPriorModel'])
-                self.assertEqual(park['latestAttempt']['lastDate'], '2026-11-18')
+                attempt = park['latestAttempt']
+                self.assertEqual(attempt['lastDate'], '2026-11-18')
+                self.assertEqual(attempt['visitFactorSupport']['long_weekend_first']['knownDays'], 1)
+                self.assertEqual(attempt['status'], 'insufficient-data')
+                self.assertIsNone(attempt['validation'])
+                self.assertEqual(state['parks'][park['parkId']]['activeModelSamples'], prior['samples'])
+                self.assertEqual(state['parks'][park['parkId']]['activeModelDays'], prior['days'])
 
     def test_missing_one_parks_observations_does_not_complete_its_day(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -127,7 +133,9 @@ class NightlyTrainingTest(unittest.TestCase):
             for park in supplemented['parks']:
                 park['bootstrap'] = {'historySamples': 50}
             # Sea's broader prior was retained after a failed remote fitting attempt.
-            supplemented['parks'][1]['lastBootstrapAttempt'] = {'lastObservedDate': '2026-11-17'}
+            latest_supplement = {'lastObservedDate': '2026-11-17', 'historySamples': 40,
+                                 'fit': {'days': 6, 'status': 'insufficient-data', 'validation': None}}
+            supplemented['parks'][1]['lastBootstrapAttempt'] = latest_supplement
             with patch.object(nightly, 'supplement_sparse_history', return_value=supplemented):
                 nightly.run(data, dt.datetime(2026, 11, 17, 22, tzinfo=nightly.JST))
             state = read(data, 'training-state.json')['parks']
@@ -138,6 +146,23 @@ class NightlyTrainingTest(unittest.TestCase):
             model = read(data, 'wait-model.json')['parks']
             self.assertTrue(model[0]['usable'])
             self.assertFalse(model[1]['usable'])
+            self.assertEqual(model[1]['lastBootstrapAttempt'], latest_supplement)
+            self.assertNotIn('lastBootstrapAttempt', model[0])
+
+    def test_new_install_keeps_short_supplement_as_an_attempt(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            data = Path(temporary)
+            fixture(data, observations([17]))
+            short = {'parkId': 'sea', 'usable': False, 'days': 6, 'samples': 320,
+                     'lastDate': '2026-11-17', 'validation': None,
+                     'bootstrap': {'historySamples': 310}}
+            with patch.object(nightly, 'supplement_sparse_history', return_value={'parks': [short]}):
+                nightly.run(data, dt.datetime(2026, 11, 17, 22, tzinfo=nightly.JST))
+            park = read(data, 'wait-model.json')['parks'][1]
+            self.assertFalse(park['usable'])
+            self.assertEqual(park['samples'], 12)
+            self.assertEqual(park['lastBootstrapAttempt']['fit']['samples'], 320)
+            self.assertIsNone(read(data, 'training-state.json')['parks']['sea']['activeModelSamples'])
 
     def test_failed_fit_retains_published_files_and_bounds_retries(self):
         with tempfile.TemporaryDirectory() as temporary:

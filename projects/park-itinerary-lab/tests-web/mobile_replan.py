@@ -39,6 +39,32 @@ def activity_rows(plan):
     return [row for row in plan['result']['rows'] if row['kind'] == 'activity']
 
 
+def check_forecast_panel(page):
+    page.locator('#forecastPanel > summary').click()
+    expect(page.locator('#crowdOutlookValue')).to_be_visible()
+    expect(page.locator('#forecastPanel a')).to_have_count(0)
+    expect(page.locator('#weather')).to_be_hidden()
+    expect(page.locator('#weather')).to_be_disabled()
+    page.locator('#weatherMode').select_option('manual')
+    expect(page.locator('#weather')).to_be_visible()
+    page.locator('#weather').select_option('rain')
+    page.locator('#weatherMode').select_option('auto')
+    expect(page.locator('#manualWeatherField')).to_be_hidden()
+    expect(page.locator('#weather')).to_be_disabled()
+
+    # Import a saved manual choice, then check the report for that specific date.
+    fixture = json.loads((Path(__file__).parent / 'fixtures/land-v150-plan.json').read_text())
+    fixture['settings'].update(weatherMode='manual', weather='rain')
+    page.locator('#planFile').set_input_files({
+        'name':'saved.json', 'mimeType':'application/json', 'buffer':json.dumps(fixture).encode(),
+    })
+    expect(page.locator('#weatherMode')).to_have_value('manual')
+    expect(page.locator('#weather')).to_be_enabled()
+    expect(page.locator('#weather')).to_have_value('rain')
+    report = page.locator('#sourcePanel #visitDayFactSources a[href*="accuracy.html"]')
+    expect(report).to_have_attribute('href', 'accuracy.html?date=2026-11-18&park=land')
+
+
 def check_mobile(page, url):
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
@@ -48,6 +74,10 @@ def check_mobile(page, url):
     page.goto(url + '/park-itinerary-lab/')
     expect(page.locator('#solveButton')).to_be_enabled(timeout=30_000)
     expect(page.locator('#visitDate')).to_have_value('2026-11-19')
+    check_forecast_panel(page)
+    page.reload()
+    expect(page.locator('#solveButton')).to_be_enabled(timeout=30_000)
+    expect(page.locator('#sourcePanel #visitDayFactSources a[href*="accuracy.html"]')).to_have_count(0)
 
     page.get_by_role('searchbox', name='施設名やエリアで検索').fill('カリブの海賊')
     ride = page.locator('#catalogue button[data-add]')
