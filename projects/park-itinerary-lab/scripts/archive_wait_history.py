@@ -14,7 +14,7 @@ import re
 
 JST=dt.timezone(dt.timedelta(hours=9))
 MONTH_FILE=re.compile(r'\d{4}-(?:0[1-9]|1[0-2])\.json')
-PUBLIC_FIELDS={'date','activityId','time','wait','weather','event','source','observedAt','temperature','precipitation','openingMinute','holiday','holidayName'}
+PUBLIC_FIELDS={'date','activityId','time','wait','weather','event','source','observedAt','temperature','precipitation','openingMinute','holiday','holidayName','weatherSource','weatherTime','weatherFetchedAt'}
 
 
 def bucket(row):

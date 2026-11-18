@@ -10,6 +10,7 @@ import sys
 import tempfile
 
 from archive_wait_history import JST, atomic_json, update_archive
+from train_wait_model import fit_summary
 
 SCRIPTS = Path(__file__).resolve().parent
 BUNDLED = SCRIPTS.parent / 'web' / 'data'
@@ -101,22 +102,39 @@ def run(data, now, force=False):
         needed = {park['parkId'] for park in result['parks']
                   if 'latestAttempt' in park or not park['usable'] or park['lastDate'] != day}
         supplements = {}
+        supplemental_attempts = {}
         if needed:
             augmented = supplement_sparse_history(data, catalogue, calendar, candidate,
                                                    Path(temporary) / 'augmented.json', day)
-            supplements = {p['parkId']: p for p in augmented.get('parks', [])
-                           if p['parkId'] in needed and p['usable'] and p['lastDate'] == day
-                           and 'lastBootstrapAttempt' not in p and p.get('bootstrap', {}).get('historySamples', 0) > 0}
+            for park in augmented.get('parks', []):
+                park_id = park['parkId']
+                if park_id not in needed:
+                    continue
+                provider = park.get('bootstrap', {})
+                attempt = park.get('lastBootstrapAttempt')
+                if attempt:
+                    # The fitter retained the wider prior and summarised the new candidate.
+                    if attempt.get('fit') and attempt.get('historySamples', 0) > 0:
+                        supplemental_attempts[park_id] = attempt
+                elif provider.get('historySamples', 0) > 0:
+                    if park['usable'] and park['lastDate'] == day:
+                        supplements[park_id] = park
+                    else:
+                        supplemental_attempts[park_id] = {**provider, 'fit': fit_summary(park)}
         attempts = {}
         for index, park in enumerate(result['parks']):
             fit = park.get('latestAttempt', park)
             park_id = park['parkId']
             active = supplements.get(park_id, park)
+            if park_id in supplemental_attempts:
+                active['lastBootstrapAttempt'] = supplemental_attempts[park_id]
             result['parks'][index] = active
             attempts[park_id] = {
                 'archiveThrough': fit['lastDate'], 'archiveDays': fit['days'], 'archiveSamples': fit['samples'],
                 'lastObservedDate': active['lastDate'] if park_id in supplements else fit['lastDate'],
                 'activeModelThrough': active['lastDate'], 'retainedPriorModel': 'latestAttempt' in active,
+                'activeModelSamples': active['samples'] if active['usable'] else None,
+                'activeModelDays': active['days'] if active['usable'] else None,
                 'fitSource': 'queue-times+anonymous-history' if park_id in supplements else 'queue-times',
             }
         if set(attempts) != {'land', 'sea'}:

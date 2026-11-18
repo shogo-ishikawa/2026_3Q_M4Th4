@@ -384,6 +384,20 @@ body[data-park=sea] .hero h1{font-size:clamp(24px,2.35vw,36px);line-height:1.6}
 #visitDayFacts p { margin:.35rem 0; }
 #visitDaySupport summary { font-size:.85rem; }
 .visit-day-sources { display:flex; flex-wrap:wrap; gap:.3rem .8rem; font-size:.8rem; }
+#visitDayFactSummary { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; }
+.visit-fact-badge {
+  display:inline-block; border:1px solid currentColor; border-radius:.5rem; padding:.18rem .6rem;
+  color:#444e60; background:#f1f3f6; font-size:.85rem; font-weight:650; line-height:1.6;
+}
+.visit-fact-badge.weekday { color:#145247; background:#e6f5ee; }
+.visit-fact-badge.holiday { color:#77401d; background:#fff0d9; }
+.visit-fact-badge.middle { color:#7d2253; background:#fae2f0; }
+.visit-fact-badge.fare-1 { color:#12575a; background:#e3f6f4; }
+.visit-fact-badge.fare-2 { color:#235581; background:#e5f2fc; }
+.visit-fact-badge.fare-3 { color:#49437e; background:#eeebfa; }
+.visit-fact-badge.fare-4 { color:#724a03; background:#fff1c7; }
+.visit-fact-badge.fare-5 { color:#813b18; background:#ffdfc7; }
+.visit-fact-badge.fare-6 { color:#802a42; background:#fbd4df; }
 .wish-presets { margin:0 0 1.1rem; padding:.8rem 1rem 1rem; border:1px solid var(--line); border-radius:16px; min-width:0; }
 .wish-presets legend { padding:0 .3rem; font-weight:750; }
 .wish-presets .field-note { margin:0 0 .6rem; }
@@ -413,3 +427,21 @@ body[data-park=sea] .hero h1{font-size:clamp(24px,2.35vw,36px);line-height:1.6}
 .onsite-actions #onsiteReplan, #onsiteJump { background:var(--accent-dark); border-color:var(--accent-dark); color:white; }
 #onsiteJump { position:fixed; z-index:5; right:max(12px,env(safe-area-inset-right)); bottom:max(12px,env(safe-area-inset-bottom)); box-shadow:0 3px 12px #0002; }
 @media print { #onsiteCard, #onsiteJump { display:none !important; } }
+
+/* The outlook is read first. Controls and their assumptions follow the visit facts. */
+.crowd-outlook { background:var(--accent-pale); border-inline-start:4px solid var(--accent); border-radius:8px; padding:.7rem .9rem; }
+#crowdLevelStatus { margin:0; line-height:1.5; }
+#crowdOutlookTitle { display:block; font-size:.85rem; color:var(--muted); }
+#crowdOutlookValue { font-size:1.45rem; color:var(--ink); }
+#crowdOutlookSource { display:inline-block; margin-inline-start:.6rem; font-size:.8rem; color:var(--muted); }
+#crowdLevelDetail { margin:.25rem 0 0; line-height:1.65; }
+#crowdLevelDetail:empty { display:none; }
+#visitEvents h3 { margin:.75rem 0 .25rem; font-size:1rem; }
+#visitEvents .event-badges { margin-top:0; }
+#forecastPanel .forecast-method summary { min-height:0; padding:.35rem 0; color:var(--muted); font-size:.85rem; font-weight:600; }
+.forecast-controls { border-top:1px solid var(--line); margin-top:.85rem; }
+.forecast-controls .field-grid { grid-template-columns:minmax(0,1fr); }
+.visit-day-references { margin-top:1rem; border-top:1px solid var(--line); }
+.visit-day-references .visit-day-sources, #visitDayFactSources { display:flex; flex-wrap:wrap; align-items:baseline; gap:.25rem 1rem; }
+.visit-day-references a { display:inline-block; padding:.3rem 0; }
+#manualWeatherField[hidden] { display:none; }

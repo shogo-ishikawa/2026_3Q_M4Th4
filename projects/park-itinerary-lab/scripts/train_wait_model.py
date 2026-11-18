@@ -38,6 +38,14 @@ def load_history(directory):
     return rows, sources
 
 
+def fit_summary(candidate):
+    """Keep the evidence for a candidate separately from the model used for predictions."""
+    fields = ("trainedAt", "beforeDate", "firstDate", "lastDate", "days", "samples",
+              "minDays", "minSamples", "status", "usable", "validation",
+              "visitFactorSupport", "visitFactors", "visitFactorValidation")
+    return {key: candidate[key] for key in fields if key in candidate}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--observations", type=Path)
@@ -74,7 +82,11 @@ def main():
             fallback = next((park for park in previous.get("parks", []) if park.get("parkId") == candidate["parkId"]), None)
             narrower = fallback and (candidate.get('days', 0) < fallback.get('days', 0) or (candidate.get('firstDate') and fallback.get('firstDate') and candidate['firstDate'] > fallback['firstDate'] and candidate.get('lastDate', '9999') <= fallback.get('lastDate', '0000')))
             if (not candidate.get("usable") or narrower) and fallback and fallback.get("status") == "trained" and fallback.get("usable") and fallback.get("lastDate", "9999") < args.before_date:
-                model["parks"][index] = {**fallback, "retainedModelReason": "学習期間が狭まる場合や検証誤差が改善しない場合は前の検証済みモデルを保持", "latestAttempt": {"beforeDate": args.before_date, "lastDate": candidate["lastDate"], "samples": candidate["samples"], "days": candidate["days"], "validation": candidate["validation"]}}
+                model["parks"][index] = {
+                    **fallback,
+                    "retainedModelReason": "学習期間または検証結果に基づき前の検証済みモデルを保持",
+                    "latestAttempt": fit_summary(candidate),
+                }
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(model, ensure_ascii=False, indent=2) + "\n")
     for park in model["parks"]:

@@ -36,6 +36,63 @@ def timestamp(value: str | None) -> dt.datetime | None:
         return None
 
 
+def weather_fields(code, temperature, precipitation=None) -> dict:
+    fields = {}
+    if isinstance(code, int) and not isinstance(code, bool):
+        if code == 0:
+            fields["weather"] = "sun"
+        elif code in (1, 2, 3, 45, 48):
+            fields["weather"] = "cloud"
+        elif code in (51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 71, 73, 75, 77, 80, 81, 82, 85, 86, 95, 96, 99):
+            fields["weather"] = "rain"
+    for key, value, low, high in (("temperature", temperature, -40, 60), ("precipitation", precipitation, 0, 200)):
+        if isinstance(value, (int, float)) and not isinstance(value, bool) and low <= value <= high:
+            fields[key] = value
+    return fields
+
+
+def hourly_weather(data: dict) -> dict:
+    """Match Open-Meteo's JST forecasts to the containing hour, as in web/weather.js."""
+    if not isinstance(data, dict) or data.get("timezone", "Asia/Tokyo") != "Asia/Tokyo":
+        return {}
+    hours = data.get("hourly")
+    if not isinstance(hours, dict) or not isinstance(hours.get("time"), list):
+        return {}
+    times = {}
+    for i, stamp in enumerate(hours["time"]):
+        try:
+            hour = dt.datetime.strptime(stamp, "%Y-%m-%dT%H:00")
+        except (TypeError, ValueError):
+            continue
+        times[hour] = i
+
+    def value(name, index):
+        values = hours.get(name)
+        return values[index] if isinstance(values, list) and index is not None and index < len(values) else None
+
+    result = {}
+    for hour, i in times.items():
+        # Precipitation is end-labelled. A gap or missing next day must stay unknown.
+        following = times.get(hour + dt.timedelta(hours=1))
+        fields = weather_fields(value("weather_code", i), value("temperature_2m", i), value("precipitation", following))
+        if fields:
+            result[hour.strftime("%Y-%m-%dT%H")] = fields
+    return result
+
+
+def fill_weather(row: dict, weather: dict, source: str) -> dict:
+    """Keep existing weather and attribute retrospective additions to their source."""
+    fields = ("weather", "temperature", "precipitation")
+    added = {key: weather[key] for key in fields if key in weather and row.get(key) in (None, "")}
+    if not added:
+        return row
+    if any(row.get(key) not in (None, "") for key in fields):
+        added["supplementalWeather"] = {"source": source, "fields": sorted(added)}
+    else:
+        added["weatherSource"] = source
+    return {**row, **added}
+
+
 def valid_open_meteo(data) -> bool:
     hours = data.get("hourly") if isinstance(data, dict) else None
     if not isinstance(hours, dict) or not isinstance(hours.get("time"), list) or not 1 <= len(hours["time"]) <= 400:

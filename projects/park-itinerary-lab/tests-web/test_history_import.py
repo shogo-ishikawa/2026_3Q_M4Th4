@@ -27,7 +27,7 @@ class HistoryImportTests(unittest.TestCase):
 
     def test_archived_weather_joins_the_observation_hour_and_keeps_unknowns_unknown(self):
         rows = [{'date': '2026-11-01', 'time': 570, 'weather': ''}, {'date': '2026-11-01', 'time': 600, 'weather': ''}]
-        response = {'hourly': {'time': ['2026-11-01T09:00'], 'weather_code': [61], 'temperature_2m': [14.5], 'precipitation': [2]}}
+        response = {'hourly': {'time': ['2026-11-01T09:00', '2026-11-01T10:00'], 'weather_code': [61, None], 'temperature_2m': [14.5, None], 'precipitation': [13, 2]}}
         with tempfile.TemporaryDirectory() as directory:
             calls = []
             report = self.importer.enrich_weather(rows, Path(directory), lambda url: calls.append(url) or response)
@@ -35,6 +35,7 @@ class HistoryImportTests(unittest.TestCase):
             self.assertEqual(report['missing'], 1)
             self.assertEqual(rows[0]['weather'], 'rain')
             self.assertEqual(rows[0]['temperature'], 14.5)
+            self.assertEqual(rows[0]['precipitation'], 2)
             self.assertEqual(rows[1]['weather'], '')
             self.assertIn('archive-api.open-meteo.com', calls[0])
             self.importer.enrich_weather(rows, Path(directory), lambda url: self.fail('cached request'))

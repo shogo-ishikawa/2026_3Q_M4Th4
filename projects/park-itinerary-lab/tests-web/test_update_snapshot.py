@@ -80,7 +80,7 @@ class ArchiveTests(unittest.TestCase):
     def test_archive_never_publishes_private_provider_records_and_retains_months(self):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);history=root/'history';history.mkdir()
-            row={'date':'2026-11-17','activityId':'land-a','time':540,'wait':5,'openingMinute':540,'source':'queue-times','privatePayload':{'anything':'removed'}}
+            row={'date':'2026-11-17','activityId':'land-a','time':540,'wait':5,'openingMinute':540,'source':'queue-times','weatherSource':'open-meteo-hourly-forecast','weatherTime':'2026-11-17T09:00:00+09:00','weatherFetchedAt':'2026-11-16T23:38:00+00:00','privatePayload':{'anything':'removed'}}
             (root/'observations.json').write_text(json.dumps([row,{**row,'time':555,'wait':35},{**row,'source':'themeparks-wiki'},{**row,'date':'2026-11-18'}]))
             (history/'2024-11.json').write_text('[]')
             (history/'ignore.json').write_text('["not loaded"]')
@@ -89,6 +89,8 @@ class ArchiveTests(unittest.TestCase):
             self.assertEqual(len(values),2)
             self.assertTrue(all(r['source']=='queue-times' for r in values))
             self.assertTrue(all('privatePayload' not in r for r in values))
+            for key in ('weatherSource', 'weatherTime', 'weatherFetchedAt'):
+                self.assertEqual(values[0][key], row[key])
             self.assertFalse((history/'2024-11.json').exists())
             self.assertTrue((history/'ignore.json').exists())
             self.assertEqual(index['samples'],2)

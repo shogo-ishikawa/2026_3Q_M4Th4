@@ -1,3 +1,17 @@
+// The dated 3 November record of the official calendar gives one adult fare for both parks.
+// Its publication time is unspecified, so use it only from the following midnight in Japan.
+export const archivedFareSource = 'https://www.pricey.jp/web/articles/7323';
+export const archivedFaresKnownBy = '2026-11-04T00:00:00+09:00';
+export const archivedFares = new Map([
+  ['2026-11-03', 9900], ['2026-11-04', 9900], ['2026-11-05', 9900], ['2026-11-06', 9900],
+  ['2026-11-07', 10900], ['2026-11-08', 10900], ['2026-11-09', 10900], ['2026-11-10', 10900],
+  ['2026-11-11', 10900], ['2026-11-12', 10900], ['2026-11-13', 10900], ['2026-11-14', 12400],
+  ['2026-11-15', 11900], ['2026-11-16', 10900], ['2026-11-17', 10900], ['2026-11-18', 10900],
+  ['2026-11-19', 10900], ['2026-11-20', 10900], ['2026-11-21', 12400], ['2026-11-22', 12400],
+  ['2026-11-23', 10900], ['2026-11-24', 10900], ['2026-11-25', 10900], ['2026-11-26', 10900],
+  ['2026-11-27', 10900], ['2026-11-28', 12400], ['2026-11-29', 11900], ['2026-11-30', 10900],
+]);
+
 // Adult one-day fares posted in the official park-specific monthly calendars.
 // Each entry contains the visit date and the Disneyland and DisneySea fares in yen.
 export const faresCheckedAt = '2026-11-18T17:10:10Z';

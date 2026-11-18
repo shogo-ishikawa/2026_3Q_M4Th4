@@ -1,15 +1,15 @@
 import datetime as dt
-import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
 SCRIPT = Path(__file__).resolve().parents[1] / 'scripts/bootstrap_wait_history.py'
-spec = importlib.util.spec_from_file_location('history_bootstrap', SCRIPT)
-history = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(history)
+sys.path.insert(0, str(SCRIPT.parent))
+import bootstrap_wait_history as history
+
 NOW = dt.datetime(2026, 11, 11, 12, 0, tzinfo=dt.timezone.utc)
 
 
@@ -94,12 +94,21 @@ class HistoricalBootstrapTests(unittest.TestCase):
                 normalise(data)
 
     def test_weather_keeps_missing_values_unknown_and_labels_forecast_provenance(self):
-        lookup = history.weather_lookup({'hourly': {'time': ['2026-11-11T09:00', '2026-11-11T10:00'], 'weather_code': [61, None], 'temperature_2m': [12.5, None], 'precipitation': [0.8, None]}})
+        lookup = history.hourly_weather({'hourly': {'time': ['2026-11-11T09:00', '2026-11-11T10:00'], 'weather_code': [61, None], 'temperature_2m': [12.5, None], 'precipitation': [7.2, 0.8]}})
         row = history.enrich_weather(normalise(payload([event()])), lookup)[0]
         self.assertEqual((row['weather'], row['temperature'], row['precipitation']), ('rain', 12.5, 0.8))
         self.assertEqual(row['weatherSource'], 'open-meteo-past-forecast')
-        self.assertEqual(lookup['2026-11-11T10']['weather'], '')
-        self.assertIsNone(lookup['2026-11-11T10']['temperature'])
+        self.assertNotIn('2026-11-11T10', lookup)
+
+    def test_supplemental_weather_only_claims_fields_it_filled(self):
+        lookup = {'2026-11-11T09': {'weather': 'rain', 'temperature': 8, 'precipitation': 2}}
+        legacy = {'date': '2026-11-11', 'time': 545, 'weather': 'sun', 'temperature': 11, 'precipitation': 0}
+        self.assertEqual(history.enrich_weather([legacy], lookup), [legacy])
+        partial = {**legacy, 'temperature': None, 'weatherSource': 'observed'}
+        enriched = history.enrich_weather([partial], lookup)[0]
+        self.assertEqual(enriched['weatherSource'], 'observed')
+        self.assertEqual((enriched['weather'], enriched['temperature'], enriched['precipitation']), ('sun', 8, 0))
+        self.assertEqual(enriched['supplementalWeather'], {'source': 'open-meteo-past-forecast', 'fields': ['temperature']})
 
     def test_a_weaker_or_older_refresh_does_not_replace_a_usable_model(self):
         prior = {'usable': True, 'firstDate':'2026-11-05', 'lastDate': '2026-11-11', 'days': 7}
@@ -107,6 +116,21 @@ class HistoricalBootstrapTests(unittest.TestCase):
             self.assertEqual(history.choose_model(candidate, prior)['days'], 7)
         newer = {'usable': True, 'firstDate':'2026-11-05', 'lastDate': '2026-11-12','days':8}
         self.assertEqual(history.choose_model(newer, prior), newer)
+
+    def test_rejected_replay_records_eligible_dates_without_changing_the_active_fit(self):
+        prior = {'usable': True, 'days': 7, 'coefficients': [2], 'visitFactors': []}
+        support = {'adult_ticket_yen': {'knownDays': 6, 'levels': 2, 'supportedLevels': 1}}
+        candidate = {'usable': False, 'status': 'insufficient-data', 'days': 6, 'coefficients': [],
+                     'beforeDate': '2026-11-19', 'samples': 2100, 'visitFactorSupport': support,
+                     'validation': None, 'bootstrap': {'historySamples': 2050}}
+        retained = history.choose_model(candidate, prior)
+        self.assertEqual(retained['coefficients'], [2])
+        self.assertNotIn('visitFactorSupport', retained)
+        attempt = retained['lastBootstrapAttempt']
+        self.assertEqual(attempt['historySamples'], 2050)
+        self.assertEqual(attempt['fit']['visitFactorSupport'], support)
+        self.assertIsNone(attempt['fit']['validation'])
+        self.assertNotIn('coefficients', attempt['fit'])
 
     def test_a_newer_rolling_week_is_published_instead_of_freezing_the_first_week(self):
         prior={'usable':True,'firstDate':'2026-11-11','lastDate':'2026-11-17','days':7}
