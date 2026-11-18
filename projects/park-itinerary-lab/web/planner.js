@@ -1,7 +1,7 @@
-import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.11.0';
+import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.12.0';
 import { weatherAtMinute, calendarContext } from './calendar-features.js';
-import { predictModelWait, estimateParkCrowd, calendarCrowdLevel } from './wait-model.js?v=1.11.0';
-import { liveWaitFor, currentRideStatus } from './wait-data.js?v=1.11.0';
+import { predictModelWait, estimateParkCrowd, calendarCrowdLevel } from './wait-model.js?v=1.12.0';
+import { liveWaitFor, currentRideStatus } from './wait-data.js?v=1.12.0';
 /* Browser itinerary search. Every returned plan is checked; the search does not claim global optimality. */
 const resolvedCrowd = Symbol('park crowd');
 const FOOD = new Set(['restaurant', 'cafe', 'snack', 'popcorn']);
@@ -172,6 +172,15 @@ export function estimateWait(activity, start, settings, history = []) {
   return { minutes: Math.max(0, Math.round(finite(activity.baseWait) * timeFactor * dayFactor)), source: 'trend', samples: 0 };
 }
 
+/** Prepare a fresh set of settings for the browser planner or the shared daily forecast. */
+export function setWaitForecastContext(park, settings, recordReference) {
+  settings.activeEvents = (park.events || []).filter(event => event.startDate <= settings.date && settings.date <= event.endDate);
+  if (settings.crowdLevel !== 'auto') return null;
+  const crowd = estimateParkCrowd(park, settings, recordReference);
+  settings[resolvedCrowd] = crowd;
+  return crowd;
+}
+
 function normalise(park, settings) {
   if (!park || !Array.isArray(park.activities)) throw new TypeError('施設データを確認してください。');
   if (!dateValid(settings?.date)) throw new RangeError('訪問日を確認してください。');
@@ -224,8 +233,7 @@ function normalise(park, settings) {
   }).sort((a, b) => a.start - b.start);
   if (result.fixedBreaks.some((item, index, all) => index && all[index - 1].start + all[index - 1].duration > item.start)) throw new RangeError('追加した休憩の時間が重なっています。');
   result.history = Array.isArray(settings.history) ? settings.history.slice(0, 100000) : [];
-  result.activeEvents = (park.events || []).filter(event => event.startDate <= settings.date && settings.date <= event.endDate);
-  if (settings.crowdLevel === 'auto') result[resolvedCrowd] = estimateParkCrowd(park, settings);
+  setWaitForecastContext(park, result);
   const activities = new Map(park.activities.map(activity => [activity.id, activity]));
   const input = settings.selections || [];
   if (!Array.isArray(input) || input.length > 200) throw new RangeError('希望する施設は200件以内にしてください。');

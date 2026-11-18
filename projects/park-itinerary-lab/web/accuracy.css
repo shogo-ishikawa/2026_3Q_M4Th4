@@ -1,0 +1,78 @@
+:root {
+  color-scheme: light;
+  font-family: "Hiragino Sans", "Yu Gothic", system-ui, sans-serif;
+  color: #202943;
+  background: #f5f5fd;
+  --accent: #4945b9;
+  --line: #d9deeb;
+  --muted: #53617b;
+}
+* { box-sizing: border-box; }
+body { margin: 0; line-height: 1.7; }
+.wrap { width: min(980px, calc(100% - 40px)); margin: auto; }
+a { color: var(--accent); text-underline-offset: 4px; }
+.skip { position: absolute; left: 12px; top: -120px; padding: 10px; background: white; }
+.skip:focus { top: 5px; }
+:focus-visible { outline: 3px solid #a65000; outline-offset: 3px; }
+header { display: flex; gap: 16px; justify-content: space-between; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.brand { display: inline-flex; gap: 8px; align-items: center; color: #202943; font-size: 1.25rem; font-weight: 750; text-decoration: none; }
+.brand img { object-fit: contain; }
+main { margin: clamp(28px, 5vw, 56px) auto 38px; }
+h1 { font-size: clamp(1.7rem, 4.4vw, 2.85rem); line-height: 1.3; margin: 0; letter-spacing: -.045em; }
+.intro { margin: 12px 0 24px; color: var(--muted); }
+form { display: flex; align-items: end; flex-wrap: wrap; gap: 14px; padding: 22px; background: white; border: 1px solid var(--line); border-radius: 14px; }
+label { display: block; font-weight: 650; }
+label span { font-size: .85rem; color: var(--muted); }
+input, select, button { font: inherit; }
+input, select { display: block; width: 100%; min-width: 0; min-height: 45px; margin-top: 4px; padding: 6px 12px; background: white; color: inherit; border: 1px solid #919bb3; border-radius: 7px; }
+button { border: 1px solid transparent; border-radius: 7px; padding: 8px 18px; min-height: 45px; cursor: pointer; background: var(--accent); color: white; font-weight: 650; }
+button:hover { background: #34318b; }
+#reportStatus { min-height: 1.7em; margin: 16px 0 8px; color: var(--muted); }
+article { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: clamp(18px, 4vw, 38px); }
+.report-top { display: flex; align-items: start; justify-content: space-between; flex-wrap: wrap; gap: 8px 18px; }
+.report-top p { margin: 0; color: var(--muted); font-size: .94rem; }
+h2, h3 { line-height: 1.4; margin: 0; }
+h2 { font-size: clamp(1.35rem, 3vw, 1.9rem); }
+h3 { font-size: 1.13rem; margin-bottom: 10px; }
+.print { background: white; border-color: var(--line); color: var(--accent); }
+.print:hover { background: #eeedfb; }
+section { margin-top: 28px; }
+p { margin: 9px 0; }
+dl { margin: 0; }
+.metrics { display: grid; gap: 1px; grid-template-columns: repeat(auto-fit, minmax(min(145px, 100%), 1fr)); background: var(--line); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.metrics > div { background: #f9f9ff; padding: 12px; }
+.metrics dt, .note { font-size: .9rem; color: var(--muted); }
+.metrics dd { font-size: 1.3rem; font-weight: 730; margin: 3px 0 0; font-variant-numeric: tabular-nums; }
+.crowd-levels { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.crowd-levels div { border-left: 3px solid #bcb9ec; padding-left: 12px; }
+.crowd-levels dt { color: var(--muted); font-size: .9rem; }
+.crowd-levels dd { margin: 2px 0 0; font-weight: 700; }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: .91rem; font-variant-numeric: tabular-nums; }
+th, td { border-bottom: 1px solid var(--line); padding: 8px; text-align: right; }
+th:first-child { text-align: left; min-width: 8.5em; }
+td, thead th { white-space: nowrap; }
+thead th { color: var(--muted); background: #f7f8fb; font-weight: 600; }
+footer { color: var(--muted); font-size: .85rem; border-top: 1px solid var(--line); padding: 12px 0 32px; }
+footer p { margin: 3px 0; }
+@media (max-width: 560px) {
+  .wrap { width: calc(100% - 24px); }
+  form { padding: 14px; }
+  form label, form button { width: 100%; }
+  .brand img { width: 56px; }
+  .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media print {
+  :root, body, article { background: white; color: black; }
+  .wrap { width: 100%; }
+  header, form, .skip, .print, #reportStatus, noscript { display: none; }
+  main { margin: 0; }
+  h1 { font-size: 18pt; }
+  h2 { font-size: 15pt; }
+  h2, h3 { break-after: avoid; }
+  article { border: 0; padding: 0; }
+  .metrics, .crowd-levels, tr { break-inside: avoid; }
+  .table-wrap { overflow: visible; }
+  table { font-size: 9pt; }
+  th, td { padding: 3pt; white-space: normal; }
+}

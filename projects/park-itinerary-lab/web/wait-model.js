@@ -140,7 +140,7 @@ export function calendarCrowdLevel(calendar) {
 /** Compare each ride's forecast with its own observed means at the same hours.
  * This is a park-wide posted-wait index, independent of the visitor's wishlist.
  */
-export function estimateParkCrowd(park, settings) {
+export function estimateParkCrowd(park, settings, recordReference) {
   const model = settings.waitModel, date = settings.date;
   const calendarData = settings.calendarData || (model?.parkId === park.id ? model.calendarData : null);
   const calendar = calendarContext(date, calendarData);
@@ -154,8 +154,10 @@ export function estimateParkCrowd(park, settings) {
   // Avoid extrapolating seasonality to a month the training records hardly cover.
   const hasDays = (dimension, key, minimum) => Array.isArray(model.correlations?.[dimension]) &&
     model.correlations[dimension].some(group => group?.key === String(key) && Number.isInteger(group.days) && group.days >= minimum);
-  if (!hasDays('month', calendar.month, 2) || !hasDays('weekday', calendar.weekday, 1) ||
-      (calendar.isHoliday && !hasDays('holiday', 'holiday', 2))) return fallback;
+  const covered = hasDays('month', calendar.month, 2) && hasDays('weekday', calendar.weekday, 1) &&
+    (!calendar.isHoliday || hasDays('holiday', 'holiday', 2));
+  // A dated report can still evaluate a calendar forecast against pre-existing reference waits.
+  if (!covered && !recordReference) return fallback;
 
   const profilesByRide = new Map();
   for (const profile of model.activityTimeProfiles || []) {
@@ -173,7 +175,7 @@ export function estimateParkCrowd(park, settings) {
     const daily = activity.dailySchedules?.[date], datedWindows = daily?.windows || (activity.windowsDate === date ? activity.windows : null);
     const ride = datedWindows ? {...activity, windows:datedWindows} : activity;
     const activeModel = {...model, calendarData, activityTimeProfiles:profiles};
-    const hours = [];
+    const anchors = [];
     let expected = 0, usual = 0;
     for (const profile of profiles) {
       const hour = profile.hour, minute = hour * 60 + 30;
@@ -182,14 +184,17 @@ export function estimateParkCrowd(park, settings) {
       const row = {date, minute, ...weatherAtMinute(date, minute, settings), eventIds:events};
       expected += predict(row, ride, activeModel);
       usual += profile.meanWait;
-      hours.push(hour);
+      anchors.push(profile);
     }
-    if (hours.length < 2) continue;
+    if (anchors.length < 2) continue;
     ratios.push(expected / usual);
-    slots += hours.length;
-    for (const hour of hours) usedHours.add(hour);
+    slots += anchors.length;
+    for (const profile of anchors) {
+      usedHours.add(profile.hour);
+      recordReference?.(activity.id, profile.hour * 60 + 30, profile.meanWait);
+    }
   }
-  if (ratios.length < 3 || usedHours.size < 3) return fallback;
+  if (!covered || ratios.length < 3 || usedHours.size < 3) return fallback;
   ratios.sort((a, b) => a - b);
   const middle = Math.floor(ratios.length / 2);
   const ratio = ratios.length % 2 ? ratios[middle] : (ratios[middle - 1] + ratios[middle]) / 2;

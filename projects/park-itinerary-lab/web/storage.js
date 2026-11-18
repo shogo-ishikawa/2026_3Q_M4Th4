@@ -1,6 +1,6 @@
-import {validateWaitModel} from './wait-model.js?v=1.11.0';
+import {validateWaitModel} from './wait-model.js?v=1.12.0';
 import {weatherForMinute,formatWeatherDetails} from './weather.js';
-import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=1.11.0';
+import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=1.12.0';
 /** Portable schedules: the shared link contains preferences, never a browser's saved history. */
 const STORAGE_KEY = 'park-itinerary-lab:v1';
 const PLANS_KEY = 'park-itinerary-lab:plans:v1';
