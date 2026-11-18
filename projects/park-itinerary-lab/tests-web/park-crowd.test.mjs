@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {WAIT_BASE_FEATURE_NAMES} from '../web/calendar-features.js';
+import {calendarDayOutlook} from '../web/calendar-outlook.js';
 import {estimateParkCrowd} from '../web/wait-model.js';
 import {solveItinerary,validatePlan} from '../web/planner.js';
 
@@ -22,6 +23,7 @@ const settings = extra => ({date:'2026-11-21',entry:660,exit:1020,speed:100,budg
 
 test('the park index compares the same ride and hours even when the visitor chooses different rides or arrives late',()=>{
   const normal=settings(), a=estimateParkCrowd(park,normal);
+  assert.equal(calendarDayOutlook(park, {...normal,crowdLevel:'quiet'}, normal.date).crowd, 'model');
   assert.deepEqual(a,{level:'busy',source:'model',ratio:1.2,rides:3,slots:9,days:17,samples:600});
   assert.deepEqual(estimateParkCrowd(park,{...normal,entry:990,selections:[]}),a);
   assert.equal(estimateParkCrowd(park,settings({waitModel:testModel(0.8)})).level,'quiet');
@@ -33,7 +35,11 @@ test('the park index compares the same ride and hours even when the visitor choo
 
 test('unsupported facility coverage, clock coverage, dates or validation fall back to the calendar',()=>{
   const s=settings();
-  const fallback=(p, st) => assert.deepEqual([estimateParkCrowd(p,st).source,estimateParkCrowd(p,st).ratio],['calendar',null]);
+  const fallback=(p, st) => {
+    const estimate=estimateParkCrowd(p,st);
+    assert.deepEqual([estimate.source,estimate.ratio],['calendar',null]);
+    assert.equal(calendarDayOutlook(p, st, st.date).crowd, estimate.source);
+  };
   const short=testModel();short.activityTimeProfiles=short.activityTimeProfiles.filter(p=>p.hour!==14);
   fallback(park,{...s,waitModel:short});
   const low=testModel();low.activityTimeProfiles.forEach(p=>{p.days=2;});

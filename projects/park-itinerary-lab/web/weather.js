@@ -6,14 +6,27 @@ const JMA_SOURCE='https://www.jma.go.jp/bosai/forecast/#area_type=class20s&area_
 const CACHE_KEY='park-weather-v150-start-hour';
 const FRESH_MS=30*60000, MAX_AGE_MS=12*3600000;
 const memory=new WeakMap();
+const publishedBulletins=new WeakMap();
 const labels={sun:'晴れ',cloud:'曇り',rain:'雨・雪の可能性'};
 const icons={sun:'☀',cloud:'☁',rain:'☂'};
 const dateOf=value=>new Date(new Date(value).getTime()+9*3600000).toISOString().slice(0,10);
-export function forecastDateInRange(date,now=Date.now()) {
+export function forecastDateRange(now=Date.now()) {
   const time=new Date(now).getTime();
-  if(!Number.isFinite(time)||typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(date))return false;
+  if (!Number.isFinite(time)) return null;
+  return {startDate:dateOf(time), endDate:dateOf(time+15*86400000)};
+}
+export function forecastDateInRange(date,now=Date.now()) {
+  const range=forecastDateRange(now);
+  if(!range||typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(date))return false;
   const day=Date.parse(date+'T12:00Z');
-  return Number.isFinite(day)&&new Date(day).toISOString().startsWith(date)&&date>=dateOf(time)&&date<=dateOf(time+15*86400000);
+  return Number.isFinite(day)&&new Date(day).toISOString().startsWith(date)&&date>=range.startDate&&date<=range.endDate;
+}
+/** JMA may publish the day's first bulletin after opening. Count only its stated interval. */
+export function weatherRowInterval(row, date, entry, exit) {
+  if (row.time && !String(row.time).startsWith(date + 'T')) return null;
+  const start = Math.max(entry, row.minute, row.weatherFromMinute ?? 0);
+  const end = Math.min(exit, row.endMinute ?? row.minute + 60, row.weatherToMinute ?? 1440);
+  return start < end ? {start, end} : null;
 }
 const numeric=(value,min=-Infinity,max=Infinity)=>typeof value==='number'&&Number.isFinite(value)&&value>=min&&value<=max?value:null;
 const jmaNumber=(value,min,max)=>value!==''&&value!==null&&value!==undefined?numeric(Number(value),min,max):null;
@@ -139,10 +152,16 @@ export function normaliseJma(forecast,series,date,{fetchedAt=new Date().toISOStr
 }
 
 function cacheFor(fetchImpl){let cache=memory.get(fetchImpl);if(!cache){cache=new Map();memory.set(fetchImpl,cache);}return cache;}
+let savedWeatherText, savedWeatherDates;
 function storedForecast(date,now){
   try{
-    const data=JSON.parse(globalThis.sessionStorage?.getItem(CACHE_KEY)||'null');
-    return usableWeatherForecast(data?.[date],date,now)?data[date]:null;
+    const text=globalThis.sessionStorage?.getItem(CACHE_KEY);
+    if (!text) return null;
+    if (text !== savedWeatherText) {
+      savedWeatherDates=JSON.parse(text);
+      savedWeatherText=text;
+    }
+    return usableWeatherForecast(savedWeatherDates?.[date],date,now) ? savedWeatherDates[date] : null;
   }catch{return null;}
 }
 export function usableWeatherForecast(forecast,date,now){
@@ -163,8 +182,62 @@ function saveForecast(cache,forecast,now,persist){
 }
 function cacheResult(forecast,now,stale=false){return {...clone(forecast),transport:stale?'last-good-cache':'session-cache',cacheAgeMinutes:Math.max(0,Math.floor(ageOf(forecast.fetchedAt,now)/60000)),stale};}
 
+/** Both parks and every date use the same public file. A visit changing dates only
+ * cancels that visit's wait; the shared download still has its own short deadline. */
+function loadPublishedBulletin({fetchImpl, now, timeoutMs}) {
+  let bulletin = publishedBulletins.get(fetchImpl);
+  if (bulletin && now < bulletin.retryAt) return bulletin.request;
+  if (!bulletin) {
+    bulletin = {data:null, dates:new Map()};
+    publishedBulletins.set(fetchImpl, bulletin);
+  }
+  bulletin.retryAt = now + FRESH_MS;
+  bulletin.request = readJson(PUBLISHED, {fetchImpl, timeoutMs}).then(data => {
+    if (data?.schemaVersion !== 1) throw new Error('公開済み予報の形式を確認してください。');
+    bulletin.data = data;
+    bulletin.dates.clear();
+    return data;
+  }).catch(error => {
+    bulletin.retryAt = now + 60000;
+    throw error;
+  });
+  return bulletin.request;
+}
+
+export async function warmCalendarWeather({fetchImpl=fetch, now=Date.now(), timeoutMs=4500}={}) {
+  try { await loadPublishedBulletin({fetchImpl, now:Number(now), timeoutMs}); }
+  catch { /* Previously fetched, unexpired dates remain available in the calendar. */ }
+}
+
+/** Read a date's forecast without contacting any provider. */
+export function cachedForecastForDate(date, now=Date.now(), fetchImpl=fetch, useSessionCache=fetchImpl===globalThis.fetch) {
+  if (!forecastDateInRange(date,now)) return null;
+  const local = cacheFor(fetchImpl).get(date) || (useSessionCache && storedForecast(date,now));
+  const bulletin = publishedBulletins.get(fetchImpl);
+  let published = bulletin?.dates.get(date);
+  if (bulletin?.data && (published === undefined || (published && !usableWeatherForecast(published,date,now)))) {
+    try { published = weatherFromPublishedCache(bulletin.data,date,now); }
+    catch { published = null; }
+    bulletin.dates.set(date,published);
+  }
+  if (usableWeatherForecast(local,date,now) && (!published || Date.parse(local.fetchedAt) >= Date.parse(published.fetchedAt))) return local;
+  return published || null;
+}
+
 async function publishedForecast(date,options){
-  return weatherFromPublishedCache(await readJson(PUBLISHED,options),date,options.now);
+  const {signal,now} = options;
+  checkAbort(signal);
+  let abort;
+  try {
+    const cancelled = new Promise((_,reject) => {
+      abort = () => reject(aborted());
+      signal.addEventListener('abort',abort,{once:true});
+    });
+    const data = await Promise.race([loadPublishedBulletin(options),cancelled]);
+    return weatherFromPublishedCache(data,date,now);
+  } finally {
+    signal.removeEventListener('abort',abort);
+  }
 }
 
 export function weatherFromPublishedCache(data,date,now,{strictAsOf=false}={}){
@@ -214,7 +287,8 @@ export async function fetchWeather(date,{signal,fetchImpl=fetch,now=Date.now(),t
       }
     }
     if(!forecast){
-      if(usableWeatherForecast(previous,date,now))return {...cacheResult(previous,now,true),refreshFailure:firstError?.message||'通信失敗'};
+      const lastGood=cachedForecastForDate(date,now,fetchImpl,useSessionCache);
+      if(lastGood)return {...cacheResult(lastGood,now,true),refreshFailure:firstError?.message||'通信失敗'};
       throw firstError||new Error('天気予報を取得できませんでした。');
     }
     checkAbort(signal);saveForecast(cache,forecast,now,useSessionCache);return clone(forecast);

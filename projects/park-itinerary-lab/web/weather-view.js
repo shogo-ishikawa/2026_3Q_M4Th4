@@ -1,4 +1,4 @@
-import {forecastDateInRange, usableWeatherForecast} from './weather.js?v=1.15.1';
+import {forecastDateInRange, usableWeatherForecast, weatherRowInterval} from './weather.js?v=1.16.0';
 
 /** Compact forecast cards. Original periods and provenance remain in the details. */
 const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -46,10 +46,9 @@ export function visitWeatherSummary(settings, {pending = false, now = Date.now()
   let coveredTo = entry, gap = false;
   const rows = [], changes = [];
   for (const row of [...forecast.hours].sort((a,b) => a.minute - b.minute)) {
-    // Some JMA daily bulletins start mid-day. Their lookup rows before release do not cover the morning.
-    const start = Math.max(entry, row.minute, row.weatherFromMinute ?? 0);
-    const end = Math.min(exit, row.endMinute ?? row.minute + 60, row.weatherToMinute ?? 1440);
-    if (start >= end || (row.time && !String(row.time).startsWith(date + 'T'))) continue;
+    const interval = weatherRowInterval(row, date, entry, exit);
+    if (!interval) continue;
+    const {start, end} = interval;
     if (start > coveredTo) gap = true;
     coveredTo = Math.max(coveredTo, end);
     rows.push(row);

@@ -1,20 +1,22 @@
-import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, createVisitOutlook, prepareLiveForReplan } from './wait-data.js?v=1.15.1';
-export {prepareWeatherForVisit as prepareWeatherForPlan} from './wait-data.js?v=1.15.1';
-import {visitDayDetails} from './visit-day-view.js?v=1.15.1';
+import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, createVisitOutlook, prepareLiveForReplan } from './wait-data.js?v=1.16.0';
+export {prepareWeatherForVisit as prepareWeatherForPlan} from './wait-data.js?v=1.16.0';
+import {visitDayDetails} from './visit-day-view.js?v=1.16.0';
+import {createForecastCalendar} from './forecast-calendar.js?v=1.16.0';
+import {calendarDayOutlook} from './calendar-outlook.js?v=1.16.0';
 import {WISH_PRESETS, presetFacilities, presetStartsPlan, addPresetWishes} from './wishlist-presets.js';
 import {attachItineraryImage} from './itinerary-image.js';
 import {attachOnsiteNavigation} from './onsite-navigation.js';
-import {attachDayProgress} from './day-progress-ui.js?v=1.15.1';
+import {attachDayProgress} from './day-progress-ui.js?v=1.16.0';
 import {baseVisitId, repeatVisitId, isRepeatVisit, expandRepeatVisits, resolveDpaVisit} from './repeat-visits.js';
-import { restsBesideFood, settledReplanWishes } from './planner.js?v=1.15.1';
-import { enhanceTimeInputs, parkTimeBounds, clampClock } from './time-input.js?v=1.15.1';
-import { estimateParkCrowd } from './wait-model.js?v=1.15.1';
-import { weatherForMinute } from './weather.js?v=1.15.1';
-import { forecastCardHtml, forecastSourcesHtml, visitWeatherSummary } from './weather-view.js?v=1.15.1';
-import { activityAvailable, operationPauseInfo } from './operation-windows.js?v=1.15.1';
+import { restsBesideFood, settledReplanWishes } from './planner.js?v=1.16.0';
+import { enhanceTimeInputs, parkTimeBounds, clampClock } from './time-input.js?v=1.16.0';
+import { estimateParkCrowd } from './wait-model.js?v=1.16.0';
+import { warmCalendarWeather, weatherForMinute } from './weather.js?v=1.16.0';
+import { forecastCardHtml, forecastSourcesHtml, visitWeatherSummary } from './weather-view.js?v=1.16.0';
+import { activityAvailable, operationPauseInfo } from './operation-windows.js?v=1.16.0';
 import { contingencySettings, compareContingency } from './contingency.js';
-import { renderParkMap } from './map-view.js?v=1.15.1';
-import { listSavedPlans, saveNamedPlan, loadSavedPlan, renameSavedPlan, deleteSavedPlan, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=1.15.1';
+import { renderParkMap } from './map-view.js?v=1.16.0';
+import { listSavedPlans, saveNamedPlan, loadSavedPlan, renameSavedPlan, deleteSavedPlan, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=1.16.0';
 
 const CATEGORY = {attraction:'アトラクション',show:'ショー',parade:'パレード',restaurant:'レストラン',cafe:'カフェ',snack:'スナック',popcorn:'ポップコーン',greeting:'グリーティング',shop:'お土産'};
 const FOOD = new Set(['restaurant','cafe','snack','popcorn']);
@@ -366,7 +368,7 @@ export function initialiseApp() {
   let purchaseDraft, progressEditor, itineraryImage, onsiteCard;
   const modelCache=new Map();
   const visitOutlook=createVisitOutlook();
-  let displayedOutlook;
+  let displayedOutlook, forecastCalendar;
   const restUndo=new WeakMap();
   // An invalid edit stays with its wish when the user switches genre or opens another card.
   const wishDrafts=new WeakMap();
@@ -444,12 +446,12 @@ export function initialiseApp() {
   }
   function updateVisitPreferences(){
     const s=state.settings;
-    $('dayBudget').textContent=money(s.budget);
     const pace={50:'ゆっくり',70:'普通',90:'早め'}[s.speed] || `${s.speed} m/分`;
     const rest=s.restEvery && s.restMinutes ? `自動休憩 約${s.restEvery}分ごと` : '自動休憩なし';
     $('movementSummary').textContent=`歩く速さ ${pace} · ${rest}`;
   }
   function updateDayOverview(){
+    forecastCalendar?.refresh();
     updateVisitPreferences();
     const s=state.settings;
     const pending=Boolean(displayedOutlook && !displayedOutlook.values);
@@ -466,6 +468,7 @@ export function initialiseApp() {
     $('crowdOutlookValue').textContent=crowd.label;
     $('crowdOutlookSource').textContent=crowd.source;
     const details=visitDayDetails(currentPark(),s);
+    $('dayTicketPrice').textContent=details?.adultOneDayYen ? money(details.adultOneDayYen) : '料金未確認';
     $('visitDayFacts').hidden=!details;
     const events = details?.events || [];
     $('visitEvents').hidden = !events.length;
@@ -1006,7 +1009,7 @@ export function initialiseApp() {
     const extra=Number($('contingencyDelay').value),profile=contingencySettings(state.result.settings||state.settings,extra);
     contingencyBase=state.result;const request=++contingencyRequest;
     const initialPlan=profile.replanFrom!=null?state.result:null;
-    contingencyWorker=new Worker(new URL('./planner-worker.js?v=1.15.1',import.meta.url),{type:'module'});
+    contingencyWorker=new Worker(new URL('./planner-worker.js?v=1.16.0',import.meta.url),{type:'module'});
     $('searchContingency').disabled=true;$('cancelContingency').hidden=false;
     $('contingencyStatus').textContent=`通常の待ち列がさらに${extra}分長い場合を探索しています。`;
     contingencyWorker.onmessage=event=>{
@@ -1062,7 +1065,7 @@ export function initialiseApp() {
     if(preparingRequest!==requestId)return;
     preparation=null;state.settings=prepared;if(state.result){state.resultDirty=true;renderResult();}writeSettings();externalPanel?.refresh();
     searchStarted=performance.now();
-    try{worker=new Worker(new URL('./planner-worker.js?v=1.15.1',import.meta.url),{type:'module'});}catch{stopSearch();showPlanError(new Error('探索を起動できませんでした。ページを再読み込みしてもう一度お試しください。'));return;}
+    try{worker=new Worker(new URL('./planner-worker.js?v=1.16.0',import.meta.url),{type:'module'});}catch{stopSearch();showPlanError(new Error('探索を起動できませんでした。ページを再読み込みしてもう一度お試しください。'));return;}
     setSolveDisabled(true);$('cancelSearch').hidden=false;$('searchProgress').hidden=false;$('progressBar').value=0;$('progressText').textContent='最初の計画を探しています…';
     const thisRequest=requestId;
     worker.onmessage=event=>{
@@ -1111,6 +1114,13 @@ export function initialiseApp() {
     markResultStale();writeSettings();updateContext();
   }
   function attachEvents() {
+    forecastCalendar=createForecastCalendar({
+      getCoverage(date) {
+        const pendingModel=Boolean(displayedOutlook && !displayedOutlook.values && state.settings.waitModel?.parkId!==state.parkId);
+        return calendarDayOutlook(currentPark(),state.settings,date,{pendingModel});
+      },
+      onOpen:()=>warmCalendarWeather().then(()=>forecastCalendar.refresh())
+    });
     progressEditor=attachDayProgress({
       root:document, context:()=>({park:currentPark(),settings:state.settings,session:state}),
       apply:applyVisitProgress, syncClocks:syncTimeEditors,
@@ -1259,7 +1269,7 @@ export function initialiseApp() {
     document.querySelector('.settings-panel').addEventListener('change',safely(event=>{
       readSettings();
       if(['entryTime','exitTime'].includes(event.target.id)){prepareVisitOutlook();updateDayOverview();}
-      if(['budget','walkSpeed','restEvery','restMinutes'].includes(event.target.id))updateVisitPreferences();
+      if(['walkSpeed','restEvery','restMinutes'].includes(event.target.id))updateVisitPreferences();
       if(['dpaPurchaseLimit','entryTime','exitTime'].includes(event.target.id))renderWishlist();
       markResultStale();
     }));

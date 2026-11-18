@@ -1,5 +1,5 @@
-import {calendarContext, longWeekendPosition, validCalendarDate} from './calendar-features.js?v=1.15.1';
-import {ticketFactsFor} from './ticket-calendar.js?v=1.15.1';
+import {calendarContext, longWeekendPosition, validCalendarDate} from './calendar-features.js?v=1.16.0';
+import {ticketFactsFor} from './ticket-calendar.js?v=1.16.0';
 
 const yen = n => n.toLocaleString('ja-JP')+'円';
 const positions = {first:'初日',last:'最終日'};
@@ -53,6 +53,6 @@ export function visitDayDetails(park,settings,now=Date.now()) {
   if (fare.studentOffer===true && fare.studentSourceUrl) sources.push({label:'学生向け割引の対象・条件',url:fare.studentSourceUrl});
   if (day.holidayKnown && calendar?.sourcePage) sources.push({label:'内閣府の祝日一覧',url:calendar.sourcePage});
   const past=settings.date<new Date(now+9*3600000).toISOString().slice(0,10);
-  return {facts, events:eventLabels(park,settings.date,fare), sources,
+  return {adultOneDayYen:fare.adultOneDayYen ?? null, facts, events:eventLabels(park,settings.date,fare), sources,
     report:past?'accuracy.html?date='+settings.date+'&park='+park.id:null};
 }
