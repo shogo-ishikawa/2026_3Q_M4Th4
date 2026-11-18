@@ -95,9 +95,9 @@ function parseTimestamp(value) {
   return Date.parse(value);
 }
 
-function collectPosts(rows, date, midnight, asOf, slots) {
+function collectPosts(rows, date, midnight, asOf, slots, source) {
   for (const row of rows) {
-    if (row?.date !== date || row.source !== 'queue-times' || !validWait(row.wait) ||
+    if (row?.date !== date || row.source !== source || !validWait(row.wait) ||
         row.isOpen === false || !Number.isInteger(row.time) || row.time < 0 || row.time >= 1440) continue;
     const observedAt = parseTimestamp(row.observedAt);
     if (!Number.isFinite(observedAt) || observedAt > asOf ||
@@ -115,12 +115,12 @@ function collectPosts(rows, date, midnight, asOf, slots) {
  * with the rest of the day. Coverage and within10 are fractions, bias is
  * forecast minus observed in minutes. Empty metrics are null.
  */
-export function scoreForecastAccuracy({date, parkId, forecast, observations = [], asOf = Date.now()}) {
+export function scoreForecastAccuracy({date, parkId, forecast, observations = [], asOf = Date.now(), source = 'queue-times'}) {
   const midnight = Date.parse(date + 'T00:00:00+09:00');
   const now = typeof asOf === 'string' ? parseTimestamp(asOf) : Number(asOf);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(midnight) ||
       new Date(midnight + DAY / 2).toISOString().slice(0, 10) !== date ||
-      !Number.isFinite(now) || !['land', 'sea'].includes(parkId)) {
+      !Number.isFinite(now) || !['land', 'sea'].includes(parkId) || !['queue-times', 'themeparks-wiki'].includes(source)) {
     throw new RangeError('日付とパークを確認してください。');
   }
   const result = {date, parkId, status:'no-forecast', issuedAt:null, slotsInDay:0,
@@ -151,10 +151,16 @@ export function scoreForecastAccuracy({date, parkId, forecast, observations = []
   result.issuedAt = park.issuedAt;
   result.slotsInDay = slots.size;
   const elapsed = [...slots.values()].filter(slot => midnight + slot.end * MINUTE <= now);
-  collectPosts(Array.isArray(observations) ? observations : [], date, midnight, now, slots);
+  collectPosts(Array.isArray(observations) ? observations : [], date, midnight, now, slots, source);
   const byActivity = new Map(), byHour = new Map();
   for (const slot of elapsed) {
-    slot.observed = median([...slot.posts.values()]);
+    if (source === 'themeparks-wiki' && slot.posts.size) {
+      // Change events have a different sampling pattern from periodic observations.
+      const lastChange = Math.max(...slot.posts.keys());
+      slot.observed = slot.posts.get(lastChange);
+    } else {
+      slot.observed = median([...slot.posts.values()]);
+    }
     if (!byActivity.has(slot.activityId)) byActivity.set(slot.activityId, []);
     byActivity.get(slot.activityId).push(slot);
     const hour = Math.floor(slot.minute / 60);

@@ -13,6 +13,7 @@ on:
       - 'projects/park-itinerary-lab/scripts/bootstrap_wait_history.py'
       - 'projects/park-itinerary-lab/scripts/train_wait_model.py'
       - 'projects/park-itinerary-lab/scripts/issue_wait_forecast.mjs'
+      - 'projects/park-itinerary-lab/scripts/score_wait_history.py'
       - 'projects/park-itinerary-lab/web/planner.js'
       - 'projects/park-itinerary-lab/web/wait-model.js'
       - 'projects/park-itinerary-lab/web/data/queue-times-map.json'
@@ -73,18 +74,30 @@ jobs:
         id: forecast
         if: ${{ !cancelled() && steps.seed.outcome == 'success' }}
         run: node projects/park-itinerary-lab/scripts/issue_wait_forecast.mjs --data-dir data-publish
+      - name: Compare earlier forecasts with posted wait history
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        env:
+          THEMEPARKS_API_KEY: ${{ secrets.THEMEPARKS_API_KEY }}
+        run: python projects/park-itinerary-lab/scripts/score_wait_history.py --data-dir data-publish
       - name: Publish data without rebuilding the application
-        if: always() && steps.prepare.outcome == 'success' && steps.seed.outcome == 'success'
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         working-directory: data-publish
         env:
+          SEED_STATUS: ${{ steps.seed.outcome }}
           FORECAST_STATUS: ${{ steps.forecast.outcome }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          for name in live-waits.json observations.json wait-model.json history-index.json weather-forecast.json training-state.json; do
+          if [ "$SEED_STATUS" = success ]; then
+            for name in live-waits.json observations.json wait-model.json history-index.json weather-forecast.json training-state.json; do
+              if [ -f "$name" ]; then git add "$name"; fi
+            done
+            if [ -d history ]; then git add history; fi
+          fi
+          # Stage only public per-day scores and their retry marker, including partial successes.
+          for name in accuracy-history/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].json accuracy-history/state.json; do
             if [ -f "$name" ]; then git add "$name"; fi
           done
-          if [ -d history ]; then git add history; fi
           if [ "$FORECAST_STATUS" = success ] && [ -d forecasts ]; then git add forecasts; fi
           if ! git diff --cached --quiet; then
             git commit -m 'Update park observations, models and forecasts'

@@ -1,4 +1,4 @@
-import {scoreForecastAccuracy} from './forecast-accuracy.js';
+import {scoreForecastAccuracy} from './forecast-accuracy.js?v=1.12.1';
 
 const dataRoot = 'https://raw.githubusercontent.com/shogo-ishikawa/2026_3Q_M4Th4/park-wait-data/';
 const parks = {land: '東京ディズニーランド', sea: '東京ディズニーシー'};
@@ -41,6 +41,23 @@ function checkedRows(payload) {
   return payload;
 }
 
+function historySummary(data, forecast) {
+  if (data === null) return null;
+  if (data.schemaVersion !== 1 || data.source !== 'themeparks-wiki' ||
+      data.method !== 'latest-standby-change-per-slot' || data.date !== forecast.date || !Array.isArray(data.parks)) {
+    throw new Error('履歴の集計形式を確認できませんでした。');
+  }
+  const park = data.parks.find(item => item?.parkId === forecast.parkId);
+  if (!park) return null;
+  if (park.issuedAt !== forecast.issuedAt || park.expected !== forecast.slotsInDay ||
+      !Number.isInteger(park.matched) || park.matched < 5 || park.matched > park.expected ||
+      !Number.isFinite(park.mae) || park.mae < 0 || !Number.isFinite(park.bias) ||
+      !Number.isFinite(park.within10) || park.within10 < 0 || park.within10 > 1) {
+    throw new Error('履歴と事前予測の対応を確認できませんでした。');
+  }
+  return {...park, coverage:park.matched / park.expected};
+}
+
 export async function loadAccuracyReport(date, parkId, {fetchImpl = fetch, signal, asOf = Date.now()} = {}) {
   if (!validDate(date) || !Object.hasOwn(parks, parkId)) throw new Error('対象日とパークを選んでください。');
   const today = dayInJapan(asOf);
@@ -58,17 +75,32 @@ export async function loadAccuracyReport(date, parkId, {fetchImpl = fetch, signa
 
   const paths = ['history/' + date.slice(0, 7) + '.json'];
   if (Date.parse(today) - Date.parse(date) < 60 * dayMs) paths.push('observations.json');
-  const records = await Promise.allSettled(paths.map(async path => checkedRows(await download(path, fetchImpl, signal))));
-  if (signal?.aborted) throw signal.reason ?? new Error('中断しました。');
-  const incompleteDownload = records.some(record => record.status === 'rejected');
+  const dayFinished = beforeObservations.overall.expected === beforeObservations.slotsInDay;
+  const observations = paths.map(async path => checkedRows(await download(path, fetchImpl, signal)));
+  const summary = dayFinished
+    ? download('accuracy-history/' + date + '.json', fetchImpl, signal).then(data => historySummary(data, beforeObservations))
+    : null;
+  const [historical, ...records] = await Promise.allSettled([summary, ...observations]);
+  if (signal?.aborted && signal.reason?.name !== 'TimeoutError') throw signal.reason ?? new Error('中断しました。');
+  const historyComparison = historical.status === 'fulfilled' ? historical.value : null;
+  const queueIncomplete = records.some(record => record.status === 'rejected');
+  const historyUnavailable = historical.status === 'rejected';
   for (const record of records) {
     if (record.status === 'fulfilled') {
       base.observations = base.observations.concat(record.value.filter(row => row?.date === date));
     }
   }
-  const result = scoreForecastAccuracy(base);
-  if (incompleteDownload && !result.overall.matched) throw new Error('掲示待ち時間の記録を取得できませんでした。');
-  return {result, incompleteDownload};
+  const queueTimes = scoreForecastAccuracy(base);
+  if ((queueIncomplete || historyUnavailable) && !queueTimes.overall.matched && !historyComparison) {
+    throw new Error('掲示待ち時間の記録を取得できませんでした。');
+  }
+  // Keep the two samples separate: the providers can cover the same facility and time.
+  const preferHistory = historyComparison && historyComparison.matched > queueTimes.overall.matched;
+  const result = preferHistory
+    ? {...queueTimes, status:'complete', provider:'themeparks-wiki', overall:historyComparison}
+    : {...queueTimes, provider:'queue-times'};
+  return {result, queueTimes, historyComparison, queueIncomplete, historyUnavailable,
+    incompleteDownload:queueIncomplete || historyUnavailable};
 }
 
 function tag(name, content, className) {
@@ -121,26 +153,28 @@ function breakdown(title, firstColumn, rows, rowName) {
   return block;
 }
 
-function crowdSection(crowd) {
+function crowdSection(queueCrowd, historyComparison, queueMatched) {
   const block = section('パークの混雑');
   const readings = tag('dl', null, 'crowd-levels');
-  readings.append(term('事前の予測', levels[crowd.forecastLevel] || '予測なし'),
-    term('掲示待ち時間による判定', levels[crowd.observedLevel] || '記録不足'));
-  block.append(readings, tag('p', '同じ施設・時間帯で、当日の掲示待ち時間が普段より長かったかを比べます。', 'note'));
-  if (crowd.observedLevel) {
-    block.append(tag('p', '判定に使えた施設は' + crowd.facilities + '施設です。', 'note'));
-  } else {
-    block.append(tag('p', '比較できる施設や時間帯がそろうと判定が出ます。', 'note'));
+  readings.append(term('事前の予測', levels[queueCrowd.forecastLevel] || '予測なし'));
+  if (queueMatched || !historyComparison) {
+    readings.append(term('Queue-Timesによる判定', levels[queueCrowd.observedLevel] || '記録不足'));
   }
+  if (historyComparison) {
+    readings.append(term('ThemeParks.wikiによる判定', levels[historyComparison.crowd?.observedLevel] || '記録不足'));
+  }
+  block.append(readings, tag('p', '同じ施設・時間帯の普段の待ち時間と比べます。比較できる施設や時間帯が少ない場合は「記録不足」と表示します。', 'note'));
   return block;
 }
 
-function waitSection(metrics) {
-  const block = section('待ち時間の誤差');
+function waitSection(metrics, provider) {
+  const block = section(provider + 'との待ち時間の比較');
   const readings = tag('dl', null, 'metrics');
   readings.append(term('平均絶対誤差', minutes(metrics.mae)), term('誤差10分以内', percentage(metrics.within10)),
     term('予測 − 掲示の平均', signedMinutes(metrics.bias)), term('照合できた割合', percentage(metrics.coverage)));
-  block.append(readings, tag('p', '施設ごとに30分枠の掲示待ち時間の中央値と、その枠の予測値を比較します。', 'note'), tag('p', '予測と掲示の差がプラスなら、予測が長めです。', 'note'));
+  const comparison = provider === 'Queue-Times' ? '枠内に収集した掲示値の中央値' : '枠内で最後に更新された通常列の掲示値';
+  block.append(readings, tag('p', '対象' + metrics.expected + '枠のうち' + metrics.matched + '枠で、' +
+    comparison + 'と予測を比べました。差がプラスなら予測が長めです。', 'note'));
   if (metrics.baselineMatched && Number.isFinite(metrics.comparableMae) && Number.isFinite(metrics.baselineMae)) {
     block.append(tag('p', '普段の待ち時間も分かる' + metrics.baselineMatched + '件で比べると、平均絶対誤差はTDRouteの予測で' +
       minutes(metrics.comparableMae) + '、普段の待ち時間をそのまま使うと' + minutes(metrics.baselineMae) + 'です。'));
@@ -157,7 +191,7 @@ const statusText = {
   complete: '予測の対象時間帯はすべて終了しました。保存された掲示記録の範囲で集計しています。'
 };
 
-function showReport(report, {result, incompleteDownload}) {
+function showReport(report, {result, queueTimes = result, historyComparison, queueIncomplete, historyUnavailable}) {
   report.replaceChildren();
   const top = tag('div', null, 'report-top');
   const heading = tag('div');
@@ -170,17 +204,26 @@ function showReport(report, {result, incompleteDownload}) {
   print.addEventListener('click', () => window.print());
   top.append(heading, print);
   report.append(top, tag('p', statusText[result.status]));
-  if (incompleteDownload) report.append(tag('p', '一部の観測データを取得できなかったため、読み込めた記録で集計しています。'));
+  if (queueIncomplete) report.append(tag('p', 'Queue-Timesの一部の記録を取得できませんでした。'));
+  if (historyUnavailable) report.append(tag('p', 'ThemeParks.wikiの日別集計を読み込めませんでした。'));
   if (result.issuedAt) {
-    const elapsed = result.hours.length ? '（' + result.hours[0].hour + '時台〜' + result.hours.at(-1).hour + '時台）' : '';
-    report.append(tag('p', '事前に保存した施設別の予測枠は' + result.slotsInDay + '件。終了した' +
-      result.overall.expected + '枠' + elapsed + 'のうち、掲示記録と照合できたのは' + result.overall.matched + '件です。', 'note'));
+    const elapsed = queueTimes.hours.length ? '（' + queueTimes.hours[0].hour + '時台〜' + queueTimes.hours.at(-1).hour + '時台）' : '';
+    const source = result.provider === 'themeparks-wiki' ? 'ThemeParks.wiki' : 'Queue-Times';
+    const counts = '保存した' + result.slotsInDay + '枠のうち、終了した枠は' + result.overall.expected + '件' + elapsed + 'です。';
+    const matched = result.overall.matched ? source + 'の掲示値と' + result.overall.matched + '枠を照合しました。' : '';
+    report.append(tag('p', counts + matched, 'note'));
   }
-  if (result.crowd?.forecastLevel || result.crowd?.observedLevel) report.append(crowdSection(result.crowd));
-  if (result.overall.matched) {
-    report.append(waitSection(result.overall));
-    report.append(breakdown('時間帯別', '日本時間', result.hours, row => row.hour + '時台'));
-    report.append(breakdown('施設別', '施設', result.facilities, row => row.name));
+  const queueMatched = queueTimes.overall.matched;
+  if (historyComparison && queueMatched) report.append(tag('p', '同じ枠を両方の情報源が記録することがあります。照合件数と誤差は情報源ごとに集計しています。', 'note'));
+  if (result.provider === 'themeparks-wiki') report.append(waitSection(historyComparison, 'ThemeParks.wiki'));
+  if (queueMatched) report.append(waitSection(queueTimes.overall, 'Queue-Times'));
+  if (historyComparison && result.provider !== 'themeparks-wiki') report.append(waitSection(historyComparison, 'ThemeParks.wiki'));
+  if (queueTimes.crowd?.forecastLevel || queueTimes.crowd?.observedLevel || historyComparison?.crowd?.observedLevel) {
+    report.append(crowdSection(queueTimes.crowd, historyComparison, queueMatched));
+  }
+  if (queueMatched) {
+    report.append(breakdown('時間帯別（Queue-Times）', '日本時間', queueTimes.hours, row => row.hour + '時台'));
+    report.append(breakdown('施設別（Queue-Times）', '施設', queueTimes.facilities, row => row.name));
   }
   report.hidden = false;
 }
@@ -209,7 +252,7 @@ function start() {
     if (!form.reportValidity()) return;
     const controller = new AbortController();
     current = controller;
-    const timeout = setTimeout(() => controller.abort(), 20000);
+    const timeout = setTimeout(() => controller.abort(new DOMException('取得時間を超えました。', 'TimeoutError')), 20000);
     const url = new URL(location.href);
     url.searchParams.set('date', date.value);
     url.searchParams.set('park', park.value);
