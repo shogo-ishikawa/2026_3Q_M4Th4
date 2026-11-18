@@ -52,7 +52,7 @@ test('weather uses the containing hour precipitation even when the following ins
 test('restaurant and cafe selection is separated from quick snacks and popcorn',()=>{
  assert.equal(genreOf('restaurant'),'dining');assert.equal(genreOf('cafe'),'dining');assert.equal(genreOf('snack'),'snacks');assert.equal(genreOf('popcorn'),'snacks');
  const html=foodLinks({category:'snack',sourceUrl:'https://www.tokyodisneyresort.jp/tds/restaurant/1/',menuUrl:'https://www.tokyodisneyresort.jp/tds/restaurant/1/menu.html',menuItems:[{name:'<script>test</script>'}],menuCheckedOn:'2026-11-17'});
- assert.ok(html.includes('/1/menu.html'));assert.match(html,/店舗・売り場/);assert.match(html,/メニューを見る/);assert.ok(html.includes('&lt;script&gt;'));assert.equal(html.includes('<script>'),false);assert.equal(html.includes('<button'),false);
+ assert.ok(html.includes('/1/menu.html'));assert.match(html,/メニュー ↗/);assert.equal((html.match(/<a /g)||[]).length,1);assert.equal(html.includes('メニュー確認'),false);assert.ok(html.includes('&lt;script&gt;'));assert.equal(html.includes('<script>'),false);assert.equal(html.includes('<button'),false);
  assert.equal(foodLinks({category:'attraction'}),'');
 });
 test('calendar downloads validate coverage and use the packaged fallback after provider failure',async()=>{

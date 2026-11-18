@@ -459,24 +459,11 @@ def build(raw_path, water_map=None, park_id='sea'):
     }
     (ROOT/f"web/data/{park_id}-geography.json").write_text(json.dumps(geographic, ensure_ascii=False, separators=(",", ":"))+"\n")
 
-    def polygon(coords, fill, stroke="none", width=1):
-        return f'<polygon points="{" ".join(",".join(map(str, p)) for p in coords)}" fill="{fill}" stroke="{stroke}" stroke-width="{width}"/>'
-
-    svg = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000" role="img" aria-label="{park["name"]}の徒歩通路と水域を示す地理地図">',
-           f'<title>{park["name"]}の地理地図</title><desc>© OpenStreetMap contributors. ODbL 1.0. {extracted_on}取得。</desc>',
-           '<rect width="1000" height="1000" fill="#ddebdc"/>', polygon(geographic["boundary"]["geometry"], "#e9eee3", "#a7b9aa", 2)]
-    for item in water:
-        # Even-odd rings preserve real islands and shores inside the harbour.
-        parts = [item["geometry"]]+[hole["geometry"] for hole in item.get("holes", [])]
-        commands = " ".join("M"+" L".join(",".join(map(str,p)) for p in ring)+" Z" for ring in parts)
-        svg.append(f'<path d="{commands}" fill="#86c8df" fill-rule="evenodd" stroke="#64abc5" stroke-width="1"/>')
-    svg += [polygon(item["geometry"], "#d5cbb7", "#b4aa98", .7) for item in buildings]
-    svg.append('<g fill="none" stroke="#fdfbf0" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">')
-    svg += [f'<polyline points="{" ".join(",".join(map(str,p)) for p in item["geometry"])}"/>' for item in map_ways]
-    svg += ['</g>', '<g fill="#254c61" font-family="sans-serif" font-weight="bold"><path d="M935 82 L945 45 L955 82 L945 72Z"/><text x="945" y="35" text-anchor="middle" font-size="17">N</text></g>',
-            f'<path d="M45 927 v8 h{100*scale:.3f} v-8" fill="none" stroke="#254c61" stroke-width="3"/><text x="45" y="958" font-family="sans-serif" font-size="17" fill="#254c61">100 m</text>',
-            '<text x="975" y="984" text-anchor="end" font-family="sans-serif" font-size="13" fill="#254c61">© OpenStreetMap contributors · ODbL</text></svg>']
-    (ROOT/f"web/assets/{park_id}-geographic-map.svg").write_text("\n".join(svg)+"\n")
+    # Render both reviewed maps in the entrance-facing display projection.
+    # This step only reads the saved geography and catalogue; it never modifies
+    # routing vertices, connectivity, coordinates or geodesic edge lengths.
+    from build_illustrated_maps import build as build_display_maps
+    build_display_maps()
     print(json.dumps({"nodes": len(node_records), "edges": len(edges), "anchors": len(anchors), "walkwaySegments": len(map_ways), "waterPolygons": len(water), "maxLandmarkOffsetMetres": max(a["offsetMetres"] for a in anchor_report)}, ensure_ascii=False))
 
 

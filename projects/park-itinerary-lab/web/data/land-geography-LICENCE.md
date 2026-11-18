@@ -26,3 +26,15 @@
 
 再作成：`python scripts/build_sea_geography.py /path/to/osm-map.xml --park land`
 既存のシー用スクリプトを共通化しており、シーは従来どおり `--park sea` または指定なしで作成できます。
+
+## 表示の向きとランドマーク
+
+入口が下になるように表示だけを回転し、全体を同じ縮尺で収めています。
+水域・島・建物の輪郭と徒歩通路の頂点は元の地理データを保持します。距離の計算は変更しません。
+
+`map-landmarks.json` のランドの緯度経度もOpenStreetMapを加工したもので、上記のODbL 1.0が適用されます。
+2026年11月18日に標準のOSM Map APIから取得し、地物IDと取得URLをJSONに記録しています。
+城・山・船などの絵は位置を示す独自の記号です。実際の建物の輪郭や大きさを表すものではありません。
+公式ガイドマップの画像は使用していません。
+
+表示だけの再作成：`python scripts/build_illustrated_maps.py`

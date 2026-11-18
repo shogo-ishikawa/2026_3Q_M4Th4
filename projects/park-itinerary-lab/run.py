@@ -9,7 +9,7 @@ import webbrowser
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Park Itinerary Lab')
+    parser = argparse.ArgumentParser(description='TDRoute')
     parser.add_argument('--port', type=int, default=8000)
     parser.add_argument('--no-browser', action='store_true')
     args = parser.parse_args()
@@ -18,7 +18,7 @@ def main():
     root = project / 'web'
     server = ThreadingHTTPServer(('127.0.0.1', args.port), partial(SimpleHTTPRequestHandler, directory=str(root)))
     url = f'http://127.0.0.1:{server.server_port}/'
-    print(f'Park Itinerary Lab: {url} (Ctrl+C to stop)', flush=True)
+    print(f'TDRoute: {url} (Ctrl+C to stop)', flush=True)
     if not args.no_browser:
         timer = threading.Timer(0.4, lambda: webbrowser.open(url))
         timer.daemon = True

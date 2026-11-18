@@ -5,6 +5,9 @@ import { liveWaitFor, currentRideStatus } from './wait-data.js';
 /* Browser itinerary search. Every returned plan is checked; the search does not claim global optimality. */
 const FOOD = new Set(['restaurant', 'cafe', 'snack', 'popcorn']);
 const FIXED = new Set(['show', 'parade']);
+const DINING_RECOVERY_MINUTES = 20;
+const DINING_BREAK_GAP = 30;
+const LONG_ATTRACTION_QUEUE = 45;
 const now = () => typeof performance !== 'undefined' ? performance.now() : Date.now();
 const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 const ceil100 = value => Math.ceil(value / 100) * 100;
@@ -283,6 +286,32 @@ function row(kind, start, end, name, extra = {}) {
   return { kind, type: kind, start, end, duration: end - start, name, cost: 0, dpa: false, ...extra };
 }
 
+function recoveryEnds(rows) {
+  return rows.filter(item => item.kind === 'rest' ||
+    (item.kind === 'activity' && FOOD.has(item.category) && item.end - item.start >= DINING_RECOVERY_MINUTES)).map(item => item.end);
+}
+
+function autoRestDue(state, activity, context) {
+  const settings = context.settings;
+  if (!settings.restEvery || !settings.restMinutes || FOOD.has(activity.category)) return false;
+  // Eating already provides a pause. Even a short snack should not be followed
+  // immediately by another automatic stop.
+  const latestFood = state.rows.filter(item => item.kind === 'activity' && FOOD.has(item.category)).at(-1);
+  if (latestFood && state.time - latestFood.end < DINING_BREAK_GAP) return false;
+  // Leave room for a nearby requested meal, even if a short visit is next.
+  const mealSoon = context.selected.some(selection => !state.visited.has(selection.id) &&
+    FOOD.has(context.map.get(selection.id)?.category) && Number.isFinite(selection.earliest) &&
+    Math.abs(selection.earliest - state.time) < DINING_BREAK_GAP);
+  if (mealSoon) return false;
+  const fixedRest = settings.fixedBreaks[state.breakIndex];
+  if (fixedRest && fixedRest.start - state.time <= DINING_BREAK_GAP) return false;
+  const tiringVisits = new Set(state.rows.filter(item => item.kind === 'activity' &&
+    item.category === 'attraction' && item.end > state.lastRest).map(item => item.activityId));
+  const longQueue = state.rows.some(item => item.kind === 'queue' && tiringVisits.has(item.activityId) && item.end - item.start >= LONG_ATTRACTION_QUEUE);
+  const elapsed = state.time - state.lastRest;
+  return elapsed >= settings.restEvery || (longQueue && elapsed >= Math.min(settings.restEvery, 60));
+}
+
 function prefixSourceRows(initialPlan,settings) {
   const cutoff=toMinutes(settings.replanFrom),priorRows=initialPlan?.rows||[];
   const startedVisitIds=new Set(priorRows.filter(item=>item.start<cutoff&&['queue','activity'].includes(item.kind)).map(item=>item.activityId));
@@ -348,7 +377,8 @@ function contextFor(park, settings, initialPlan) {
     cost: spent, foodCost: sourceRows.filter(item => FOOD.has(item.category)).reduce((sum, item) => sum + finite(item.cost), 0),
     dpaCost: Math.max(prefixDpa, paidDpa), shoppingCost: sourceRows.filter(item => item.category === 'shop').reduce((sum, item) => sum + finite(item.cost), 0),
     walk: prefix.filter(item => item.kind === 'walk').reduce((sum, item) => sum + finite(item.metres), 0),
-    lastRest: beginning, purchases: settings.purchases.map(copy),
+    lastRest: prefix.length ? Math.max(Math.min(settings.entry, ...prefix.map(item => item.start)), ...recoveryEnds(prefix)) : beginning,
+    purchases: settings.purchases.map(copy), restDeferred:false, restDeferralMinutes:0,
     required: completedSelections.filter(item => item.required).length,
   };
   for (const item of prefix.filter(item => item.fixedBreakId)) {
@@ -430,7 +460,16 @@ export function queueAllowance(activity, estimate, method, settings) {
   return {estimatedMinutes:estimate.minutes, bufferMinutes:buffer, delayMinutes:delay, totalMinutes:estimate.minutes + buffer + delay};
 }
 
-function scheduledOptions(state, baseActivity, selection, context) {
+function requiredVisitsStillReachable(state, context) {
+  // This optimistic look-ahead only decides whether an automatic rest should
+  // wait. Actual fixed rests and all reservation conditions are checked again
+  // by the normal search and the independent validator.
+  const after = {...state, breakIndex:context.settings.fixedBreaks.length};
+  return context.selected.filter(selection => selection.required && !state.visited.has(selection.id))
+    .every(selection => scheduledOptions(after, context.map.get(selection.id), selection, context, false).length > 0);
+}
+
+function scheduledOptions(state, baseActivity, selection, context, allowAutoRest = true, deferRest = false) {
   if (!activityAvailable(baseActivity, context.settings.date)||currentRideStatus(baseActivity,context.settings,{now:context.settings.waitAsOf})?.isOpen===false) return [];
   const settings = context.settings, graph = context.graph;
   const methods = [];
@@ -449,6 +488,7 @@ function scheduledOptions(state, baseActivity, selection, context) {
     }
   }
   const options = [];
+  let triedRest = false;
   for (const method of methods) {
     const activity = { ...baseActivity, node: method.method === 'dpa' ? (selection.nodeOverride || baseActivity.node) : baseActivity.node };
   const metres = graph.distances[state.node]?.[activity.node] ?? Infinity;
@@ -456,9 +496,10 @@ function scheduledOptions(state, baseActivity, selection, context) {
   const rows = [];
   let departure = state.time, lastRest = state.lastRest;
   const autoBreakId=`${state.node}:${activity.id}`;
-  if (settings.restEvery && settings.restMinutes && departure - lastRest >= settings.restEvery&&!settings.excludedAutoBreaks.includes(autoBreakId)) {
+  if (allowAutoRest && autoRestDue(state, activity, context) && !settings.excludedAutoBreaks.includes(autoBreakId)) {
     rows.push(row('rest', departure, departure + settings.restMinutes, 'ひと休み', { node: state.node,autoBreakId }));
     departure += settings.restMinutes; lastRest = departure;
+    triedRest = true;
   }
   const walkMinutes=walkingMinutes(metres,departure,settings);
   const arrival = departure + walkMinutes;
@@ -522,7 +563,7 @@ function scheduledOptions(state, baseActivity, selection, context) {
         start: window[0], end: window[1], cost: method.price, owned: false,
       });
       const visited = new Set(state.visited); visited.add(activity.id);
-      options.push({
+      const child = {
         key, time: end, node: endNode, rows: state.rows.concat(extra), breakIndex: state.breakIndex,
         visits: state.visits.concat({ id: activity.id, activityId: activity.id, name: activity.name,
           node: activity.node, endNode, category: activity.category, start, end, queueStart, arrival,
@@ -530,12 +571,23 @@ function scheduledOptions(state, baseActivity, selection, context) {
         visited, score: state.score + selection.weight, cost: state.cost + activityCost,
         foodCost: state.foodCost + (FOOD.has(activity.category) ? selection.cost : 0),
         shoppingCost: state.shoppingCost + (activity.category === 'shop' ? selection.cost : 0),
-        dpaCost: state.dpaCost + method.price, walk: state.walk + metres, lastRest,
+        dpaCost: state.dpaCost + method.price, walk: state.walk + metres,
+        lastRest: FOOD.has(activity.category) && selection.duration >= DINING_RECOVERY_MINUTES ? end : lastRest,
+        restDeferred: FOOD.has(activity.category) && selection.duration >= DINING_RECOVERY_MINUTES ? false :
+          (rows.some(item => item.autoBreakId) ? false : (state.restDeferred || deferRest)),
+        restDeferralMinutes: (state.restDeferralMinutes || 0) +
+          (!rows.some(item => item.autoBreakId) && (state.restDeferred || deferRest) ?
+            (FOOD.has(activity.category) && selection.duration >= DINING_RECOVERY_MINUTES ? start : end) - state.time : 0),
         purchases, required: state.required + (selection.required ? 1 : 0),
-      });
+      };
+      if (allowAutoRest && rows.some(item => item.autoBreakId) && !requiredVisitsStillReachable(child, context)) continue;
+      options.push(child);
     }
   }
-  return options;
+  // Keep the deferred branch as well: individually reachable reservations may
+  // still form a tight chain. Preference for recovery is a soft ranking below
+  // wish scores, never a restriction on an otherwise feasible visit.
+  return triedRest ? options.concat(scheduledOptions(state, baseActivity, selection, context, false, true)) : options;
 }
 
 function tieValue(state, context) {
@@ -548,7 +600,8 @@ function tieValue(state, context) {
   const burden = state.rows.filter(item => ['walk', 'queue', 'wait'].includes(item.kind))
     .reduce((sum, item) => sum + item.end - item.start, 0) + exitMinutes;
   // Time spent queueing, walking and waiting comes before distance alone.
-  const value = [state.score, preferenceScore, -burden, -(state.time + exitMinutes), -state.cost, -(state.walk + exitMetres)];
+  const value = [state.score, preferenceScore, -(state.restDeferralMinutes || 0), -Number(!!state.restDeferred),
+    -burden, -(state.time + exitMinutes), -state.cost, -(state.walk + exitMetres)];
   context.rankCache.set(state, value);
   return value;
 }
@@ -579,6 +632,7 @@ function nextFixedBreak(state, context) {
   const end = reservation.start + reservation.duration;
   rows.push(row('rest', reservation.start, end, reservation.label, { node: reservation.node, fixedBreakId: reservation.id }));
   return { ...state, rows, time: end, node: reservation.node, lastRest: end,
+    restDeferred:false, restDeferralMinutes:(state.restDeferralMinutes || 0) + (state.restDeferred ? reservation.start - state.time : 0),
     walk: state.walk + metres, breakIndex: state.breakIndex + 1 };
 }
 
@@ -586,6 +640,15 @@ function canFinish(state, context) {
   const metres = context.graph.distances[state.node]?.[context.park.exitNode] ?? Infinity;
   return state.breakIndex === context.settings.fixedBreaks.length && Number.isFinite(metres) && state.time + walkingMinutes(metres,state.time,context.settings) <= context.settings.exit &&
     state.cost + Math.max(0, finite(context.settings.souvenirReserve) - state.shoppingCost) <= context.settings.budget;
+}
+
+function recoveryBeforeExit(state, context) {
+  const activity = {id:'exit',category:'exit'}, autoBreakId = `${state.node}:exit`;
+  if (!state.restDeferred || !autoRestDue(state, activity, context) || context.settings.excludedAutoBreaks.includes(autoBreakId)) return state;
+  const end = state.time + context.settings.restMinutes;
+  const rested = {...state, time:end, lastRest:end, restDeferred:false,
+    rows:state.rows.concat(row('rest',state.time,end,'ひと休み',{node:state.node,autoBreakId}))};
+  return canFinish(rested, context) ? rested : state;
 }
 
 function finishRows(state, context) {
@@ -673,6 +736,7 @@ function searchTracker(context, options, started) {
         if (!next) break;
         complete = next;
       }
+      complete = recoveryBeforeExit(complete, context);
       if (requiredMet(complete, context) && canFinish(complete, context) && (!best || compare(complete, best, context) < 0)) best = complete;
       if (now() - lastProgress >= 150) {
         const details = diagnostics(true), preview = best ? resultFrom(best, context, { ...details,
@@ -708,9 +772,11 @@ function beamSearch(context, tracker, deadline) {
     const grouped = new Map();
     for (const state of next) {
       const key = [...state.visited].sort().join('|') + ';' + state.node + ';' + state.breakIndex + ';' +
-        state.purchases.map(purchase => purchase.id + ':' + purchase.start).join(',');
+        state.purchases.map(purchase => purchase.id + ':' + purchase.start).join(',') + ';' + Number(!!state.restDeferred);
       const previous = grouped.get(key);
-      if (!previous || state.time < previous.time || (state.time === previous.time && compare(state, previous, context) < 0)) grouped.set(key, state);
+      const deferral = (state.restDeferralMinutes || 0) - (previous?.restDeferralMinutes || 0);
+      if (!previous || deferral < 0 || (deferral === 0 &&
+        (state.time < previous.time || (state.time === previous.time && compare(state, previous, context) < 0)))) grouped.set(key, state);
     }
     beam = [...grouped.values()].sort((a, b) => {
       const remaining = state => context.selected.filter(item => item.required && !state.visited.has(item.id)).length;
@@ -727,24 +793,34 @@ function randomGenerator() {
 
 /** Replay a priority order; defer activities that fit only after the next fixed rest. */
 function replayOrder(order, context, tracker, random, diversify = false) {
-  let state = context.initial, remaining = order.slice();
-  while (remaining.length || state.breakIndex < context.settings.fixedBreaks.length) {
+  let frontier = [context.initial], best = context.initial;
+  for (let depth = 0; depth < order.length + context.settings.fixedBreaks.length && frontier.length; depth++) {
     if (now() >= context.deadline) break;
-    let chosen = null, chosenId = null;
-    for (const selection of remaining) {
-      const choices = scheduledOptions(state, context.map.get(selection.id), selection, context);
-      if (choices.length) {
-        choices.sort((a, b) => a.time - b.time || compare(a, b, context));
-        chosen = choices[diversify && choices.length > 1 && random() < 0.25 ? Math.floor(random() * Math.min(3, choices.length)) : 0];
-        chosenId = selection.id; break;
+    const next = [];
+    for (const state of frontier) {
+      if (now() >= context.deadline) break;
+      let choices = [];
+      for (const selection of order) {
+        if (state.visited.has(selection.id)) continue;
+        choices = scheduledOptions(state, context.map.get(selection.id), selection, context);
+        if (choices.length) break;
+      }
+      if (!choices.length) { const fixed = nextFixedBreak(state, context); if (fixed) choices = [fixed]; }
+      choices.sort((a, b) => a.time - b.time || compare(a, b, context));
+      // Retain a bounded recovery and deferred alternative for this order.
+      for (const deferred of [false,true]) {
+        const group = choices.filter(choice => !!choice.restDeferred === deferred);
+        if (!group.length) continue;
+        const chosen = group[diversify && group.length > 1 && random() < .25 ? Math.floor(random() * Math.min(3,group.length)) : 0];
+        tracker.accept(chosen); next.push(chosen);
+        if (compare(chosen, best, context) < 0) best = chosen;
       }
     }
-    if (chosen) remaining = remaining.filter(item => item.id !== chosenId);
-    else chosen = nextFixedBreak(state, context);
-    if (!chosen) break;
-    state = chosen; tracker.accept(state);
+    frontier = [false,true].flatMap(deferred => next.filter(state => !!state.restDeferred === deferred)
+      .sort((a,b) => (!deferred ? (a.restDeferralMinutes || 0) - (b.restDeferralMinutes || 0) : 0) ||
+        a.time - b.time || compare(a,b,context)).slice(0,2));
   }
-  return state;
+  return best;
 }
 
 /** Multiple greedy starts followed by order insertion and swap neighbourhoods. */
