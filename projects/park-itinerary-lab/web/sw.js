@@ -1,5 +1,5 @@
 /* TDRoute の公開画面だけを版ごとに保存する。個人のしおりはアプリが端末内で管理する。 */
-const VERSION = '2.0.0';
+const VERSION = '2.1.0';
 const BUILD_ID = 'source';
 const INTEGRITY = {};
 const scope = self.registration.scope;
@@ -12,11 +12,12 @@ const OFFLINE_FILES = [
   'accuracy-page.js', 'forecast-accuracy.js', 'forecast-calendar.js', 'calendar-outlook.js',
   'onsite-navigation.js', 'visit-day-view.js', 'wishlist-presets.js', 'itinerary-image.js',
   'ticket-calendar.js', 'ticket-calendar-seed.js', 'day-progress-ui.js', 'day-progress-plan.js',
-  'repeat-visits.js', 'intraday-waits.js', 'map-view.js', 'map-display.js', 'storage.js',
+  'repeat-visits.js', 'intraday-waits.js', 'map-view.js', 'map-display.js', 'map-gestures.js', 'storage.js',
   'weather.js', 'weather-view.js', 'time-input.js', 'operation-windows.js',
   'wait-data.js', 'wait-model.js', 'calendar-features.js',
   'data/parks.json', 'data/calendar.json', 'data/live-waits.json', 'data/wait-model.json',
   'assets/tdroute-logo.webp', 'assets/land-hero.webp', 'assets/sea-hero.webp',
+  'assets/land-geographic-map.webp', 'assets/sea-geographic-map.webp',
   'assets/land-geographic-map.svg', 'assets/sea-geographic-map.svg', 'assets/land-map.webp', 'assets/sea-map.webp',
   'assets/pwa/splash.webp', 'assets/pwa/apple-touch-icon.png', 'assets/pwa/icon-192.png',
   'assets/pwa/icon-512.png', 'assets/pwa/icon-maskable-512.png'

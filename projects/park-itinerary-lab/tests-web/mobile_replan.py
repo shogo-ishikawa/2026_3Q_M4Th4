@@ -176,6 +176,32 @@ def check_share_edits(page):
     date.fill('2026-11-19')
 
 
+def check_mobile_course_links(website):
+    course_links = 'a[href="../"], a[href="#learn"], a[href*="colab.research.google.com"], a[href*="github.com/shogo-ishikawa/"], a[href$=".zip"], #learn'
+    expect(website.locator('a[href="../"]')).to_be_visible()
+    guide = website.context.new_page()
+    guide.goto(website.url + 'guide.html#learn')
+    expect(guide.locator('#learn a[href*="colab"]').first).to_be_visible()
+    expect(guide.locator('a[href*="docs/wait-data.md"]')).to_have_count(1)
+    guide.close()
+
+    app = website.context.new_page()
+    app.add_init_script("Object.defineProperty(navigator, 'standalone', {value:true})")
+    app.goto(website.url)
+    expect(app.locator('html')).to_have_class('tdroute-standalone')
+    expect(app.locator(course_links)).to_have_count(0)
+    app.locator('header a[href="guide.html"]').click()
+    expect(app.locator('html')).to_have_class('tdroute-standalone')
+    expect(app.locator(course_links)).to_have_count(0)
+    expect(app.locator('#official a').first).to_be_visible()
+    app.locator('nav a[href="accuracy.html"]').click()
+    expect(app.locator('#reportForm')).to_be_visible()
+    expect(app.locator(course_links)).to_have_count(0)
+    app.get_by_role('link', name='プラン作成に戻る').click()
+    expect(app.locator(course_links)).to_have_count(0)
+    app.close()
+
+
 def check_mobile(page, url):
     errors = []
     page.on('pageerror', lambda error: errors.append(str(error)))
@@ -185,6 +211,7 @@ def check_mobile(page, url):
     page.goto(url + '/park-itinerary-lab/')
     expect(page.locator('#solveButton')).to_be_enabled(timeout=30_000)
     expect(page.locator('#visitDate')).to_have_value('2026-11-19')
+    check_mobile_course_links(page)
     check_share_edits(page)
     check_forecast_calendar(page)
     check_forecast_panel(page)
@@ -287,6 +314,7 @@ def check_mobile(page, url):
 
 
 if __name__ == '__main__':
+    from mobile_map import check_map_gestures
     site = Path(__file__).resolve().parents[3] / '_site'
     assert (site / 'park-itinerary-lab/index.html').is_file(), 'Build the public site first.'
     with ThreadingHTTPServer(('127.0.0.1', 0), partial(QuietFiles, directory=site)) as server, sync_playwright() as pw:
@@ -295,7 +323,12 @@ if __name__ == '__main__':
             browser = pw.chromium.launch(channel='chrome', headless=True)
             context = browser.new_context(locale='ja-JP', timezone_id='Asia/Tokyo', viewport={'width':393,'height':851},
                                           has_touch=True, is_mobile=True, service_workers='allow', reduced_motion='reduce')
-            check_mobile(context.new_page(), f'http://127.0.0.1:{server.server_port}')
+            origin = f'http://127.0.0.1:{server.server_port}'
+            map_page = context.new_page()
+            map_page.route('**/*', lambda route: route.continue_() if route.request.url.startswith(origin + '/') else route.abort())
+            check_map_gestures(map_page, origin + '/park-itinerary-lab/')
+            map_page.close()
+            check_mobile(context.new_page(), origin)
             browser.close()
         finally:
             server.shutdown()

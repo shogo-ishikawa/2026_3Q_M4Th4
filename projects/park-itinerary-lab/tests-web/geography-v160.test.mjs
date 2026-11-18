@@ -36,7 +36,7 @@ test('Land uses the geographic background and hides former schematic routes',()=
  const container={innerHTML:'',querySelectorAll(){return[];},querySelector(){return null;}},graph=graphDistances(land);
  const row={kind:'walk',name:'過去の概略ルート',path:graph.paths.entry.thunder,metres:graph.distances.entry.thunder};
  renderParkMap(container,land,{plan:{rows:[row]}});assert.doesNotMatch(container.innerHTML,/過去の概略ルート/);
- assert.match(container.innerHTML,/land-geographic-map.svg/);assert.match(container.innerHTML,/ODbL/);
+ assert.match(container.innerHTML,/href="assets\/land-geographic-map\.webp\?v=/);assert.match(container.innerHTML,/ODbL/);
  renderParkMap(container,land,{plan:{rows:[{...row,routeSource:land.routeGraphVersion}]}});assert.match(container.innerHTML,/過去の概略ルート/);
  const direct=distance([nodes.get('entry').lon,nodes.get('entry').lat],[nodes.get('thunder').lon,nodes.get('thunder').lat]);
  assert.ok(graph.distances.entry.thunder>direct*1.1);assert.ok(routeCoordinates(land,row.path).length>20);

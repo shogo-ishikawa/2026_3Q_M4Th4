@@ -29,6 +29,9 @@ function prepareOffline(appUrl, setStatus) {
   }).catch(() => setStatus(unavailable));
 }
 
+// Keep website-only links inert until the page knows which surface opened it.
+const appDisplayModes = ['standalone', 'minimal-ui', 'fullscreen', 'window-controls-overlay', 'tabbed'];
+
 export function initialisePwa() {
   const byId = id => document.getElementById(id);
   const install = byId('installApp');
@@ -36,20 +39,35 @@ export function initialisePwa() {
   const splash = byId('launchSplash');
   const platform = mobilePlatform(navigator);
   const appUrl = new URL('./', location.href).href;
-  const standalone = window.matchMedia('(display-mode: standalone)');
+  const standalone = window.matchMedia(appDisplayModes.map(mode => '(display-mode: ' + mode + ')').join(', '));
+  const websiteContent = Array.from(document.querySelectorAll('template[data-website]'), template => ({
+    template, nodes: Array.from(template.content.childNodes)
+  }));
   let promptEvent;
   let installed = false;
 
   function updateMode() {
     const launched = standalone.matches || navigator.standalone === true;
     document.documentElement.classList.toggle('tdroute-standalone', launched);
-    install.hidden = installed || launched;
-    if (install.hidden && dialog.open) dialog.close();
+    for (const {template, nodes} of websiteContent) {
+      if (template.content.hasChildNodes() === launched) continue;
+      if (launched) template.content.append(...nodes);
+      else template.after(...nodes);
+    }
+    if (install) {
+      install.hidden = installed || launched;
+      if (install.hidden && dialog.open) dialog.close();
+    }
     return launched;
   }
 
+  const launched = updateMode();
+  if (standalone.addEventListener) standalone.addEventListener('change', updateMode);
+  else standalone.addListener?.(updateMode);
+  if (!install) return; // The guide only needs its presentation mode.
+
   function dismissSplash() { splash.hidden = true; }
-  if (updateMode() && !document.hidden && isFreshLaunch(performance.getEntriesByType('navigation')[0]?.type, document.referrer, appUrl)) {
+  if (launched && !document.hidden && isFreshLaunch(performance.getEntriesByType('navigation')[0]?.type, document.referrer, appUrl)) {
     splash.hidden = false;
     window.addEventListener('tdroute:ready', dismissSplash, {once: true});
     window.addEventListener('pagehide', dismissSplash, {once: true});
@@ -57,8 +75,6 @@ export function initialisePwa() {
     // Let users access the interface even if a module fails or the network stalls.
     window.setTimeout(dismissSplash, 2400);
   }
-  if (standalone.addEventListener) standalone.addEventListener('change', updateMode);
-  else standalone.addListener?.(updateMode);
   window.addEventListener('appinstalled', () => {
     installed = true;
     promptEvent = undefined;
