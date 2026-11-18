@@ -84,7 +84,7 @@ test('地理背景と帰属を表示し旧保存プランの概略線を重ね�
   const path=shortestPath('harbor-s','fortress').path;
   const row={kind:'walk',name:'テスト徒歩',path,metres:400};
   renderParkMap(container,sea,{plan:{rows:[row]}});
-  assert.match(container.innerHTML,/assets\/sea-geographic-map.svg/);
+  assert.match(container.innerHTML,/href="assets\/sea-geographic-map\.webp\?v=/);
   assert.match(container.innerHTML,/openstreetmap.org\/copyright/);
   assert.doesNotMatch(container.innerHTML,/テスト徒歩/);
   renderParkMap(container,sea,{plan:{rows:[{...row,routeSource:sea.routeGraphVersion}]}});

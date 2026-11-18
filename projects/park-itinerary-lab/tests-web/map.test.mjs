@@ -103,3 +103,66 @@ test('計画後は予定のピンへ絞り込み、利用者が戻した全件�
  container.selected.checked=false;container.selected.dispatch('change');
  renderParkMap(container,park(),settings);assert.equal(container.svg.dataset.onlySelected,'false');
 });
+
+test('希望・予定が変わっても地図とフォーカス中の施設を作り直さない', () => {
+  class MapContainer extends Container {
+    constructor() {
+      super();
+      this.layers = Object.fromEntries(['.park-map-locations','.park-routes','.park-rests'].map(key => [key,new Element()]));
+      this.layers['.park-map-locations'].getAttribute = name => this.layers['.park-map-locations'].attributes[name];
+    }
+    querySelector(selector) { return this.layers[selector] || super.querySelector(selector); }
+  }
+  const container = new MapContainer(), data = park();
+  renderParkMap(container, data);
+  const svg = container.svg, pin = container.markers[0], otherPin = container.markers[1];
+  pin.classList = {toggle() {}};
+  container.action('in');
+  const zoomed = svg.attributes.viewBox;
+  const visit = {id:'castle-ride'};
+  const row = {kind:'walk',name:'お城へ',path:['entry','castle']};
+  renderParkMap(container, data, {selectedIds:['castle-ride'],plan:{visits:[visit],rows:[row]}});
+  assert.equal(container.svg, svg);
+  assert.equal(container.markers[0], pin);
+  assert.equal(svg.attributes.viewBox, zoomed);
+  assert.equal(pin.attributes['aria-pressed'],'true');
+  assert.match(pin.attributes['aria-label'],/予定1/);
+  assert.equal(otherPin.innerHTML,undefined);
+  assert.match(container.layers['.park-routes'].innerHTML,/お城へ/);
+  assert.match(container.layers['.park-map-locations'].innerHTML,/data-focus-activity="castle-ride"/);
+  renderParkMap(container, data);
+  assert.equal(container.layers['.park-routes'].innerHTML, '');
+  assert.equal(container.layers['.park-map-locations'].hidden, true);
+  assert.equal(pin.attributes['aria-pressed'],'false');
+  const replacement = park();
+  replacement.activities[0].name = '更新した施設名';
+  renderParkMap(container, replacement);
+  assert.notEqual(container.svg,svg);
+  assert.match(container.innerHTML,/更新した施設名/);
+});
+
+test('公開地図は軽量な背景、同じ原画、通路の順に表示を引き継ぐ', () => {
+  const container = new Container(), fallback = new Element(), data = park();
+  data.geographicMap = {asset:'assets/land-geographic-map.svg'};
+  const selector = container.querySelector.bind(container);
+  container.querySelector = key => key === '.park-walkways' ? fallback : selector(key);
+  renderParkMap(container, data);
+  assert.match(container.innerHTML,/href="assets\/land-geographic-map\.webp\?v=/);
+  assert.doesNotMatch(container.innerHTML,/<polyline/);
+  container.art.dispatch('error');
+  assert.match(container.art.attributes.href,/^assets\/land-geographic-map\.svg\?v=/);
+  assert.equal(fallback.innerHTML,undefined);
+  container.art.dispatch('error');
+  assert.match(fallback.innerHTML,/points="500,950 500,450"/);
+  assert.equal(container.art.style.display,'none');
+});
+
+test('独自の地図画像は標準背景に差し替えず通路と重ねて描く', () => {
+  const data = park(), container = new Container();
+  data.geographicMap = {asset:'assets/other-geography.svg'};
+  renderParkMap(container,data);
+  assert.match(container.innerHTML,/href="assets\/other-geography\.svg\?v=/);
+  assert.match(container.innerHTML,/points="500,950 500,450"/);
+  container.art.dispatch('error');
+  assert.equal(container.art.style.display,'none');
+});

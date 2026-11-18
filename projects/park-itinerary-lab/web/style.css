@@ -540,3 +540,10 @@ body[data-park=sea] .install-action{border-color:#bbdbf4;background:#123f65;colo
 .tdroute-standalone body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 @media(display-mode:standalone){[data-browser-only]{display:none!important}}
 @media print{.install-action,.install-help,#launchSplash{display:none!important}}
+
+.park-touch-help{display:none}
+.park-map-pan:not([hidden]){margin-top:7px}
+.park-map-pan button{min-width:42px;min-height:42px;border:1px solid #cfdae6;border-radius:9px;background:white;color:#173450}
+.park-route-map{user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.park-map-scale{font-variant-numeric:tabular-nums}
+@media(pointer:coarse){.park-touch-help{display:block;margin:0 0 6px;color:var(--muted);font-size:12px}}
