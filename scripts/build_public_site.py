@@ -21,6 +21,8 @@ PIPE_WEB_FILES = ('index.html', 'style.css', 'app.js', 'physics.js', 'sph.js',
                   'learning-tools.js', 'methods.html', 'methods.css', 'methods.js',
                   'experiment-state.js')
 ILLUSION_WEB_FILES = ('index.html', 'style.css', 'app.js', 'core.js', 'renderer.js', 'guide.html', 'lessons.js', 'lesson-view.js', 'guide.js', 'lessons.css')
+ASTERION_PUBLIC_FILES = ('index.html', 'style.css', 'app.js', 'data.js', 'engine.js',
+                         'guide.html', 'assets/asterion-hero.webp')
 
 
 # Only the TDRoute allowlist used by the portable app is published on Pages.
@@ -43,6 +45,28 @@ def build_park_site(output=OUTPUT):
     archive = destination / 'downloads' / f'TDRoute_{version}.zip'
     park_packaging['build_archive'](project, archive, worker)
     print(f'Built park-itinerary-lab with {archive.stat().st_size:,}-byte distribution ZIP')
+    return archive
+
+
+def build_asterion_site(output=OUTPUT):
+    project = ROOT / 'projects' / 'asterion-story'
+    destination = Path(output) / 'asterion-story'
+    destination.mkdir(parents=True, exist_ok=True)
+    for name in ASTERION_PUBLIC_FILES:
+        target = destination / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(project / name, target)
+    version = 'v' + json.loads((project / 'version.json').read_text(encoding='utf-8'))['version']
+    downloads = destination / 'downloads'
+    downloads.mkdir(exist_ok=True)
+    archive = downloads / f'Asterion_{version}.zip'
+    tracked = subprocess.check_output(['git', 'ls-files', '-z', '--', str(project.relative_to(ROOT))], cwd=ROOT).decode().split('\0')
+    with ZipFile(archive, 'w', ZIP_DEFLATED) as bundle:
+        for name in sorted(filter(None, tracked)):
+            path = ROOT / name
+            if path.is_file():
+                bundle.write(path, Path(version) / path.relative_to(project))
+    print(f'Built asterion-story with {archive.stat().st_size:,}-byte distribution ZIP')
     return archive
 
 
@@ -202,6 +226,7 @@ def main():
     build_lantern_site()
     build_illusion_site()
     build_park_site()
+    build_asterion_site()
     print(f'Built {OUTPUT.relative_to(ROOT)} with {archive.stat().st_size:,}-byte distribution ZIP')
 
 
