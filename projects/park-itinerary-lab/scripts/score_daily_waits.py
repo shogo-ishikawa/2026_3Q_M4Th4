@@ -40,6 +40,7 @@ def date_rows(path, dates):
 
 
 def preserve_coverage(prior, current):
+    new_crowd = current['crowd']
     previous_comparison = (prior or {}).get('intradayComparison')
     current_comparison = current.get('intradayComparison')
     if prior and prior['issuedAt']:
@@ -51,8 +52,21 @@ def preserve_coverage(prior, current):
         def support(park):
             return park['overall']['matched'], park['overall'].get('samples', 0)
 
-        if not current['issuedAt'] or support(prior) > support(current):
+        if not current['issuedAt']:
+            new_crowd = prior['crowd']
             current = dict(prior)
+        elif support(prior) > support(current):
+            current = dict(prior)
+        # A retry may recover more wait slots while omitting earlier crowd reference slots.
+        # Keep the better-supported crowd reading independently of overall wait coverage.
+        def crowd_support(entry):
+            return entry.get('observedLevel') is not None, entry['slots'], entry['matched']
+
+        prior_crowd = prior['crowd']
+        best_crowd = max((new_crowd, prior_crowd), key=crowd_support)
+        current['crowd'] = {**best_crowd}
+        if 'expected' not in current['crowd'] and new_crowd.get('expected') is not None:
+            current['crowd']['expected'] = new_crowd['expected']
     comparisons = [entry for entry in (current_comparison, previous_comparison) if entry]
     if comparisons:
         current['intradayComparison'] = max(comparisons, key=lambda entry: (

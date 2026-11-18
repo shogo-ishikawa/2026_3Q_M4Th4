@@ -1,4 +1,4 @@
-import {scoreForecastAccuracy} from './forecast-accuracy.js?v=1.14.1';
+import {scoreForecastAccuracy} from './forecast-accuracy.js?v=1.15.0';
 
 const dataRoot = 'https://raw.githubusercontent.com/shogo-ishikawa/2026_3Q_M4Th4/park-wait-data/';
 const parks = {land: '東京ディズニーランド', sea: '東京ディズニーシー'};
@@ -68,11 +68,13 @@ function savedQueueScore(data, forecast) {
       !Array.isArray(park.hours) || !park.crowd || !park.overall) return null;
   const {expected, matched, mae, within10, bias} = park.overall;
   if (expected !== forecast.slotsInDay || !Number.isInteger(matched) || matched < 0 || matched > expected) return null;
-  if (!expected) return park.status === 'no-forecast' ? park : null;
-  if (!matched) return park.status === 'no-observations' ? park : null;
+  // Earlier daily reports omit the crowd denominator. It comes from the same frozen forecast.
+  const scored = {...park, crowd:{expected:forecast.crowd.expected, ...park.crowd}};
+  if (!expected) return park.status === 'no-forecast' ? scored : null;
+  if (!matched) return park.status === 'no-observations' ? scored : null;
   if (park.status !== 'complete' || !Number.isFinite(mae) || mae < 0 || !Number.isFinite(bias) ||
       !Number.isFinite(within10) || within10 < 0 || within10 > 1) return null;
-  return park;
+  return scored;
 }
 
 async function queueReport(base, initial, checkSaved, today, fetchImpl, signal) {
@@ -191,17 +193,23 @@ function breakdown(title, firstColumn, rows, rowName) {
   return block;
 }
 
-function crowdSection(queueCrowd, historyComparison, queueMatched) {
+export function crowdReading(crowd) {
+  if (!crowd) return '記録不足';
+  const result = levels[crowd.observedLevel] || '判定保留';
+  if (!Number.isInteger(crowd.expected) || !Number.isInteger(crowd.matched)) return result;
+  if (!crowd.expected) return '判定保留（比較対象の時間枠なし）';
+  return result + '（' + crowd.expected + '基準枠のうち' + crowd.matched + '枠を照合）';
+}
+
+function crowdSection(queueCrowd, historyComparison) {
   const block = section('パークの混雑');
   const readings = tag('dl', null, 'crowd-levels');
-  readings.append(term('事前の予測', levels[queueCrowd.forecastLevel] || '予測なし'));
-  if (queueMatched || !historyComparison) {
-    readings.append(term('Queue-Timesによる判定', levels[queueCrowd.observedLevel] || '記録不足'));
-  }
+  readings.append(term('事前の予測', levels[queueCrowd.forecastLevel] || '予測なし'),
+    term('Queue-Timesによる判定', crowdReading(queueCrowd)));
   if (historyComparison) {
-    readings.append(term('ThemeParks.wikiによる判定', levels[historyComparison.crowd?.observedLevel] || '記録不足'));
+    readings.append(term('ThemeParks.wikiによる判定', crowdReading(historyComparison.crowd)));
   }
-  block.append(readings, tag('p', '同じ施設・時間帯の普段の待ち時間と比べます。比較できる施設や時間帯が少ない場合は「記録不足」と表示します。', 'note'));
+  block.append(readings, tag('p', '同じ施設・時間帯の普段の掲示待ち時間と比べます。3施設以上で各2枠以上、全体で3時間帯以上が判定の目安です。', 'note'));
   return block;
 }
 
@@ -279,7 +287,7 @@ function showReport(report, {result, queueTimes = result, savedDaily, historyCom
   if (intraday) report.append(intraday);
   if (historyComparison && result.provider !== 'themeparks-wiki') report.append(waitSection(historyComparison, 'ThemeParks.wiki'));
   if (queueTimes.crowd?.forecastLevel || queueTimes.crowd?.observedLevel || historyComparison?.crowd?.observedLevel) {
-    report.append(crowdSection(queueTimes.crowd, historyComparison, queueMatched));
+    report.append(crowdSection(queueTimes.crowd, historyComparison));
   }
   if (queueMatched) {
     report.append(breakdown('時間帯別（Queue-Times）', '日本時間', queueTimes.hours, row => row.hour + '時台'));

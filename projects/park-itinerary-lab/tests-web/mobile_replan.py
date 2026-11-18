@@ -43,6 +43,8 @@ def check_forecast_panel(page):
     page.locator('#forecastPanel > summary').click()
     expect(page.locator('#crowdOutlookValue')).to_be_visible()
     expect(page.locator('#forecastPanel a')).to_have_count(0)
+    expect(page.locator('#forecastPanel').get_by_text('予測に使うデータ', exact=True)).to_have_count(0)
+    expect(page.locator('#crowdLevelDetail, #crowdLevelUse')).to_have_count(0)
     expect(page.locator('#weather')).to_be_hidden()
     expect(page.locator('#weather')).to_be_disabled()
     page.locator('#weatherMode').select_option('manual')

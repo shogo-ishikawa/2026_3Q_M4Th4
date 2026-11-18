@@ -66,6 +66,30 @@ class DailyScores(unittest.TestCase):
         self.assertEqual(self.output.read_bytes(), improved)
         self.assertEqual((self.data / 'forecasts' / (DAY + '.json')).read_bytes(), original)
 
+    def test_more_non_reference_waits_cannot_erase_a_supported_crowd_reading(self):
+        rows, anchors, other = [], [], []
+        for suffix in 'abc':
+            for minute in (570, 600, 630, 660, 690, 720, 750, 870):
+                ride = 'land-' + suffix
+                row = dict(activityId=ride, minute=minute, wait=20)
+                note = {**self.post('land', minute + 1, 35), 'activityId':ride}
+                if minute in (630, 750, 870):
+                    row['reference'] = 20
+                    anchors.append(note)
+                else:
+                    other.append(note)
+                rows.append(row)
+        park = dict(parkId='land', issuedAt=DAY+'T08:00:00+09:00', crowd={'level':'normal'}, rows=rows)
+        self.write('forecasts/'+DAY+'.json', dict(date=DAY, schemaVersion=1, slotMinutes=30, parks=[park]))
+        self.write('observations.json', anchors)
+        run(self.data, NOW)
+        self.write('observations.json', other)
+        run(self.data, NOW)
+        land = json.loads(self.output.read_text())['parks'][0]
+        self.assertEqual(land['overall']['matched'], 15)
+        self.assertEqual(land['crowd']['observedLevel'], 'busy')
+        self.assertEqual((land['crowd']['matched'], land['crowd']['expected']), (9, 9))
+
     def test_missing_issuance_is_persisted_and_prior_unscored_dates_catch_up(self):
         previous = '2026-10-26'
         self.issue(previous)

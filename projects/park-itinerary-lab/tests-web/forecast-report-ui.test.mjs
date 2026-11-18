@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {scoreForecastAccuracy} from '../web/forecast-accuracy.js';
-import {loadAccuracyReport, issuanceNote} from '../web/accuracy-page.js';
+import {loadAccuracyReport, issuanceNote, crowdReading} from '../web/accuracy-page.js';
 
 const date = '2026-11-19', asOf = Date.parse('2026-11-19T12:00:00+09:00');
 const forecastPath = 'forecasts/' + date + '.json';
@@ -214,4 +214,18 @@ test('saved samples and supplementary provider scores remain independent', async
   assert.equal(report.historyComparison.matched, 41);
   assert.equal(report.queueTimes.overall.matched, 1);
   assert.ok(!options.paths.includes(recentPath));
+});
+
+
+test('crowd report gives available eligible reference slots, including legacy scores and missing coverage', async () => {
+  const anchored = {...forecast,parks:[{...forecast.parks[0],rows:[{activityId,minute:630,wait:20,reference:25}]}]};
+  const record = {...observation,time:635,observedAt:date+'T10:35:00+09:00'};
+  const daily = dailyScores(anchored,[record]);
+  delete daily.parks[0].crowd.expected;
+  const {queueTimes} = await loadAccuracyReport(date,'land',settings({[forecastPath]:anchored,[dailyPath]:daily},evening));
+  assert.equal(queueTimes.crowd.expected,1);
+  assert.match(crowdReading(queueTimes.crowd),/判定保留.*1基準枠のうち1枠/);
+  assert.match(crowdReading({expected:0,matched:0}),/比較対象の時間枠なし/);
+  assert.equal(crowdReading({observedLevel:'quiet'}),'比較的すいている');
+  assert.match(crowdReading({observedLevel:'busy',matched:7,expected:18}),/混み合う.*18基準枠のうち7枠/);
 });

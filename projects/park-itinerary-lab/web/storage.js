@@ -1,7 +1,7 @@
-import {validateWaitModel} from './wait-model.js?v=1.14.1';
-import {weatherForMinute,formatWeatherDetails} from './weather.js?v=1.14.1';
+import {validateWaitModel} from './wait-model.js?v=1.15.0';
+import {weatherForMinute,formatWeatherDetails} from './weather.js?v=1.15.0';
 import {baseVisitId, isRepeatVisit} from './repeat-visits.js';
-import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=1.14.1';
+import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=1.15.0';
 /** Portable schedules: the shared link contains preferences, never a browser's saved history. */
 const STORAGE_KEY = 'park-itinerary-lab:v1';
 const PLANS_KEY = 'park-itinerary-lab:plans:v1';
@@ -421,7 +421,7 @@ export function createShareUrl(state, baseUrl = location.href) {
   validateSavedState(state);
   const url = new URL(baseUrl);
   if (!['https:', 'http:'].includes(url.protocol)) fail('共有用のWebページを開いてください。');
-  const {history, initialPlan, waitModel, liveData, liveSnapshot, liveNotice, waitAsOf, operationalHolds, calendarData, weatherForecast, weatherNotice, dayProgress, completedIds, ...portableSettings} = state.settings;
+  const {history, initialPlan, waitModel, liveData, liveSnapshot, liveNotice, waitAsOf, operationalHolds, calendarData, weatherForecast, weatherNotice, visitForecastAsOf, dayProgress, completedIds, ...portableSettings} = state.settings;
   if (dayProgress) {
     delete portableSettings.replanFrom;
     delete portableSettings.currentNode;

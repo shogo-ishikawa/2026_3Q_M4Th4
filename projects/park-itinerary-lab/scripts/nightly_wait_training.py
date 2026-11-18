@@ -10,7 +10,8 @@ import sys
 import tempfile
 
 from archive_wait_history import JST, atomic_json, update_archive
-from train_wait_model import fit_summary
+from train_wait_model import fit_summary, load_history
+from observed_wait_summary import summarise_observed_waits
 
 SCRIPTS = Path(__file__).resolve().parent
 BUNDLED = SCRIPTS.parent / 'web' / 'data'
@@ -59,7 +60,7 @@ def supplement_sparse_history(data, catalogue, calendar, local_model, output, da
         subprocess.run([
             sys.executable, str(SCRIPTS / 'bootstrap_wait_history.py'),
             '--catalogue', str(catalogue), '--calendar', str(calendar),
-            '--history-dir', str(data / 'history'), '--end-date', day,
+            '--history-dir', str(data / 'history'), '--forecast-dir', str(data / 'forecasts'), '--end-date', day,
             '--days', '7', '--max-history-requests', '14',
             '--fallback-model', str(local_model), '--output-model', str(output),
         ], env=env, timeout=90, check=True)
@@ -94,7 +95,7 @@ def run(data, now, force=False):
             sys.executable, str(SCRIPTS / 'train_wait_model.py'),
             '--catalogue', str(catalogue),
             '--calendar', str(calendar),
-            '--history-dir', str(data / 'history'),
+            '--history-dir', str(data / 'history'), '--forecast-dir', str(data / 'forecasts'),
             '--before-date', (end + dt.timedelta(days=1)).isoformat(),
             '--output', str(candidate), '--fallback-model', str(model),
         ], check=True)
@@ -121,6 +122,10 @@ def run(data, now, force=False):
                         supplements[park_id] = park
                     else:
                         supplemental_attempts[park_id] = {**provider, 'fit': fit_summary(park)}
+        archived, _ = load_history(data / 'history')
+        closed_rows = (row for row in archived if row['date'] <= day)
+        weather_statistics = summarise_observed_waits(
+            closed_rows, json.loads(catalogue.read_text()), data / 'weather-daily')
         attempts = {}
         for index, park in enumerate(result['parks']):
             fit = park.get('latestAttempt', park)
@@ -135,6 +140,7 @@ def run(data, now, force=False):
                 'activeModelThrough': active['lastDate'], 'retainedPriorModel': 'latestAttempt' in active,
                 'activeModelSamples': active['samples'] if active['usable'] else None,
                 'activeModelDays': active['days'] if active['usable'] else None,
+                'observedWeather': weather_statistics[park_id],
                 'fitSource': 'queue-times+anonymous-history' if park_id in supplements else 'queue-times',
             }
         if set(attempts) != {'land', 'sea'}:

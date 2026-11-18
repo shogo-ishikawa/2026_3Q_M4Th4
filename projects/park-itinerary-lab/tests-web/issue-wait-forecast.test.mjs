@@ -33,6 +33,11 @@ test('a frozen standard day matches the common planner and only uses pre-existin
   const report = await forecastPark(park, {date, issuedAt, waitModel:model, calendarData, rideIds});
   assert.deepEqual(report.crowd, crowd);
   assert.equal(report.weatherProvider, null);
+  assert.deepEqual(report.weatherHours, []);
+  assert.equal(report.visitDayFactors.dayType, 'weekday');
+  assert.equal(report.visitDayFactors.longWeekendPosition, 'ordinary');
+  assert.deepEqual(report.visitDayFactors.eventIds, park.events.filter(event =>
+    event.startDate<=date && date<=event.endDate).map(event => event.id));
   assert.equal(report.trainedThrough, model.lastDate);
   assert.deepEqual(new Set(report.rows.map(row => row.source)), new Set(['ml', 'trend']));
   const activities = new Map(park.activities.map(a => [a.id, a]));
@@ -86,14 +91,44 @@ test('late issuance excludes begun intervals, known closures and dated pauses', 
 test('the weather source is the available forecast at issuance', async () => {
   const issuedAt = '2026-11-18T12:56:00Z';
   const hourly = {time:[date+'T10:00',date+'T11:00'],temperature_2m:[13,15],
-    weather_code:[61,61], precipitation:[0,0], precipitation_probability:[0,0]};
+    weather_code:[61,61], precipitation:[0,1.5], precipitation_probability:[0,0]};
   const entry = {data:{hourly}, fetchedAt:issuedAt};
   const forecast = weatherCache => forecastPark(park, {date, issuedAt, waitModel:model, calendarData, rideIds, weatherCache});
   const current = await forecast({schemaVersion:1, providers:{'open-meteo':entry}});
   assert.equal(current.weatherProvider, 'open-meteo');
   assert.equal(current.weatherFetchedAt, issuedAt);
-  const future = await forecast({schemaVersion:1, providers:{'open-meteo':{...entry,fetchedAt:'2026-11-19T09:00:00Z'}}});
+  assert.equal(current.weatherIssuedAt, null);
+  assert.deepEqual(current.weatherHours, [
+    {minute:600,endMinute:660,weather:'rain',weatherFromMinute:600,weatherToMinute:660,temperature:13,precipitation:1.5},
+    {minute:660,endMinute:720,weather:'rain',weatherFromMinute:660,weatherToMinute:720,temperature:15,precipitation:null}
+  ]);
+  const future = await forecast({schemaVersion:1, providers:{'open-meteo':{...entry,fetchedAt:'2026-11-18T12:56:01Z'}}});
   assert.equal(future.weatherProvider, null);
+  assert.deepEqual(future.weatherHours, []);
+});
+
+test('late JMA issue preserves original three-hour and daily weather periods without inventing hourly measurements', async () => {
+  const issuedAt = date+'T01:05:00Z'; // 10:05 JST, first wait interval is 10:30.
+  const reportDatetime = date+'T06:00:00+09:00';
+  const op = at => date+'T'+at+':00+09:00';
+  const forecast = [{reportDatetime,timeSeries:[{timeDefines:[op('06:00')],
+    areas:[{area:{code:'120010'},weatherCodes:['100']}]}]}];
+  const series = {reportDateTime:reportDatetime,
+    areaTimeSeries:{timeDefines:[{dateTime:op('09:00'),duration:'PT3H'}],weather:['雨']},
+    pointTimeSeries:{pointNameEN:'Chiba',timeDefines:[{dateTime:op('09:00')},{dateTime:op('12:00')}],temperature:[16,18]}};
+  const weatherCache = {schemaVersion:1,providers:{jma:{forecast,series,fetchedAt:issuedAt}}};
+  const issue = () => forecastPark(park,{date,issuedAt,waitModel:null,calendarData,rideIds,weatherCache});
+  const report = await issue();
+  assert.equal(report.weatherProvider, 'jma');
+  assert.equal(report.weatherIssuedAt, reportDatetime);
+  assert.equal(report.weatherHours[0].minute, 600);
+  assert.deepEqual(report.weatherHours[0],{minute:600,endMinute:660,weather:'rain',
+    weatherFromMinute:540,weatherToMinute:720,temperature:null,precipitation:null});
+  assert.deepEqual(report.weatherHours.find(row=>row.minute===720),{minute:720,endMinute:780,weather:'sun',
+    weatherFromMinute:360,weatherToMinute:1440,temperature:18,precipitation:null});
+  assert.ok(report.weatherHours.every(row=>row.precipitation===null));
+  forecast[0].reportDatetime = date+'T10:05:01+09:00';
+  assert.deepEqual((await issue()).weatherHours, []);
 });
 
 test('concurrent runs freeze once; later models and repeated runs cannot change published bytes', async t => {
@@ -103,11 +138,16 @@ test('concurrent runs freeze once; later models and repeated runs cannot change 
   const unseen = structuredClone(models);
   for (const model of unseen.parks) model.trainedAt = '2027-01-01T00:00:00Z';
   await writeFile(join(directory, 'wait-model.json'), JSON.stringify(unseen));
+  const laterCatalogue = await json('parks.json');
+  laterCatalogue.fetchedAt = '2027-01-01T00:00:00Z';
+  for (const p of laterCatalogue.parks) p.events = [];
+  await writeFile(join(directory, 'catalogue.json'), JSON.stringify(laterCatalogue));
   const files = (await Promise.all([issueForecast(directory,time), issueForecast(directory,time)])).filter(Boolean);
   assert.equal(files.length, 1);
   const before = await readFile(files[0], 'utf8');
   const snapshot = JSON.parse(before);
   assert.deepEqual(snapshot.parks.map(park => park.parkId), ['land','sea']);
+  assert.ok(snapshot.parks.every(park => park.visitDayFactors.eventIds.length > 0));
   assert.ok(snapshot.parks.every(park => Date.parse(park.modelTrainedAt) < time.getTime()));
   await writeFile(join(directory, 'wait-model.json'), 'invalid');
   assert.equal(await issueForecast(directory, new Date('2026-11-19T02:00:00Z')), null);

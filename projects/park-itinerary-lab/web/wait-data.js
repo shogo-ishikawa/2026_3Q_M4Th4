@@ -1,8 +1,8 @@
-import { weatherAtMinute } from './calendar-features.js?v=1.14.1';
-import {trainWaitModel, validateWaitModel} from './wait-model.js?v=1.14.1';
-import {validateCatalogue} from './storage.js?v=1.14.1';
-import {prepareWeatherForVisit,forecastSourceLabel,forecastCacheLabel} from './weather.js?v=1.14.1';
-export {fetchWeather,prepareWeatherForVisit} from './weather.js?v=1.14.1';
+import { weatherAtMinute } from './calendar-features.js?v=1.15.0';
+import {trainWaitModel, validateWaitModel} from './wait-model.js?v=1.15.0';
+import {validateCatalogue} from './storage.js?v=1.15.0';
+import {prepareWeatherForVisit,forecastSourceLabel,forecastCacheLabel} from './weather.js?v=1.15.0';
+export {fetchWeather,prepareWeatherForVisit} from './weather.js?v=1.15.0';
 
 const REMOTE='https://raw.githubusercontent.com/shogo-ishikawa/2026_3Q_M4Th4/park-wait-data/';
 const QUEUE_URL='https://queue-times.com/';
@@ -142,6 +142,34 @@ export function mergeObservations(existing,incoming) {
     rows.set([row.date,row.activityId,width,Math.floor(time/width)].join('|'),row);
   }return [...rows.values()].slice(-50000);
 }
+/** One weather profile and model lookup for the date preview and its planner. */
+export function createVisitOutlook({prepareWeather=prepareWeatherForVisit,loadModel=fetchPublishedModel,now=Date.now}={}) {
+  let current;
+  const cancel=()=>{current?.controller.abort();current=null;};
+  function resolve(park,settings,preparedWeather) {
+    const manual=settings.weatherMode==='manual';
+    const key=JSON.stringify([park.id,settings.date,settings.entry,settings.exit,manual,manual?settings.weather:null]);
+    if(!preparedWeather && current?.key===key && (!current.values || now()<current.expiresAt))return current;
+    cancel();
+    const controller=new AbortController(),signal=controller.signal;
+    const request={key,controller,values:null};
+    current=request;
+    const weather=preparedWeather || prepareWeather(settings,park,{signal});
+    const model=settings.waitModel?.parkId===park.id ? null : loadModel(park,{signal,timeoutMs:5000});
+    request.promise=Promise.all([weather,model]).then(([prepared,waitModel])=>{
+      if(signal.aborted)throw new DOMException('訪問日が変わりました。','AbortError');
+      const {weatherMode,weather,weatherForecast,weatherNotice}=prepared;
+      const visitForecastAsOf=now();
+      request.values={weatherMode,weather,weatherForecast,weatherNotice,visitForecastAsOf,...(waitModel?{waitModel}:{})};
+      // Allow a failed fetch to be retried while keeping the displayed fallback available to an immediate solve.
+      request.expiresAt=visitForecastAsOf+(manual || weatherForecast ? 30*60000 : 60000);
+      return request.values;
+    });
+    return request;
+  }
+  return {resolve,cancel};
+}
+
 export async function fetchPublishedModel(park,{signal,fetchImpl=fetch,timeoutMs=15000}={}) {
   const candidates=await Promise.all([REMOTE+'wait-model.json',new URL('./data/wait-model.json',import.meta.url).href].map(async url=>{
     try{const data=await readJson(url,signal,fetchImpl,timeoutMs),model=data.parks?.find(item=>item.parkId===park.id);return validateWaitModel(model)?model:null;}catch(error){if(error.name==='AbortError')throw error;return null;}
@@ -216,7 +244,7 @@ export function shouldUsePublishedModel(existing,published,parkId) {
 /** A self-contained panel; settings and observations remain owned by the application. */
 export function initialiseExternalData({container,getContext,onUpdate,beforeAction}) {
   if(!container)return;
-  let generation=0,weatherResult=null,busy=false,contextKey='',modelRequest=0,pendingController=null;
+  let generation=0,weatherResult=null,busy=false,contextKey='',pendingController=null;
   container.innerHTML=`<h3>待ち時間と天気を更新</h3><p>来園前は学習モデルや履歴から予測します。記録が少ない場合は傾向モデルを使います。当日は更新から15分以内の掲示を直近1時間の計画に使います。組み替え時に複数施設の掲示が学習予測を同じ方向に外れているときは、1〜3時間先のアトラクションの待ち時間も補正します。</p><div class="field-grid"><label>当日の情報<select data-external="liveMode"><option value="auto">新しい待ち時間を使う</option><option value="off">予測だけを使う</option></select></label></div><div class="actions"><button type="button" data-external="refresh">最新の待ち時間を取得</button><button type="button" data-external="weather">天気予報を取得</button><button type="button" data-external="train">記録から学習し直す</button><button type="button" data-external="export">記録CSVを保存</button></div><p data-external="status" role="status" aria-live="polite"></p><p data-external="live"></p><p><a href="${QUEUE_URL}" target="_blank" rel="noopener">Powered by Queue-Times.com</a> · <a href="https://yosocal.com/" target="_blank" rel="noopener">混雑予想カレンダー</a> · <a data-external="comparison" href="https://queue-times.com/ja/parks/274/calendar" target="_blank" rel="noopener">過去の混雑を見る</a> · <a data-external="disneyreal" href="https://disneyreal.asumirai.info/realtime/disneyland-wait-today.html" target="_blank" rel="noopener">ディズニーリアル</a></p><p data-external="sources"></p><p data-external="weatherResult"></p><p data-external="model"></p><details class="correlation-panel"><summary>曜日・天気・イベント別の実績を見る</summary><label class="full-field">比べる条件<select data-external="correlationDimension"><option value="weekday">曜日</option><option value="month">月</option><option value="weather">天気</option><option value="holiday">祝日</option><option value="event">イベント</option></select></label><div data-external="correlations"></div><p data-external="numericCorrelations" class="correlation-note"></p></details><details><summary>予測モデルと自分の記録</summary><p>施設・時刻・曜日・季節・祝日・天気・イベントを使うリッジ回帰です。最後の約20%の日付を検証に回します。誤差が傾向モデルより小さいときに採用します。今日の記録は明日以降の予測に生かします。</p><div class="field-grid"><label>記録する施設<select data-external="activity"></select></label><label>並び始めた時刻<input type="time" data-external="time"></label><label>実際の待ち時間（分）<input type="number" min="0" max="600" step="1" value="30" data-external="wait"></label></div><button type="button" data-external="record">この待ち時間を記録</button></details>`;
   const element=name=>container.querySelector(`[data-external="${name}"]`);
   const status=message=>{element('status').textContent=message;};
@@ -238,7 +266,7 @@ export function initialiseExternalData({container,getContext,onUpdate,beforeActi
     const summaryTemperature=shownWeather&&Number.isFinite(shownWeather.temperatureMin)&&Number.isFinite(shownWeather.temperatureMax)?`${shownWeather.temperatureMin}〜${shownWeather.temperatureMax}℃`:'未提供';
     element('weatherResult').innerHTML=shownWeather?`${escape(shownWeather.date)}：${escape(shownWeather.label)} · 気温 ${escape(summaryTemperature)}（${shownWeather.provider==='jma'?'参考範囲・地点と時刻は予定表に表示':'滞在中の最低〜最高'}） · 降水確率 ${Number.isFinite(shownWeather.precipitationProbability)?`最大${shownWeather.precipitationProbability}%`:'未提供'} · ${shownWeather.provider==='jma'?'降水量は未提供':'1時間ごとの降水量は予定表に表示'} · <a href="${escape(safeSourceUrl(shownWeather.sourceUrl))}" target="_blank" rel="noopener">${escape(forecastSourceLabel(shownWeather))}</a>${shownWeather.provider==='open-meteo'?' · <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>':''} · 取得 ${escape(stamp(shownWeather.fetchedAt))}${shownWeather.issuedAt?` · 発表 ${escape(stamp(shownWeather.issuedAt))}`:''} · ${escape(forecastCacheLabel(shownWeather))}`:'';
   }
-  function cancel(){const wasBusy=busy;generation++;modelRequest++;pendingController?.abort();pendingController=null;busy=false;for(const button of container.querySelectorAll('button'))button.disabled=false;if(wasBusy)status('取得を中止しました。');}
+  function cancel(){const wasBusy=busy;generation++;pendingController?.abort();pendingController=null;busy=false;for(const button of container.querySelectorAll('button'))button.disabled=false;if(wasBusy)status('取得を中止しました。');}
   async function perform(action) {
     if(busy)return;
     try{beforeAction?.();}catch(error){status(error.message);return;}
@@ -266,8 +294,7 @@ export function initialiseExternalData({container,getContext,onUpdate,beforeActi
   element('train').addEventListener('click',()=>perform(async({park,settings,history},token)=>{const tomorrow=dateOf(Date.now()+86400000),beforeDate=settings.date<tomorrow?settings.date:tomorrow;const model=trainWaitModel(history,park,{beforeDate,calendarData:settings.calendarData});if(!current(token,park.id,settings.date))return;onUpdate({waitModel:model});status(model.status==='trained'?'記録からモデルを更新しました。':'記録を集計しました。学習に必要な日数と件数を確認してください。');}));
   element('record').addEventListener('click',()=>{try{const {park,settings,history}=getContext(), wait=Number(element('wait').value),time=element('time').value;if(!time||!Number.isInteger(wait)||wait<0||wait>600)throw new Error('時刻と0〜600分の待ち時間を入力してください。');if(settings.date===dateOf(Date.now())&&Number(time.slice(0,2))*60+Number(time.slice(3))>minuteOf(Date.now()))throw new Error('まだ来ていない時刻は記録できません。');if(settings.date>dateOf(Date.now()))throw new Error('実際に訪れた日の待ち時間を記録してください。');const activity=park.activities.find(item=>item.id===element('activity').value);const row={date:settings.date,activityId:element('activity').value,openingMinute:activity?.dailySchedules?.[settings.date]?.windows?.[0]?.[0]??activity?.windows?.[0]?.[0]??540,time:Number(time.slice(0,2))*60+Number(time.slice(3)),wait,...observationWeather(settings.date,Number(time.slice(0,2))*60+Number(time.slice(3)),settings),event:(park.events||[]).filter(event=>event.startDate<=settings.date&&settings.date<=event.endDate).map(event=>event.id).join('|'),source:'user'};onUpdate({history:mergeObservations(history,[row])});status('待ち時間を記録しました。CSVでも保存できます。');render();}catch(error){status(error.message);}});
   element('export').addEventListener('click',()=>{downloadObservations(getContext().history||[]);status('記録CSVを保存しました。');});
-  function loadModel(){const {park,settings}=getContext();if(!park||settings.waitModel?.parkId===park.id)return;const token=++modelRequest;fetchPublishedModel(park).then(model=>{const current=getContext();if(model&&token===modelRequest&&current.park.id===park.id&&current.settings.date===settings.date&&shouldUsePublishedModel(current.settings.waitModel,model,park.id)){onUpdate({waitModel:model});render();}}).catch(()=>{});}
-  document.addEventListener('park-context-change',()=>{const {park,settings}=getContext(),key=[park.id,settings.date,settings.entry,settings.exit,settings.weatherMode,settings.weather].join('|');if(key!==contextKey){cancel();weatherResult=null;contextKey=key;}loadModel();render();});
-  const initial=getContext();contextKey=[initial.park.id,initial.settings.date,initial.settings.entry,initial.settings.exit,initial.settings.weatherMode,initial.settings.weather].join('|');render();loadModel();
+  document.addEventListener('park-context-change',()=>{const {park,settings}=getContext(),key=[park.id,settings.date,settings.entry,settings.exit,settings.weatherMode,settings.weather].join('|');if(key!==contextKey){cancel();weatherResult=null;contextKey=key;}render();});
+  const initial=getContext();contextKey=[initial.park.id,initial.settings.date,initial.settings.entry,initial.settings.exit,initial.settings.weatherMode,initial.settings.weather].join('|');render();
   return {refresh:render,cancel};
 }

@@ -9,7 +9,7 @@ test('new plans show the automatic source and distinguish it from a manual assum
   const settings = {...defaultSettings(), date:'2026-11-21'};
   assert.equal(settings.crowdLevel, 'auto');
   assert.match(crowdExplanation(park, settings).summary, /混み合う（暦の目安）/);
-  assert.match(crowdExplanation(park, settings).detail, /学習モデルがありません/);
+  assert.equal(crowdExplanation(park, settings).source, '暦の目安');
   assert.match(crowdExplanation(park, {...settings, date:'2026-11-19'}).summary, /ふつう（暦の目安）/);
   assert.match(crowdExplanation(park, {...settings, crowdLevel:'normal'}).summary, /ふつう（手動）/);
 });

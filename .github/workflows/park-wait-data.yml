@@ -7,6 +7,9 @@ on:
       - '.github/workflows/park-wait-data.yml'
       - 'projects/park-itinerary-lab/scripts/collect_wait_data.py'
       - 'projects/park-itinerary-lab/scripts/collect_weather.py'
+      - 'projects/park-itinerary-lab/scripts/archive_daily_weather.py'
+      - 'projects/park-itinerary-lab/scripts/issued_training_inputs.py'
+      - 'projects/park-itinerary-lab/scripts/observed_wait_summary.py'
       - 'projects/park-itinerary-lab/scripts/archive_wait_history.py'
       - 'projects/park-itinerary-lab/scripts/seed_wait_model.py'
       - 'projects/park-itinerary-lab/scripts/nightly_wait_training.py'
@@ -85,6 +88,10 @@ jobs:
         id: daily_score
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: python projects/park-itinerary-lab/scripts/score_daily_waits.py --data-dir data-publish
+      - name: Compare the issued weather forecast with hourly AMeDAS measurements after closing
+        if: ${{ !cancelled() && steps.daily_score.outcome == 'success' }}
+        continue-on-error: true
+        run: python projects/park-itinerary-lab/scripts/archive_daily_weather.py --data-dir data-publish
       - name: Archive collected waits and train through the latest completed park day
         if: ${{ !cancelled() && steps.daily_score.outcome == 'success' && steps.seed.outcome == 'success' }}
         run: |
@@ -122,7 +129,7 @@ jobs:
           fi
           # Score writers publish each completed file atomically, even if another park or date fails.
           shopt -s nullglob
-          reports=(accuracy-{daily,history}/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].json)
+          reports=({accuracy-daily,accuracy-history,weather-daily}/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9].json)
           if (( ${#reports[@]} )); then git add -- "${reports[@]}"; fi
           if [ -f accuracy-history/state.json ]; then git add accuracy-history/state.json; fi
           if [ "$EXTERNAL_SCORE_STATUS" = failure ]; then

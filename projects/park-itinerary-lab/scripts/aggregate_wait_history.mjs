@@ -22,7 +22,6 @@ function historicalSummary(input) {
   const {expected, matched, mae, bias, within10, coverage} = scored.overall;
   const facilities = scored.facilities.filter(facility => facility.matched > 0);
   if (scored.status !== 'complete' || matched < 5 || facilities.length < 3) return null;
-  const {forecastLevel, observedLevel, slots, ratio} = scored.crowd;
   return {parkId:scored.parkId, issuedAt:scored.issuedAt, expected, matched, mae, bias, within10, coverage,
-    crowd:{forecastLevel, observedLevel, facilities:scored.crowd.facilities, slots, ratio}};
+    crowd:scored.crowd};
 }

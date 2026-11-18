@@ -27,6 +27,7 @@ import urllib.request
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from collect_weather import fill_weather, hourly_weather
 from train_wait_model import fit_summary
+from issued_training_inputs import with_issued_inputs
 
 PROJECT = Path(__file__).resolve().parents[1]
 API = 'https://api.themeparks.wiki/v1'
@@ -359,7 +360,8 @@ def bootstrap(args, private_dir: Path) -> dict:
     sources=list(SOURCES)+input_sources
     if any(row.get('source')=='queue-times' for row in rows):sources.append({'name':'Queue-Times.com','url':'https://queue-times.com/','kind':'collected-live-observations','attribution':'Powered by Queue-Times.com'})
     sources=list({json.dumps(source,sort_keys=True):source for source in sources if isinstance(source,dict)}.values())
-    result=fit_models(rows,catalogue,calendar,before,args.model_module.resolve(),sources)
+    training_rows = with_issued_inputs(rows, getattr(args, 'forecast_dir', None))
+    result=fit_models(training_rows,catalogue,calendar,before,args.model_module.resolve(),sources)
     previous=json.loads(args.fallback_model.read_text()) if args.fallback_model and args.fallback_model.exists() else {}
     latest_reports={(report['parkId'],report['date']):report for report in reports}
     pending=sum(latest_reports.get((job[0]['id'],job[2]),{}).get('status')!='ok' for job in jobs)
@@ -386,6 +388,7 @@ def main():
     parser.add_argument('--calendar', type=Path)
     parser.add_argument('--existing-observations', type=Path)
     parser.add_argument('--history-dir', type=Path, help='Monthly Queue-Times history, not private provider data')
+    parser.add_argument('--forecast-dir', type=Path, help='Frozen daily forecasts with their hourly inputs')
     parser.add_argument('--output-model', type=Path, required=True)
     parser.add_argument('--fallback-model', type=Path)
     parser.add_argument('--private-dir', type=Path)

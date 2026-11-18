@@ -382,7 +382,6 @@ body[data-park=sea] .hero h1{font-size:clamp(24px,2.35vw,36px);line-height:1.6}
 #visitDayFacts { border-top:1px solid var(--line); margin-top:.9rem; padding-top:.75rem; }
 #visitDayFacts h3 { margin:0; font-size:1rem; }
 #visitDayFacts p { margin:.35rem 0; }
-#visitDaySupport summary { font-size:.85rem; }
 .visit-day-sources { display:flex; flex-wrap:wrap; gap:.3rem .8rem; font-size:.8rem; }
 #visitDayFactSummary { display:flex; flex-wrap:wrap; align-items:center; gap:.4rem; }
 .visit-fact-badge {
@@ -434,11 +433,8 @@ body[data-park=sea] .hero h1{font-size:clamp(24px,2.35vw,36px);line-height:1.6}
 #crowdOutlookTitle { display:block; font-size:.85rem; color:var(--muted); }
 #crowdOutlookValue { font-size:1.45rem; color:var(--ink); }
 #crowdOutlookSource { display:inline-block; margin-inline-start:.6rem; font-size:.8rem; color:var(--muted); }
-#crowdLevelDetail { margin:.25rem 0 0; line-height:1.65; }
-#crowdLevelDetail:empty { display:none; }
 #visitEvents h3 { margin:.75rem 0 .25rem; font-size:1rem; }
 #visitEvents .event-badges { margin-top:0; }
-#forecastPanel .forecast-method summary { min-height:0; padding:.35rem 0; color:var(--muted); font-size:.85rem; font-weight:600; }
 .forecast-controls { border-top:1px solid var(--line); margin-top:.85rem; }
 .forecast-controls .field-grid { grid-template-columns:minmax(0,1fr); }
 .visit-day-references { margin-top:1rem; border-top:1px solid var(--line); }

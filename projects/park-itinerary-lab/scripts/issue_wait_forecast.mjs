@@ -4,7 +4,7 @@ import {access, link, mkdir, readFile, rm, writeFile} from 'node:fs/promises';
 import {dirname, join, resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {chooseCatalogue, defaultSettings} from '../web/app.js';
-import {visitDayContext} from '../web/calendar-features.js';
+import {calendarContext, longWeekendPosition, visitDayContext} from '../web/calendar-features.js';
 import {activityAvailable, operationPauseInfo, subtractPauseWindows} from '../web/operation-windows.js';
 import {estimateWait, setWaitForecastContext} from '../web/planner.js';
 import {validateCatalogue} from '../web/storage.js';
@@ -56,6 +56,27 @@ function availableWindows(park, activity, settings, parkWindows) {
   return subtractPauseWindows(windows, pauses);
 }
 
+// Hours are JST intervals on the visit date. JMA's daily or three-hour weather
+// keeps its original coverage. A point temperature is recorded only at that point.
+function issuedWeatherHours(forecast, rows) {
+  if (!forecast) return [];
+  const hours = new Set(rows.map(row => Math.floor(row.minute / 60) * 60));
+  return forecast.hours.filter(row => hours.has(row.minute)).map(row => ({
+    minute:row.minute, endMinute:row.endMinute, weather:row.weather,
+    weatherFromMinute:row.weatherFromMinute ?? row.minute,
+    weatherToMinute:row.weatherToMinute ?? row.endMinute,
+    temperature:forecast.provider === 'jma' && row.temperatureAtMinute !== row.minute ? null : row.temperature,
+    precipitation:row.precipitation
+  }));
+}
+
+function dayType(date, calendar) {
+  const day = calendarContext(date, calendar);
+  if (day.isHoliday) return 'holiday';
+  if (day.weekday === 0 || day.weekday === 6) return 'weekend';
+  return day.holidayKnown ? 'weekday' : null;
+}
+
 export async function forecastPark(park, {date, issuedAt, waitModel, calendarData, weatherCache, rideIds}) {
   const now = Date.parse(issuedAt);
   const midnight = Date.parse(date + 'T00:00:00+09:00');
@@ -65,7 +86,7 @@ export async function forecastPark(park, {date, issuedAt, waitModel, calendarDat
     ...defaults, date, waitModel, calendarData, waitAsOf:now, liveMode:'off',
     entry:parkWindows[0]?.[0] ?? defaults.entry,
     exit:parkWindows.at(-1)?.[1] ?? defaults.exit
-  }, park, {fetchWeatherImpl:() => weatherFromPublishedCache(weatherCache, date, now)});
+  }, park, {fetchWeatherImpl:() => weatherFromPublishedCache(weatherCache, date, now, {strictAsOf:true})});
   const references = new Map();
   const crowd = setWaitForecastContext(park, settings, (id, minute, mean) =>
     references.set(id + '/' + minute, mean));
@@ -86,11 +107,17 @@ export async function forecastPark(park, {date, issuedAt, waitModel, calendarDat
       }
     }
   }
+  const forecast = settings.weatherForecast;
+  const calendar = calendarData || waitModel?.calendarData;
   return {parkId:park.id, issuedAt, trainedThrough:waitModel?.lastDate ?? null,
-    modelTrainedAt:waitModel?.trainedAt ?? null, weatherProvider:settings.weatherForecast?.provider ?? null,
-    weatherFetchedAt:settings.weatherForecast?.fetchedAt ?? null, weatherAssumption:settings.weather,
+    modelTrainedAt:waitModel?.trainedAt ?? null, weatherProvider:forecast?.provider ?? null,
+    weatherFetchedAt:forecast?.fetchedAt ?? null, weatherIssuedAt:forecast?.issuedAt ?? null,
+    weatherSourceUrl:forecast?.sourceUrl ?? null, weatherHours:issuedWeatherHours(forecast, rows),
+    weatherAssumption:settings.weather,
     visitDayFactors:{
-      inputs:visitDayContext(date,park,calendarData,now),
+      inputs:visitDayContext(date,park,calendar,now),
+      dayType:dayType(date,calendar), longWeekendPosition:longWeekendPosition(date,calendar),
+      eventIds:settings.activeEvents.map(event => event.id),
       modelFeatures:waitModel?.usable ? (waitModel.visitFactors || []).map(factor=>factor.name) : []
     }, crowd, activities, rows};
 }
@@ -113,10 +140,14 @@ export async function issueForecast(directory, currentTime = new Date()) {
   const [bundledCatalogue, publishedCatalogue] = await Promise.all([
     readJson(join(bundled, 'parks.json')), readJson(join(directory, 'catalogue.json'), true)
   ]);
-  const date = targetDay(currentTime, publishedCatalogue, bundledCatalogue);
+  const asOf = currentTime.getTime();
+  const knownCatalogues = [bundledCatalogue, publishedCatalogue].map(catalogue =>
+    catalogue && Date.parse(catalogue.fetchedAt || catalogue.updatedAt) <= asOf ? catalogue : null);
+  const [knownBundle, knownPublished] = knownCatalogues;
+  const date = targetDay(currentTime, knownPublished, knownBundle);
   const issuedAt = currentTime.toISOString();
   const file = join(directory, 'forecasts', date + '.json');
-  if (await exists(file)) return null;
+  if (await exists(file) || !knownBundle && !knownPublished) return null;
 
   const [bundledModel, publishedModel, bundledCalendar,
     publishedCalendar, weatherCache, mapping] = await Promise.all([
@@ -124,8 +155,8 @@ export async function issueForecast(directory, currentTime = new Date()) {
     readJson(join(bundled, 'calendar.json')), readJson(join(directory, 'calendar.json'), true),
     readJson(join(directory, 'weather-forecast.json'), true), readJson(join(bundled, 'queue-times-map.json'))
   ]);
-  const catalogue = chooseCatalogue(validateCatalogue(bundledCatalogue),
-    publishedCatalogue ? validateCatalogue(publishedCatalogue) : null);
+  const catalogue = knownBundle ? chooseCatalogue(validateCatalogue(knownBundle),
+    knownPublished ? validateCatalogue(knownPublished) : null) : validateCatalogue(knownPublished);
   const calendarData = [publishedCalendar, bundledCalendar].find(calendar =>
     validateCalendarData(calendar) && Date.parse(calendar.updatedAt) <= currentTime.getTime());
   const parks = await Promise.all(catalogue.parks.map(park => forecastPark(park, {
