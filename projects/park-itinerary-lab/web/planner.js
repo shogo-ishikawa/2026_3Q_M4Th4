@@ -1,4 +1,4 @@
-import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.9.0';
+import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.10.0';
 import { weatherAtMinute, calendarContext } from './calendar-features.js';
 import { predictModelWait } from './wait-model.js';
 import { liveWaitFor, currentRideStatus } from './wait-data.js';
@@ -178,6 +178,9 @@ function normalise(park, settings) {
       if (result[key] % 100) throw new RangeError('予算は100円単位で指定してください。');
     }
   }
+  if (settings.avoidConsecutiveFood !== undefined && typeof settings.avoidConsecutiveFood !== 'boolean') {
+    throw new RangeError('フードを連続して入れない設定を確認してください。');
+  }
   if (settings.dpaPurchaseLimit !== undefined && (!Number.isInteger(settings.dpaPurchaseLimit) || settings.dpaPurchaseLimit < 0 || settings.dpaPurchaseLimit > 200)) {
     throw new RangeError('DPAの購入件数の上限は0〜200の整数で指定してください。');
   }
@@ -303,12 +306,32 @@ function recoveryEnds(rows,settings) {
     (item.kind === 'activity' && restIntervalStartsAgain(item.category,item.end-item.start,item.activityId,settings))).map(item => item.end);
 }
 
+function isFoodVisit(item, activities) {
+  return (item?.kind || item?.type) === 'activity' &&
+    FOOD.has(activities.get(item.activityId)?.category ?? item.category);
+}
+
+/** Only visits and breaks separate stops; travel, queues and idle time do not. */
+export function restsBesideFood(rows, activities) {
+  const rests = new Set();
+  let previous;
+  for (const item of rows) {
+    const kind = item.kind || item.type;
+    if (kind !== 'activity' && kind !== 'rest') continue;
+    if (kind === 'rest' && isFoodVisit(previous, activities)) rests.add(item);
+    if ((previous?.kind || previous?.type) === 'rest' && isFoodVisit(item, activities)) rests.add(previous);
+    previous = item;
+  }
+  return rests;
+}
+
 function autoRestDue(state, activity, context) {
   const settings = context.settings;
   if (!settings.restEvery || !settings.restMinutes || FOOD.has(activity.category)) return false;
   // Eating already provides a pause. Even a short snack should not be followed
   // immediately by another automatic stop.
-  const latestFood = state.rows.filter(item => item.kind === 'activity' && FOOD.has(item.category)).at(-1);
+  if (state.lastVisitWasFood) return false;
+  const latestFood = state.rows.findLast(item => isFoodVisit(item, context.map));
   if (latestFood && state.time - latestFood.end < DINING_BREAK_GAP) return false;
   // Leave room for a nearby requested meal, even if a short visit is next.
   const mealSoon = context.selected.some(selection => !state.visited.has(selection.id) &&
@@ -331,7 +354,7 @@ function prefixSourceRows(initialPlan,settings) {
   const recorded=initialPlan?.status==='no-plan'?rows.filter(row=>row.preserved):rows;
   const priorRows=recorded.map(row=>row.kind||!row.type?row:{...row,kind:row.type});
   const startedVisitIds=new Set(priorRows.filter(item=>item.start<cutoff&&['queue','activity'].includes(item.kind)).map(item=>item.activityId));
-  return priorRows.filter(item=>item.kind!=='exit'&&(item.start<cutoff||(startedVisitIds.has(item.activityId)&&['queue','activity'].includes(item.kind))));
+  return priorRows.filter(item=>item.kind!=='exit'&&(item.start<cutoff||(startedVisitIds.has(item.activityId)&&(['queue','activity'].includes(item.kind)||item.awaitingPerformance===true))));
 }
 /** Visits already accounted for when checking the remaining wishes in the editor. */
 export function settledReplanWishes(park,settings,previous) {
@@ -347,7 +370,7 @@ export function settledReplanWishes(park,settings,previous) {
 function preservedPrefix(initialPlan,settings) {
   const cutoff=toMinutes(settings.replanFrom);
   return prefixSourceRows(initialPlan,settings).map(item=>{
-    const end=['wait','rest'].includes(item.kind)&&!item.fixedBreakId?Math.min(item.end,cutoff):item.end;
+    const end=['wait','rest'].includes(item.kind)&&!item.fixedBreakId&&!item.awaitingPerformance?Math.min(item.end,cutoff):item.end;
     // Older plans identify a purchased candidate by its charge or, for a free slot, its ticket.
     const legacyCandidate = item.kind === 'activity' && item.dpa && item.plannedDpaPurchase === undefined &&
       !item.dpaCost && initialPlan?.purchases?.some(ticket => ticket.id === item.activityId && ticket.owned === false);
@@ -397,6 +420,7 @@ function contextFor(park, settings, initialPlan) {
   const selected = settings.selections.filter(selection => !completed.has(selection.id));
   const paidDpa = settings.purchases.reduce((sum, purchase) => sum + purchase.cost, 0);
   const sourceRows = prefix.filter(item => item.kind === 'activity');
+  const lastVisit = sourceRows.at(-1);
   const prefixNonDpa = sourceRows.reduce((sum, item) => sum + Math.max(0, finite(item.cost) - finite(item.dpaCost)), 0);
   // A subsequently confirmed ticket can also appear in a completed visit's charge.
   const prefixDpa = sourceRows.reduce((sum, item) => {
@@ -408,6 +432,7 @@ function contextFor(park, settings, initialPlan) {
   const spent = Math.max(settings.spentBudget, prefixNonDpa + paidDpa + prefixDpa);
   const initial = {
     time: beginning, node: location, rows: prefix, visits: prefixVisits, visited: new Set(completed),
+    lastVisitWasFood: FOOD.has(lastVisit?.category ?? map.get(lastVisit?.activityId)?.category),
     breakIndex: settings.fixedBreaks.filter(item => item.start + item.duration <= beginning).length,
     score: completedSelections.reduce((sum, item) => sum + item.weight, 0),
     cost: spent, foodCost: sourceRows.filter(item => FOOD.has(item.category)).reduce((sum, item) => sum + finite(item.cost), 0),
@@ -500,6 +525,7 @@ function requiredVisitsStillReachable(state, context) {
 function scheduledOptions(state, baseActivity, selection, context, allowAutoRest = true, deferRest = false) {
   if (!activityAvailable(baseActivity, context.settings.date)||currentRideStatus(baseActivity,context.settings,{now:context.settings.waitAsOf})?.isOpen===false) return [];
   const settings = context.settings, graph = context.graph;
+  if (settings.avoidConsecutiveFood && state.lastVisitWasFood && FOOD.has(baseActivity.category)) return [];
   const methods = [];
   if (selection.dpaMode !== 'owned') methods.push({ method: 'normal', windows: activityWindows(baseActivity, selection, settings, context.park), price: 0 });
   if (dpaAvailable(baseActivity, settings.date) && selection.dpaMode === 'owned' &&
@@ -558,11 +584,22 @@ function scheduledOptions(state, baseActivity, selection, context, allowAutoRest
       const waitEstimate = context.waitCache.get(cacheKey);
       const waitSource = method.method === 'dpa' ? 'dpa' : waitEstimate.source;
       const allowance = queueAllowance(activity, method.method === 'dpa' ? {minutes:Math.round(finite(activity.dpa.wait, 10)), source:'dpa'} : waitEstimate, method.method, settings);
-      let wait = allowance.totalMinutes;
+      const wait = allowance.totalMinutes;
       let start = queueStart + wait;
       if (fixed) {
         start = proposed;
         queueStart = start - wait;
+        if (method.method === 'dpa') {
+          // Each admission belongs to the next confirmed performance at this viewing location.
+          if (starts.some(time => time >= window[0] && time < start)) continue;
+          // When the ticket closes earlier, enter during its window and wait inside.
+          if (queueStart >= window[1]) {
+            const operating = activityWindows(activity, selection, settings, context.park)
+              .find(([open,close]) => Math.max(open,earliest,window[0]) < window[1] && start + selection.duration <= close);
+            if (!operating) continue;
+            queueStart = Math.max(earliest, window[0], operating[0]);
+          }
+        }
         if (queueStart < earliest || queueStart < window[0]) continue;
       }
       if (method.method === 'dpa' && queueStart >= window[1]) continue;
@@ -578,8 +615,12 @@ function scheduledOptions(state, baseActivity, selection, context, allowAutoRest
       if (options.some(option => option.key === key)) continue;
       const extra = rows.slice();
       if (queueStart > arrival) extra.push(row('wait', arrival, queueStart, fixed ? '開演前の時間' : '時間帯まで待機', { node: activity.node, activityId: activity.id }));
-      if (wait) extra.push(row('queue', queueStart, start, fixed ? '鑑賞場所へ・入場待ち' : '待ち時間', { node: activity.node, activityId: activity.id, dpa: method.method === 'dpa', waitSource,
+      const queueEnd = queueStart + wait;
+      if (wait || queueEnd < start) extra.push(row('queue', queueStart, queueEnd, fixed ? '鑑賞場所へ・入場待ち' : '待ち時間', { node: activity.node, activityId: activity.id, dpa: method.method === 'dpa', waitSource,
         estimatedMinutes:allowance.estimatedMinutes, bufferMinutes:allowance.bufferMinutes, delayMinutes:allowance.delayMinutes }));
+      if (queueEnd < start) extra.push(row('wait', queueEnd, start, '鑑賞エリアで開演待ち', {
+        node:activity.node, activityId:activity.id, dpa:true, awaitingPerformance:true,
+      }));
       const activityCost = selection.cost + method.price;
       extra.push(row('activity', start, end, activity.name, {
         activityId: activity.id, node: activity.node, endNode, category: activity.category,
@@ -599,6 +640,7 @@ function scheduledOptions(state, baseActivity, selection, context, allowAutoRest
         visits: state.visits.concat({ id: activity.id, activityId: activity.id, name: activity.name,
           node: activity.node, endNode, category: activity.category, start, end, queueStart, arrival,
           method: method.method, waitSource, weight: selection.weight, cost: activityCost, dpaCost: method.price }),
+        lastVisitWasFood: FOOD.has(activity.category),
         visited, score: state.score + selection.weight, cost: state.cost + activityCost,
         foodCost: state.foodCost + (FOOD.has(activity.category) ? selection.cost : 0),
         shoppingCost: state.shoppingCost + (activity.category === 'shop' ? selection.cost : 0),
@@ -632,7 +674,11 @@ function tieValue(state, context) {
   const burden = state.rows.filter(item => ['walk', 'queue', 'wait'].includes(item.kind))
     .reduce((sum, item) => sum + item.end - item.start, 0) + exitMinutes;
   // Time spent queueing, walking and waiting comes before distance alone.
-  const value = [state.score, preferenceScore, -(state.restDeferralMinutes || 0), -Number(!!state.restDeferred),
+  // Keep a manually timed break. Among otherwise equally scored wishes, prefer
+  // an order that puts an activity between the fixed break and a food stop.
+  const fixedBesideFood = context.settings.fixedBreaks.length
+    ? [...restsBesideFood(state.rows, context.map)].filter(rest => rest.fixedBreakId).length : 0;
+  const value = [state.score, preferenceScore, -fixedBesideFood, -(state.restDeferralMinutes || 0), -Number(!!state.restDeferred),
     -burden, -(state.time + exitMinutes), -state.cost, -(state.walk + exitMetres)];
   context.rankCache.set(state, value);
   return value;
@@ -718,6 +764,14 @@ function omissionFor(selection, context, best) {
     const wait=selection.manualWait??activity.baseWait??0;
     if (wait+selection.duration>available)
       return conflict('earliest',`待ち時間${wait}分と滞在${selection.duration}分に対して、営業時間と希望時間帯が重なるのは最大${available}分です。希望時間帯か待ち時間を見直してください。`);
+  }
+  if (context.settings.avoidConsecutiveFood && FOOD.has(activity.category)) {
+    const remainingFood = context.selected.filter(wish => FOOD.has(context.map.get(wish.id).category));
+    // Even with every other selected activity used as a separator, only this many food visits can fit.
+    const maxFood = context.selected.length - remainingFood.length + Number(!context.initial.lastVisitWasFood);
+    const foodCount = best ? remainingFood.filter(wish => best.visited.has(wish.id)).length + 1
+                           : remainingFood.filter(wish => wish.required).length;
+    if (foodCount > maxFood) return conflict('avoidConsecutiveFood','フードの間に入れる体験が足りません。食事以外の希望を追加するか「フードを連続して入れない」をオフにしてください。');
   }
   let reason = '移動・時間・予算の組合せで今回は採用されませんでした。';
   if (!Number.isFinite(context.graph.distances[context.initial.node]?.[activity.node])) reason = '現在地からつながる歩行経路がありません。';
@@ -823,7 +877,8 @@ function beamSearch(context, tracker, deadline) {
     const grouped = new Map();
     for (const state of next) {
       const key = [...state.visited].sort().join('|') + ';' + state.node + ';' + state.breakIndex + ';' +
-        state.purchases.map(purchase => purchase.id + ':' + purchase.start).join(',') + ';' + Number(!!state.restDeferred);
+        state.purchases.map(purchase => purchase.id + ':' + purchase.start).join(',') + ';' + Number(!!state.restDeferred)
+        + ';' + Number(state.lastVisitWasFood);
       const previous = grouped.get(key);
       const deferral = (state.restDeferralMinutes || 0) - (previous?.restDeferralMinutes || 0);
       if (!previous || deferral < 0 || (deferral === 0 &&
@@ -967,6 +1022,7 @@ export function validatePlan(park, settings, result, options = {}) {
   let previous = Math.min(entry,originalEntry), node = settings.replanFrom !== undefined && rows.some(item => item.preserved) ? park.entryNode : (settings.currentNode || park.entryNode);
   const visited = new Set(settings.completedIds || []);
   let previousRow=null;
+  let previousVisitWasFood=false;
   for (const item of rows) {
     if (!Number.isFinite(item.start) || !Number.isFinite(item.end) || item.start < previous || item.end < item.start) errors.push('予定の時刻が前後しています。');
     const verifiedPreserved=item.preserved&&sourceSignatures.has(rowSignature(item));
@@ -974,7 +1030,7 @@ export function validatePlan(park, settings, result, options = {}) {
     if (item.start < (historicalBoundary?originalEntry:entry) || item.end > (historicalBoundary?originalExit:exit)) errors.push('滞在時間の外に予定があります。');
     if (item.preserved) {
       const cutoff=settings.replanFrom === undefined || settings.replanFrom === '' ? null : toMinutes(settings.replanFrom);
-      const ongoing=cutoff!==null&&item.kind==='activity'&&rows.some(prior=>prior.preserved&&prior.kind==='queue'&&prior.activityId===item.activityId&&prior.start<cutoff);
+      const ongoing=cutoff!==null&&(item.kind==='activity'||item.awaitingPerformance===true)&&rows.some(prior=>prior.preserved&&prior.kind==='queue'&&prior.activityId===item.activityId&&prior.start<cutoff);
       if(cutoff===null||(item.kind!=='location'&&item.start>=cutoff&&!ongoing))errors.push('保持した予定が組み替え開始より前につながっていません。');
     }
     if (item.kind === 'walk') {
@@ -1011,6 +1067,11 @@ export function validatePlan(park, settings, result, options = {}) {
       if (!Number.isFinite(item.cost) || item.cost < 0 || item.cost % 100) errors.push('体験費用が不正です。');
       const activity = activities.get(item.activityId), selection = selectionMap.get(item.activityId);
       if (!activity) { errors.push('施設が見つかりません。'); continue; }
+      const isFood = FOOD.has(verifiedPreserved ? (item.category ?? activity.category) : activity.category);
+      if (settings.avoidConsecutiveFood && !verifiedPreserved && previousVisitWasFood && isFood) {
+        errors.push('フードが連続しています。間に別の体験を入れてください。');
+      }
+      previousVisitWasFood = isFood;
       if (visited.has(activity.id) && !(settings.completedIds || []).includes(activity.id)) errors.push('同じ施設が重複しています。');
       visited.add(activity.id);
       if (item.node !== (item.dpa ? (selection?.nodeOverride || activity.node) : activity.node)) errors.push('体験地点が施設の地点と一致しません。');
@@ -1030,8 +1091,11 @@ export function validatePlan(park, settings, result, options = {}) {
         const estimateAt = fixed ? item.start : admission;
         const estimate = item.dpa ? {minutes:Math.round(finite(activity.dpa.wait, 10)), source:'dpa'} : estimateWait(activity, estimateAt, walkingSettings, (settings.history || []).filter(record => (record.activityId || record.activity_id) === activity.id));
         const allowance = queueAllowance(activity, estimate, item.dpa ? 'dpa' : 'normal', settings);
-        if (queue?.bufferMinutes !== undefined || queue?.delayMinutes !== undefined || allowance.bufferMinutes || allowance.delayMinutes) {
-          if (!queue || queue.end !== item.start || queue.end - queue.start !== allowance.totalMinutes || queue.estimatedMinutes !== allowance.estimatedMinutes || queue.bufferMinutes !== allowance.bufferMinutes || queue.delayMinutes !== allowance.delayMinutes) errors.push('待ち時間と計画用の余裕が設定と一致しません。');
+        const venueWait=previousRow?.awaitingPerformance ? previousRow : null;
+        if (venueWait && (!fixed || !item.dpa || venueWait.kind!=='wait' || venueWait.activityId!==activity.id ||
+            venueWait.node!==item.node || venueWait.end!==item.start || venueWait.start!==queue?.end)) errors.push('DPA入場から開演までの待機が正しくありません。');
+        if (queue?.bufferMinutes !== undefined || queue?.delayMinutes !== undefined || allowance.bufferMinutes || allowance.delayMinutes || venueWait) {
+          if (!queue || queue.end !== (venueWait?.start ?? item.start) || queue.end - queue.start !== allowance.totalMinutes || queue.estimatedMinutes !== allowance.estimatedMinutes || queue.bufferMinutes !== allowance.bufferMinutes || queue.delayMinutes !== allowance.delayMinutes) errors.push('待ち時間と計画用の余裕が設定と一致しません。');
         }
         if (!activityWindows(activity, selection, settings, park).some(window => admission >= window[0] && item.end <= window[1])) errors.push('施設の営業時間の外です。');
         if (item.dpa) {
@@ -1040,6 +1104,8 @@ export function validatePlan(park, settings, result, options = {}) {
           const owned = selection.dpaMode === 'owned';
           const ticket = (result.purchases || []).find(purchase => purchase.id === item.activityId &&
             purchase.owned === owned && purchase.start <= admission && admission < purchase.end);
+          if (ticket && fixed && showTimes(activity,timeSelection,settings).some(time=>time>=ticket.start && time<item.start))
+            errors.push('DPAの入場枠に対応する公演回と一致しません。');
           if (!ticket) errors.push('DPAの利用枠の外です。');
           else if (owned) {
             if (ticket.start !== toMinutes(selection.dpaStart) || ticket.end !== toMinutes(selection.dpaEnd) ||
@@ -1055,6 +1121,9 @@ export function validatePlan(park, settings, result, options = {}) {
     }
     if (item.kind === 'exit' && (item.node !== park.exitNode || node !== park.exitNode)) errors.push('出口に到着していません。');
     previous = item.end;previousRow=item;
+  }
+  for (const rest of restsBesideFood(rows, activities)) {
+    if (rest.autoBreakId && !rest.preserved) errors.push('フードと自動休憩が連続しています。');
   }
   for (const reservation of settings.fixedBreaks || []) {
     const expectedStart = toMinutes(reservation.start), expectedEnd = expectedStart + Number(reservation.duration);
