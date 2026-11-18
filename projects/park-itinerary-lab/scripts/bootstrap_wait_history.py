@@ -124,7 +124,7 @@ def opening_minute(park: dict, date: str) -> int:
 
 
 def normalise_history(payload: dict, park: dict, mapping: dict[str, str], date: str,
-                      *, now: dt.datetime | None = None) -> list[dict]:
+                      *, now: dt.datetime | None = None, keep_changes: bool = False) -> list[dict]:
     """Use observed changes only; never manufacture a zero or fill an absent day."""
     now = now or dt.datetime.now(dt.timezone.utc)
     if payload.get('id') != PARK_IDS[park['id']] or payload.get('timezone') != 'Asia/Tokyo':
@@ -162,7 +162,7 @@ def normalise_history(payload: dict, park: dict, mapping: dict[str, str], date: 
             local = at.astimezone(JST)
             minute = local.hour * 60 + local.minute
             width = 10 if opening <= minute < opening + 90 else 30
-            key = (activity_id, minute // width, width)
+            key = (activity_id, at) if keep_changes else (activity_id, minute // width, width)
             row = {'date': date, 'activityId': activity_id, 'time': minute, 'wait': wait,
                    'openingMinute': opening, 'weather': '', 'temperature': None, 'precipitation': None,
                    'event': '|'.join(item['id'] for item in park.get('events', [])
