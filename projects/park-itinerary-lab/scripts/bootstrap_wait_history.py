@@ -147,6 +147,12 @@ def normalise_history(payload: dict, park: dict, mapping: dict[str, str], date: 
         if not carried.get('degraded') and observed and observed.astimezone(JST).date().isoformat() == date:
             events.append({**carried, 'time': observed.isoformat()})
         for event in events:
+            # A history row contains the whole ride state. A change to another
+            # queue or to the operating status does not timestamp the standby wait.
+            if 'changed' in event:
+                changed = event['changed']
+                if not isinstance(changed, list) or 'queue.STANDBY.waitTime' not in changed:
+                    continue
             at = timestamp(event.get('time'))
             wait = ((event.get('queue') or {}).get('STANDBY') or {}).get('waitTime')
             if (not at or at > now or at.astimezone(JST).date().isoformat() != date
@@ -354,9 +360,10 @@ def bootstrap(args, private_dir: Path) -> dict:
     latest_reports={(report['parkId'],report['date']):report for report in reports}
     pending=sum(latest_reports.get((job[0]['id'],job[2]),{}).get('status')!='ok' for job in jobs)
     for index,model in enumerate(result['parks']):
+        park_dates={row['date'] for row in rows if row['activityId'].startswith(model['parkId']+'-')}
         model['bootstrap']={'provider':'themeparks-wiki','accessMode':'key-entitlement' if account else 'anonymous',
             'attemptedAt':result['updatedAt'],'requestedDays':getattr(args,'days',None),
-            'observedDays':len({row['date'] for row in rows if row['activityId'].startswith(model['parkId']+'-')}),
+            'observedDays':len(park_dates),'lastObservedDate':max(park_dates,default=None),
             'historyRequestsSelected':len(selected),'historyRequestsPending':pending,
             'coverage':next(item for item in coverage_reports if item['parkId']==model['parkId']),
             'weatherProvenance':'past-weather-forecast' if weather else 'unavailable',

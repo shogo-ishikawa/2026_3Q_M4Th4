@@ -1,5 +1,6 @@
 /* Models use observed waits; unknown weather and missing historical days remain unknown. */
 import {validCalendarDate as dateValid,minuteOf,finiteObservationNumber,calendarContext,weatherAtMinute,eventIdsFor,WAIT_BASE_FEATURE_NAMES,waitFeatures} from './calendar-features.js';
+import {activityAvailable} from './operation-windows.js';
 const MIN_DATES=7,MIN_SAMPLES=100,MAX_SAMPLES=50000;
 const clipped=value=>Math.max(0,Math.min(600,Math.round(value)));
 const weekdayLabels=['日曜日','月曜日','火曜日','水曜日','木曜日','金曜日','土曜日'];
@@ -119,7 +120,7 @@ export function validateWaitModel(model) {
   if(!model||![1,2].includes(model.schemaVersion)||model.method!=='ridge-regression'||!['land','sea'].includes(model.parkId)||!['trained','insufficient-data'].includes(model.status)||!Array.isArray(model.activityIds)||model.activityIds.length>400||new Set(model.activityIds).size!==model.activityIds.length||!model.activityIds.every(id=>typeof id==='string'&&id.length<121)||!Array.isArray(model.coefficients)||model.coefficients.some(value=>!Number.isFinite(value)))return false;
   let count=7;
   if(model.dataSources!==undefined&&(!Array.isArray(model.dataSources)||model.dataSources.length>20||model.dataSources.some(source=>!source||typeof source.name!=='string'||source.name.length>120||typeof source.url!=='string'||source.url.length>2000||!/^https:\/\//.test(source.url)||typeof source.attribution!=='string'||source.attribution.length>300)))return false;
-  if(model.schemaVersion===2){if(!Number.isInteger(model.samples)||model.samples<0||!Number.isSafeInteger(model.samples)||!Number.isInteger(model.days)||model.days<0||model.days>100000||typeof model.trainedAt!=='string'||!Number.isFinite(Date.parse(model.trainedAt))||!dateValid(model.beforeDate)||(model.lastDate!==null&&(!dateValid(model.lastDate)||model.lastDate>=model.beforeDate))||(model.status==='trained'&&(!dateValid(model.firstDate)||model.firstDate>model.lastDate||v?.testThrough>model.lastDate)))return false;if(!Array.isArray(model.featureNames)||!Array.isArray(model.eventIds)||model.eventIds.length>60||model.eventIds.some(id=>typeof id!=='string'||!id||id.length>120)||new Set(model.eventIds).size!==model.eventIds.length)return false;const expected=WAIT_BASE_FEATURE_NAMES.concat(model.eventIds.map(id=>'event:'+id));if(JSON.stringify(expected)!==JSON.stringify(model.featureNames))return false;count=expected.length;if(model.calendarData!==null&&model.calendarData!==undefined&&(!Array.isArray(model.calendarData.holidays)||model.calendarData.holidays.length>5000||model.calendarData.holidays.some(item=>!item||!dateValid(item.date)||typeof item.name!=='string'||item.name.length>120)))return false;if(model.activityTimeProfiles!==undefined&&(!Array.isArray(model.activityTimeProfiles)||model.activityTimeProfiles.length>9600||new Set(model.activityTimeProfiles.map(p=>p?.activityId+'|'+p?.hour)).size!==model.activityTimeProfiles.length||model.activityTimeProfiles.some(p=>!model.activityIds.includes(p.activityId)||!Number.isInteger(p.hour)||p.hour<0||p.hour>23||!Number.isInteger(p.days)||p.days<1||!Number.isInteger(p.samples)||p.samples<1||!Number.isFinite(p.correctionMinutes)||Math.abs(p.correctionMinutes)>600||!Number.isFinite(p.meanWait)||p.meanWait<0||p.meanWait>600)))return false;}
+  if(model.schemaVersion===2){if(!Number.isInteger(model.samples)||model.samples<0||!Number.isSafeInteger(model.samples)||!Number.isInteger(model.days)||model.days<0||model.days>100000||typeof model.trainedAt!=='string'||!Number.isFinite(Date.parse(model.trainedAt))||!dateValid(model.beforeDate)||(model.lastDate!==null&&(!dateValid(model.lastDate)||model.lastDate>=model.beforeDate))||(model.status==='trained'&&(!dateValid(model.firstDate)||model.firstDate>model.lastDate||v?.testThrough>model.lastDate)))return false;if(!Array.isArray(model.featureNames)||!Array.isArray(model.eventIds)||model.eventIds.length>60||model.eventIds.some(id=>typeof id!=='string'||!id||id.length>120)||new Set(model.eventIds).size!==model.eventIds.length)return false;const expected=WAIT_BASE_FEATURE_NAMES.concat(model.eventIds.map(id=>'event:'+id));if(JSON.stringify(expected)!==JSON.stringify(model.featureNames))return false;count=expected.length;if(model.calendarData!==null&&model.calendarData!==undefined&&(!Array.isArray(model.calendarData.holidays)||model.calendarData.holidays.length>5000||model.calendarData.holidays.some(item=>!item||!dateValid(item.date)||typeof item.name!=='string'||item.name.length>120)))return false;if(model.activityTimeProfiles!==undefined&&(!Array.isArray(model.activityTimeProfiles)||model.activityTimeProfiles.length>9600||new Set(model.activityTimeProfiles.map(p=>p?.activityId+'|'+p?.hour)).size!==model.activityTimeProfiles.length||model.activityTimeProfiles.some(p=>!p||!model.activityIds.includes(p.activityId)||!Number.isInteger(p.hour)||p.hour<0||p.hour>23||!Number.isInteger(p.days)||p.days<1||!Number.isInteger(p.samples)||p.samples<1||!Number.isFinite(p.correctionMinutes)||Math.abs(p.correctionMinutes)>600||!Number.isFinite(p.meanWait)||p.meanWait<0||p.meanWait>600)))return false;}
   return model.status!=='trained'||(metrics&&model.coefficients.length===count+model.activityIds.length&&dateValid(model.lastDate)&&model.days>=MIN_DATES&&model.samples>=MIN_SAMPLES);
 }
 /** Predict at queue start using hourly weather and the same calendar/event encoding used for fitting. */
@@ -129,4 +130,69 @@ export function predictModelWait(activity,minute,settings,model) {
   const row={date:settings.date,minute,...weather,eventIds,event:eventIds.join('|')};
   const activeModel=model.schemaVersion===2?{...model,calendarData:settings.calendarData||model.calendarData}:model;
   const value=predict(row,activity,activeModel);return value===null?null:{minutes:value,source:'ml',samples:model.samples,modelDays:model.days,validationMae:model.validation?.modelMae,unseenEvents:eventIds.filter(id=>model.schemaVersion===2&&!model.eventIds.includes(id))};
+}
+
+const parkCrowdHours = [10, 12, 14, 16, 18];
+export function calendarCrowdLevel(calendar) {
+  return calendar?.isHoliday || calendar?.weekday === 0 || calendar?.weekday === 6 ? 'busy' : 'normal';
+}
+
+/** Compare each ride's forecast with its own observed means at the same hours.
+ * This is a park-wide posted-wait index, independent of the visitor's wishlist.
+ */
+export function estimateParkCrowd(park, settings) {
+  const model = settings.waitModel, date = settings.date;
+  const calendarData = settings.calendarData || (model?.parkId === park.id ? model.calendarData : null);
+  const calendar = calendarContext(date, calendarData);
+  const fallback = {level:calendarCrowdLevel(calendar), source:'calendar', ratio:null, rides:0, slots:0, days:0, samples:0};
+  if (!calendar || model?.parkId !== park.id || !validateWaitModel(model) ||
+      model.schemaVersion !== 2 || !dateValid(model.lastDate) || model.lastDate >= date) return fallback;
+  fallback.days = model.days;
+  fallback.samples = model.samples;
+  if (model.status !== 'trained' || model.usable !== true || model.validation.modelMae > model.validation.baselineMae) return fallback;
+
+  // Avoid extrapolating seasonality to a month the training records hardly cover.
+  const hasDays = (dimension, key, minimum) => Array.isArray(model.correlations?.[dimension]) &&
+    model.correlations[dimension].some(group => group?.key === String(key) && Number.isInteger(group.days) && group.days >= minimum);
+  if (!hasDays('month', calendar.month, 2) || !hasDays('weekday', calendar.weekday, 1) ||
+      (calendar.isHoliday && !hasDays('holiday', 'holiday', 2))) return fallback;
+
+  const profilesByRide = new Map();
+  for (const profile of model.activityTimeProfiles || []) {
+    if (!profilesByRide.has(profile.activityId)) profilesByRide.set(profile.activityId, []);
+    profilesByRide.get(profile.activityId).push(profile);
+  }
+  const events = (park.events || []).filter(event => event.startDate <= date && date <= event.endDate).map(event => event.id);
+  const parkHours = park.operatingCalendar?.[date]?.windows;
+  const covers = (windows, minute) => !windows || windows.some(([start, end]) => start <= minute && minute < end);
+  const ratios = [], usedHours = new Set();
+  let slots = 0;
+  for (const activity of park.activities) {
+    const profiles = profilesByRide.get(activity.id);
+    if (!profiles || activity.category !== 'attraction' || !activityAvailable(activity, date)) continue;
+    const daily = activity.dailySchedules?.[date], datedWindows = daily?.windows || (activity.windowsDate === date ? activity.windows : null);
+    const ride = datedWindows ? {...activity, windows:datedWindows} : activity;
+    const activeModel = {...model, calendarData, activityTimeProfiles:profiles};
+    const hours = [];
+    let expected = 0, usual = 0;
+    for (const profile of profiles) {
+      const hour = profile.hour, minute = hour * 60 + 30;
+      if (!parkCrowdHours.includes(hour) || profile.samples < 5 || profile.days < 3 || profile.meanWait < 10 ||
+          !covers(parkHours, minute) || !covers(datedWindows, minute)) continue;
+      const row = {date, minute, ...weatherAtMinute(date, minute, settings), eventIds:events};
+      expected += predict(row, ride, activeModel);
+      usual += profile.meanWait;
+      hours.push(hour);
+    }
+    if (hours.length < 2) continue;
+    ratios.push(expected / usual);
+    slots += hours.length;
+    for (const hour of hours) usedHours.add(hour);
+  }
+  if (ratios.length < 3 || usedHours.size < 3) return fallback;
+  ratios.sort((a, b) => a - b);
+  const middle = Math.floor(ratios.length / 2);
+  const ratio = ratios.length % 2 ? ratios[middle] : (ratios[middle - 1] + ratios[middle]) / 2;
+  const level = ratio <= 0.85 ? 'quiet' : ratio >= 1.15 ? 'busy' : 'normal';
+  return {level, source:'model', ratio, rides:ratios.length, slots, days:model.days, samples:model.samples};
 }
