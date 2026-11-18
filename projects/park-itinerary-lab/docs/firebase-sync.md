@@ -38,4 +38,10 @@ npm ci
 npx --yes firebase-tools@15.36.0 emulators:exec --only firestore --project demo-tdroute 'node --test firestore-rules.test.mjs'
 ```
 
+配布版のFirebase SDKで2端末の同期を確認するテストもあります。ChromeとPlaywrightを用意してから次を実行します。テスト用のGoogle認証情報を発行するのはローカルのAuth Emulatorです。
+
+```sh
+npx --yes firebase-tools@15.36.0 emulators:exec --only auth,firestore --project demo-tdroute-check 'python ../tests-web/firebase_emulator_browser.py --credential'
+```
+
 無料枠の利用状況はFirebaseコンソールの「Firestore Database」→「使用状況」で確認できます。[Firestoreの無料枠](https://firebase.google.com/docs/firestore/quotas?hl=ja) ／ [Googleログイン](https://firebase.google.com/docs/auth/web/google-signin?hl=ja) ／ [Firestoreの保存場所](https://firebase.google.com/docs/firestore/locations?hl=ja) ／ [Firebaseのウェブ用APIキー](https://firebase.google.com/docs/projects/api-keys?hl=ja)
