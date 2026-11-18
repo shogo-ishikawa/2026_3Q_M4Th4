@@ -260,6 +260,15 @@ body[data-park=sea] .hero h1{font-size:clamp(24px,2.35vw,36px);line-height:1.6}
   .dpa-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dpa-choices span { width: 100%; text-align: center; padding: 5px; }
 }
+/* In narrow pairs, native spinners would cover the second digit beside the reel. */
+.time-field { container-type: inline-size; }
+@container (max-width: 165px) {
+  .clamped-time { gap: 2px; padding-inline: 3px; }
+  .clamped-time .clock-component { appearance: textfield; }
+  .clamped-time .clock-component::-webkit-inner-spin-button,
+  .clamped-time .clock-component::-webkit-outer-spin-button { appearance: none; margin: 0; }
+}
+
 /* The reel and direct entry share the same bounded time value. */
 .clock-reel-button {
   flex: none;
