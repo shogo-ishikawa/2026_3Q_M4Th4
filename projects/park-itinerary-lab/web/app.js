@@ -1,22 +1,22 @@
-import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, createVisitOutlook, prepareLiveForReplan } from './wait-data.js?v=1.16.0';
-export {prepareWeatherForVisit as prepareWeatherForPlan} from './wait-data.js?v=1.16.0';
-import {visitDayDetails} from './visit-day-view.js?v=1.16.0';
-import {createForecastCalendar} from './forecast-calendar.js?v=1.16.0';
-import {calendarDayOutlook} from './calendar-outlook.js?v=1.16.0';
+import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, createVisitOutlook, prepareLiveForReplan } from './wait-data.js?v=1.16.1';
+export {prepareWeatherForVisit as prepareWeatherForPlan} from './wait-data.js?v=1.16.1';
+import {visitDayDetails} from './visit-day-view.js?v=1.16.1';
+import {createForecastCalendar} from './forecast-calendar.js?v=1.16.1';
+import {calendarDayOutlook, calendarDayPreview, CROWD_LABELS} from './calendar-outlook.js?v=1.16.1';
 import {WISH_PRESETS, presetFacilities, presetStartsPlan, addPresetWishes} from './wishlist-presets.js';
 import {attachItineraryImage} from './itinerary-image.js';
 import {attachOnsiteNavigation} from './onsite-navigation.js';
-import {attachDayProgress} from './day-progress-ui.js?v=1.16.0';
+import {attachDayProgress} from './day-progress-ui.js?v=1.16.1';
 import {baseVisitId, repeatVisitId, isRepeatVisit, expandRepeatVisits, resolveDpaVisit} from './repeat-visits.js';
-import { restsBesideFood, settledReplanWishes } from './planner.js?v=1.16.0';
-import { enhanceTimeInputs, parkTimeBounds, clampClock } from './time-input.js?v=1.16.0';
-import { estimateParkCrowd } from './wait-model.js?v=1.16.0';
-import { warmCalendarWeather, weatherForMinute } from './weather.js?v=1.16.0';
-import { forecastCardHtml, forecastSourcesHtml, visitWeatherSummary } from './weather-view.js?v=1.16.0';
-import { activityAvailable, operationPauseInfo } from './operation-windows.js?v=1.16.0';
+import { restsBesideFood, settledReplanWishes } from './planner.js?v=1.16.1';
+import { enhanceTimeInputs, parkTimeBounds, clampClock } from './time-input.js?v=1.16.1';
+import { estimateParkCrowd } from './wait-model.js?v=1.16.1';
+import { warmCalendarWeather, weatherForMinute } from './weather.js?v=1.16.1';
+import { forecastCardHtml, forecastSourcesHtml, visitWeatherSummary } from './weather-view.js?v=1.16.1';
+import { activityAvailable, operationPauseInfo } from './operation-windows.js?v=1.16.1';
 import { contingencySettings, compareContingency } from './contingency.js';
-import { renderParkMap } from './map-view.js?v=1.16.0';
-import { listSavedPlans, saveNamedPlan, loadSavedPlan, renameSavedPlan, deleteSavedPlan, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=1.16.0';
+import { renderParkMap } from './map-view.js?v=1.16.1';
+import { listSavedPlans, saveNamedPlan, loadSavedPlan, renameSavedPlan, deleteSavedPlan, createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=1.16.1';
 
 const CATEGORY = {attraction:'アトラクション',show:'ショー',parade:'パレード',restaurant:'レストラン',cafe:'カフェ',snack:'スナック',popcorn:'ポップコーン',greeting:'グリーティング',shop:'お土産'};
 const FOOD = new Set(['restaurant','cafe','snack','popcorn']);
@@ -41,7 +41,6 @@ const $ = id => document.getElementById(id);
 const defaultDate = () => { const now = new Date();return new Intl.DateTimeFormat('sv-SE',{timeZone:'Asia/Tokyo',year:'numeric',month:'2-digit',day:'2-digit'}).format(now); };
 export const defaultSettings = () => ({date:defaultDate(),entry:540,exit:1260,speed:70,budget:12000,foodBudget:5000,dpaBudget:5000,souvenirReserve:2000,souvenirMode:'reserve',budgetPreference:'balanced',crowdMode:'estimate',crowdLevel:'auto',weather:'sun',weatherMode:'auto',walkCrowdMode:'estimate',waitBufferMode:'auto',waitBufferMinutes:5,queueDelayMinutes:0,gondolaAvoidHarbourShows:true,weatherForecast:null,selections:[],avoidConsecutiveFood:true,restEvery:0,restMinutes:10,searchSeconds:15,searchMethod:'portfolio',fixedBreaks:[],excludedAutoBreaks:[],spentBudget:0,purchases:[],history:[]});
 
-const CROWD_LABELS = {quiet:'比較的すいている',normal:'ふつう',busy:'混み合う'};
 
 export function crowdExplanation(park, settings) {
   const auto = settings.crowdLevel === 'auto';
@@ -131,6 +130,18 @@ export function catalogueRefreshNotice(catalogue) {
 
 const visitDayFields = ['dpaStart','dpaEnd','dpaPurchasedAt','dpaAvailableWindows','nodeOverride','viewingNode',
   'windows','pauseWindows','normalShowTimes','showTimes','confirmSchedule','confirmAccess','confirmedAccess'];
+
+function visitDateChangeNotice(state, date) {
+  const s=state.settings;
+  if(date===s.date)return '';
+  const resets=[];
+  if(state.result)resets.push('今のしおり');
+  if(s.purchases.length || s.selections.some(wish=>Number.isInteger(wish.dpaStart) || Number.isInteger(wish.dpaEnd)))resets.push('入力済みのDPA枠');
+  if(s.spentBudget || s.completedIds?.length || Object.keys(s.dayProgress?.visits || {}).length)resets.push('当日の記録');
+  const other=state.parkStates?.[state.parkId==='land'?'sea':'land'];
+  if(other?.result || other?.settings?.selections?.length)resets.push('もう一方のパークの編集中の計画');
+  return resets.length ? '訪問日を変えると、'+resets.join('・')+'がリセットされます。' : '';
+}
 
 /** Carry preferences to a new visit day and replace date-specific facts. */
 export function resetForNewVisitDay(state, park, drafts) {
@@ -378,7 +389,11 @@ export function initialiseApp() {
   const byId = id => activities().find(a => a.id === baseVisitId(id || ''));
   const setStatus = (message,error = false) => { $('status').textContent=message; $('status').classList.toggle('is-error',error); };
   const safely = action => async(...args) => { try {await action(...args);}catch(error){setStatus(error.message || '入力を確認してもう一度試してください。',true);} };
-  const setSolveDisabled = disabled => {for(const button of document.querySelectorAll('[data-start-plan]'))button.disabled=disabled;onsiteCard?.refresh();};
+  const setSolveDisabled = disabled => {
+    for(const button of document.querySelectorAll('[data-start-plan]'))button.disabled=disabled;
+    itineraryImage?.refresh(state.result, state.resultDirty || disabled);
+    onsiteCard?.refresh();
+  };
   const numberInput = (id,min,max,step=1) => {
     const input=$(id),value=Number(input.value);
     if(input.value.trim()!==''&&Number.isFinite(value)&&value>=min&&value<=max&&Number.isInteger(value/step))return value;
@@ -420,6 +435,7 @@ export function initialiseApp() {
   }
   function useOutlook(values) {
     const {waitModel,...weather}=values;
+    if (state.settings.weather !== weather.weather) closeSharePanel();
     Object.assign(state.settings,weather);
     if(waitModel && state.settings.waitModel?.parkId!==state.parkId){
       state.settings.waitModel=waitModel;
@@ -514,7 +530,7 @@ export function initialiseApp() {
     setSolveDisabled(false);$('cancelSearch').hidden=true;$('searchProgress').hidden=true;$('scheduleEmptyText').textContent=state.result?'':'まだ計画は作成されていません。希望を選び、プランを考えてみましょう。';
     if(keepBest && latestPreview){state.result=latestPreview;state.resultDirty=false;renderResult();renderMap();}
   }
-  function markResultStale(){clearPlanFeedback();if(worker||preparation){stopSearch();setStatus('条件を変更したため探索を止めました。新しい条件でプランを考えてください。');}if(state.result){state.resultDirty=true;renderResult();}}
+  function markResultStale(){closeSharePanel();clearPlanFeedback();if(worker||preparation){stopSearch();setStatus('条件を変更したため探索を止めました。新しい条件でプランを考えてください。');}if(state.result){state.resultDirty=true;renderResult();}}
   function rememberOwnedPurchase(selection){
     if(selection.dpaMode!=='owned'||!Number.isInteger(selection.dpaStart)||!Number.isInteger(selection.dpaEnd)||!Number.isInteger(selection.dpaPurchasedAt)||selection.dpaStart>=selection.dpaEnd||selection.dpaPurchasedAt>selection.dpaStart)return;
     const activity=byId(selection.id);if(!activity?.dpa)return;const purchases=state.settings.purchases||[];const existing=purchases.find(p=>p.id===selection.id);const purchase={id:selection.id,kind:activity.dpa.kind||'attraction',purchasedAt:selection.dpaPurchasedAt,start:selection.dpaStart,end:selection.dpaEnd,cost:existing?.cost ?? activity.dpa.price};
@@ -549,6 +565,7 @@ export function initialiseApp() {
     $('weather').disabled=!manual;
   }
   function writeSettings() {
+    closeSharePanel();
     const s=state.settings;const bounds=parkTimeBounds(currentPark(),s.date);s.entry=clampClock(s.entry,bounds);s.exit=clampClock(s.exit,bounds);
     for (const [id, value] of [['waitBuffer',s.waitBufferMode === 'auto' ? 'auto' : String(s.waitBufferMinutes ?? 0)],['queueDelay',String(s.queueDelayMinutes ?? 0)]]) {
       const control=$(id);control.querySelector('[data-custom-margin]')?.remove();
@@ -787,7 +804,7 @@ export function initialiseApp() {
   function renderResult() {
     if (state.resultDirty || (contingencyBase && contingencyBase !== state.result)) clearContingency();
     progressEditor?.refresh();
-    itineraryImage?.refresh(state.result, state.resultDirty);
+    itineraryImage?.refresh(state.result, state.resultDirty || !!worker || !!preparation);
     onsiteCard?.refresh();
     const result=state.result;$('results').hidden=!result;$('scheduleEmpty').hidden=!!result;renderSources();if(!result)return;renderFixedBreaks();
     const t=result.totals||{},c=result.coverage||{};
@@ -855,7 +872,7 @@ export function initialiseApp() {
     restUndo.set(change.result,{index,start:state.result.rows[index].start,previous:state.result,
       fixedBreaks:state.settings.fixedBreaks,excludedAutoBreaks:state.settings.excludedAutoBreaks,skipAutoRestAfter:state.settings.skipAutoRestAfter});
     Object.assign(state,change);
-    renderResult();
+    closeSharePanel();renderResult();
     $('timeline').querySelector('[data-undo-rest]')?.focus({preventScroll:true});
   }
   function undoTimelineRest() {
@@ -865,7 +882,7 @@ export function initialiseApp() {
     for(const key of ['fixedBreaks','excludedAutoBreaks','skipAutoRestAfter']){
       if(undo[key]===undefined)delete state.settings[key];else state.settings[key]=undo[key];
     }
-    renderResult();
+    closeSharePanel();renderResult();
     $('timeline').querySelector(`[data-remove-rest-index="${undo.index}"]`)?.focus({preventScroll:true});
   }
   function renderFixedBreaks() {
@@ -1009,7 +1026,7 @@ export function initialiseApp() {
     const extra=Number($('contingencyDelay').value),profile=contingencySettings(state.result.settings||state.settings,extra);
     contingencyBase=state.result;const request=++contingencyRequest;
     const initialPlan=profile.replanFrom!=null?state.result:null;
-    contingencyWorker=new Worker(new URL('./planner-worker.js?v=1.16.0',import.meta.url),{type:'module'});
+    contingencyWorker=new Worker(new URL('./planner-worker.js?v=1.16.1',import.meta.url),{type:'module'});
     $('searchContingency').disabled=true;$('cancelContingency').hidden=false;
     $('contingencyStatus').textContent=`通常の待ち列がさらに${extra}分長い場合を探索しています。`;
     contingencyWorker.onmessage=event=>{
@@ -1047,7 +1064,7 @@ export function initialiseApp() {
     clearPlanFeedback();
     try{readSettings();checkSelectionDetails();checkVisitCommitments();}
     catch(error){showPlanError(error);return;}
-    externalPanel?.cancel();stopSearch();latestPreview=null;requestId++;
+    closeSharePanel();externalPanel?.cancel();stopSearch();latestPreview=null;requestId++;
     const preparingRequest=requestId,park=currentPark();
     preparation=new AbortController();showWorkflow('schedule',{focus:true,scroll:true});$('scheduleEmptyText').textContent='天気と当日の情報を確認して、希望をつなぐ順序を探しています。';
     setSolveDisabled(true);$('cancelSearch').hidden=false;$('searchProgress').hidden=false;$('progressBar').value=0;
@@ -1065,7 +1082,7 @@ export function initialiseApp() {
     if(preparingRequest!==requestId)return;
     preparation=null;state.settings=prepared;if(state.result){state.resultDirty=true;renderResult();}writeSettings();externalPanel?.refresh();
     searchStarted=performance.now();
-    try{worker=new Worker(new URL('./planner-worker.js?v=1.16.0',import.meta.url),{type:'module'});}catch{stopSearch();showPlanError(new Error('探索を起動できませんでした。ページを再読み込みしてもう一度お試しください。'));return;}
+    try{worker=new Worker(new URL('./planner-worker.js?v=1.16.1',import.meta.url),{type:'module'});}catch{stopSearch();showPlanError(new Error('探索を起動できませんでした。ページを再読み込みしてもう一度お試しください。'));return;}
     setSolveDisabled(true);$('cancelSearch').hidden=false;$('searchProgress').hidden=false;$('progressBar').value=0;$('progressText').textContent='最初の計画を探しています…';
     const thisRequest=requestId;
     worker.onmessage=event=>{
@@ -1113,13 +1130,40 @@ export function initialiseApp() {
     Object.assign(state.settings,patch);
     markResultStale();writeSettings();updateContext();
   }
+  function closeSharePanel() {
+    if ($('sharePanel').hidden) return;
+    $('sharePanel').hidden=true;
+    $('shareUrl').value='';
+    $('sharePlan').setAttribute('aria-expanded','false');
+  }
+  function currentShareUrl() {
+    try {
+      readSettings();
+      for (const wish of state.settings.selections) {
+        const draft=wishDrafts.get(wish)?.values().next().value;
+        if (draft) throw Error(`${byId(wish.id)?.name || '希望'}：${draft.label}。 ${draft.message}`);
+      }
+      return createShareUrl(state,location.href);
+    } catch (error) {
+      closeSharePanel();
+      throw error;
+    }
+  }
   function attachEvents() {
+    const calendarOptions=()=>({
+      pendingModel:Boolean(displayedOutlook && !displayedOutlook.values && state.settings.waitModel?.parkId!==state.parkId)
+    });
     forecastCalendar=createForecastCalendar({
-      getCoverage(date) {
-        const pendingModel=Boolean(displayedOutlook && !displayedOutlook.values && state.settings.waitModel?.parkId!==state.parkId);
-        return calendarDayOutlook(currentPark(),state.settings,date,{pendingModel});
-      },
+      getCoverage:date=>calendarDayOutlook(currentPark(),state.settings,date,calendarOptions()),
+      getPreview:date=>calendarDayPreview(currentPark(),state.settings,date,calendarOptions()),
+      getChangeNotice:date=>visitDateChangeNotice(state,date),
       onOpen:()=>warmCalendarWeather().then(()=>forecastCalendar.refresh())
+    });
+    $('jumpToWishes').addEventListener('click',()=>{
+      showWorkflow('wishlist');
+      const heading=$('selectionTitle');
+      heading.focus({preventScroll:true});
+      heading.scrollIntoView({block:'start'});
     });
     progressEditor=attachDayProgress({
       root:document, context:()=>({park:currentPark(),settings:state.settings,session:state}),
@@ -1154,7 +1198,14 @@ export function initialiseApp() {
     }));
 
     $('landTab').addEventListener('click',safely(()=>switchPark('land')));$('seaTab').addEventListener('click',safely(()=>switchPark('sea')));
-    for(const id of ['landTab','seaTab'])$(id).addEventListener('keydown',event=>{if(event.key==='ArrowLeft'||event.key==='ArrowRight'){event.preventDefault();safely(()=>switchPark(state.parkId==='land'?'sea':'land'))();}});
+    for(const id of ['landTab','seaTab'])$(id).addEventListener('keydown',safely(event=>{
+      if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
+      event.preventDefault();
+      const otherPark=state.parkId==='land'?'sea':'land';
+      const next={Home:'land',End:'sea'}[event.key] || otherPark;
+      switchPark(next);
+      $(next+'Tab').focus();
+    }));
     $('wishlistTabs').addEventListener('click',event=>{const tab=event.target.closest('[data-wish-genre]');if(!tab)return;wishlistGenre=tab.dataset.wishGenre;renderWishlist();$(`wishTab-${wishlistGenre}`).focus();});
     $('wishlistTabs').addEventListener('keydown',event=>{const tab=event.target.closest('[data-wish-genre]');if(!tab||!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;event.preventDefault();const index=GENRES.findIndex(g=>g.id===tab.dataset.wishGenre),next=event.key==='Home'?0:event.key==='End'?GENRES.length-1:(index+(event.key==='ArrowRight'?1:-1)+GENRES.length)%GENRES.length;wishlistGenre=GENRES[next].id;renderWishlist();$(`wishTab-${wishlistGenre}`).focus();});
     $('breakEditor').addEventListener('toggle',()=>{if($('breakEditor').open&&state.result!==lastBreakSuggestionResult){suggestBreakLocation();lastBreakSuggestionResult=state.result;}});
@@ -1289,8 +1340,25 @@ export function initialiseApp() {
     $('cancelContingency').addEventListener('click',()=>{clearContingency();$('contingencyStatus').textContent='代替案の探索を止めました。現在のしおりを引き続き使えます。';});
     $('savePlan').addEventListener('click',safely(()=>{readSettings();showSavedPlans(true);}));
     $('loadPlan').addEventListener('click',safely(()=>showSavedPlans(false)));
-    $('sharePlan').addEventListener('click',safely(async()=>{readSettings();$('shareUrl').value=await createShareUrl(state,location.href);$('sharePanel').hidden=false;setStatus('リンクをコピーしてスマホへ送れます。予定表はJSONやスマホ用しおりでも持ち出せます。');}));
-    $('copyShare').addEventListener('click',safely(async()=>{try{await navigator.clipboard.writeText($('shareUrl').value);setStatus('共有リンクをコピーしました。');}catch{$('shareUrl').select();setStatus('リンク欄を選択しました。コピーして送ってください。');}}));
+    $('sharePlan').addEventListener('click',safely(()=>{
+      if (!$('sharePanel').hidden) { closeSharePanel(); return; }
+      $('shareUrl').value=currentShareUrl();
+      $('sharePanel').hidden=false;
+      $('sharePlan').setAttribute('aria-expanded','true');
+      $('copyShare').focus({preventScroll:true});
+    }));
+    $('copyShare').addEventListener('click',safely(async()=>{
+      const url=currentShareUrl();
+      $('shareUrl').value=url;
+      try {
+        await navigator.clipboard.writeText(url);
+        if (!$('sharePanel').hidden && $('shareUrl').value===url) setStatus('共有リンクをコピーしました。');
+      } catch {
+        if ($('sharePanel').hidden || $('shareUrl').value!==url) return;
+        $('shareUrl').select();
+        setStatus('リンク欄を選択しました。コピーして送ってください。');
+      }
+    }));
     $('importPlan').addEventListener('click',()=>$('planFile').click());$('planFile').addEventListener('change',safely(async()=>{const file=$('planFile').files[0];if(!file)return;if(file.size>5000000)throw Error('計画ファイルは5MB以下で指定してください。');const value=parsePlanJson(await file.text());stopSearch();state=cleanState(value);openedPlanId=null;writeSettings();updateContext();showWorkflow(state.result?'schedule':'wishlist');setStatus('計画ファイルを読み込みました。');$('planFile').value='';}));
     $('importHistory').addEventListener('click',()=>$('historyFile').click());$('historyFile').addEventListener('change',safely(async()=>{const file=$('historyFile').files[0];if(!file)return;if(file.size>10000000)throw Error('待ち時間CSVは10MB以下で指定してください。');state.history=parseHistoryCsv(await file.text());state.settings.history=state.history;updateCrowd();externalPanel?.refresh();markResultStale();setStatus(`${state.history.length}件の待ち時間を読み込みました。再探索すると計画へ反映します。`);$('historyFile').value='';}));
     $('exportCatalogue').addEventListener('click',safely(downloadCatalogue));$('importCatalogue').addEventListener('click',()=>$('catalogueFile').click());$('catalogueFile').addEventListener('change',safely(async()=>{const file=$('catalogueFile').files[0];if(!file)return;if(file.size>5000000)throw Error('施設JSONは5MB以下で指定してください。');const next=validateCatalogue(JSON.parse(await file.text()));stopSearch();catalogue=next;state.result=null;state.settings.selections=state.settings.selections.filter(s=>byId(s.id));updateContext();setStatus('施設情報を更新しました。時間・料金を確認して再探索してください。');$('catalogueFile').value='';}));
