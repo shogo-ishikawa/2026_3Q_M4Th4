@@ -100,7 +100,7 @@ class ParkPublicBuildTests(unittest.TestCase):
         text = (repository / 'web/index.html').read_text(encoding='utf-8')
         projects = re.findall(r'<article[^>]+aria-labelledby="([^"]+)"', text)
         self.assertEqual(projects[3:5], ['swing-title', 'park-title'])
-        self.assertEqual(len(projects), 8)
+        self.assertEqual(len(projects), 9)
 
 
 if __name__ == '__main__':
