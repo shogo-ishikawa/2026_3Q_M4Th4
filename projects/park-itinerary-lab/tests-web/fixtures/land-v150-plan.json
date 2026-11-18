@@ -1,0 +1,411 @@
+{
+  "parkId": "land",
+  "settings": {
+    "date": "2026-11-18",
+    "entry": 540,
+    "exit": 1260,
+    "speed": 70,
+    "budget": 10000,
+    "restEvery": 0,
+    "restMinutes": 0,
+    "crowdMode": "manual",
+    "searchSeconds": 0.1,
+    "selections": [
+      {
+        "id": "land-attraction-151",
+        "weight": 3,
+        "manualWait": 10
+      },
+      {
+        "id": "land-attraction-191",
+        "weight": 3,
+        "manualWait": 10
+      },
+      {
+        "id": "land-attraction-154",
+        "weight": 3,
+        "manualWait": 10
+      }
+    ]
+  },
+  "result": {
+    "status": "feasible",
+    "parkId": "land",
+    "settings": {
+      "date": "2026-11-18",
+      "entry": 540,
+      "exit": 1260,
+      "speed": 70,
+      "budget": 10000,
+      "restEvery": 0,
+      "restMinutes": 0,
+      "crowdMode": "manual",
+      "searchSeconds": 0.1,
+      "selections": [
+        {
+          "id": "land-attraction-151",
+          "weight": 3,
+          "manualWait": 10,
+          "confirmedAccess": false,
+          "required": false,
+          "duration": 6,
+          "cost": 0,
+          "dpaMode": "none",
+          "pauseWindows": []
+        },
+        {
+          "id": "land-attraction-191",
+          "weight": 3,
+          "manualWait": 10,
+          "confirmedAccess": false,
+          "required": false,
+          "duration": 10,
+          "cost": 500,
+          "dpaMode": "none",
+          "pauseWindows": []
+        },
+        {
+          "id": "land-attraction-154",
+          "weight": 3,
+          "manualWait": 10,
+          "confirmedAccess": false,
+          "required": false,
+          "duration": 15,
+          "cost": 0,
+          "dpaMode": "none",
+          "pauseWindows": []
+        }
+      ],
+      "waitAsOf": 1794963570282,
+      "spentBudget": 0,
+      "gondolaAvoidHarbourShows": true,
+      "walkCrowdMode": "off",
+      "excludedAutoBreaks": [],
+      "searchMethod": "beam",
+      "fixedBreaks": [],
+      "history": [],
+      "activeEvents": [
+        {
+          "id": "land-christmas-2026",
+          "name": "ディズニー・クリスマス",
+          "startDate": "2026-11-11",
+          "endDate": "2026-12-25",
+          "multiplier": 1.12,
+          "sourceUrl": "https://www.tokyodisneyresort.jp/treasure/christmas2026/tdl/",
+          "multiplierSource": "planning-assumption",
+          "checkedOn": "2026-11-17"
+        }
+      ],
+      "purchases": [],
+      "historySampleCount": 0
+    },
+    "rows": [
+      {
+        "kind": "walk",
+        "type": "walk",
+        "start": 540,
+        "end": 544,
+        "duration": 4,
+        "name": "ペニーアーケードへ移動",
+        "cost": 0,
+        "dpa": false,
+        "from": "entry",
+        "to": "visit-land-attraction-191",
+        "node": "visit-land-attraction-191",
+        "metres": 235,
+        "path": [
+          "entry",
+          "world-south",
+          "world",
+          "visit-land-attraction-191"
+        ],
+        "activityId": "land-attraction-191",
+        "walkSpeed": 70
+      },
+      {
+        "kind": "queue",
+        "type": "queue",
+        "start": 544,
+        "end": 554,
+        "duration": 10,
+        "name": "待ち時間",
+        "cost": 0,
+        "dpa": false,
+        "node": "visit-land-attraction-191",
+        "activityId": "land-attraction-191",
+        "waitSource": "manual"
+      },
+      {
+        "kind": "activity",
+        "type": "activity",
+        "start": 554,
+        "end": 564,
+        "duration": 10,
+        "name": "ペニーアーケード",
+        "cost": 500,
+        "dpa": false,
+        "activityId": "land-attraction-191",
+        "node": "visit-land-attraction-191",
+        "endNode": "visit-land-attraction-191",
+        "category": "attraction",
+        "dpaCost": 0,
+        "method": "normal",
+        "waitSource": "manual",
+        "sourceUrl": "https://www.tokyodisneyresort.jp/tdl/attraction/detail/191/"
+      },
+      {
+        "kind": "walk",
+        "type": "walk",
+        "start": 564,
+        "end": 571,
+        "duration": 7,
+        "name": "ウエスタンリバー鉄道へ移動",
+        "cost": 0,
+        "dpa": false,
+        "from": "visit-land-attraction-191",
+        "to": "visit-land-attraction-154",
+        "node": "visit-land-attraction-154",
+        "metres": 430,
+        "path": [
+          "visit-land-attraction-191",
+          "world",
+          "hub-s",
+          "hub-w",
+          "adventure",
+          "visit-land-attraction-154"
+        ],
+        "activityId": "land-attraction-154",
+        "walkSpeed": 70
+      },
+      {
+        "kind": "queue",
+        "type": "queue",
+        "start": 571,
+        "end": 581,
+        "duration": 10,
+        "name": "待ち時間",
+        "cost": 0,
+        "dpa": false,
+        "node": "visit-land-attraction-154",
+        "activityId": "land-attraction-154",
+        "waitSource": "manual"
+      },
+      {
+        "kind": "activity",
+        "type": "activity",
+        "start": 581,
+        "end": 596,
+        "duration": 15,
+        "name": "ウエスタンリバー鉄道",
+        "cost": 0,
+        "dpa": false,
+        "activityId": "land-attraction-154",
+        "node": "visit-land-attraction-154",
+        "endNode": "visit-land-attraction-154",
+        "category": "attraction",
+        "dpaCost": 0,
+        "method": "normal",
+        "waitSource": "manual",
+        "sourceUrl": "https://www.tokyodisneyresort.jp/tdl/attraction/detail/154/"
+      },
+      {
+        "kind": "walk",
+        "type": "walk",
+        "start": 596,
+        "end": 601,
+        "duration": 5,
+        "name": "オムニバスへ移動",
+        "cost": 0,
+        "dpa": false,
+        "from": "visit-land-attraction-154",
+        "to": "visit-land-attraction-151",
+        "node": "visit-land-attraction-151",
+        "metres": 315,
+        "path": [
+          "visit-land-attraction-154",
+          "adventure",
+          "hub-w",
+          "hub-s",
+          "visit-land-attraction-151"
+        ],
+        "activityId": "land-attraction-151",
+        "walkSpeed": 70
+      },
+      {
+        "kind": "wait",
+        "type": "wait",
+        "start": 601,
+        "end": 630,
+        "duration": 29,
+        "name": "時間帯まで待機",
+        "cost": 0,
+        "dpa": false,
+        "node": "visit-land-attraction-151",
+        "activityId": "land-attraction-151"
+      },
+      {
+        "kind": "queue",
+        "type": "queue",
+        "start": 630,
+        "end": 640,
+        "duration": 10,
+        "name": "待ち時間",
+        "cost": 0,
+        "dpa": false,
+        "node": "visit-land-attraction-151",
+        "activityId": "land-attraction-151",
+        "waitSource": "manual"
+      },
+      {
+        "kind": "activity",
+        "type": "activity",
+        "start": 640,
+        "end": 646,
+        "duration": 6,
+        "name": "オムニバス",
+        "cost": 0,
+        "dpa": false,
+        "activityId": "land-attraction-151",
+        "node": "visit-land-attraction-151",
+        "endNode": "visit-land-attraction-151",
+        "category": "attraction",
+        "dpaCost": 0,
+        "method": "normal",
+        "waitSource": "manual",
+        "sourceUrl": "https://www.tokyodisneyresort.jp/tdl/attraction/detail/151/"
+      },
+      {
+        "kind": "walk",
+        "type": "walk",
+        "start": 646,
+        "end": 651,
+        "duration": 5,
+        "name": "出口へ移動",
+        "cost": 0,
+        "dpa": false,
+        "from": "visit-land-attraction-151",
+        "to": "entry",
+        "node": "entry",
+        "metres": 350,
+        "path": [
+          "visit-land-attraction-151",
+          "hub-s",
+          "world",
+          "world-south",
+          "entry"
+        ],
+        "walkSpeed": 70
+      },
+      {
+        "kind": "exit",
+        "type": "exit",
+        "start": 651,
+        "end": 651,
+        "duration": 0,
+        "name": "退園",
+        "cost": 0,
+        "dpa": false,
+        "node": "entry"
+      }
+    ],
+    "visits": [
+      {
+        "id": "land-attraction-191",
+        "activityId": "land-attraction-191",
+        "name": "ペニーアーケード",
+        "node": "visit-land-attraction-191",
+        "endNode": "visit-land-attraction-191",
+        "category": "attraction",
+        "start": 554,
+        "end": 564,
+        "queueStart": 544,
+        "arrival": 544,
+        "method": "normal",
+        "waitSource": "manual",
+        "weight": 3,
+        "cost": 500,
+        "dpaCost": 0
+      },
+      {
+        "id": "land-attraction-154",
+        "activityId": "land-attraction-154",
+        "name": "ウエスタンリバー鉄道",
+        "node": "visit-land-attraction-154",
+        "endNode": "visit-land-attraction-154",
+        "category": "attraction",
+        "start": 581,
+        "end": 596,
+        "queueStart": 571,
+        "arrival": 571,
+        "method": "normal",
+        "waitSource": "manual",
+        "weight": 3,
+        "cost": 0,
+        "dpaCost": 0
+      },
+      {
+        "id": "land-attraction-151",
+        "activityId": "land-attraction-151",
+        "name": "オムニバス",
+        "node": "visit-land-attraction-151",
+        "endNode": "visit-land-attraction-151",
+        "category": "attraction",
+        "start": 640,
+        "end": 646,
+        "queueStart": 630,
+        "arrival": 601,
+        "method": "normal",
+        "waitSource": "manual",
+        "weight": 3,
+        "cost": 0,
+        "dpaCost": 0
+      }
+    ],
+    "purchases": [],
+    "totals": {
+      "cost": 500,
+      "foodCost": 0,
+      "dpaCost": 0,
+      "shoppingCost": 0,
+      "walkingMetres": 1330,
+      "walkMinutes": 21,
+      "queueMinutes": 30,
+      "waitMinutes": 59,
+      "restMinutes": 0,
+      "burdenMinutes": 80,
+      "score": 9,
+      "finish": 651,
+      "visitCount": 3,
+      "budgetRemaining": 9500,
+      "souvenirAllocation": 0
+    },
+    "coverage": {
+      "weight": 9,
+      "totalWeight": 9,
+      "percent": 100,
+      "count": 3,
+      "totalCount": 3,
+      "requiredCount": 0,
+      "requiredTotal": 0
+    },
+    "omissions": [],
+    "diagnostics": {
+      "elapsedMs": 11,
+      "expanded": 16,
+      "method": "beam-search",
+      "optimal": false,
+      "timedOut": false,
+      "waitSource": "manual",
+      "notes": [
+        "重要度の合計を優先し、同点では待ち時間・移動・待機の合計を短くする案を比べます。予算上限を守り、徒歩距離だけで訪問順を決めません。最適性の証明は行いません。",
+        "待ち時間は手動指定、当日の新しい外部データ、検証で改善した学習モデル、履歴、傾向モデルの順に使います。施設ごとの出典は予定表に表示します。",
+        "移動時間は設定した歩く速さと通路の距離から計算しています。",
+        "DPAの購入案は入力した空き枠と購入履歴から計算しています。在庫は公式アプリで確認してください。"
+      ],
+      "waitSources": [
+        "manual"
+      ]
+    }
+  },
+  "fixtureSource": "Synthetic plan generated with adb79370abddc635bb1caefa4163e3308f160335"
+}

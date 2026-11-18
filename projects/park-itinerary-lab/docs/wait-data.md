@@ -29,7 +29,7 @@ v1.3.0は2026年11月11〜17日の許可された履歴を使った初期モデ�
 
 ## 公式情報の日次更新
 
-**Update official park catalogue** が毎朝6:15 JSTに動きます。公式の施設一覧・運営カレンダー・休止情報・イベントページ・店舗メニュー・内閣府の祝日CSVを確認します。結果は同じデータブランチの `catalogue.json` と `calendar.json` に保存します。通信に失敗した情報は前回確認済みの内容を保持します。初回は同梱データを使います。取得成功日時と更新試行日時は分けて記録し、取得できなかったことを画面と差分レポートに表示します。メニューと祝日カレンダーの更新は個別に試行します。
+公式情報の日次更新は毎朝6:15 JSTにクラウド実行します。公開リポジトリの最新の `scripts/refresh_official_bundle.py` を使い、確認した結果だけを `park-wait-data` へ保存します。GitHub-hosted runner はLinux・macOSの両方で公式サイトへの通信がタイムアウトしたため、日次取得の実行元を分けています。GitHub Actionsの **Update official park catalogue** は手動確認用です。公式の施設一覧・運営カレンダー・休止情報・イベントページ・店舗メニュー・内閣府の祝日CSVを確認します。結果は同じデータブランチの `catalogue.json` と `calendar.json` に保存します。通信に失敗した情報は前回確認済みの内容を保持します。初回は同梱データを使います。取得成功日時と更新試行日時は分けて記録し、取得できなかったことを画面と差分レポートに表示します。メニューと祝日カレンダーの更新は個別に試行します。
 
 施設の `dailySchedules` が日付別の営業時間と公演回、`closedPeriods` が明示された休止期間です。営業時間が「ー」で未発表の欄は休止と判定しません。未登録施設やDPA対象の変更はレポートに残し、位置・通路・料金を確認してからカタログへ加えます。公式の情報と計画用の概算を区別します。追加した店舗の位置と短い接続距離は概略地図のエリアをもとにした目安です。予算は注文内容に合わせて変更できます。
 
@@ -99,3 +99,15 @@ python3 scripts/train_wait_model.py --observations outputs/waits/observations.js
 - [Open-Meteo](https://open-meteo.com/en/docs)：パーク周辺の天気を取得します。[非商用・教育利用の条件](https://open-meteo.com/en/terms)と[CC BY 4.0](https://open-meteo.com/en/license)に従い、天気の表示に出典リンクを付けます。
 - [気象庁](https://www.jma.go.jp/bosai/forecast/)：千葉県北西部の天気と千葉・銚子地点の気温を予報の区切りとともに表示します。提供されない降水量は補完しません。Open-Meteoと気象庁の予報を `weather-forecast.json` へ保存し、日中は約1時間、夜間は3時間ごとに更新を試みます。取得失敗時は前回の取得・発表日時を維持します。
 - Yosocal、Queue-Timesの混雑カレンダー、ディズニーリアルは画面から開ける比較用リンクです。各ページの予想や過去履歴を自動収集する機能はありません。
+
+## 公式情報の更新を手元で確認する
+
+```sh
+python3 scripts/refresh_official_bundle.py --output-dir outputs/official-update
+```
+
+Python標準ライブラリで営業予定・休止・イベント・メニュー・祝日を取得します。既存の公開カタログを読み込む場合は `--previous-catalogue /保存先/catalogue.json` を加えます。前回の `calendar.json` が同じフォルダにあれば保持用に読み込みます。出力は `catalogue.json`、`catalogue-report.json`、`calendar.json`、`calendar-report.json` です。元HTMLや画像は配布しません。このコマンドだけでは公開しません。
+
+通信失敗は最大1回だけ再試行します。施設一覧は3並列、メニューは4並列です。同じ店舗を表す複数の売り場では一回の応答を共有します。取得試行と成功は別の日時で記録します。メニューは各施設の `menuCheckedOn` が最後の確認成功日で、全体の `foodMenuUpdate.checkedAt` は更新を試みた日時です。全件失敗を成功扱いにしません。
+
+日次処理は最新mainのスクリプトで生成した公開JSONだけをデータ専用ブランチへ反映します。反映直前にデータブランチのHEADを確認し、他の待ち時間収集のコミットを保持します。競合した場合は最新のデータから再度結合し、強制更新しません。新施設の位置・料金・DPA変更は引き続き確認が必要です。

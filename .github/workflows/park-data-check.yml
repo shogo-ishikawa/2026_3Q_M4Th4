@@ -1,15 +1,6 @@
 name: Update official park catalogue
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - '.github/workflows/park-data-check.yml'
-      - 'projects/park-itinerary-lab/scripts/update_park_data.py'
-      - 'projects/park-itinerary-lab/scripts/update_food_menus.py'
-      - 'projects/park-itinerary-lab/scripts/update_calendar.py'
-      - 'projects/park-itinerary-lab/scripts/official_http.py'
-      - 'projects/park-itinerary-lab/web/data/parks.json'
   pull_request:
     paths:
       - '.github/workflows/park-data-check.yml'
@@ -22,8 +13,6 @@ on:
         description: '照合する日付（YYYY-MM-DD、空欄は日本時間の当日）'
         required: false
         type: string
-  schedule:
-    - cron: '15 21 * * *' # 06:15 JST, before park opening
 
 permissions:
   contents: write
@@ -36,41 +25,20 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  check-official-network:
+  check-updater:
     if: github.event_name == 'pull_request'
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, macos-15]
-    runs-on: ${{ matrix.os }}
+    runs-on: ubuntu-latest
     permissions:
       contents: read
-    timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - name: Read official lists without publishing
-        run: python projects/park-itinerary-lab/scripts/update_park_data.py --output "${{ runner.temp }}/catalogue.json"
-      - name: Check official menu links from both parks
+      - name: Check retrieval limits and last-known facts
         run: |
-          python - <<'PY'
-          import datetime as dt,json,pathlib,sys
-          sys.path.insert(0,'projects/park-itinerary-lab/scripts')
-          from update_food_menus import refresh_food
-          catalogue=json.loads(pathlib.Path('projects/park-itinerary-lab/web/data/parks.json').read_text())
-          date=dt.datetime.now(dt.timezone(dt.timedelta(hours=9))).date().isoformat()
-          for park in catalogue['parks']:
-              activity=next(a for a in park['activities'] if a['category']=='restaurant')
-              result=refresh_food(activity,date)
-              print(park['id'],result['menuStatus'],result['menuUrl'],len(result['menuItems']))
-          PY
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: official-network-${{ matrix.os }}
-          path: ${{ runner.temp }}/catalogue-report.json
+          python -m unittest discover -s projects/park-itinerary-lab/tests-web -p test_official_http.py
+          python -m unittest discover -s projects/park-itinerary-lab/tests-web -p test_catalogue_failure.py
   update-catalogue:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest

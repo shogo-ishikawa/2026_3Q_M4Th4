@@ -79,12 +79,15 @@ def curl_bytes(url, timeout, max_bytes):
         for _ in range(4):
             official_url(url)
             remaining = max(1, timeout - (time.monotonic()-started))
-            result = subprocess.run(['curl','--silent','--show-error','--compressed','--proto','=https',
+            try:
+                result = subprocess.run(['curl','--silent','--show-error','--compressed','--proto','=https',
                                      '--connect-timeout',str(min(10,remaining)),'--max-time',str(remaining),
                                      '--max-filesize',str(max_bytes),'--user-agent',USER_AGENT,
                                      '--header','Accept: text/html,application/xhtml+xml',
                                      '--dump-header',str(headers),'--output',str(body),'--write-out','%{http_code}',url],
-                                    capture_output=True, text=True, timeout=remaining+3)
+                                        capture_output=True, text=True, timeout=remaining+3)
+            except subprocess.TimeoutExpired as error:
+                raise TimeoutError('Official curl process exceeded its deadline') from error
             if result.returncode == 28:
                 raise TimeoutError('Official curl request timed out')
             if result.returncode:
