@@ -1,4 +1,4 @@
-"""Regressions for delayed schedules and failed history training."""
+"""Regressions for closed-day boundaries, archive-only fitting and model retention."""
 import datetime as dt
 import json
 from pathlib import Path
@@ -12,49 +12,140 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 import nightly_wait_training as nightly
 
 
-def model_for(day):
-    return {'parks': [{'parkId': name, 'bootstrap': {'lastObservedDate': day}}
-                      for name in ('land', 'sea')]}
+def observations(days, parks=('land', 'sea')):
+    # Constant positive waits make the fitted model better than the trend baseline.
+    return [{'date': f'2026-11-{day:02}', 'source': 'queue-times', 'activityId': f'{park}-ride',
+             'time': hour * 60, 'wait': 20} for day in days for park in parks for hour in range(9, 21)]
+
+
+def fixture(data, rows):
+    parks = [{'id': park, 'activities': [{'id': park+'-ride', 'baseWait': 45, 'category': 'attraction'}],
+              'events': []} for park in ('land', 'sea')]
+    (data / 'catalogue.json').write_text(json.dumps({'parks': parks}))
+    (data / 'observations.json').write_text(json.dumps(rows))
+
+
+def read(data, name):
+    return json.loads((data / name).read_text())
 
 
 class NightlyTrainingTest(unittest.TestCase):
-    def test_closed_day_uses_japan_time_and_the_actual_start_of_the_job(self):
+    def test_closed_day_uses_japan_time_and_later_actual_closing(self):
         now = dt.datetime(2026, 11, 18, 12, 54, tzinfo=dt.timezone.utc)
-        self.assertEqual(str(nightly.closed_day(now)), '2026-11-17')
-        self.assertEqual(str(nightly.closed_day(now + dt.timedelta(minutes=1))), '2026-11-18')
-        self.assertEqual(str(nightly.closed_day(now + dt.timedelta(hours=12))), '2026-11-18')
-
-    def test_missed_evening_archive_catches_up_once_and_keeps_newer_observations(self):
         with tempfile.TemporaryDirectory() as temporary:
             data = Path(temporary)
-            observations = [{'source': 'queue-times', 'date': date, 'activityId': 'land-ride',
-                             'time': 550, 'wait': 10} for date in ('2026-11-17', '2026-11-18')]
-            (data / 'observations.json').write_text(json.dumps(observations))
-            (data / 'wait-model.json').write_text('{}')
-            def fit(args, check):
-                day = args[args.index('--end-date') + 1]
-                model = Path(args[args.index('--output-model') + 1])
-                model.write_text(json.dumps(model_for(day)))
-            now = dt.datetime(2026, 11, 18, 11, tzinfo=nightly.JST)
-            with patch.object(nightly.subprocess, 'run', side_effect=fit) as runner:
-                nightly.run(data, now)
-                self.assertEqual(json.loads((data / 'training-state.json').read_text())['completedThrough'], '2026-11-17')
-                self.assertEqual(len(json.loads((data / 'history' / '2026-11.json').read_text())), 2)
+            self.assertEqual(str(nightly.latest_closed_day(data, now)), '2026-11-17')
+            self.assertEqual(str(nightly.latest_closed_day(data, now + dt.timedelta(minutes=1))), '2026-11-18')
+            calendar = {'2026-11-18': {'windows': [[540, 1260], [1320, 1380]]}}
+            (data / 'catalogue.json').write_text(json.dumps({'parks': [{'id': 'sea', 'operatingCalendar': calendar}]}))
+            self.assertEqual(str(nightly.latest_closed_day(data, now + dt.timedelta(minutes=65))), '2026-11-17')
+            self.assertEqual(str(nightly.latest_closed_day(data, now + dt.timedelta(minutes=66))), '2026-11-18')
+            self.assertEqual(str(nightly.latest_closed_day(data, now + dt.timedelta(hours=12))), '2026-11-18')
+
+    def test_real_fit_uses_archived_and_just_closed_days_once_with_no_future_or_closed_samples(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            data = Path(temporary)
+            archive = data / 'history'
+            archive.mkdir()
+            (archive / '2026-11.json').write_text(json.dumps(observations(range(1, 9))))
+            recent = observations([8, 9, 10])
+            closed = {**recent[0], 'date': '2026-11-09', 'time': 1260, 'wait': 0, 'isOpen': False}
+            fixture(data, [*recent, closed])
+            now = dt.datetime(2026, 11, 10, 11, tzinfo=nightly.JST)
+            nightly.run(data, now)
+            state = read(data, 'training-state.json')
+            self.assertEqual(state['completedThrough'], '2026-11-09')
+            self.assertEqual(len(read(data, 'history/2026-11.json')), 10 * 2 * 12)
+            for park in read(data, 'wait-model.json')['parks']:
+                self.assertEqual(park['samples'], 9 * 12)
+                self.assertEqual(park['firstDate'], '2026-11-01')
+                self.assertEqual(park['lastDate'], '2026-11-09')
+                self.assertLess(park['validation']['trainThrough'], park['validation']['testFrom'])
+                self.assertTrue(park['usable'])
+                self.assertEqual([source['name'] for source in park['dataSources']], ['Queue-Times.com'])
+            with patch.object(nightly.subprocess, 'run') as runner:
                 nightly.run(data, now + dt.timedelta(minutes=15))
-                self.assertEqual(runner.call_count, 1)
-                nightly.run(data, now, force=True)
-                self.assertEqual(runner.call_count, 2)
-                nightly.run(data, now.replace(hour=22))
-                self.assertEqual(runner.call_count, 3)
-                self.assertEqual(json.loads((data / 'training-state.json').read_text())['completedThrough'], '2026-11-18')
+                runner.assert_not_called()
+            nightly.run(data, now.replace(hour=22))
+            self.assertEqual(read(data, 'training-state.json')['completedThrough'], '2026-11-10')
+            self.assertEqual(read(data, 'wait-model.json')['parks'][0]['samples'], 120)
 
-    def test_provider_failure_retains_previous_success_and_bounds_retries(self):
+    def test_daily_attempt_with_too_few_dates_retains_validated_baseline_and_records_new_day(self):
         with tempfile.TemporaryDirectory() as temporary:
             data = Path(temporary)
-            marker = data / 'training-state.json'
-            marker.write_text(json.dumps({'completedThrough': '2026-11-16'}))
+            fixture(data, observations([18]))
+            # Existing validated initial models come from a wider historical bootstrap.
+            bundled = read(nightly.BUNDLED, 'wait-model.json')
+            (data / 'wait-model.json').write_text(json.dumps(bundled))
+            real_parks = read(nightly.BUNDLED, 'parks.json')
+            (data / 'catalogue.json').write_text(json.dumps(real_parks))
+            rows = []
+            for park in real_parks['parks']:
+                key = next(a['id'] for a in park['activities'] if a.get('category') == 'attraction')
+                rows.append({'date': '2026-11-18', 'activityId': key, 'wait': 30, 'time': 700, 'source': 'queue-times'})
+            (data / 'observations.json').write_text(json.dumps(rows))
+            with patch.object(nightly, 'supplement_sparse_history', return_value={}) as supplement:
+                nightly.run(data, dt.datetime(2026, 11, 18, 22, tzinfo=nightly.JST))
+                supplement.assert_called_once()
+            state = read(data, 'training-state.json')
+            self.assertEqual(state['completedThrough'], '2026-11-18')
+            for park, prior in zip(read(data, 'wait-model.json')['parks'], bundled['parks']):
+                self.assertEqual(park['coefficients'], prior['coefficients'])
+                self.assertEqual(park['lastDate'], prior['lastDate'])
+                self.assertTrue(state['parks'][park['parkId']]['retainedPriorModel'])
+                self.assertEqual(park['latestAttempt']['lastDate'], '2026-11-18')
+
+    def test_missing_one_parks_observations_does_not_complete_its_day(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            data = Path(temporary)
+            fixture(data, observations([17]) + observations([18], ['land']))
+            with patch.object(nightly, 'supplement_sparse_history', return_value={}), self.assertRaisesRegex(RuntimeError, 'incomplete'):
+                nightly.run(data, dt.datetime(2026, 11, 18, 22, tzinfo=nightly.JST))
+            state = read(data, 'training-state.json')
+            self.assertNotIn('completedThrough', state)
+            self.assertEqual(state['parks']['land']['lastObservedDate'], '2026-11-18')
+            self.assertEqual(state['parks']['sea']['lastObservedDate'], '2026-11-17')
+
+    def test_anonymous_supplement_cannot_use_a_key_or_block_local_fit_on_timeout(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            data = Path(temporary)
+            with patch.dict('os.environ', {'THEMEPARKS_API_KEY': 'unused'}), patch.object(
+                    nightly.subprocess, 'run', side_effect=subprocess.TimeoutExpired('bootstrap', 90)) as runner:
+                result = nightly.supplement_sparse_history(data, data/'catalogue.json', data/'calendar.json',
+                                                          data/'local.json', data/'out.json', '2026-11-18')
+            self.assertEqual(result, {})
+            args, options = runner.call_args
+            self.assertEqual(args[0][args[0].index('--days') + 1], '7')
+            self.assertEqual(args[0][args[0].index('--history-dir') + 1], str(data/'history'))
+            self.assertNotIn('THEMEPARKS_API_KEY', options['env'])
+
+    def test_sparse_local_archive_uses_successful_combined_candidate_only_for_eligible_park(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            data = Path(temporary)
+            fixture(data, observations([17]))
+            supplemented = read(nightly.BUNDLED, 'wait-model.json')
+            for park in supplemented['parks']:
+                park['bootstrap'] = {'historySamples': 50}
+            # Sea's broader prior was retained after a failed remote fitting attempt.
+            supplemented['parks'][1]['lastBootstrapAttempt'] = {'lastObservedDate': '2026-11-17'}
+            with patch.object(nightly, 'supplement_sparse_history', return_value=supplemented):
+                nightly.run(data, dt.datetime(2026, 11, 17, 22, tzinfo=nightly.JST))
+            state = read(data, 'training-state.json')['parks']
+            self.assertEqual(state['land']['fitSource'], 'queue-times+anonymous-history')
+            self.assertEqual(state['land']['archiveSamples'], 12)
+            self.assertEqual(state['land']['archiveDays'], 1)
+            self.assertEqual(state['sea']['fitSource'], 'queue-times')
+            model = read(data, 'wait-model.json')['parks']
+            self.assertTrue(model[0]['usable'])
+            self.assertFalse(model[1]['usable'])
+
+    def test_failed_fit_retains_published_files_and_bounds_retries(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            data = Path(temporary)
+            (data / 'training-state.json').write_text(json.dumps({'completedThrough': '2026-11-16'}))
+            (data / 'wait-model.json').write_text('{"prior": true}')
             now = dt.datetime(2026, 11, 18, 4, tzinfo=nightly.JST)
-            failure = subprocess.CalledProcessError(1, 'bootstrap_wait_history')
+            failure = subprocess.CalledProcessError(1, 'train_wait_model')
             with patch.object(nightly.subprocess, 'run', side_effect=failure) as runner:
                 with self.assertRaises(subprocess.CalledProcessError):
                     nightly.run(data, now)
@@ -63,18 +154,8 @@ class NightlyTrainingTest(unittest.TestCase):
                 with self.assertRaises(subprocess.CalledProcessError):
                     nightly.run(data, now + dt.timedelta(hours=6))
                 self.assertEqual(runner.call_count, 2)
-            self.assertEqual(json.loads(marker.read_text())['completedThrough'], '2026-11-16')
-
-    def test_fallback_or_missing_park_cannot_mask_stale_or_failed_new_attempt(self):
-        model = model_for('2026-11-17')
-        park = model['parks'][0]
-        park['lastBootstrapAttempt'] = {'lastObservedDate': '2026-11-16'}
-        self.assertFalse(nightly.training_complete(model, '2026-11-17'))
-        park['lastBootstrapAttempt'] = {'lastObservedDate': '2026-11-17', 'failedDays': 3}
-        self.assertFalse(nightly.training_complete(model, '2026-11-17'))
-        park['lastBootstrapAttempt']['failedDays'] = 0
-        self.assertTrue(nightly.training_complete(model, '2026-11-17'))
-        self.assertFalse(nightly.training_complete({'parks': [park]}, '2026-11-17'))
+            self.assertEqual(read(data, 'training-state.json')['completedThrough'], '2026-11-16')
+            self.assertEqual(read(data, 'wait-model.json'), {'prior': True})
 
 
 if __name__ == '__main__':

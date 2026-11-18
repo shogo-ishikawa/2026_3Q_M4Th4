@@ -1,4 +1,4 @@
-import {scoreForecastAccuracy} from './forecast-accuracy.js?v=1.12.1';
+import {scoreForecastAccuracy} from './forecast-accuracy.js?v=1.12.2';
 
 const dataRoot = 'https://raw.githubusercontent.com/shogo-ishikawa/2026_3Q_M4Th4/park-wait-data/';
 const parks = {land: '東京ディズニーランド', sea: '東京ディズニーシー'};
@@ -29,6 +29,7 @@ function validDate(value) {
 }
 
 async function download(path, fetchImpl, signal) {
+  if (signal?.aborted) throw signal.reason ?? new Error('中断しました。');
   const response = await fetchImpl(dataRoot + path, {signal, cache: 'no-cache'});
   if (response.status === 404) return null;
   if (!response.ok) throw new Error('公開データの取得に失敗しました。');
@@ -58,6 +59,50 @@ function historySummary(data, forecast) {
   return {...park, coverage:park.matched / park.expected};
 }
 
+function savedQueueScore(data, forecast) {
+  if (data?.schemaVersion !== 1 || data.source !== 'queue-times' || data.method !== 'median-per-slot' ||
+      data.date !== forecast.date || !Array.isArray(data.parks)) return null;
+  const park = data.parks.find(item => item?.parkId === forecast.parkId);
+  if (park?.date !== forecast.date || park.issuedAt !== forecast.issuedAt ||
+      park.slotsInDay !== forecast.slotsInDay || !Array.isArray(park.facilities) ||
+      !Array.isArray(park.hours) || !park.crowd || !park.overall) return null;
+  const {expected, matched, mae, within10, bias} = park.overall;
+  if (expected !== forecast.slotsInDay || !Number.isInteger(matched) || matched < 0 || matched > expected) return null;
+  if (!expected) return park.status === 'no-forecast' ? park : null;
+  if (!matched) return park.status === 'no-observations' ? park : null;
+  if (park.status !== 'complete' || !Number.isFinite(mae) || mae < 0 || !Number.isFinite(bias) ||
+      !Number.isFinite(within10) || within10 < 0 || within10 > 1) return null;
+  return park;
+}
+
+async function queueReport(base, initial, checkSaved, today, fetchImpl, signal) {
+  if (checkSaved) {
+    try {
+      // Leave time for the raw archive if this small per-day file stalls.
+      let dailySignal = signal;
+      if (typeof AbortSignal.any === 'function' && typeof AbortSignal.timeout === 'function') {
+        const deadline = AbortSignal.timeout(5000);
+        dailySignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+      }
+      const daily = await download('accuracy-daily/' + base.date + '.json', fetchImpl, dailySignal);
+      const saved = savedQueueScore(daily, initial);
+      if (saved) return {queueTimes:saved, savedDaily:true, queueIncomplete:false};
+    } catch {
+      // The monthly and rolling records can still serve dates without a usable daily score.
+    }
+  }
+  if (initial.status === 'no-forecast') return {queueTimes:initial, savedDaily:false, queueIncomplete:false};
+  const paths = ['history/' + base.date.slice(0, 7) + '.json'];
+  if (Date.parse(today) - Date.parse(base.date) < 60 * dayMs) paths.push('observations.json');
+  const records = await Promise.allSettled(paths.map(async path => checkedRows(await download(path, fetchImpl, signal))));
+  for (const record of records) {
+    if (record.status === 'fulfilled') {
+      base.observations = base.observations.concat(record.value.filter(row => row?.date === base.date));
+    }
+  }
+  return {queueTimes:scoreForecastAccuracy(base), savedDaily:false, queueIncomplete:records.some(record => record.status === 'rejected')};
+}
+
 export async function loadAccuracyReport(date, parkId, {fetchImpl = fetch, signal, asOf = Date.now()} = {}) {
   if (!validDate(date) || !Object.hasOwn(parks, parkId)) throw new Error('対象日とパークを選んでください。');
   const today = dayInJapan(asOf);
@@ -65,33 +110,26 @@ export async function loadAccuracyReport(date, parkId, {fetchImpl = fetch, signa
   if (date > today) return {result: scoreForecastAccuracy(base)};
 
   const forecast = await download('forecasts/' + date + '.json', fetchImpl, signal);
-  if (forecast === null) return {result: scoreForecastAccuracy(base)};
-  if (forecast.schemaVersion !== 1 || forecast.slotMinutes !== 30 || forecast.date !== date || !Array.isArray(forecast.parks)) {
+  if (forecast !== null && (forecast.schemaVersion !== 1 || forecast.slotMinutes !== 30 ||
+      forecast.date !== date || !Array.isArray(forecast.parks))) {
     throw new Error('保存された予測の形式を確認できませんでした。');
   }
   base.forecast = forecast;
-  const beforeObservations = scoreForecastAccuracy(base);
-  if (beforeObservations.status !== 'no-observations') return {result: beforeObservations};
-
-  const paths = ['history/' + date.slice(0, 7) + '.json'];
-  if (Date.parse(today) - Date.parse(date) < 60 * dayMs) paths.push('observations.json');
-  const dayFinished = beforeObservations.overall.expected === beforeObservations.slotsInDay;
-  const observations = paths.map(async path => checkedRows(await download(path, fetchImpl, signal)));
-  const summary = dayFinished
-    ? download('accuracy-history/' + date + '.json', fetchImpl, signal).then(data => historySummary(data, beforeObservations))
+  const initial = scoreForecastAccuracy(base);
+  if (initial.status === 'pending') return {result:initial};
+  const dayFinished = initial.slotsInDay > 0 && initial.overall.expected === initial.slotsInDay;
+  const checkSaved = dayFinished || initial.status === 'no-forecast';
+  const daily = queueReport(base, initial, checkSaved, today, fetchImpl, signal);
+  const historical = dayFinished
+    ? download('accuracy-history/' + date + '.json', fetchImpl, signal).then(data => historySummary(data, initial))
     : null;
-  const [historical, ...records] = await Promise.allSettled([summary, ...observations]);
+  const [queue, history] = await Promise.allSettled([daily, historical]);
   if (signal?.aborted && signal.reason?.name !== 'TimeoutError') throw signal.reason ?? new Error('中断しました。');
-  const historyComparison = historical.status === 'fulfilled' ? historical.value : null;
-  const queueIncomplete = records.some(record => record.status === 'rejected');
-  const historyUnavailable = historical.status === 'rejected';
-  for (const record of records) {
-    if (record.status === 'fulfilled') {
-      base.observations = base.observations.concat(record.value.filter(row => row?.date === date));
-    }
-  }
-  const queueTimes = scoreForecastAccuracy(base);
-  if ((queueIncomplete || historyUnavailable) && !queueTimes.overall.matched && !historyComparison) {
+  if (queue.status === 'rejected') throw queue.reason;
+  const {queueTimes, savedDaily, queueIncomplete} = queue.value;
+  const historyComparison = history.status === 'fulfilled' ? history.value : null;
+  const historyUnavailable = history.status === 'rejected';
+  if ((queueIncomplete || historyUnavailable) && !savedDaily && !queueTimes.overall.matched && !historyComparison) {
     throw new Error('掲示待ち時間の記録を取得できませんでした。');
   }
   // Keep the two samples separate: the providers can cover the same facility and time.
@@ -99,7 +137,7 @@ export async function loadAccuracyReport(date, parkId, {fetchImpl = fetch, signa
   const result = preferHistory
     ? {...queueTimes, status:'complete', provider:'themeparks-wiki', overall:historyComparison}
     : {...queueTimes, provider:'queue-times'};
-  return {result, queueTimes, historyComparison, queueIncomplete, historyUnavailable,
+  return {result, queueTimes, savedDaily, historyComparison, queueIncomplete, historyUnavailable,
     incompleteDownload:queueIncomplete || historyUnavailable};
 }
 
@@ -191,19 +229,25 @@ const statusText = {
   complete: '予測の対象時間帯はすべて終了しました。保存された掲示記録の範囲で集計しています。'
 };
 
-function showReport(report, {result, queueTimes = result, historyComparison, queueIncomplete, historyUnavailable}) {
+function showReport(report, {result, queueTimes = result, savedDaily, historyComparison, queueIncomplete, historyUnavailable}) {
   report.replaceChildren();
   const top = tag('div', null, 'report-top');
   const heading = tag('div');
   const title = tag('h2', parks[result.parkId]);
   title.id = 'reportTitle';
-  heading.append(tag('p', result.date + ' の精度レポート'), title);
+  heading.append(tag('p', result.date + (savedDaily ? ' 閉園後の精度レポート' : ' の精度レポート')), title);
   if (result.issuedAt) heading.append(tag('p', issuanceNote(result)));
   const print = tag('button', '印刷・PDF保存', 'print');
   print.type = 'button';
   print.addEventListener('click', () => window.print());
   top.append(heading, print);
-  report.append(top, tag('p', statusText[result.status]));
+  const message = savedDaily && result.status === 'no-observations'
+    ? '閉園後に検証しましたが、予測と照合できるQueue-Timesの掲示記録は0件でした。'
+    : statusText[result.status];
+  report.append(top, tag('p', message));
+  if (savedDaily && !queueTimes.overall.matched && historyComparison) {
+    report.append(tag('p', 'Queue-Timesの閉園後集計では対象' + queueTimes.overall.expected + '枠のうち照合できた枠は0件でした。', 'note'));
+  }
   if (queueIncomplete) report.append(tag('p', 'Queue-Timesの一部の記録を取得できませんでした。'));
   if (historyUnavailable) report.append(tag('p', 'ThemeParks.wikiの日別集計を読み込めませんでした。'));
   if (result.issuedAt) {

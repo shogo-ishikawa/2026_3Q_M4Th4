@@ -1,23 +1,44 @@
 #!/usr/bin/env python3
-"""Catch up the nightly wait-history job on the first available GitHub runner."""
+"""Archive the collected waits and fit a model after the last park closes."""
 import argparse
 import datetime as dt
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
+import tempfile
 
 from archive_wait_history import JST, atomic_json, update_archive
 
 SCRIPTS = Path(__file__).resolve().parent
+BUNDLED = SCRIPTS.parent / 'web' / 'data'
 RETRY_DELAY = dt.timedelta(hours=6)
+NIGHTLY_MINUTE = 21 * 60 + 55
 
 
-def closed_day(now):
+def closed_day(now, closing_minute=NIGHTLY_MINUTE):
     local = now.astimezone(JST)
-    if local.time() >= dt.time(21, 55):
+    if local.hour * 60 + local.minute >= closing_minute:
         return local.date()
     return local.date() - dt.timedelta(days=1)
+
+
+def latest_closed_day(data, now):
+    """Gate both parks together, including a later published closing time."""
+    key = now.astimezone(JST).date().isoformat()
+    ends = {}
+    for path in (BUNDLED / 'parks.json', data / 'catalogue.json'):
+        if path.exists():
+            for park in json.loads(path.read_text())['parks']:
+                if park['id'] not in ('land', 'sea'):
+                    continue
+                hours = park.get('operatingCalendar', {}).get(key, {}).get('windows', [])
+                closes = [w[1] for w in hours if isinstance(w, list) and len(w) == 2
+                          and type(w[1]) is int and 0 < w[1] <= 1440]
+                if closes:
+                    ends[park['id']] = max(closes)
+    return closed_day(now, max([NIGHTLY_MINUTE, *ends.values()]))
 
 
 def training_due(state, day, now):
@@ -29,22 +50,29 @@ def training_due(state, day, now):
     return now - last >= RETRY_DELAY
 
 
-def training_complete(model, day):
-    parks = {park['parkId']: park for park in model['parks']}
-    for park_id in ('land', 'sea'):
-        park = parks.get(park_id, {})
-        # When validation keeps an older model, inspect the NEW fitting attempt.
-        retained = park.get('lastBootstrapAttempt')
-        attempt = retained or park.get('bootstrap') or {}
-        if attempt.get('lastObservedDate') != day or (retained and attempt.get('failedDays')):
-            return False
-    return True
+def supplement_sparse_history(data, catalogue, calendar, local_model, output, day):
+    """Try the free recent history window, capped independently of any configured key."""
+    env = os.environ.copy()
+    env.pop('THEMEPARKS_API_KEY', None)
+    try:
+        subprocess.run([
+            sys.executable, str(SCRIPTS / 'bootstrap_wait_history.py'),
+            '--catalogue', str(catalogue), '--calendar', str(calendar),
+            '--history-dir', str(data / 'history'), '--end-date', day,
+            '--days', '7', '--max-history-requests', '14',
+            '--fallback-model', str(local_model), '--output-model', str(output),
+        ], env=env, timeout=90, check=True)
+        return json.loads(output.read_text())
+    except (subprocess.SubprocessError, OSError, ValueError) as error:
+        print(f'Anonymous supplement unavailable ({type(error).__name__}). Using the local fit.')
+        return {}
 
 
 def run(data, now, force=False):
     marker = data / 'training-state.json'
     state = json.loads(marker.read_text()) if marker.exists() else {}
-    day = closed_day(now).isoformat()
+    end = latest_closed_day(data, now)
+    day = end.isoformat()
     if not force and not training_due(state, day, now):
         print(f'No nightly training due for {day}.')
         return
@@ -52,25 +80,56 @@ def run(data, now, force=False):
     atomic_json(marker, state)
     # Archive current-day observations as well. Only complete days enter training.
     update_archive(data, now.astimezone(JST).date())
-    fallback = SCRIPTS.parent / 'web' / 'data'
     catalogue = data / 'catalogue.json'
     calendar = data / 'calendar.json'
+    catalogue = catalogue if catalogue.exists() else BUNDLED / 'parks.json'
+    calendar = calendar if calendar.exists() else BUNDLED / 'calendar.json'
     model = data / 'wait-model.json'
-    # bootstrap keeps provider responses in its temporary directory and writes the
-    # resulting model atomically, so a failed attempt leaves the prior model intact.
-    subprocess.run([
-        sys.executable, str(SCRIPTS / 'bootstrap_wait_history.py'),
-        '--catalogue', str(catalogue if catalogue.exists() else fallback / 'parks.json'),
-        '--calendar', str(calendar if calendar.exists() else fallback / 'calendar.json'),
-        '--history-dir', str(data / 'history'), '--end-date', day,
-        '--output-model', str(model), '--fallback-model', str(model),
-        '--max-history-requests', '1000',
-    ], check=True)
-    if not training_complete(json.loads(model.read_text()), day):
-        raise RuntimeError(f'Incomplete wait history for {day}. A later collection can retry.')
-    state['completedThrough'] = day
+    # Fit from all archived measurements. No historical provider or key is needed.
+    # A private output path keeps partial writes out of the published branch.
+    with tempfile.TemporaryDirectory(dir=data) as temporary:
+        candidate = Path(temporary) / 'candidate.json'
+        subprocess.run([
+            sys.executable, str(SCRIPTS / 'train_wait_model.py'),
+            '--catalogue', str(catalogue),
+            '--calendar', str(calendar),
+            '--history-dir', str(data / 'history'),
+            '--before-date', (end + dt.timedelta(days=1)).isoformat(),
+            '--output', str(candidate), '--fallback-model', str(model),
+        ], check=True)
+        result = json.loads(candidate.read_text())
+        needed = {park['parkId'] for park in result['parks']
+                  if 'latestAttempt' in park or not park['usable'] or park['lastDate'] != day}
+        supplements = {}
+        if needed:
+            augmented = supplement_sparse_history(data, catalogue, calendar, candidate,
+                                                   Path(temporary) / 'augmented.json', day)
+            supplements = {p['parkId']: p for p in augmented.get('parks', [])
+                           if p['parkId'] in needed and p['usable'] and p['lastDate'] == day
+                           and 'lastBootstrapAttempt' not in p and p.get('bootstrap', {}).get('historySamples', 0) > 0}
+        attempts = {}
+        for index, park in enumerate(result['parks']):
+            fit = park.get('latestAttempt', park)
+            park_id = park['parkId']
+            active = supplements.get(park_id, park)
+            result['parks'][index] = active
+            attempts[park_id] = {
+                'archiveThrough': fit['lastDate'], 'archiveDays': fit['days'], 'archiveSamples': fit['samples'],
+                'lastObservedDate': active['lastDate'] if park_id in supplements else fit['lastDate'],
+                'activeModelThrough': active['lastDate'], 'retainedPriorModel': 'latestAttempt' in active,
+                'fitSource': 'queue-times+anonymous-history' if park_id in supplements else 'queue-times',
+            }
+        if set(attempts) != {'land', 'sea'}:
+            raise ValueError('Expected fitting attempts for both parks.')
+        atomic_json(model, result)
+    state['parks'] = attempts
+    complete = all(attempt['lastObservedDate'] == day for attempt in attempts.values())
+    if complete:
+        state['completedThrough'] = day
     atomic_json(marker, state)
-    print(f'Archived and evaluated wait history through {day}.')
+    if not complete:
+        raise RuntimeError(f'Collected waits are incomplete for {day}. A later run can retry.')
+    print(f'Archived and fitted collected waits through {day}.')
 
 
 if __name__ == '__main__':

@@ -1,11 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {scoreForecastAccuracy} from '../web/forecast-accuracy.js';
 import {loadAccuracyReport, issuanceNote} from '../web/accuracy-page.js';
 
 const date = '2026-11-19', asOf = Date.parse('2026-11-19T12:00:00+09:00');
 const forecastPath = 'forecasts/' + date + '.json';
 const archivePath = 'history/2026-11.json';
 const recentPath = 'observations.json';
+const dailyPath = 'accuracy-daily/' + date + '.json';
 const summaryPath = 'accuracy-history/' + date + '.json';
 const activityId = 'land-attraction-152';
 const forecast = {
@@ -16,7 +18,7 @@ const forecast = {
 const observation = {source:'queue-times', date, time:575, wait:30, activityId, observedAt:'2026-11-19T00:35:00Z'};
 
 function settings(responses, now = asOf) {
-  responses = {[summaryPath]:404, ...responses};
+  responses = {[summaryPath]:404, [dailyPath]:404, ...responses};
   const paths = [];
   const fetchImpl = async url => {
     const path = url.split('/park-wait-data/')[1];
@@ -35,7 +37,7 @@ test('a future date, an unavailable forecast and a pending day never download ob
   assert.deepEqual(next.paths, []);
   const missing = settings({[forecastPath]:404});
   assert.equal((await loadAccuracyReport(date, 'land', missing)).result.status, 'no-forecast');
-  assert.deepEqual(missing.paths, [forecastPath]);
+  assert.deepEqual(missing.paths, [forecastPath, dailyPath]);
   const early = settings({[forecastPath]:forecast}, Date.parse('2026-11-19T09:15:00+09:00'));
   assert.equal((await loadAccuracyReport(date, 'land', early)).result.status, 'pending');
   assert.deepEqual(early.paths, [forecastPath]);
@@ -54,7 +56,7 @@ test('on-demand report combines archived and recent records with equal duplicate
 test('archived dates need only one observation file, current missing month can use the rolling file', async () => {
   const historic = settings({[forecastPath]:forecast, [archivePath]:[observation]}, Date.parse('2027-02-01T00:00:00Z'));
   assert.equal((await loadAccuracyReport(date, 'land', historic)).result.overall.matched, 1);
-  assert.deepEqual(historic.paths, [forecastPath, archivePath, summaryPath]);
+  assert.deepEqual(historic.paths, [forecastPath, dailyPath, summaryPath, archivePath]);
   const monthlyMissing = settings({[forecastPath]:forecast, [archivePath]:404, [recentPath]:[observation]});
   assert.equal((await loadAccuracyReport(date, 'land', monthlyMissing)).result.overall.matched, 1);
 });
@@ -158,4 +160,58 @@ test('an overall timeout retains a completed provider summary but explicit cance
       assert.equal(report.queueIncomplete, true);
     }
   }
+});
+
+
+function dailyScores(dateForecast, records, parkId = 'land') {
+  const scored = scoreForecastAccuracy({date, forecast:dateForecast, observations:records, parkId, asOf:evening});
+  return {schemaVersion:1, date, source:'queue-times', method:'median-per-slot', parks:[scored]};
+}
+
+test('stored after-close scores include breakdowns and coverage without downloading monthly observations', async () => {
+  const daily = dailyScores(forecast, [observation]);
+  const options = settings({[forecastPath]:forecast, [dailyPath]:daily}, evening);
+  const report = await loadAccuracyReport(date, 'land', options);
+  assert.equal(report.savedDaily, true);
+  assert.equal(report.result.provider, 'queue-times');
+  assert.equal(report.result.overall.coverage, 0.5);
+  assert.equal(report.result.overall.mae, 5);
+  assert.deepEqual(report.result.facilities, daily.parks[0].facilities);
+  assert.deepEqual(options.paths, [forecastPath, dailyPath, summaryPath]);
+});
+
+test('saved missing outcomes distinguish a missing forecast and an issued forecast without matching posts', async () => {
+  for (const issued of [null, forecast]) {
+    const daily = dailyScores(issued, []);
+    const options = settings({[forecastPath]:issued ?? 404, [dailyPath]:daily, [summaryPath]:new Error('offline')}, evening);
+    const report = await loadAccuracyReport(date, 'land', options);
+    assert.equal(report.savedDaily, true);
+    assert.equal(report.result.status, issued ? 'no-observations' : 'no-forecast');
+    assert.equal(report.result.overall.matched, 0);
+    assert.equal(report.result.overall.mae, null);
+    assert.ok(!options.paths.includes(archivePath));
+  }
+});
+
+test('past samples remain available when the saved report belongs to a different issuance', async () => {
+  const daily = dailyScores(forecast, [observation]);
+  daily.parks[0].issuedAt = '2026-11-18T18:00:00Z';
+  const options = settings({[forecastPath]:forecast, [dailyPath]:daily, [archivePath]:[], [recentPath]:[observation]}, evening);
+  const report = await loadAccuracyReport(date, 'land', options);
+  assert.equal(report.savedDaily, false);
+  assert.equal(report.queueTimes.overall.matched, 1);
+  assert.ok(options.paths.includes(archivePath));
+});
+
+test('saved samples and supplementary provider scores remain independent', async () => {
+  const post = {source:'queue-times', date, time:1140, wait:35, activityId:'sea-attraction-0',
+    observedAt:'2026-11-19T10:00:00Z'};
+  const daily = dailyScores(seaForecast, [post], 'sea');
+  const options = settings({[forecastPath]:seaForecast, [dailyPath]:daily, [summaryPath]:changeSummary}, evening);
+  const report = await loadAccuracyReport(date, 'sea', options);
+  assert.equal(report.savedDaily, true);
+  assert.equal(report.result.provider, 'themeparks-wiki');
+  assert.equal(report.historyComparison.matched, 41);
+  assert.equal(report.queueTimes.overall.matched, 1);
+  assert.ok(!options.paths.includes(recentPath));
 });

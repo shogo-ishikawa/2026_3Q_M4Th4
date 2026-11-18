@@ -15,7 +15,7 @@ from pathlib import Path
 from archive_wait_history import atomic_json
 from bootstrap_wait_history import (API, JST, PARK_IDS, PROJECT, entity_mapping,
                                     normalise_history, request_json, timestamp)
-from nightly_wait_training import closed_day, RETRY_DELAY
+from nightly_wait_training import latest_closed_day, RETRY_DELAY
 
 
 def read(path, fallback=None):
@@ -40,7 +40,7 @@ def pending_jobs(data, now, attempts):
     # Published summaries remain readable long after the raw window expires.
     local_day = now.astimezone(JST).date()
     first = local_day - dt.timedelta(days=6)
-    day = closed_day(now)
+    day = latest_closed_day(data, now)
     while day >= first:
         key = day.isoformat()
         forecast = read(data/'forecasts'/(key+'.json'), {})

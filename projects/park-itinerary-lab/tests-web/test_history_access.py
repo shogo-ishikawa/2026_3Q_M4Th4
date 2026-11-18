@@ -84,12 +84,16 @@ class HistoryAccessTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root=Path(directory);(root/'catalogue.json').write_text(json.dumps({'parks':parks}))
             old={'date':'2020-01-01','activityId':'land-attraction-1','time':600,'wait':30,'weather':'rain','temperature':5,'weatherSource':'observed','source':'queue-times'}
-            (root/'owned.json').write_text(json.dumps([old]));private=root/'private';private.mkdir()
+            overlap={**old,'date':(today-dt.timedelta(days=29)).isoformat(),'time':545,'wait':85}
+            (root/'owned.json').write_text(json.dumps([old,overlap]));private=root/'private';private.mkdir()
             args=SimpleNamespace(catalogue=root/'catalogue.json',calendar=None,end_date=today.isoformat(),days=None,start_date=None,max_history_requests=6,history_dir=None,existing_observations=root/'owned.json',model_module=PROJECT/'web/wait-model.js',fallback_model=None,private_dir=private)
             with mock.patch.dict('os.environ',{'THEMEPARKS_API_KEY':'fixture-key'}),mock.patch.object(history,'request_json',side_effect=response),mock.patch.object(history,'fit_models',side_effect=fit):
                 first=history.bootstrap(args,private);first_dates={row['date'] for row in fitted[-1]}
                 second=history.bootstrap(args,private);second_dates={row['date'] for row in fitted[-1]}
             self.assertEqual(len(calls),12);self.assertTrue(first_dates<second_dates)
+            same_slot=[row for row in fitted[-1] if row['date']==overlap['date'] and row['activityId']=='land-attraction-1' and row['time']//10==54]
+            self.assertGreaterEqual(len(same_slot),2)
+            self.assertEqual(same_slot[-1]['wait'],85)
             self.assertTrue(any(row==old for row in fitted[-1]));self.assertGreater(first['parks'][0]['bootstrap']['historyRequestsPending'],0)
             self.assertGreater(second['parks'][0]['bootstrap']['observedDays'],first['parks'][0]['bootstrap']['observedDays'])
             self.assertNotIn('fixture-key',json.dumps(second))

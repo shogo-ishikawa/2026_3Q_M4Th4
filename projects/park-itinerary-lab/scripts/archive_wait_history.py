@@ -25,6 +25,7 @@ def bucket(row):
 
 def valid_row(row,today):
     if not isinstance(row,dict) or row.get('source')!='queue-times':return False
+    if row.get('isOpen') is False or row.get('status') in ('CLOSED','DOWN','REFURBISHMENT'):return False
     try:day=dt.date.fromisoformat(row.get('date',''))
     except (ValueError,TypeError):return False
     minute=row.get('time');wait=row.get('wait')

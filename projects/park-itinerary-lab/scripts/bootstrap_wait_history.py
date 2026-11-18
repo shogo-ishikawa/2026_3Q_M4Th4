@@ -325,7 +325,9 @@ def bootstrap(args, private_dir: Path) -> dict:
         payload=json.loads(args.existing_observations.read_text())
         existing.extend(payload if isinstance(payload,list) else payload.get('observations',[]))
         if isinstance(payload,dict):input_sources.extend(payload.get('dataSources',[]))
-    rows=eligible_input(existing+rows,catalogue,end)
+    # The canonical fitter keeps the last row in each facility/time bucket.
+    # Give directly collected observations priority when both sources overlap.
+    rows=eligible_input(rows+existing,catalogue,end)
     weather={}
     # Request only months that have actual observations, preserving all older input dates.
     dates=sorted({row.get('date') for row in rows if isinstance(row,dict) and isinstance(row.get('date'),str) and row['date']<=end.isoformat()})
@@ -360,10 +362,12 @@ def bootstrap(args, private_dir: Path) -> dict:
     latest_reports={(report['parkId'],report['date']):report for report in reports}
     pending=sum(latest_reports.get((job[0]['id'],job[2]),{}).get('status')!='ok' for job in jobs)
     for index,model in enumerate(result['parks']):
-        park_dates={row['date'] for row in rows if row['activityId'].startswith(model['parkId']+'-')}
+        park_rows=[row for row in rows if row['activityId'].startswith(model['parkId']+'-')]
+        park_dates={row['date'] for row in park_rows}
         model['bootstrap']={'provider':'themeparks-wiki','accessMode':'key-entitlement' if account else 'anonymous',
             'attemptedAt':result['updatedAt'],'requestedDays':getattr(args,'days',None),
             'observedDays':len(park_dates),'lastObservedDate':max(park_dates,default=None),
+            'historySamples':sum(row.get('source')=='themeparks-wiki' for row in park_rows),
             'historyRequestsSelected':len(selected),'historyRequestsPending':pending,
             'coverage':next(item for item in coverage_reports if item['parkId']==model['parkId']),
             'weatherProvenance':'past-weather-forecast' if weather else 'unavailable',
