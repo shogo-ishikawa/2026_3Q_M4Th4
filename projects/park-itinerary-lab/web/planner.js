@@ -1,4 +1,4 @@
-import {baseVisitId, canStartVisit, expandRepeatVisits, facilityForVisit} from './repeat-visits.js';
+import {baseVisitId, canStartVisit, compactRepeatSelections, expandRepeatVisits, facilityForVisit} from './repeat-visits.js';
 import {applyProgressToPrefix, progressEntries} from './day-progress-plan.js';
 import {activityAvailable,operationPauseInfo,normalisePauseWindows,subtractPauseWindows} from './operation-windows.js?v=1.13.0';
 import { weatherAtMinute, calendarContext } from './calendar-features.js';
@@ -288,7 +288,7 @@ function normalise(park, settings) {
   });
   if (!Array.isArray(settings.purchases || []) || (settings.purchases || []).length > 200) throw new RangeError('DPAの購入履歴を確認してください。');
   result.purchases = (settings.purchases || []).map(purchase => {
-    if (!activities.has(purchase.id)) throw new RangeError('取得済みDPAの施設IDを確認してください。');
+    if (baseVisitId(purchase.id)!==purchase.id || !activities.has(purchase.id)) throw new RangeError('取得済みDPAの施設IDを確認してください。');
     const activity = activities.get(purchase.id);
     if (!activity.dpa) throw new RangeError('取得済みDPAの対象を確認してください。');
     if (purchase.kind && purchase.kind !== (activity.dpa.kind || 'attraction')) throw new RangeError('DPA購入履歴の種別が施設と一致しません。');
@@ -297,9 +297,10 @@ function normalise(park, settings) {
       end: toMinutes(purchase.end), cost: ceil100(numberIn(purchase.cost ?? activity.dpa.price, '支払済みDPAの費用', 0, 10000000, true)), owned: true };
   });
   for (const selection of result.selections.filter(item => item.dpaMode === 'owned')) {
-    if (!result.purchases.some(purchase => purchase.id === selection.id)) {
+    const facilityId=baseVisitId(selection.id);
+    if (!result.purchases.some(purchase => purchase.id === facilityId)) {
       const activity = activities.get(selection.id);
-      result.purchases.push({ id: selection.id, kind: activity.dpa.kind || 'attraction', purchasedAt: selection.dpaPurchasedAt,
+      result.purchases.push({ id: facilityId, kind: activity.dpa.kind || 'attraction', purchasedAt: selection.dpaPurchasedAt,
         start: selection.dpaStart, end: selection.dpaEnd, cost: activity.dpa.price, owned: true });
     }
   }
@@ -307,7 +308,7 @@ function normalise(park, settings) {
   for (const purchase of result.purchases) {
     if (purchaseIds.has(purchase.id)) throw new RangeError('同じDPAの購入履歴が重複しています。');
     purchaseIds.add(purchase.id);
-    const selection = result.selections.find(item => item.id === purchase.id && item.dpaMode === 'owned');
+    const selection = result.selections.find(item => baseVisitId(item.id) === purchase.id && item.dpaMode === 'owned');
     if (selection && (selection.dpaStart !== purchase.start || selection.dpaEnd !== purchase.end || selection.dpaPurchasedAt !== purchase.purchasedAt)) throw new RangeError('取得済みDPAの時刻と購入履歴が一致しません。');
     if (purchase.purchasedAt < entry || purchase.start >= purchase.end || purchase.end > 1439 ||
       purchase.purchasedAt > purchase.start) throw new RangeError('取得済みDPAの購入・利用時刻を確認してください。');
@@ -406,7 +407,7 @@ function preservedPrefix(initialPlan,settings,park) {
     const end=['wait','rest'].includes(item.kind)&&!item.fixedBreakId&&!item.awaitingPerformance?Math.min(item.end,cutoff):item.end;
     // Older plans identify a purchased candidate by its charge or, for a free slot, its ticket.
     const legacyCandidate = item.kind === 'activity' && item.dpa && item.plannedDpaPurchase === undefined &&
-      !item.dpaCost && initialPlan?.purchases?.some(ticket => ticket.id === item.activityId && ticket.owned === false);
+      !item.dpaCost && initialPlan?.purchases?.some(ticket => ticket.id === baseVisitId(item.activityId) && ticket.owned === false);
     return {...copy(item),...(legacyCandidate ? {plannedDpaPurchase:true} : {}),end,duration:end-item.start,preserved:true,...(item.kind==='walk'?{walkSpeed:item.walkSpeed??initialPlan?.settings?.speed??settings.speed}:{})};
   });
   return applyProgressToPrefix(park,{...settings,entry:toMinutes(settings.entry),exit:toMinutes(settings.exit)},cutoff,original,initialPlan);
@@ -463,7 +464,7 @@ function contextFor(park, settings, initialPlan) {
     if(!item.userProgress) return previous ? [copy(previous)] : [];
     const queue=prefix.find(r=>r.kind==='queue' && r.activityId===item.activityId);
     return [{id:item.activityId, activityId:item.activityId, name:item.name, category:item.category,
-      node:item.node, endNode:item.endNode, start:item.start, end:item.end, queueStart:queue?.start??item.start,
+      node:item.node, endNode:item.endNode, start:item.start, end:item.end, queueStart:item.dpaAdmission??queue?.start??item.start,
       arrival:queue?.start??item.start, method:item.dpa?'dpa':'normal', userProgress:item.userProgress,
       cost:item.cost, dpaCost:item.dpaCost??0}];
   });
@@ -474,13 +475,14 @@ function contextFor(park, settings, initialPlan) {
   const selected = goalSelections.filter(selection => !completed.has(selection.id));
   const paidDpa = settings.purchases.reduce((sum, purchase) => sum + purchase.cost, 0);
   const sourceRows = prefix.filter(item => item.kind === 'activity');
+  const previousDpaEntries=dpaAdmissions(prefix);
   const lastVisit = sourceRows.at(-1);
   const prefixNonDpa = sourceRows.reduce((sum, item) => sum + Math.max(0, finite(item.cost) - finite(item.dpaCost)), 0);
   // A subsequently confirmed ticket can also appear in a completed visit's charge.
   const prefixDpa = sourceRows.reduce((sum, item) => {
     if (!item.dpaCost) return sum;
-    const admission = prefix.find(row => row.kind === 'queue' && row.activityId === item.activityId)?.start ?? item.start;
-    const recorded = settings.purchases.some(ticket => ticket.id === item.activityId && ticket.start <= admission && admission < ticket.end);
+    const admission = item.dpaAdmission ?? prefix.find(row => row.kind === 'queue' && row.activityId === item.activityId)?.start ?? item.start;
+    const recorded = settings.purchases.some(ticket => ticket.id === baseVisitId(item.activityId) && ticket.start <= admission && admission < ticket.end);
     return sum + (recorded ? 0 : item.dpaCost);
   }, 0);
   const spent = Math.max(settings.spentBudget, prefixNonDpa + paidDpa + prefixDpa);
@@ -509,7 +511,7 @@ function contextFor(park, settings, initialPlan) {
     if (!historyById.has(id)) historyById.set(id, []);
     historyById.get(id).push(record);
   }
-  return { park, settings, map, graph, selected, goalSelections, completed, completedSelections, initial, historicalVisitBounds:prefix.length?historicalBounds(park,settings,initialPlan):null, historyById, waitCache: new Map(), rankCache: new WeakMap() };
+  return { park, settings, map, graph, selected, previousDpaEntries, goalSelections, completed, completedSelections, initial, historicalVisitBounds:prefix.length?historicalBounds(park,settings,initialPlan):null, historyById, waitCache: new Map(), rankCache: new WeakMap() };
 }
 
 function activityWindows(activity, selection, settings, park) {
@@ -532,7 +534,7 @@ function eligiblePurchaseAt(state, activity, window, context) {
   let at = context.settings.replanFrom !== undefined && context.settings.replanFrom !== '' ? toMinutes(context.settings.replanFrom) : context.settings.entry;
   for (const purchase of state.purchases.filter(item => item.kind === kind)) {
     at = Math.max(at, Math.min(purchase.purchasedAt + 60, purchase.start));
-    if (purchase.id === activity.id) at = Math.max(at, purchase.end);
+    if (purchase.id === baseVisitId(activity.id)) at = Math.max(at, purchase.end);
   }
   return at <= window[0] ? at : Infinity;
 }
@@ -550,6 +552,23 @@ function budgetAllowed(state, activity, price, dpaPrice, context) {
   if (settings.foodBudget !== undefined && state.foodCost + (FOOD.has(activity.category) ? price : 0) > settings.foodBudget) return false;
   if (settings.dpaBudget !== undefined && state.dpaCost + dpaPrice > settings.dpaBudget) return false;
   return true;
+}
+
+// Receipts are issued for a facility. Visits keep their individual entry time
+// so the same receipt cannot be admitted a second time after a replan.
+function dpaAdmissions(rows) {
+  const result=new Map();
+  const queueStarts=new Map(rows.filter(row=>row.kind==='queue' && row.dpa).map(row=>[row.activityId,row.start]));
+  for(const row of rows.filter(row=>row.kind==='activity' && row.dpa)) {
+    const facility=baseVisitId(row.activityId);
+    if(!result.has(facility)) result.set(facility,[]);
+    result.get(facility).push(row.dpaAdmission ?? queueStarts.get(row.activityId) ?? row.start);
+  }
+  return result;
+}
+
+function usedDpaWindow(context,id,start,end) {
+  return context.previousDpaEntries.get(baseVisitId(id))?.some(time=>time>=start && time<end) ?? false;
 }
 
 function dpaAvailable(activity, date) {
@@ -583,6 +602,7 @@ function scheduledOptions(state, baseActivity, selection, context, allowAutoRest
   const methods = [];
   if (selection.dpaMode !== 'owned') methods.push({ method: 'normal', windows: activityWindows(baseActivity, selection, settings, context.park), price: 0 });
   if (dpaAvailable(baseActivity, settings.date) && selection.dpaMode === 'owned' &&
+    !usedDpaWindow(context, selection.id, selection.dpaStart, selection.dpaEnd) &&
     (baseActivity.category !== 'parade' || (selection.nodeOverride && selection.showTimes?.length))) methods.push({
     method: 'dpa', windows: [[selection.dpaStart, selection.dpaEnd]], price: 0, owned: true,
   });
@@ -590,6 +610,7 @@ function scheduledOptions(state, baseActivity, selection, context, allowAutoRest
     (settings.dpaPurchaseLimit === undefined || state.plannedDpaCount < settings.dpaPurchaseLimit) &&
     (baseActivity.category !== 'parade' || (selection.nodeOverride && selection.showTimes?.length))) {
     for (const window of selection.dpaAvailableWindows || []) {
+      if (usedDpaWindow(context, selection.id, window[0], window[1])) continue;
       const purchaseAt = eligiblePurchaseAt(state, baseActivity, window, context);
       if (Number.isFinite(purchaseAt)) methods.push({
         method: 'dpa', windows: [window], price: ceil100(baseActivity.dpa.price), purchaseAt,
@@ -684,7 +705,7 @@ function scheduledOptions(state, baseActivity, selection, context, allowAutoRest
       }));
       const purchases = state.purchases.slice();
       if (method.method === 'dpa' && !method.owned) purchases.push({
-        id: activity.id, kind: activity.dpa.kind || 'attraction', purchasedAt: method.purchaseAt,
+        id: baseVisitId(activity.id), kind: activity.dpa.kind || 'attraction', purchasedAt: method.purchaseAt,
         start: window[0], end: window[1], cost: method.price, owned: false,
       });
       const visited = new Set(state.visited); visited.add(activity.id);
@@ -802,6 +823,10 @@ function omissionFor(selection, context, best) {
   if (!activityAvailable(activity,date)) return conflict('required','訪問日は休止・開催期間外です。訪問日か必須の指定を見直してください。');
   if (currentRideStatus(facilityForVisit(activity),context.settings,{now:context.settings.waitAsOf})?.isOpen===false)
     return conflict('required','運営停止の再開を確認できていません。当日の情報を更新するか必須の指定を見直してください。');
+  if (selection.dpaMode==='owned' && usedDpaWindow(context, selection.id, selection.dpaStart, selection.dpaEnd))
+    return conflict('dpaStart','このDPAの利用枠は体験履歴で使用済みです。2回目の待ち列か、当日の体験記録を確認してください。');
+  if (selection.dpaMode==='owned' && context.initial.time>=selection.dpaEnd)
+    return conflict('dpaStart','取得済みDPAの受付終了を過ぎています。実際の利用状況と残りの希望を確認してください。');
   if (activity.category === 'parade' && selection.dpaMode === 'owned' && (!selection.nodeOverride || !selection.showTimes?.length))
     return conflict(selection.nodeOverride?'showTimes':'nodeOverride','DPAの鑑賞地点と、その場所の公演時刻を入力してください。');
   if (FIXED.has(activity.category) && !showTimes(activity, selection, context.settings).length)
@@ -1024,13 +1049,7 @@ export function solveItinerary(park, rawSettings, options = {}) {
   }
   ({park, settings:input} = expandRepeatVisits(park,input,initialPlan));
   const settings = normalise(park, input), context = contextFor(park, settings, initialPlan);
-  // An owned DPA makes the first ride mandatory. Preserve the user's own
-  // choice for a normal-queue repeat when restoring the compact wishlist.
-  context.portableSelections=settings.selections.filter(s=>baseVisitId(s.id)===s.id).map(s=>{
-    if(s.dpaMode!=='owned' || s.repeatCount!==2) return s;
-    const wish=input.selections.find(w=>w.id===s.id);
-    return {...s,required:!!wish?.required};
-  });
+  context.portableSelections=compactRepeatSelections(settings.selections,rawSettings.selections || []);
   const milliseconds = Math.min(settings.searchSeconds * 1000,
     options.deadlineMs === undefined ? Infinity : Math.max(1, Number(options.deadlineMs)));
   context.deadline = started + milliseconds;
@@ -1057,6 +1076,12 @@ export function solveItinerary(park, rawSettings, options = {}) {
     ...(settings.selections.some(item=>item.id==='sea-attraction-230')?[settings.gondolaAvoidHarbourShows?'ゴンドラは指定した休止枠と、日付を確認できたハーバーショーの上演中を避けます。前後の準備・再開時刻は当日の稼働状況で確認します。':'ゴンドラは指定した休止枠を避けます。ショー上演中を避ける目安は使用していません。']:[]),
     'DPAの購入案は入力した空き枠と購入履歴から計算しています。在庫は公式アプリで確認してください。',
   ];
+  if (replan) for (const ticket of settings.purchases) {
+    if (toMinutes(settings.replanFrom)>=ticket.end && !usedDpaWindow(context,ticket.id,ticket.start,ticket.end)) {
+      const endTime=String(Math.floor(ticket.end/60)).padStart(2,'0')+':'+String(ticket.end%60).padStart(2,'0');
+      diagnostics.notes.push(context.map.get(ticket.id).name+'の取得済みDPAは'+endTime+'で受付終了です。しおりにこの枠の利用記録はなく、購入額は支払済みとして保持します。');
+    }
+  }
   if (!tracker.best) diagnostics.notes.unshift('必須条件と追加した休憩をすべて満たす案は見つかりませんでした。指定した時刻・場所・予算を見直してください。実行不可能と証明した結果ではありません。');
   context.deadline = null;
   const result = resultFrom(tracker.best, context, diagnostics);
@@ -1171,6 +1196,7 @@ export function validatePlan(park, settings, result, options = {}) {
       if (!item.preserved && !activityAvailable(activity, settings.date)) errors.push('休止日の施設が含まれています。');
       if(!item.preserved&&currentRideStatus(facilityForVisit(activity),settings,{now:settings.waitAsOf??Date.now()})?.isOpen===false)errors.push('現在停止中の施設が残りの予定に含まれています。');
       if (selection && !item.preserved) {
+        if (selection.dpaMode==='owned' && !item.dpa) errors.push('取得済みDPAを指定した回の利用方法が違います。');
         if (item.end - item.start !== Number(selection.duration ?? activity.duration ?? 10)) errors.push('体験の所要時間が設定と一致しません。');
         if (selection.earliest !== undefined && item.start < toMinutes(selection.earliest)) errors.push('希望時間帯より前です。');
         if (selection.latest !== undefined && item.end > toMinutes(selection.latest)) errors.push('希望時間帯より後です。');
@@ -1194,7 +1220,7 @@ export function validatePlan(park, settings, result, options = {}) {
           if (!dpaAvailable(activity, settings.date)) errors.push('この日にはDPAを利用できません。');
           if (activity.category === 'parade' && (!selection.nodeOverride || !selection.showTimes?.length)) errors.push('パレードDPAの鑑賞地点・時刻が未確認です。');
           const owned = selection.dpaMode === 'owned';
-          const ticket = (result.purchases || []).find(purchase => purchase.id === item.activityId &&
+          const ticket = (result.purchases || []).find(purchase => purchase.id === baseVisitId(item.activityId) &&
             purchase.owned === owned && purchase.start <= admission && admission < purchase.end);
           if (ticket && fixed && showTimes(activity,timeSelection,settings).some(time=>time>=ticket.start && time<item.start))
             errors.push('DPAの入場枠に対応する公演回と一致しません。');
@@ -1236,13 +1262,19 @@ export function validatePlan(park, settings, result, options = {}) {
       errors.push('支払済みDPAの時刻・料金が購入履歴と一致しません。');
     }
   }
+  const admissions=dpaAdmissions(rows);
+  for(const ticket of purchased) {
+    if (ticket.id!==baseVisitId(ticket.id)) errors.push('DPA購入履歴の施設IDが不正です。');
+    if ((admissions.get(ticket.id)||[]).filter(at=>at>=ticket.start && at<ticket.end).length>1)
+      errors.push('同じDPAの利用枠を複数の体験に使用しています。');
+  }
   const ownedCosts = purchased.filter(item => item.owned).reduce((sum, item) => sum + item.cost, 0);
   const prefix = rows.filter(item => item.kind === 'activity' && item.preserved);
   const prefixNonDpa = prefix.reduce((sum, item) => sum + Math.max(0, item.cost - finite(item.dpaCost)), 0);
   let prefixDpa = 0;
   for (const item of prefix.filter(row => row.dpa && row.dpaCost > 0)) {
-    const admission = rows.find(row => row.kind === 'queue' && row.activityId === item.activityId)?.start ?? item.start;
-    if (!purchased.some(ticket => ticket.owned && ticket.id === item.activityId && ticket.start <= admission && admission < ticket.end)) prefixDpa += item.dpaCost;
+    const admission = item.dpaAdmission ?? rows.find(row => row.kind === 'queue' && row.activityId === item.activityId)?.start ?? item.start;
+    if (!purchased.some(ticket => ticket.owned && ticket.id === baseVisitId(item.activityId) && ticket.start <= admission && admission < ticket.end)) prefixDpa += item.dpaCost;
   }
   const baseSpent = Math.max(finite(settings.spentBudget), prefixNonDpa + prefixDpa + ownedCosts);
   const newCosts = rows.filter(item => item.kind === 'activity' && !item.preserved).reduce((sum, item) => sum + item.cost, 0);
@@ -1262,7 +1294,7 @@ export function validatePlan(park, settings, result, options = {}) {
   const dpaCost = prefixDpa + ownedCosts + proposed.reduce((sum, item) => sum + item.cost, 0);
   const previousCount = sourceRows.filter(row => row.kind === 'activity' && row.dpa && (row.dpaCost > 0 || row.plannedDpaPurchase)).length;
   const newVisits = rows.filter(row => row.kind === 'activity' && !row.preserved && row.dpa && selectionMap.get(row.activityId)?.dpaMode === 'consider');
-  if (newVisits.length !== proposed.length || proposed.some(ticket => !newVisits.some(row => row.activityId === ticket.id))) errors.push('DPA購入候補の件数が明細と一致しません。');
+  if (newVisits.length !== proposed.length || proposed.some(ticket => !newVisits.some(row => baseVisitId(row.activityId) === ticket.id))) errors.push('DPA購入候補の件数が明細と一致しません。');
   const plannedCount = previousCount + newVisits.length;
   if (result.totals?.plannedDpaCount !== undefined && result.totals.plannedDpaCount !== plannedCount) errors.push('DPA購入候補の合計件数が明細と一致しません。');
   if (settings.dpaPurchaseLimit !== undefined && newVisits.length > Math.max(0, settings.dpaPurchaseLimit - previousCount)) errors.push('DPAの購入件数の上限を超えています。');

@@ -52,14 +52,15 @@ export function reviseDayProgress(park, settings, {id, status, at, end, doneAt, 
     if (doneAt != null && (!Number.isInteger(doneAt) || doneAt < settings.entry || doneAt > at || (active(old?.status) && doneAt < priorStart)))
       throw Error('体験した時刻は入園・記録した開始時刻以降、組み替え開始までにしてください。');
     const observedStart = active(old?.status) ? priorStart : old?.status === 'done' ? old.startedAt : undefined;
-    visits[id] = {status, ...(doneAt == null ? {} : {endsAt:doneAt}),
+    const reportedAt = Math.min(at, old?.status === 'done' ? (old.reportedAt ?? at) : at);
+    visits[id] = {status, ...(doneAt == null ? {reportedAt} : {endsAt:doneAt}),
       ...(doneAt != null && Number.isInteger(observedStart) && observedStart <= doneAt ? {startedAt:observedStart} : {})};
   } else {
     visits[id] = {status};
   }
   if (isRepeatVisit(id) && (active(status) || status === 'done') && visits[base]?.status !== 'done') {
     if (!confirmFirst) throw Error('2回目を記録するには、先に1回目を体験したことを確認してください。');
-    visits[base] = {status:'done'};
+    visits[base] = {status:'done',reportedAt:status === 'done' ? (doneAt ?? at) : at};
   }
   if (!isRepeatVisit(id) && (status === 'pending' || status === 'skipped' || status === 'clear') &&
       (active(visits[repeatVisitId(base)]?.status) || visits[repeatVisitId(base)]?.status === 'done'))
@@ -191,7 +192,7 @@ export function attachDayProgress({root, context, apply, replan, syncClocks}) {
       apply(patch, id, requested);
       chooseFacility(id,requested === 'clear' ? 'done' : requested);
       refresh();
-      message.textContent = requested === 'clear' ? 'この体験記録を取り消しました。' : '体験状況を記録しました。';
+      message.textContent = requested === 'clear' ? 'この体験記録を取り消しました。' : '体験状況を記録しました。後で開き直すには「名前を付けて保存」から新規保存または上書き保存してください。';
       message.classList.remove('is-error');
       dirty = false;
       if (!override) get('progressReplan').focus({preventScroll:true});

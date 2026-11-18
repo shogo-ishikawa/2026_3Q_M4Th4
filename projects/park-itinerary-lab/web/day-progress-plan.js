@@ -50,7 +50,11 @@ export function applyProgressToPrefix(park, settings, cutoff, original, previous
       throw new RangeError(activity.name+'の終了見込みを過ぎました。「体験済み」にするか、終了見込みを延ばしてください。');
     const selection = settings.selections?.find(s=>s.id===id);
     const confirmsPrior = !ongoing && prior?.end===end && (value.startedAt==null || value.startedAt===prior.start);
-    const accounted = prior && (prior.userProgress || confirmsPrior) ? prior : null;
+    const admission = prior?.dpa ? (prior.dpaAdmission ?? previous.rows.find(r=>r.kind==='queue' && r.activityId===id)?.start ??
+      previous.visits?.find(v=>v.id===id)?.queueStart ?? prior.start) : null;
+    // A corrected completion before the original scan cannot have consumed it.
+    const incompatibleScan = admission!=null && (admission>=end || (value.status==='queue' && admission<start));
+    const accounted = prior && !incompatibleScan && (prior.userProgress || confirmsPrior) ? prior : null;
     const node = accounted?.dpa ? accounted.node : activity.node;
     const details = {activityId:id, node, userProgress:value.status};
     const rideStart = value.status==='queue' ? Math.max(cutoff, end - (selection?.duration ?? activity.duration ?? 10)) : start;
@@ -60,6 +64,11 @@ export function applyProgressToPrefix(park, settings, cutoff, original, previous
     // cannot establish a purchase or a payment for an off-itinerary ride.
     const paid = accounted ?
       {cost:accounted.cost??0,dpaCost:accounted.dpaCost??0,dpa:!!accounted.dpa,...(accounted.plannedDpaPurchase?{plannedDpaPurchase:true}:{})} : {};
+    if (accounted?.dpa) {
+      // A completion marker may fall after the admission window. Keep the
+      // entry that the ticket paid for, including across subsequent edits.
+      paid.dpaAdmission=admission;
+    }
     declared.push(recordRow('activity',rideStart,end,activity.name,{
       ...details, endNode:activity.endNode || node, category:activity.category, ...paid,
     }));

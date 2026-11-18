@@ -106,3 +106,56 @@ test('an explicitly contradictory first and second visit must be corrected',()=>
     assert.throws(()=>solveItinerary(park,settings),/2回目/);
   }
 });
+
+test('one physical DPA receipt pays for a later second ride; the validator refuses a second admission on that receipt',()=>{
+  const paidPark={...park,activities:park.activities.map(a=>a.id==='a'?{...a,baseWait:2,dpa:{kind:'attraction',price:1500,wait:1}}:a)};
+  const settings={...base,selections:[wish('a',{repeatCount:2,dpaMode:'owned',dpaVisit:2,dpaStart:550,dpaEnd:620,dpaPurchasedAt:540})]};
+  const first=solveItinerary(paidPark,settings);
+  assert.equal(first.status,'feasible');
+  assert.deepEqual(first.visits.map(v=>[v.id,v.method]),[['a','normal'],['a~2','dpa']]);
+  assert.deepEqual(first.purchases.map(p=>[p.id,p.cost]),[['a',1500]]);
+  assert.equal(first.totals.cost,1500);
+  const restored=JSON.parse(JSON.stringify(first));
+  const revised=solveItinerary(paidPark,{...restored.settings,replanFrom:first.visits[0].end},{initialPlan:restored});
+  assert.deepEqual(revised.visits.map(v=>v.method),['normal','dpa']);
+  assert.deepEqual(validatePlan(paidPark,settings,first).errors,[]);
+  const overlap=structuredClone(first);
+  // Both admissions lie in this longer ticket window. Turning the historical
+  // standby visit into a second DPA admission must never validate.
+  overlap.purchases[0].start=540;
+  for (const row of overlap.rows.filter(r=>r.activityId==='a')) row.dpa=true;
+  assert.ok(validatePlan(paidPark,settings,overlap).errors.some(e=>e.includes('複数の体験')));
+});
+
+test('an expired owned DPA assigned to the second occurrence is reported and its fee is retained once',()=>{
+  const paidPark={...park,activities:park.activities.map(a=>a.id==='a'?{...a,dpa:{kind:'attraction',price:1500,wait:2}}:a)};
+  const settings=progress({a:{status:'done',endsAt:565}},{selections:[wish('a',{
+    repeatCount:2,dpaMode:'owned',dpaVisit:2,dpaStart:575,dpaEnd:600,dpaPurchasedAt:540,
+  })]});
+  const result=solveItinerary(paidPark,settings);
+  assert.equal(result.status,'no-plan');
+  assert.match(result.omissions.find(o=>o.id==='a~2').reason,/受付終了/);
+  assert.ok(result.diagnostics.notes.some(s=>s.includes('10:00で受付終了')));
+  assert.deepEqual(result.purchases.map(p=>p.id),['a']);
+  assert.equal(result.totals.cost,1500);
+});
+
+test('confirming a DPA completion beyond its admission window keeps the original scan and fee',()=>{
+  const p={...park,activities:[{...park.activities[1],dpa:{kind:'attraction',price:2000,wait:2}}]};
+  const firstWish=wish('b',{repeatCount:2, required:false, manualWait:90, dpaMode:'consider',dpaAvailableWindows:[[560,566]]});
+  const day={...base,exit:620,selections:[firstWish]};
+  const first=solveItinerary(p,day), end=first.visits[0].end;
+  const owned={...firstWish,dpaMode:'owned',dpaPurchasedAt:540,dpaStart:560,dpaEnd:566};
+  const settings={...day,replanFrom:585,selections:[owned],dayProgress:{date,parkId:park.id,visits:{b:{status:'done',endsAt:end}}}};
+  let source=first;
+  for(const cutoff of [585,590]) {
+    const updated={...settings,replanFrom:cutoff};
+    const result=solveItinerary(p,updated,{initialPlan:source});
+    const completed=result.rows.find(r=>r.kind==='activity'&&r.activityId==='b');
+    assert.equal(result.status,'feasible');assert.equal(completed.dpaAdmission,560);
+    assert.equal(result.totals.cost,2000);
+    assert.deepEqual(validatePlan(p,updated,result,{initialPlan:source}).errors,[]);
+    assert.ok(!result.diagnostics.notes.some(note=>note.includes('この枠の利用記録はなく')));
+    source=JSON.parse(JSON.stringify(result));
+  }
+});

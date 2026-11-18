@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {solveItinerary} from '../web/planner.js';
 import {
   buildCalendar, buildOfflineHtml, buildPlanJson, buildScheduleCsv, createShareUrl,
   loadSavedPlan, parsePlanJson, readSharedState, saveNamedPlan, validateSavedState,
@@ -67,12 +68,49 @@ test('a shared link carries the requested ride count without the current trip pr
   assert.equal(state.settings.dayProgress.visits[ride].status, 'done');
 });
 
+test('the same owned DPA assigned to the second ride is charged once after saving, sharing and replanning', () => {
+  const ticket = {id:ride, kind:'attraction', purchasedAt:550, start:720, end:780, cost:1500};
+  const facility = {id:ride, name:'テストライド', category:'attraction', node:'town', cost:0, duration:10,
+    baseWait:30, windows:[[540,1260]], dpa:{kind:'attraction', price:1500, wait:5}};
+  const parkData = {...park, entryNode:'town', exitNode:'town', edges:[], activities:[facility]};
+  const selection = {id:ride, repeatCount:2, dpaVisit:2, required:true, weight:5,
+    dpaMode:'owned', dpaStart:720, dpaEnd:780, dpaPurchasedAt:550, manualWait:30};
+  const settings = {date, entry:540, exit:1260, speed:70, budget:3000, restEvery:0, searchSeconds:0.1,
+    crowdMode:'manual', selections:[selection], purchases:[ticket]};
+  const state = {parkId:park.id, settings, result:solveItinerary(parkData, settings)};
+  const records = new Map();
+  const storage = {getItem:k=>records.get(k)??null, setItem:(k,v)=>records.set(k,v)};
+  const saved = saveNamedPlan('DPAは2回目', state, {storage});
+  const shared = readSharedState(new URL(createShareUrl(state,'https://example.org/')).hash);
+  const duplicate = {...state, settings:{...settings, purchases:[ticket, ticket]}};
+  assert.throws(()=>validateSavedState(duplicate), /DPAが重複/);
+  for (const restored of [parsePlanJson(buildPlanJson(state)), loadSavedPlan(saved.id,{storage}), shared]) {
+    assert.equal(restored.settings.selections[0].dpaVisit, 2);
+    assert.deepEqual(restored.settings.purchases, [ticket]);
+    if (restored.result) {
+      assert.deepEqual(restored.result.purchases.map(ticket=>ticket.id), [ride]);
+      assert.equal(restored.result.settings.selections.length, 1);
+      assert.equal(restored.result.settings.selections[0].dpaVisit, 2);
+      assert.equal(restored.result.settings.selections[0].dpaMode, 'owned');
+    }
+    const result = solveItinerary(parkData,restored.settings);
+    assert.equal(result.status, 'feasible');
+    assert.deepEqual(result.rows.filter(row=>row.kind === 'activity').map(row=>[row.activityId,row.dpa]),
+      [[ride,false], [second,true]]);
+    assert.deepEqual(result.purchases.map(ticket=>ticket.id), [ride]);
+    assert.equal(result.totals.dpaCost, 1500);
+    const html = buildOfflineHtml(result, parkData, restored.settings);
+    assert.match(html, /テストライド（2回目）<\/h2><p>[^<]*DPA利用/);
+  }
+});
+
 test('the offline itinerary lists untimed completions without inventing a calendar event', () => {
   const state = plan();
-  state.settings.dayProgress.visits[ride] = {status:'done'};
+  state.settings.dayProgress.visits[ride] = {status:'done', reportedAt:680};
   state.result.rows.shift();
   const facilities = {...park, activities:[{id:ride, name:'最初のライド'}]};
   const page = buildOfflineHtml(state.result, facilities, state.settings);
+  assert.equal(parsePlanJson(buildPlanJson(state)).settings.dayProgress.visits[ride].reportedAt,680);
   assert.match(page, /体験済み（時刻の記録なし）<\/h2><ul><li>最初のライド<\/li>/);
   assert.doesNotMatch(buildCalendar(state.result, facilities, state.settings), /最初のライド/);
 });
@@ -100,8 +138,14 @@ test('stored progress validates its park, date, visit occurrence, status, times 
     value=>{value.dayProgress.visits[second].endsAt=680;},
     value=>{value.dayProgress.visits[second].startedAt=740;},
     value=>{value.dayProgress.visits[second].endsAt=740.5;},
+    value=>{value.dayProgress.visits[ride].reportedAt=640;},
+    value=>{value.dayProgress.visits[second].reportedAt=700;},
     value=>{value.selections[0].repeatCount=3;},
     value=>{value.selections[0].id=second;},
+    value=>{value.selections[0].dpaVisit=3;},
+    value=>{value.selections[0].dpaVisit='2';},
+    value=>{value.selections[0].dpaVisit=2; delete value.selections[0].repeatCount;},
+    value=>{value.purchases=[{id:second,kind:'attraction',purchasedAt:550,start:720,end:780,cost:1500}];},
   ];
   for (const change of invalidChanges) {
     const invalid = structuredClone(state);

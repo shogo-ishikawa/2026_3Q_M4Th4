@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {expandRepeatVisits, repeatVisitId} from '../web/repeat-visits.js';
+import {expandRepeatVisits, repeatVisitId, resolveDpaVisit} from '../web/repeat-visits.js';
 import {solveItinerary, validatePlan} from '../web/planner.js';
 import {operationPauseInfo} from '../web/operation-windows.js';
 
@@ -105,4 +105,57 @@ test('the second gondola visit respects the harbour-show interruption on the phy
   const {park:expanded} = expandRepeatVisits(p,{...day,selections:[{id:gondola.id,repeatCount:2}]});
   const secondGondola = expanded.activities.find(activity=>activity.id===repeatVisitId(gondola.id));
   assert.deepEqual(operationPauseInfo(expanded,secondGondola,{},day).windows,[[630,645]]);
+});
+
+test('a morning standby ride keeps the single unused midday DPA for the repeat on replan and round-trip', () => {
+  const noon = {id:ride.id,owned:true,kind:'attraction',cost:1500,purchasedAt:600,start:720,end:750};
+  const owned = {...wish,required:false,dpaMode:'owned',dpaPurchasedAt:600,dpaStart:720,dpaEnd:750};
+  const original = {...day,exit:840,selections:[owned],purchases:[noon]};
+  const prior = solveItinerary(park,original);
+  assert.equal(prior.visits[0].method,'dpa');
+  for (const first of [{status:'done',endsAt:620},{status:'done',reportedAt:623},{status:'done'}]) {
+    const current = {...original,replanFrom:623,dayProgress:{parkId:park.id,date,visits:{[ride.id]:first}}};
+    assert.equal(resolveDpaVisit(owned,current,prior),2);
+    const revised = solveItinerary(park,current,{initialPlan:prior});
+    assert.equal(revised.status,'feasible');
+    const future = revised.rows.filter(r=>r.kind==='activity'&&!r.preserved);
+    assert.deepEqual(future.map(r=>[r.activityId,r.dpa]),[[second,true]]);
+    assert.ok(revised.visits.find(v=>v.id===second).queueStart>=720);
+    assert.deepEqual(revised.purchases.map(p=>[p.id,p.cost]),[[ride.id,1500]]);
+    assert.equal(revised.totals.dpaCost,1500);
+    assert.equal(revised.settings.selections.length,1);
+    assert.equal(revised.settings.selections[0].dpaMode,'owned');
+    assert.equal(revised.settings.selections[0].dpaVisit,2);
+    assert.deepEqual(validatePlan(park,revised.settings,revised,{initialPlan:prior}).errors,[]);
+    const sc = JSON.parse(JSON.stringify(revised.settings));
+    const rerun = solveItinerary(park,sc,{initialPlan:revised});
+    assert.deepEqual(rerun.purchases.map(p=>[p.id,p.cost]),[[ride.id,1500]]);
+    assert.deepEqual(rerun.rows.filter(r=>r.kind==='activity'&&!r.preserved).map(r=>[r.activityId,r.dpa]),[[second,true]]);
+  }
+});
+
+test('a planned second-visit DPA candidate charges one physical ticket and does not give the first visit DPA access', () => {
+  const offer = {...wish,dpaMode:'consider',dpaVisit:2,dpaAvailableWindows:[[635,650]],manualWait:25};
+  const s = {...day,budgetPreference:'dpa',exit:650,selections:[offer]};
+  const r = solveItinerary(park,s);
+  assert.equal(r.status,'feasible');
+  assert.deepEqual(r.visits.map(v=>[v.id,v.method]),[[ride.id,'normal'],[second,'dpa']]);
+  assert.deepEqual(r.purchases.map(p=>[p.id,p.owned,p.cost]),[[ride.id,false,1500]]);
+  assert.equal(r.totals.dpaCost,1500);
+  assert.equal(r.settings.selections[0].dpaMode,'consider');
+  assert.equal(r.settings.selections[0].dpaVisit,2);
+  assert.deepEqual(validatePlan(park,r.settings,r).errors,[]);
+});
+
+test('a later replan cannot spend the same used first-visit pass on a requested second DPA', () => {
+  const owned = {...wish,dpaMode:'owned',dpaStart:600,dpaEnd:670,dpaPurchasedAt:600};
+  const s = {...day,selections:[owned]};
+  const first = solveItinerary(park,s);
+  const retry = {...s,replanFrom:first.visits[0].end,selections:[{...owned,dpaVisit:2}]};
+  assert.equal(resolveDpaVisit(retry.selections[0],retry,first),1);
+  const revised = solveItinerary(park,retry,{initialPlan:first});
+  assert.equal(revised.status,'feasible');
+  assert.deepEqual(revised.rows.filter(r=>r.kind==='activity').map(r=>[r.activityId,r.dpa]),[[ride.id,true],[second,false]]);
+  assert.deepEqual(revised.purchases.map(p=>p.id),[ride.id]);
+  assert.equal(revised.totals.dpaCost,1500);
 });

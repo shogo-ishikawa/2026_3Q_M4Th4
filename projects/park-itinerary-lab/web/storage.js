@@ -127,6 +127,10 @@ function validateDayProgress(progress, parkId, date) {
         (visit.startedAt !== undefined && visit.endsAt !== undefined && visit.endsAt < visit.startedAt)) {
       fail('当日の体験記録の時刻を確認してください。');
     }
+    if (visit.reportedAt !== undefined && (visit.status !== 'done' || !validTime(visit.reportedAt) ||
+        (visit.endsAt ?? visit.startedAt ?? 0) > visit.reportedAt)) {
+      fail('体験済みを確認した時刻を確認してください。');
+    }
     if (visit.status === 'queue' || visit.status === 'riding') {
       activeVisits++;
       if (!validTime(visit.endsAt) || visit.endsAt <= (visit.startedAt ?? -1)) fail('進行中の体験の終了見込みを確認してください。');
@@ -219,6 +223,7 @@ export function validateSavedState(state) {
   for (const selection of settings.selections) {
     if (!plain(selection) || !id(selection.id) || ids.has(selection.id) || !integer(selection.weight, 1, 5)) fail('希望のIDと重要度1〜5を確認してください。');
     if (!optionalNumber(selection, 'repeatCount', 1, 2, true)) fail('希望する体験回数は1回または2回で指定してください。');
+    if (!optionalNumber(selection, 'dpaVisit', 1, selection.repeatCount ?? 1, true)) fail('DPAを使う回は希望する体験回数の中から選んでください。');
     ids.add(selection.id);
     if (selection.nodeOverride !== undefined && !id(selection.nodeOverride)) fail('鑑賞・集合地点のIDを確認してください。');
     for (const key of ['earliest', 'latest', 'dpaStart', 'dpaEnd', 'dpaPurchasedAt']) if (!optionalNumber(selection, key, 0, 1440, true)) fail('希望する時間帯を確認してください。');
@@ -235,7 +240,10 @@ export function validateSavedState(state) {
   if (settings.currentNode !== undefined && !id(settings.currentNode)) fail('現在地の地点を確認してください。');
   if (settings.completedIds !== undefined && (!Array.isArray(settings.completedIds) || settings.completedIds.length > MAX_VISITS || settings.completedIds.some(value => !visitId(value)))) fail('体験済みの施設を確認してください。');
   validateDayProgress(settings.dayProgress, state.parkId, settings.date);
-  if (settings.purchases !== undefined && (!Array.isArray(settings.purchases) || settings.purchases.length > MAX_ACTIVITIES || settings.purchases.some(item => !plain(item) || !id(item.id) || !['attraction', 'show'].includes(item.kind) || !validTime(item.purchasedAt) || !validTime(item.start) || !validTime(item.end) || item.start >= item.end || !integer(item.cost, 0, 1000000) || item.cost % 100 !== 0))) fail('購入済みDPAの時刻と費用を確認してください。');
+  if (settings.purchases !== undefined) {
+    if (!Array.isArray(settings.purchases) || settings.purchases.length > MAX_ACTIVITIES || settings.purchases.some(item => !plain(item) || !id(item.id) || !['attraction', 'show'].includes(item.kind) || !validTime(item.purchasedAt) || !validTime(item.start) || !validTime(item.end) || item.start >= item.end || !integer(item.cost, 0, 1000000) || item.cost % 100 !== 0)) fail('購入済みDPAの時刻と費用を確認してください。');
+    if (new Set(settings.purchases.map(ticket=>ticket.id)).size !== settings.purchases.length) fail('同じ施設の購入済みDPAが重複しています。');
+  }
   if (state.result !== undefined && state.result !== null) {
     if (!plain(state.result) || !Array.isArray(state.result.rows) || state.result.rows.length > 5000) fail('予定表の行を確認してください。');
     if (state.result.settings?.dayProgress !== undefined) validateDayProgress(state.result.settings.dayProgress, state.parkId, state.result.settings.date);

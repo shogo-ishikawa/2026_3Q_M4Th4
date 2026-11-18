@@ -1,6 +1,6 @@
 import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, fetchPublishedModel, prepareLiveForReplan, prepareWeatherForVisit } from './wait-data.js?v=1.13.0';
 import {attachDayProgress} from './day-progress-ui.js';
-import {baseVisitId, repeatVisitId, isRepeatVisit} from './repeat-visits.js';
+import {baseVisitId, repeatVisitId, isRepeatVisit, expandRepeatVisits, resolveDpaVisit} from './repeat-visits.js';
 import { restsBesideFood, settledReplanWishes } from './planner.js?v=1.13.0';
 import { enhanceTimeInputs, parkTimeBounds, clampClock } from './time-input.js?v=1.13.0';
 import { estimateParkCrowd } from './wait-model.js?v=1.13.0';
@@ -248,13 +248,14 @@ export function noPlanActions(result,park) {
   if(result?.status!=='no-plan')return [];
   const settings=result.settings||{},actions=[];
   const activities=new Map(park.activities.map(a=>[a.id,a]));
+  const occurrences=expandRepeatVisits(park,settings).settings.selections || [];
   for(const omitted of result.omissions||[]){
-    const wish=settings.selections?.find(item=>item.id===omitted.id);
+    const wish=occurrences.find(item=>item.id===omitted.id);
     if(!wish?.required&&wish?.dpaMode!=='owned')continue;
     if(omitted.conflictField==='avoidConsecutiveFood')continue;
-    const activity=activities.get(wish.id);
+    const activity=activities.get(baseVisitId(wish.id));
     const field=omitted.conflictField||(wish.dpaMode==='owned'?'dpaStart':ENTERTAINMENT.has(activity?.category)?'showTimes':FOOD.has(activity?.category)?'earliest':'required');
-    actions.push({wishId:wish.id,field,label:(activity?.name||omitted.name)+'の条件'});
+    actions.push({wishId:baseVisitId(wish.id),field,label:(omitted.name||activity?.name)+'の条件'});
   }
   if((result.omissions||[]).some(item=>item.required&&item.conflictField==='required'))actions.push({field:'visitDate',label:'訪問日'});
   if((result.omissions||[]).some(item=>item.conflictField==='avoidConsecutiveFood'))actions.push({field:'avoidConsecutiveFood',label:'フードを連続して入れない設定'});
@@ -292,7 +293,7 @@ function dpaExampleHelp(selection, bounds) {
   return `<p class="dpa-help">公式の購入画面例では30分枠です。当日表示された時刻と一致しますか？ <button type="button" class="text-button" data-confirm-dpa-example>${timeText(example.start)}–${timeText(example.end)}を確認して入力</button></p>`;
 }
 
-export function dpaEditor(activity, selection, park, purchase, purchaseLimit, bounds = parkTimeBounds(park)) {
+export function dpaEditor(activity, selection, park, purchase, purchaseLimit, bounds = parkTimeBounds(park), autoVisit = 1, effectiveVisit = selection.dpaVisit ?? autoVisit) {
   if (!activity.dpa) return '';
   const mode = selection.dpaMode || 'none';
   const owned = mode === 'owned';
@@ -314,6 +315,7 @@ export function dpaEditor(activity, selection, park, purchase, purchaseLimit, bo
     `<label class="full-field">DPAの集合・鑑賞場所<select data-field="nodeOverride" aria-required="true"><option value="">公式アプリの場所を選ぶ</option>${selectableNodes(park).map(n => `<option value="${escapeHtml(n.id)}"${selection.nodeOverride === n.id ? ' selected' : ''}>${escapeHtml(n.name || n.id)}</option>`).join('')}</select></label>` : '';
   return `<fieldset class="dpa-editor" aria-label="${escapeHtml(activity.name)}のディズニー・プレミアアクセス"><legend><abbr title="ディズニー・プレミアアクセス">DPA</abbr> <span>${money(activity.dpa.price)}／人</span></legend>
     <div class="dpa-choices">${radios}</div>
+    ${showSlot && activity.category === 'attraction' && selection.repeatCount === 2 ? `<label class="repeat-wish">DPAを使う回<select data-field="dpaVisit"><option value=""${selection.dpaVisit == null ? ' selected' : ''}>自動（${autoVisit === 2 ? '2' : '1'}回目）</option><option value="1"${selection.dpaVisit === 1 ? ' selected' : ''}>1回目</option><option value="2"${selection.dpaVisit === 2 ? ' selected' : ''}>2回目</option></select></label><p class="dpa-help">もう一方の回は通常の待ち列で計画します。${selection.dpaVisit != null && selection.dpaVisit !== effectiveVisit ? ` 記録した体験と取得枠に従い、今回は${effectiveVisit}回目に使います。` : ''}</p>` : ''}
     ${note ? `<p class="dpa-help">${note}</p>` : ''}
     ${showSlot ? `<div class="wish-fields dpa-times">${timeField('dpaStart', slotLabels[0])}${timeField('dpaEnd', slotLabels[1])}${owned ? timeField('dpaPurchasedAt', '購入した時刻') : ''}</div>${!owned && activity.id === 'land-attraction-197' ? `<div data-dpa-example aria-live="polite">${dpaExampleHelp(selection, bounds)}</div>` : ''}${location}` : ''}
     ${extraSlots.length ? `<p class="dpa-help">ほかの購入候補枠　${extraSlots.map(([start, end]) => `${timeText(start)}–${timeText(end)}`).join('、')}</p>` : ''}
@@ -610,10 +612,12 @@ export function initialiseApp() {
       const wishTimes = `<label>この時刻から<input type="time" data-field="earliest" value="${timeText(s.earliest ?? wishDefaults.min)}"></label>
         <label>この時刻までに終了<input type="time" data-field="latest" value="${timeText(s.latest ?? wishDefaults.max)}"></label>`;
       const ownedDpa=s.dpaMode==='owned',required=ownedDpa||s.required;
-      const dpa=dpaEditor(a,s,currentPark(),state.settings.purchases.find(p=>p.id===s.id),state.settings.dpaPurchaseLimit,bounds);
+      const autoVisit=s.repeatCount===2&&a.dpa?resolveDpaVisit({...s,dpaVisit:undefined},state.settings,state.result):1;
+      const effectiveVisit=s.dpaVisit ? resolveDpaVisit(s,state.settings,state.result) : autoVisit;
+      const dpa=dpaEditor(a,s,currentPark(),state.settings.purchases.find(p=>p.id===s.id),state.settings.dpaPurchaseLimit,bounds,autoVisit,effectiveVisit);
       const groupTitle=['snack','popcorn'].includes(a.category)&&byId(list[index-1]?.id)?.category!==a.category?`<h3 class="catalogue-group-title">${CATEGORY[a.category]}</h3>`:'';
       const pauseInfo=a.id==='sea-attraction-230'?operationPauseInfo(currentPark(),a,s,state.settings):null;
-      return `${groupTitle}<article class="wish-card genre-${genreOf(a.category)}" data-wish-id="${escapeHtml(s.id)}"><div class="wish-heading"><div><p class="wish-category">${escapeHtml(CATEGORY[a.category]||a.category)} / ${escapeHtml(a.area||'')}</p><h4>${escapeHtml(a.name)}</h4></div><button class="remove-wish" data-remove="${escapeHtml(s.id)}" type="button" aria-label="${escapeHtml(a.name)}を希望から外す">×</button></div>${foodLinks(a)}${schedule.closed?'<p class="schedule-note">訪問日は休止予定です。別の日や施設を検討してください。</p>':''}${a.category==='attraction'?`<label class="repeat-wish">乗りたい回数<select data-field="repeatCount"><option value="1"${s.repeatCount===2?'':' selected'}>1回</option><option value="2"${s.repeatCount===2?' selected':''}>2回</option></select></label>${s.repeatCount===2&&a.dpa?'<p class="field-note">2回目は通常の待ち列を利用します。</p>':''}`:''}<div class="wish-main-controls"><div class="weight-control${required?' is-required':''}"><span>${required?'必須 <strong>必ず入れる条件</strong>':`重要度 <strong>${s.weight} · ${escapeHtml(WEIGHT_LABELS[s.weight]||'行きたい')}</strong>`}</span><div class="weight-buttons" role="group" aria-label="${escapeHtml(a.name)}の重要度">${weightButtons({...s,required})}</div></div><label class="check-field"><input type="checkbox" data-field="required"${required?' checked':''}${ownedDpa?' disabled':''}>必ず入れる</label></div><div class="wish-fields">${timed ? wishTimes : ''}${paid?`<label>${a.category==='shop'?'使いたい金額':'フードの予算'}<input type="number" min="0" max="1000000" step="100" data-field="cost" value="${escapeHtml(s.cost ?? a.cost ?? 0)}" aria-label="${escapeHtml(a.name)}の予算（円）"></label>`:''}<label>体験・滞在（待ち時間を除く）<input type="number" min="1" max="360" step="1" data-field="duration" value="${escapeHtml(s.duration ?? a.duration)}" aria-label="${escapeHtml(a.name)}の滞在時間（分）"></label><label>待ち時間（手動時）<input type="number" min="0" max="360" step="5" data-field="manualWait" value="${escapeHtml(s.manualWait ?? a.baseWait)}" aria-label="${escapeHtml(a.name)}の待ち時間（分）"></label></div>${timed ? '' : `<details class="wish-details"${s.earliest != null || s.latest != null ? ' open' : ''}><summary>希望の時間帯</summary><div class="wish-fields">${wishTimes}</div></details>`}${show?`<div class="schedule-note">公演時刻：${scheduleCurrent?`${escapeHtml(schedule.date)}の公式時刻を表示しています。`:'訪問日の公式情報を確認して入力してください。必須にしていない公演は時刻が未入力でも他の希望を計画できます。'}${a.showTimesDate?` 収録データの確認日 ${escapeHtml(a.showTimesDate)}`:''}${a.scheduleNote?` ${escapeHtml(a.scheduleNote)}`:''}</div><label class="full-field">訪問日の開演時刻（例 11:00, 13:30）<input type="text" data-field="showTimes" value="${escapeHtml((s.showTimes||[]).map(timeText).join(', '))}" placeholder="11:00, 13:30"></label><label class="check-field section-gap"><input type="checkbox" data-field="confirmSchedule"${s.confirmSchedule?' checked':''}>この日の公演時刻を確認した</label>`:''}${a.access&&a.access!=='normal'?`<div class="access-note"><label><input type="checkbox" data-field="confirmedAccess"${s.confirmedAccess?' checked':''}>${a.access==='entry'?'エントリー受付の結果・入場条件を確認した':'予約・利用条件を確認した'}</label></div>`:''}${pauseInfo?`<div class="gondola-note"><label class="check-field"><input type="checkbox" data-setting="gondolaAvoidHarbourShows"${state.settings.gondolaAvoidHarbourShows!==false?' checked':''}>ショー上演中を避ける目安</label><p>${escapeHtml(pauseInfo.note)}</p><p data-pause-summary${pauseInfo.windows.length?'':' hidden'}>${pauseWindowSummary(pauseInfo)}</p><label class="full-field">確認した休止時間（例 12:00-13:00）<input type="text" data-field="pauseWindows" value="${escapeHtml((s.pauseWindows||[]).map(pair=>pair.map(timeText).join('-')).join(', '))}" placeholder="12:00-13:00, 19:00-20:00"></label></div>`:''}${dpa}<details class="wish-details"><summary>営業時間を調整する</summary><p class="wish-foot">${escapeHtml(a.dailySchedules?.[state.settings.date]?state.settings.date:a.operatingDate||a.windowsDate||'収録データ')}の営業時間を基準に計算します。訪問日の営業に合わせて変更できます。</p><div class="wish-fields"><label>営業開始<input type="time" data-field="windowStart" value="${timeText(s.windows?.[0]?.[0] ?? schedule.windows?.[0]?.[0] ?? state.settings.entry)}"></label><label>営業終了<input type="time" data-field="windowEnd" value="${timeText(s.windows?.[0]?.[1] ?? schedule.windows?.[0]?.[1] ?? state.settings.exit)}"></label></div></details></article>`;
+      return `${groupTitle}<article class="wish-card genre-${genreOf(a.category)}" data-wish-id="${escapeHtml(s.id)}"><div class="wish-heading"><div><p class="wish-category">${escapeHtml(CATEGORY[a.category]||a.category)} / ${escapeHtml(a.area||'')}</p><h4>${escapeHtml(a.name)}</h4></div><button class="remove-wish" data-remove="${escapeHtml(s.id)}" type="button" aria-label="${escapeHtml(a.name)}を希望から外す">×</button></div>${foodLinks(a)}${schedule.closed?'<p class="schedule-note">訪問日は休止予定です。別の日や施設を検討してください。</p>':''}${a.category==='attraction'?`<label class="repeat-wish">乗りたい回数<select data-field="repeatCount"><option value="1"${s.repeatCount===2?'':' selected'}>1回</option><option value="2"${s.repeatCount===2?' selected':''}>2回</option></select></label>`:''}<div class="wish-main-controls"><div class="weight-control${required?' is-required':''}"><span>${required?'必須 <strong>必ず入れる条件</strong>':`重要度 <strong>${s.weight} · ${escapeHtml(WEIGHT_LABELS[s.weight]||'行きたい')}</strong>`}</span><div class="weight-buttons" role="group" aria-label="${escapeHtml(a.name)}の重要度">${weightButtons({...s,required})}</div></div><label class="check-field"><input type="checkbox" data-field="required"${required?' checked':''}${ownedDpa?' disabled':''}>必ず入れる</label></div><div class="wish-fields">${timed ? wishTimes : ''}${paid?`<label>${a.category==='shop'?'使いたい金額':'フードの予算'}<input type="number" min="0" max="1000000" step="100" data-field="cost" value="${escapeHtml(s.cost ?? a.cost ?? 0)}" aria-label="${escapeHtml(a.name)}の予算（円）"></label>`:''}<label>体験・滞在（待ち時間を除く）<input type="number" min="1" max="360" step="1" data-field="duration" value="${escapeHtml(s.duration ?? a.duration)}" aria-label="${escapeHtml(a.name)}の滞在時間（分）"></label><label>待ち時間（手動時）<input type="number" min="0" max="360" step="5" data-field="manualWait" value="${escapeHtml(s.manualWait ?? a.baseWait)}" aria-label="${escapeHtml(a.name)}の待ち時間（分）"></label></div>${timed ? '' : `<details class="wish-details"${s.earliest != null || s.latest != null ? ' open' : ''}><summary>希望の時間帯</summary><div class="wish-fields">${wishTimes}</div></details>`}${show?`<div class="schedule-note">公演時刻：${scheduleCurrent?`${escapeHtml(schedule.date)}の公式時刻を表示しています。`:'訪問日の公式情報を確認して入力してください。必須にしていない公演は時刻が未入力でも他の希望を計画できます。'}${a.showTimesDate?` 収録データの確認日 ${escapeHtml(a.showTimesDate)}`:''}${a.scheduleNote?` ${escapeHtml(a.scheduleNote)}`:''}</div><label class="full-field">訪問日の開演時刻（例 11:00, 13:30）<input type="text" data-field="showTimes" value="${escapeHtml((s.showTimes||[]).map(timeText).join(', '))}" placeholder="11:00, 13:30"></label><label class="check-field section-gap"><input type="checkbox" data-field="confirmSchedule"${s.confirmSchedule?' checked':''}>この日の公演時刻を確認した</label>`:''}${a.access&&a.access!=='normal'?`<div class="access-note"><label><input type="checkbox" data-field="confirmedAccess"${s.confirmedAccess?' checked':''}>${a.access==='entry'?'エントリー受付の結果・入場条件を確認した':'予約・利用条件を確認した'}</label></div>`:''}${pauseInfo?`<div class="gondola-note"><label class="check-field"><input type="checkbox" data-setting="gondolaAvoidHarbourShows"${state.settings.gondolaAvoidHarbourShows!==false?' checked':''}>ショー上演中を避ける目安</label><p>${escapeHtml(pauseInfo.note)}</p><p data-pause-summary${pauseInfo.windows.length?'':' hidden'}>${pauseWindowSummary(pauseInfo)}</p><label class="full-field">確認した休止時間（例 12:00-13:00）<input type="text" data-field="pauseWindows" value="${escapeHtml((s.pauseWindows||[]).map(pair=>pair.map(timeText).join('-')).join(', '))}" placeholder="12:00-13:00, 19:00-20:00"></label></div>`:''}${dpa}<details class="wish-details"><summary>営業時間を調整する</summary><p class="wish-foot">${escapeHtml(a.dailySchedules?.[state.settings.date]?state.settings.date:a.operatingDate||a.windowsDate||'収録データ')}の営業時間を基準に計算します。訪問日の営業に合わせて変更できます。</p><div class="wish-fields"><label>営業開始<input type="time" data-field="windowStart" value="${timeText(s.windows?.[0]?.[0] ?? schedule.windows?.[0]?.[0] ?? state.settings.entry)}"></label><label>営業終了<input type="time" data-field="windowEnd" value="${timeText(s.windows?.[0]?.[1] ?? schedule.windows?.[0]?.[1] ?? state.settings.exit)}"></label></div></details></article>`;
     }).join(''):all.length?'<p class="empty-message">このジャンルの希望はまだありません。施設カードから追加できます。</p>':'<p class="empty-message">地図や施設カードから行きたい場所を選んでください。</p>';
     for(const card of $('wishlist').querySelectorAll('[data-wish-id]')){
       const drafts=wishDrafts.get(selected(card.dataset.wishId));
@@ -634,8 +638,15 @@ export function initialiseApp() {
       if(count===1&&second&&['done','riding','queue'].includes(second.status)){
         target.value='2';throw Error('2回目の体験状況を訂正してから回数を減らしてください。');
       }
-      if(count===2)s.repeatCount=2;else delete s.repeatCount;
+      if(count===2)s.repeatCount=2;
+      else {delete s.repeatCount;delete s.dpaVisit;}
       markResultStale();renderWishlist();return;
+    }
+    if(key==='dpaVisit'){
+      if(['1','2'].includes(target.value))s.dpaVisit=Number(target.value);else delete s.dpaVisit;
+      markResultStale();renderWishlist();
+      [...$('wishlist').querySelectorAll('[data-wish-id]')].find(card=>card.dataset.wishId===s.id)?.querySelector('[data-field="dpaVisit"]')?.focus({preventScroll:true});
+      return;
     }
     if(key==='dpaMode'){
       changeDpaMode(s,target.value,state.settings.purchases.find(p=>p.id===s.id));
@@ -699,7 +710,7 @@ export function initialiseApp() {
       const details=[];if(row.fixedBreakId)details.push(foodAdjacentRests.has(row)?'フードの前後に指定した休憩':'指定した休憩');if(row.metres)details.push(`${Math.round(row.metres)} m`);if(duration>=0)details.push(`${duration}分`);if(Number(row.cost)>0)details.push(money(row.cost));if(a?.area)details.push(a.area);
       if (kind === 'queue' && (row.bufferMinutes || row.delayMinutes)) details.push(`見込み${row.estimatedMinutes}分＋余裕${row.bufferMinutes || 0}分${row.delayMinutes ? `＋混雑想定${row.delayMinutes}分` : ''}`);
       const admission=row.dpa&&(kind==='queue'?row.start:result.visits?.find(visit=>visit.id===row.activityId)?.queueStart??row.start);
-      const purchase=row.dpa&&result.purchases?.find(p=>p.id===row.activityId&&p.start<=admission&&admission<p.end);
+      const purchase=row.dpa&&result.purchases?.find(p=>baseVisitId(p.id)===baseVisitId(row.activityId)&&p.start<=admission&&admission<p.end);
       const dpaLabel=purchase?.owned===true?'DPA 取得済み':purchase?.owned===false?'DPA 購入候補':'DPA';
       const forecast=['activity','rest'].includes(kind)?weatherForMinute(planSettings,Number(row.start)):null;
       const notice=lastSkip?.index===index?`<div class="rest-edit-notice" role="status">${timeText(lastSkip.start)}の休憩を外しました。<button type="button" data-undo-rest>元に戻す</button><button type="button" data-replan-rest>空き時間を使って再探索</button></div>`:'';
@@ -777,8 +788,16 @@ export function initialiseApp() {
   }
   function checkSelectionDetails() {
     const settled=settledReplanWishes(currentPark(),state.settings,state.result);
+    const expanded=expandRepeatVisits(currentPark(),state.settings,state.result);
+    const remaining=expanded.settings.selections.filter(wish=>!settled.has(wish.id));
+    const hasUnsettledField=(id,field)=>remaining.some(wish=>{
+      if(baseVisitId(wish.id)!==id)return false;
+      return !['dpaStart','dpaEnd','dpaPurchasedAt','nodeOverride'].includes(field) ||
+        wish.dpaMode==='owned' || (wish.dpaMode==='consider'&&state.settings.dpaPurchaseLimit!==0);
+    });
     const invalid=[...$('wishlist').querySelectorAll('input:invalid, select:invalid, textarea:invalid')]
-      .find(control=>!settled.has(control.closest('[data-wish-id]')?.dataset.wishId));
+      .find(control=>hasUnsettledField(control.closest('[data-wish-id]')?.dataset.wishId,
+        (control.closest('.clamped-time')?.previousElementSibling||control).dataset.field));
     if(invalid){
       const field=invalid.closest('.clamped-time')?.previousElementSibling||invalid;
       const id=invalid.closest('[data-wish-id]')?.dataset.wishId;
@@ -788,12 +807,11 @@ export function initialiseApp() {
       throw Object.assign(inputError(`${byId(id)?.name||'希望'}：${label}。 ${hint}`,field.dataset.field,id),{control:invalid});
     }
     if(!state.settings.selections.length&&!Object.keys(state.settings.dayProgress?.visits||{}).length)throw inputError('行きたい場所を一つ以上選んでください。','catalogueSearch');
-    for(const wish of state.settings.selections){
-      if(settled.has(wish.id))continue;
-      const activity=byId(wish.id);
-      const drafts=wishDrafts.get(wish);
-      const draft=drafts&&[...drafts].find(([key])=>!(state.settings.dpaPurchaseLimit===0&&wish.dpaMode==='consider'&&['dpaStart','dpaEnd','nodeOverride'].includes(key)));
-      if(draft)throw inputError(`${activity?.name||'希望'}：${draft[1].label}。 ${draft[1].message}`,draft[0],wish.id);
+    for(const wish of remaining){
+      const id=baseVisitId(wish.id), activity=byId(id);
+      const drafts=wishDrafts.get(selected(id));
+      const draft=drafts&&[...drafts].find(([key])=>hasUnsettledField(id,key));
+      if(draft)throw inputError(`${activity?.name||'希望'}：${draft[1].label}。 ${draft[1].message}`,draft[0],id);
       const problem=wishInputProblem(wish,activity,state.settings.date,state.settings.dpaPurchaseLimit);
       if(problem)throw problem;
     }
@@ -826,6 +844,7 @@ export function initialiseApp() {
   function revealPlanField({field,wishId,control}) {
     let target=control;
     if(wishId){
+      wishId=baseVisitId(wishId);
       showWorkflow('wishlist');
       const cards=() => [...$('wishlist').querySelectorAll('[data-wish-id]')];
       let card=cards().find(item=>item.dataset.wishId===wishId);

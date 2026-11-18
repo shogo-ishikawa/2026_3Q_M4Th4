@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {attachDayProgress, remainingVisitEnd, reviseDayProgress, suggestedReportTime} from '../web/day-progress-ui.js';
 import {repeatVisitId} from '../web/repeat-visits.js';
-import {resetForNewVisitDay} from '../web/app.js';
+import {changeDpaMode, dpaEditor, noPlanActions, resetForNewVisitDay} from '../web/app.js';
 
 const park = {id:'land',activities:[{id:'a',category:'attraction',node:'entrance',endNode:'exit',duration:10},
   {id:'b',category:'attraction',node:'b',duration:20}]};
@@ -32,19 +32,19 @@ test('a second visit is independent and recording it requires acknowledgement of
   const second=repeatVisitId('a');
   assert.throws(()=>update(settings,{id:second,status:'done'}),/1回目/);
   const done=update(settings,{id:second,status:'done',confirmFirst:true});
-  assert.deepEqual(done.dayProgress.visits, {a:{status:'done'},[second]:{status:'done'}});
+  assert.deepEqual(done.dayProgress.visits, {a:{status:'done',reportedAt:660},[second]:{status:'done',reportedAt:660}});
   assert.throws(()=>update(done,{id:'a',status:'pending'}),/2回目/);
   const revised=update(done,{id:second,status:'skipped'});
   const cleared=update(revised,{id:second,status:'clear'});
-  assert.deepEqual(cleared.dayProgress.visits,{a:{status:'done'}});
+  assert.deepEqual(cleared.dayProgress.visits,{a:{status:'done',reportedAt:660}});
   assert.equal(settings.dayProgress,undefined);
 });
 test('progress does not carry to a new day or another park',() => {
   const current=update(settings,{status:'queue',end:690});
   const future=update({...current,date:'2026-11-20'},{id:'b',status:'done'});
-  assert.deepEqual(future.dayProgress.visits,{b:{status:'done'}});
+  assert.deepEqual(future.dayProgress.visits,{b:{status:'done',reportedAt:660}});
   const another={...current,dayProgress:{...current.dayProgress,parkId:'sea'}};
-  assert.deepEqual(update(another,{id:'b',status:'done'}).dayProgress.visits,{b:{status:'done'}});
+  assert.deepEqual(update(another,{id:'b',status:'done'}).dayProgress.visits,{b:{status:'done',reportedAt:660}});
   const next={settings:{...current,date:'2026-11-20'}};
   resetForNewVisitDay(next,park);
   assert.equal(next.settings.dayProgress,undefined);
@@ -97,4 +97,40 @@ test('the main progress action saves valid edits, rejects incomplete waits, and 
   field('progressReplan').dispatchEvent(new Event('click'));
   assert.equal(replans,2);
   assert.equal(writes,1);
+});
+
+test('DPA visit controls reflect the selected ticket, repeat count and confirmed use',() => {
+  const attraction = {...park.activities[0],name:'ライド',dpa:{price:2000}};
+  const wish={id:attraction.id, repeatCount:2, dpaMode:'owned', dpaVisit:2};
+  const render = (selection,category=attraction.category,limit=2) =>
+    dpaEditor({...attraction,category},selection,{...park,nodes:[]},null,limit,{min:540,max:1260},2,2);
+  assert.match(render(wish), /DPAを使う回/);
+  assert.match(render(wish), /value="2" selected>2回目/);
+  assert.match(render({...wish,dpaVisit:undefined}), /value="" selected>自動（2回目）/);
+  assert.match(render({...wish,dpaVisit:1}), /今回は2回目に使います/);
+  assert.doesNotMatch(render({...wish,repeatCount:1}), /data-field="dpaVisit"/);
+  assert.doesNotMatch(render({...wish,dpaMode:'none'}), /data-field="dpaVisit"/);
+  assert.doesNotMatch(render(wish,'parade'), /data-field="dpaVisit"/);
+  changeDpaMode(wish,'consider');
+  assert.equal(wish.dpaVisit,2);
+  assert.match(render(wish), /data-field="dpaVisit"/);
+  assert.doesNotMatch(render(wish,'attraction',0), /data-field="dpaVisit"/);
+});
+
+test('confirming completion without a clock keeps the earliest known upper bound over later edits',() => {
+  const first=update(settings,{status:'done',at:620});
+  const changed=update(first,{status:'done',at:740});
+  assert.deepEqual(changed.dayProgress.visits.a,{status:'done',reportedAt:620});
+  const timed=update(changed,{status:'done',at:745,doneAt:615});
+  assert.deepEqual(timed.dayProgress.visits.a,{status:'done',endsAt:615});
+});
+
+test('an unreachable owned DPA for the second ride opens the original facility’s slot editor',() => {
+  const ride={...park.activities[0],name:'ライド',dpa:{price:2000,wait:5}};
+  const second=repeatVisitId(ride.id);
+  const profile={...settings,selections:[{id:ride.id,repeatCount:2,dpaVisit:2,dpaMode:'owned',
+    dpaStart:720,dpaEnd:750,dpaPurchasedAt:560}]};
+  const actions=noPlanActions({status:'no-plan',settings:profile,omissions:[{id:second,name:'ライド（2回目）',required:true}]},
+    {...park,activities:[ride]});
+  assert.ok(actions.some(action=>action.wishId===ride.id && action.field==='dpaStart' && action.label.includes('2回目')));
 });
