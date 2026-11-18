@@ -517,3 +517,26 @@ body[data-park=sea] .hero h1{font-size:clamp(24px,2.35vw,36px);line-height:1.6}
 .calendar-key div{display:flex;flex-wrap:wrap;align-items:center;gap:2px 10px}
 .calendar-key strong{color:var(--ink)}.calendar-key span{white-space:nowrap}.calendar-key i{margin-right:3px}
 .calendar-key p{margin:1px 0 4px}
+
+/* Installation is a secondary action beside the planner's main entrance. */
+.hero-actions{display:flex;align-items:center;gap:12px 24px;flex-wrap:wrap}
+.install-action{min-height:44px;padding:7px 15px;border:1px solid #43608a;border-radius:9px;background:#ffffffd9;color:#203f68;font-family:inherit;font-size:.875rem;font-weight:650;line-height:1.45}
+body[data-park=sea] .install-action{border-color:#bbdbf4;background:#123f65;color:#fff}
+.install-action:hover{box-shadow:0 0 0 1px currentColor}
+.install-help{box-sizing:border-box;width:min(26rem,calc(100% - 32px));max-height:85vh;max-height:85dvh;padding:22px;border:1px solid #cad4e4;border-radius:17px;background:#fff;color:#1b2741;box-shadow:0 20px 65px #09182c40}
+.install-help::backdrop{background:#141d35a8}
+.install-heading{display:flex;align-items:center;gap:12px}
+.install-heading img{flex:none;border-radius:12px}
+.install-heading h2{margin:0;font-size:1.18rem;line-height:1.5}
+.install-help ol{margin:1rem 0;padding-left:1.5em}
+.install-help li+li{margin-top:.4em}
+.install-help label{font-size:.875rem;font-weight:650}
+.install-url{display:flex;gap:8px}
+.install-url input{flex:1;min-width:0;padding:8px;border:1px solid #abb7c6;border-radius:6px}
+.install-help form{display:flex;justify-content:flex-end;margin-top:16px}
+.install-help button{min-height:44px}
+#launchSplash{position:fixed;inset:0;z-index:1000;pointer-events:none;background:#191e37 url('assets/pwa/splash.webp') center/contain no-repeat}
+.tdroute-standalone [data-browser-only]{display:none!important}
+.tdroute-standalone body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+@media(display-mode:standalone){[data-browser-only]{display:none!important}}
+@media print{.install-action,.install-help,#launchSplash{display:none!important}}

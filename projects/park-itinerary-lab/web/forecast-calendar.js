@@ -1,4 +1,4 @@
-import {forecastDateRange} from './weather.js?v=1.16.1';
+import {forecastDateRange} from './weather.js?v=2.0.0';
 
 const weatherStatus = {
   confirmed: {mark:'●', label:'予報あり'},
