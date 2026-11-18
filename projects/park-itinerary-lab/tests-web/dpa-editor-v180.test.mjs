@@ -12,7 +12,7 @@ test('each eligible wish has its own radio group and shows only the fields for i
   for (const mode of ['none','unavailable','consider','owned']) {
     const html = dpaEditor(ride, {...wish(),dpaMode:mode}, park);
     assert.equal((html.match(/name="dpa-ride"/g)||[]).length,4);
-    assert.equal((html.match(/ checked>/g)||[]).length,1);
+    assert.equal((html.match(/<input type="radio"[^>]* checked>/g)||[]).length,1);
     assert.ok(html.includes(`value="${mode}" checked`));
     assert.ok(html.includes('2,000円／人'));
     assert.equal(html.includes('data-field="dpaStart"'),['consider','owned'].includes(mode));
@@ -63,6 +63,7 @@ test('parade venue selection appears only for active slots and excludes routing-
     const html=dpaEditor(parade,{...wish(),dpaMode:mode,nodeOverride:'venue'},places);
     const active=['consider','owned'].includes(mode);
     assert.equal(html.includes('data-field="nodeOverride"'),active);
+    assert.doesNotMatch(html,/<select[^>]*\srequired(?:\s|>)/);
     assert.equal(html.includes('value="venue" selected>&lt;広場&gt;'),active);
     assert.ok(!html.includes('中継点'));
   }
@@ -111,4 +112,12 @@ test('a previous park or date cannot supply purchases or preserved visits to a n
     assert.equal(result.rows.some(row=>row.preserved),false);
     assert.equal(result.totals.cost,0);
   }
+});
+
+test('a zero purchase limit hides candidate slot requirements and keeps owned tickets editable',()=>{
+  const parade={...ride,category:'parade'};
+  const candidate=dpaEditor(parade,{...wish(),dpaMode:'consider'},park,undefined,0);
+  assert.doesNotMatch(candidate,/data-field="(?:nodeOverride|dpaStart|dpaEnd)"/);
+  assert.match(candidate,/上限が0件/);
+  assert.match(dpaEditor(parade,{...wish(),dpaMode:'owned'},park,undefined,0),/data-field="nodeOverride"/);
 });

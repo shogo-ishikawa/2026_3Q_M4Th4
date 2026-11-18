@@ -1,6 +1,6 @@
 import {validateWaitModel} from './wait-model.js';
 import {weatherForMinute,formatWeatherDetails} from './weather.js';
-import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=1.8.0';
+import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=1.9.0';
 /** Portable schedules: the shared link contains preferences, never a browser's saved history. */
 const STORAGE_KEY = 'park-itinerary-lab:v1';
 const PLANS_KEY = 'park-itinerary-lab:plans:v1';
@@ -112,6 +112,7 @@ export function validateSavedState(state) {
   if (!plain(state) || !['land', 'sea'].includes(state.parkId) || !plain(state.settings)) fail('保存データのパークと条件を確認してください。');
   const settings = state.settings;
   if (!validDate(settings.date) || !validTime(settings.entry) || !validTime(settings.exit) || settings.entry >= settings.exit || !finite(settings.speed, 10, 150) || !integer(settings.budget, 0, 10000000) || settings.budget % 100 !== 0) fail('日付・入退園時刻・歩く速さ・100円単位の予算を確認してください。');
+  if (!optionalNumber(settings, 'dpaPurchaseLimit', 0, 200, true)) fail('DPAの購入件数の上限は0〜200の整数で指定してください。');
   for (const key of ['foodBudget', 'dpaBudget', 'souvenirReserve', 'spentBudget']) if (!optionalNumber(settings, key, 0, 10000000, true) || (settings[key] !== undefined && settings[key] % 100 !== 0)) fail('費用は100円単位の整数で指定してください。');
   for (const key of ['restEvery', 'restMinutes']) if (!optionalNumber(settings, key, 0, 600, true)) fail('休憩の間隔と長さを確認してください。');
   if (!optionalNumber(settings, 'waitBufferMinutes', 0, 30, true) || !optionalNumber(settings, 'queueDelayMinutes', 0, 60, true) || (settings.waitBufferMode !== undefined && !['fixed','auto'].includes(settings.waitBufferMode))) fail('待ち時間の余裕と混雑の想定を確認してください。');
@@ -125,6 +126,7 @@ export function validateSavedState(state) {
   if (settings.walkCrowdMode !== undefined && !['estimate','off'].includes(settings.walkCrowdMode)) fail('混雑による移動時間の設定を確認してください。');
   if (settings.waitAsOf !== undefined && !integer(settings.waitAsOf,0,253402300799999)) fail('待ち時間を確認した時刻を確認してください。');
   if (settings.excludedAutoBreaks !== undefined && (!Array.isArray(settings.excludedAutoBreaks)||settings.excludedAutoBreaks.length>60||new Set(settings.excludedAutoBreaks).size!==settings.excludedAutoBreaks.length||settings.excludedAutoBreaks.some(value=>!autoBreakId(value)))) fail('取り除いた自動休憩の一覧を確認してください。');
+  if(settings.skipAutoRestAfter!==undefined&&(!Array.isArray(settings.skipAutoRestAfter)||settings.skipAutoRestAfter.length>MAX_ACTIVITIES||new Set(settings.skipAutoRestAfter).size!==settings.skipAutoRestAfter.length||settings.skipAutoRestAfter.some(value=>!id(value))))fail('見送った自動休憩の施設を確認してください。');
   if (settings.operationalHolds!==undefined&&settings.operationalHolds!==null) {
     const holds=settings.operationalHolds,today=new Date(Date.now()+9*3600000).toISOString().slice(0,10);
     if(!plain(holds)||!validDate(holds.date)||holds.date!==settings.date||holds.date>today||!validTimestamp(holds.observedAt)||Date.parse(holds.observedAt)>Date.now()+60000||new Date(Date.parse(holds.observedAt)+9*3600000).toISOString().slice(0,10)!==holds.date||!Array.isArray(holds.activityIds)||holds.activityIds.length>MAX_ACTIVITIES||new Set(holds.activityIds).size!==holds.activityIds.length||holds.activityIds.some(value=>!id(value)||!value.startsWith(state.parkId+'-')))fail('運営停止の記録の日付・パーク・確認時刻を確認してください。');
@@ -193,7 +195,7 @@ export function validateSavedState(state) {
     if (selection.dpaStart !== undefined && selection.dpaEnd !== undefined && selection.dpaStart >= selection.dpaEnd) fail('DPA枠の終了を開始より後にしてください。');
     for (const key of ['duration', 'manualWait']) if (!optionalNumber(selection, key, key === 'duration' ? 1 : 0, 600, true)) fail('所要時間と待ち時間を確認してください。');
     if (!optionalNumber(selection, 'cost', 0, 1000000, true) || (selection.cost !== undefined && selection.cost % 100 !== 0)) fail('施設の予算は100円単位で指定してください。');
-    for (const key of ['required', 'confirmedAccess', 'timeWindowLinked']) if (selection[key] !== undefined && typeof selection[key] !== 'boolean') fail('希望の確認欄の形式を確認してください。');
+    for (const key of ['required', 'confirmedAccess', 'timeWindowLinked', 'dpaWindowLinked']) if (selection[key] !== undefined && typeof selection[key] !== 'boolean') fail('希望の確認欄の形式を確認してください。');
     if (selection.dpaMode !== undefined && !['none', 'consider', 'owned', 'unavailable'].includes(selection.dpaMode)) fail('DPAの希望を選び直してください。');
     if (selection.showTimes !== undefined && (!Array.isArray(selection.showTimes) || selection.showTimes.length > 30 || selection.showTimes.some(value => !validTime(value)))) fail('公演時刻を確認してください。');
     if(selection.pauseWindows!==undefined&&(!Array.isArray(selection.pauseWindows)||selection.pauseWindows.length>50||selection.pauseWindows.some(pair=>!validWindow(pair))))fail('指定した休止時間を確認してください。');
@@ -212,6 +214,7 @@ export function validateSavedState(state) {
       if (row.path !== undefined && (!Array.isArray(row.path) || row.path.length > 1000 || row.path.some(value => !id(value)))) fail('予定表の徒歩ルートを確認してください。');
       if ((row.kind || row.type) === 'location' && (row.start !== row.end || !id(row.node))) fail('現在地の変更は同じ時刻の地点として指定してください。');
       if (row.fixedBreakId !== undefined && (!id(row.fixedBreakId) || (row.kind || row.type) !== 'rest' || !id(row.node))) fail('指定した休憩のIDと地点を確認してください。');
+      if (row.plannedDpaPurchase!==undefined && (typeof row.plannedDpaPurchase!=='boolean' || !row.dpa || (row.kind||row.type)!=='activity')) fail('DPA購入候補の利用記録を確認してください。');
       if (row.autoBreakId!==undefined&&(!autoBreakId(row.autoBreakId)||(row.kind||row.type)!=='rest')) fail('自動休憩のIDを確認してください。');
       if ((row.walkingFactor!==undefined&&(!finite(row.walkingFactor,1,3)||(row.kind||row.type)!=='walk'))||(row.walkingSource!==undefined&&(row.walkingSource!=='congestion-estimate'||(row.kind||row.type)!=='walk'))) fail('混雑を考慮した徒歩時間を確認してください。');
       if(row.routeSource!==undefined&&(!id(row.routeSource)||(row.kind||row.type)!=='walk'))fail('徒歩移動の経路の版を確認してください。');

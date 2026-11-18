@@ -26,7 +26,7 @@ function mergeWindows(windows) {
     const last=merged.at(-1);if(last&&start<=last[1])last[1]=Math.max(last[1],end);else merged.push([start,end]);
   }return merged;
 }
-function isAvailable(activity,date) {
+export function activityAvailable(activity,date) {
   return activity.closed!==true&&activity.dailySchedules?.[date]?.closed!==true&&
     !(activity.closedDates||[]).includes(date)&&
     !(activity.closedPeriods||[]).some(period=>period.startDate<=date&&(!period.endDate||date<=period.endDate))&&
@@ -38,7 +38,7 @@ export function operationPauseInfo(park,activity,selection={},settings={}) {
   for(const window of normalisePauseWindows(selection.pauseWindows||[]))items.push({window,kind:'user-confirmed',label:'指定した休止時間'});
   if(activity.id===GONDOLA_ID&&settings.gondolaAvoidHarbourShows!==false){
     for(const show of park?.activities||[]){
-      const programme=HARBOUR_SHOWS.get(show.id);if(!programme||!isAvailable(show,settings.date))continue;
+      const programme=HARBOUR_SHOWS.get(show.id);if(!programme||!activityAvailable(show,settings.date))continue;
       const chosen=(settings.selections||[]).find(item=>item.id===show.id);
       const daily=show.dailySchedules?.[settings.date];
       const starts=chosen?.confirmSchedule===true&&chosen.showTimes?.length?chosen.showTimes:
