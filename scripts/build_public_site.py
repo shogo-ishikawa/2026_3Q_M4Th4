@@ -23,6 +23,7 @@ ILLUSION_WEB_FILES = ('index.html', 'style.css', 'app.js', 'core.js', 'renderer.
 
 
 PARK_WEB_FILES = ('index.html', 'style.css', 'app.js', 'planner.js', 'planner-worker.js',
+                  'accuracy.html', 'accuracy.css', 'accuracy-page.js', 'forecast-accuracy.js',
                   'map-view.js', 'map-display.js', 'storage.js', 'weather.js', 'weather-view.js', 'time-input.js', 'operation-windows.js', 'guide.html', 'data/parks.json',
                   'wait-data.js', 'wait-model.js', 'calendar-features.js', 'data/calendar.json', 'data/live-waits.json', 'data/wait-model.json',
                   'assets/tdroute-logo.webp', 'assets/land-map.webp', 'assets/sea-map.webp', 'assets/land-hero.webp', 'assets/sea-hero.webp',

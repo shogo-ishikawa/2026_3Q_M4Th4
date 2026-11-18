@@ -12,6 +12,8 @@ on:
       - 'projects/park-itinerary-lab/scripts/nightly_wait_training.py'
       - 'projects/park-itinerary-lab/scripts/bootstrap_wait_history.py'
       - 'projects/park-itinerary-lab/scripts/train_wait_model.py'
+      - 'projects/park-itinerary-lab/scripts/issue_wait_forecast.mjs'
+      - 'projects/park-itinerary-lab/web/planner.js'
       - 'projects/park-itinerary-lab/web/wait-model.js'
       - 'projects/park-itinerary-lab/web/data/queue-times-map.json'
       - 'projects/park-itinerary-lab/web/data/wait-model.json'
@@ -67,9 +69,15 @@ jobs:
           THEMEPARKS_API_KEY: ${{ secrets.THEMEPARKS_API_KEY }}
         run: |
           python projects/park-itinerary-lab/scripts/nightly_wait_training.py --data-dir data-publish ${{ github.event_name != 'schedule' && '--force' || '' }}
+      - name: Record the forecast for future park hours
+        id: forecast
+        if: ${{ !cancelled() && steps.seed.outcome == 'success' }}
+        run: node projects/park-itinerary-lab/scripts/issue_wait_forecast.mjs --data-dir data-publish
       - name: Publish data without rebuilding the application
         if: always() && steps.prepare.outcome == 'success' && steps.seed.outcome == 'success'
         working-directory: data-publish
+        env:
+          FORECAST_STATUS: ${{ steps.forecast.outcome }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
@@ -77,7 +85,13 @@ jobs:
             if [ -f "$name" ]; then git add "$name"; fi
           done
           if [ -d history ]; then git add history; fi
+          if [ "$FORECAST_STATUS" = success ] && [ -d forecasts ]; then git add forecasts; fi
           if ! git diff --cached --quiet; then
-            git commit -m 'Update park waits, predictions and forecast cache'
-            git push origin HEAD:park-wait-data
+            git commit -m 'Update park observations, models and forecasts'
+            # The separate official catalogue updater may have published since checkout.
+            git push origin HEAD:park-wait-data || {
+              git fetch origin park-wait-data
+              git rebase FETCH_HEAD
+              git push origin HEAD:park-wait-data
+            }
           fi

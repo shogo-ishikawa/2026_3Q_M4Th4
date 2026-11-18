@@ -12,6 +12,8 @@ class ParkPublicBuildTests(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('park_site_builder', repository / 'scripts/build_public_site.py')
         builder = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(builder)
+        report_files = {'accuracy.html', 'accuracy.css', 'accuracy-page.js', 'forecast-accuracy.js'}
+        self.assertTrue(report_files.issubset(builder.PARK_WEB_FILES))
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             builder.ROOT = root

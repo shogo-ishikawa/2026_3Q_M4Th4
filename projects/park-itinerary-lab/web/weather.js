@@ -144,16 +144,19 @@ function saveForecast(cache,forecast,now,persist){
 function cacheResult(forecast,now,stale=false){return {...clone(forecast),transport:stale?'last-good-cache':'session-cache',cacheAgeMinutes:Math.max(0,Math.floor(ageOf(forecast.fetchedAt,now)/60000)),stale};}
 
 async function publishedForecast(date,options){
-  const data=await readJson(PUBLISHED,options);
+  return weatherFromPublishedCache(await readJson(PUBLISHED,options),date,options.now);
+}
+
+export function weatherFromPublishedCache(data,date,now){
   if(data?.schemaVersion!==1)throw new Error('公開済み予報の形式を確認してください。');
   let firstError;
   for(const provider of ['open-meteo','jma']){
     const item=data.providers?.[provider];
-    if(!item||ageOf(item.fetchedAt,options.now)>MAX_AGE_MS)continue;
+    if(!item||ageOf(item.fetchedAt,now)>MAX_AGE_MS)continue;
     try{
       const forecast=provider==='open-meteo'?normaliseOpenMeteo(item.data,date,{fetchedAt:item.fetchedAt,transport:'published-cache'}):normaliseJma(item.forecast,item.series,date,{fetchedAt:item.fetchedAt,transport:'published-cache'});
-      if(provider==='jma'&&ageOf(forecast.issuedAt,options.now)>36*3600000)continue;
-      return {...forecast,cacheAgeMinutes:Math.floor(ageOf(item.fetchedAt,options.now)/60000)};
+      if(provider==='jma'&&ageOf(forecast.issuedAt,now)>36*3600000)continue;
+      return {...forecast,cacheAgeMinutes:Math.floor(ageOf(item.fetchedAt,now)/60000)};
     }catch(error){firstError??=error;}
   }
   throw firstError||new Error('新しい公開済み予報がありません。');

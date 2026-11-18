@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#f5f5fd">
+  <title>混雑・待ち時間の予測精度 | TDRoute</title>
+  <link rel="icon" href="assets/tdroute-logo.webp" type="image/webp">
+  <link rel="stylesheet" href="accuracy.css">
+</head>
+<body>
+  <a class="skip" href="#reportForm">条件の選択へ移動</a>
+  <div class="wrap">
+    <header>
+      <a class="brand" href="./"><img src="assets/tdroute-logo.webp" alt="" width="86" height="48">TDRoute</a>
+      <a href="./">プラン作成に戻る</a>
+    </header>
+    <main>
+      <h1>混雑・待ち時間の予測精度</h1>
+      <p class="intro">TDRouteが事前に保存した共通予測と、当日各施設に掲示された待ち時間を比べます。当日の個別プランで使ったリアルタイム値は集計対象外です。</p>
+      <form id="reportForm">
+        <label>対象日 <span>（日本時間）</span><input id="reportDate" type="date" required></label>
+        <label>パーク<select id="reportPark">
+          <option value="land">東京ディズニーランド</option>
+          <option value="sea">東京ディズニーシー</option>
+        </select></label>
+        <button type="submit">レポートを作成</button>
+      </form>
+      <noscript><p>レポートの作成にはJavaScriptを有効にしてください。</p></noscript>
+      <p id="reportStatus" role="status" aria-live="polite"></p>
+      <article id="report" aria-labelledby="reportTitle" hidden></article>
+    </main>
+    <footer>
+      <p>掲示待ち時間の出典 <a href="https://queue-times.com/">Powered by Queue-Times.com</a></p>
+      <p>予測モデルの履歴データ <a href="https://www.themeparks.wiki/">Powered by ThemeParks.wiki</a></p>
+    </footer>
+  </div>
+  <script type="module" src="accuracy-page.js"></script>
+</body>
+</html>
