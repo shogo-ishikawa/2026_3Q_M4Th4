@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "updatedAt": "2026-11-18T07:17:16.568Z",
+  "updatedAt": "2026-11-18T09:55:31.487Z",
   "parks": [
     {
       "schemaVersion": 2,
@@ -2563,7 +2563,7 @@
       "lastBootstrapAttempt": {
         "provider": "themeparks-wiki",
         "accessMode": "anonymous",
-        "attemptedAt": "2026-11-18T07:17:16.568Z",
+        "attemptedAt": "2026-11-18T09:55:31.487Z",
         "requestedDays": null,
         "observedDays": 6,
         "lastObservedDate": "2026-11-17",
@@ -2574,7 +2574,7 @@
           "accessibleFrom": "2026-11-12",
           "throughDate": "2026-11-17",
           "archiveFrom": "2021-07-04",
-          "archiveRecordedThrough": "2026-11-15"
+          "archiveRecordedThrough": "2026-11-16"
         },
         "weatherProvenance": "past-weather-forecast",
         "failedDays": 0,
@@ -5014,7 +5014,7 @@
       "lastBootstrapAttempt": {
         "provider": "themeparks-wiki",
         "accessMode": "anonymous",
-        "attemptedAt": "2026-11-18T07:17:16.568Z",
+        "attemptedAt": "2026-11-18T09:55:31.487Z",
         "requestedDays": null,
         "observedDays": 6,
         "lastObservedDate": "2026-11-17",
@@ -5025,7 +5025,7 @@
           "accessibleFrom": "2026-11-12",
           "throughDate": "2026-11-17",
           "archiveFrom": "2021-07-04",
-          "archiveRecordedThrough": "2026-11-15"
+          "archiveRecordedThrough": "2026-11-16"
         },
         "weatherProvenance": "past-weather-forecast",
         "failedDays": 0,
