@@ -1,8 +1,8 @@
-import {cachedForecastForDate, forecastDateInRange, usableWeatherForecast, weatherProfileForVisit} from './weather.js?v=2.2.2';
-import {parkTimeBounds, clampClock} from './time-input.js?v=2.2.2';
-import {ticketFactsFor} from './ticket-calendar.js?v=2.2.2';
-import {visitWeatherSummary} from './weather-view.js?v=2.2.2';
-import {estimateParkCrowd, parkCrowdSource} from './wait-model.js?v=2.2.2';
+import {cachedForecastForDate, forecastDateInRange, usableWeatherForecast, weatherProfileForVisit} from './weather.js?v=2.3.0';
+import {parkTimeBounds, clampClock} from './time-input.js?v=2.3.0';
+import {ticketFactsFor} from './ticket-calendar.js?v=2.3.0';
+import {visitWeatherSummary} from './weather-view.js?v=2.3.0';
+import {estimateParkCrowd, parkCrowdSource} from './wait-model.js?v=2.3.0';
 
 export const CROWD_LABELS = {quiet:'比較的すいている', normal:'ふつう', busy:'混み合う'};
 

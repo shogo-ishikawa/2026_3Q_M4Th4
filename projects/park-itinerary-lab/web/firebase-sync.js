@@ -169,6 +169,12 @@ export async function connectFirebase(value, load = loadSdk) {
       await authSdk.signInWithPopup(auth, provider, authSdk.browserPopupRedirectResolver);
     },
     signOut() { return authSdk.signOut(auth); },
+    async albumIdToken(uid) {
+      requireAccount(uid);
+      const token = await authSdk.getIdToken(verifiedUser);
+      requireAccount(uid);
+      return token;
+    },
     async list(uid) {
       requireAccount(uid);
       const {sdk, db} = await store();

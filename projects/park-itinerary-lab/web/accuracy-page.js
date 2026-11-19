@@ -1,4 +1,4 @@
-import {scoreForecastAccuracy} from './forecast-accuracy.js?v=2.2.2';
+import {scoreForecastAccuracy} from './forecast-accuracy.js?v=2.3.0';
 
 const dataRoot = 'https://raw.githubusercontent.com/shogo-ishikawa/2026_3Q_M4Th4/park-wait-data/';
 const parks = {land: '東京ディズニーランド', sea: '東京ディズニーシー'};

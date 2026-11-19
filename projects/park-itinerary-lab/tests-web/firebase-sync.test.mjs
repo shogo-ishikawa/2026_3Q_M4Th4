@@ -144,3 +144,12 @@ test('a first Firestore import failure can be retried without disturbing sign-in
   assert.deepEqual(await adapter.list('a'), []);
   assert.deepEqual(loaded, ['app','auth','firestore','firestore']);
 });
+
+test('photo requests use a token only from the currently verified Google account',async () => {
+  const {adapter,auth,sdk,initial} = await fixture();
+  sdk.auth.getIdToken = async user => { assert.equal(user, auth.currentUser); return 'synthetic'; };
+  assert.equal(await adapter.albumIdToken(initial.uid), 'synthetic');
+  await assert.rejects(adapter.albumIdToken('another'), {code:'sync/account'});
+  sdk.auth.getIdToken = async () => { auth.currentUser = null; return 'stale'; };
+  await assert.rejects(adapter.albumIdToken(initial.uid), {code:'sync/account'});
+});
