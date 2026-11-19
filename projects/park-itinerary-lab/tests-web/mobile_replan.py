@@ -282,20 +282,30 @@ def check_desktop_install_links(browser, origin, store):
     from mobile_auth import sign_in, wire_device
 
     url = origin + '/park-itinerary-lab/'
-    context = browser.new_context(service_workers='block')
+    context = browser.new_context(service_workers='block', viewport={'width': 1000, 'height': 800})
     wire_device(context, store)
     page = context.new_page()
     page.route('**/*', lambda route: route.continue_() if route.request.url.startswith(origin + '/') else route.abort())
+    # Headless Chrome does not consistently expose the window's fullscreen display mode.
+    # Drive the same MediaQueryList change events with a controlled viewport transition.
+    page.add_init_script("""const matchMedia = window.matchMedia.bind(window);
+      window.matchMedia = query => matchMedia(query.replaceAll(
+        '(display-mode: fullscreen)', '(min-width: 1200px)'));""")
     page.goto(url)
     sign_in(page)
-    page.evaluate('document.documentElement.requestFullscreen()')
-    assert page.evaluate("matchMedia('(display-mode: fullscreen)').matches")
+    page.evaluate('''() => {
+      const mode = matchMedia('(display-mode: fullscreen)');
+      window.fullscreenModeChanged = new Promise(resolve =>
+        mode.addEventListener('change', event => resolve(event.matches), {once: true}));
+    }''')
+    page.set_viewport_size({'width': 1280, 'height': 800})
+    assert page.evaluate('window.fullscreenModeChanged')
     check_app_qr(page)
     install = page.get_by_role('link', name='スマホにインストール', exact=True)
     install.click()
     expect(page.locator('#installHelp')).to_be_visible()
     page.keyboard.press('Escape')
-    page.evaluate('document.exitFullscreen()')
+    page.set_viewport_size({'width': 1000, 'height': 800})
 
     # Keep login and planning active, but simulate just the PWA module failing to load.
     page.route('**/pwa.js*', lambda route: route.abort())
