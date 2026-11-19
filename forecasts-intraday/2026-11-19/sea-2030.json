@@ -1,0 +1,1 @@
+{"schemaVersion":1,"date":"2026-11-19","parkId":"sea","minute":1230,"issuedAt":"2026-11-19T09:51:23.907Z","baselineIssuedAt":"2026-11-18T13:10:12.336Z","source":"queue-times","evidence":{"rides":22,"agreeing":17,"offset":4},"rows":[{"activityId":"sea-attraction-226","wait":0}]}
