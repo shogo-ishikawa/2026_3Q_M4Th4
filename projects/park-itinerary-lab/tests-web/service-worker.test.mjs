@@ -114,7 +114,7 @@ test('公開シェル以外の取得・別の版・個人情報付きの要求�
   for (const path of ['../another-app/', '../park-itinerary-lab-copy/app.js', 'https://example.org/weather.json',
     'https://raw.githubusercontent.com/shogo-ishikawa/2026_3Q_M4Th4/park-wait-data/live-waits.json',
     'downloads/TDRoute.zip', 'data/park-history.json', 'index.html?plan=private', 'app.js?v=previous',
-    'app.js?v=2.6.0&user=private', 'data/parks.json?refresh=123&user=private']) {
+    'app.js?v=2.6.1&user=private', 'data/parks.json?refresh=123&user=private']) {
     assert.equal(sw.request(path), undefined, path);
   }
   assert.equal(sw.request('app.js', {method: 'POST', body: 'private'}), undefined);

@@ -1,6 +1,6 @@
-import {companionEmail, progressLabels} from './companion-view.js?v=2.6.0';
-import {jointEditor} from './joint-planning.js?v=2.6.0';
-import {formatTime} from './storage.js?v=2.6.0';
+import {companionEmail, progressLabels} from './companion-view.js?v=2.6.1';
+import {jointEditor} from './joint-planning.js?v=2.6.1';
+import {formatTime} from './storage.js?v=2.6.1';
 import {baseVisitId,isRepeatVisit} from './repeat-visits.js';
 
 const element = (tag, text) => Object.assign(document.createElement(tag), {textContent:text});

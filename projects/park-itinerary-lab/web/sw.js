@@ -1,5 +1,5 @@
 /* TDRoute の公開画面だけを版ごとに保存する。個人のしおりや認証の応答はここには保存しない。 */
-const VERSION = '2.6.0';
+const VERSION = '2.6.1';
 const BUILD_ID = 'source';
 const INTEGRITY = {};
 const scope = self.registration.scope;
@@ -19,7 +19,7 @@ const OFFLINE_FILES = [
   'weather.js', 'weather-view.js', 'time-input.js', 'operation-windows.js',
   'wait-data.js', 'wait-model.js', 'calendar-features.js',
   'data/parks.json', 'data/calendar.json', 'data/live-waits.json', 'data/wait-model.json',
-  'assets/tdroute-logo.webp', 'assets/land-hero.webp', 'assets/sea-hero.webp',
+  'assets/tdroute-logo.webp', 'assets/tdroute-app-qr.png', 'assets/land-hero.webp', 'assets/sea-hero.webp',
   'assets/land-geographic-map.webp', 'assets/sea-geographic-map.webp',
   'assets/land-geographic-map.svg', 'assets/sea-geographic-map.svg', 'assets/land-map.webp', 'assets/sea-map.webp',
   'assets/pwa/apple-touch-icon.png', 'assets/pwa/icon-192.png',

@@ -1,4 +1,4 @@
-import {encodeJoint, decodeJoint} from './joint-planning.js?v=2.6.0';
+import {encodeJoint, decodeJoint} from './joint-planning.js?v=2.6.1';
 
 // Only the visit day, timetable and recorded experience status leave the owner's private plan.
 export const progressLabels = {

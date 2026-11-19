@@ -36,6 +36,8 @@ export function initialisePwa() {
   const byId = id => document.getElementById(id);
   const install = byId('installApp');
   const dialog = byId('installHelp');
+  const qrDialog = byId('appQrDialog');
+  const qrButtons = document.querySelectorAll('[data-open-app-qr]');
   const splash = byId('launchSplash');
   const platform = mobilePlatform(navigator);
   const appUrl = new URL('./', location.href).href;
@@ -58,6 +60,8 @@ export function initialisePwa() {
       install.hidden = installed || launched;
       if (install.hidden && dialog.open) dialog.close();
     }
+    for (const button of qrButtons) button.hidden = launched || typeof qrDialog?.showModal !== 'function';
+    if (launched && qrDialog?.open) qrDialog.close();
     return launched;
   }
 
@@ -65,6 +69,7 @@ export function initialisePwa() {
   if (standalone.addEventListener) standalone.addEventListener('change', updateMode);
   else standalone.addListener?.(updateMode);
   if (!install) return; // The guide only needs its presentation mode.
+  for (const button of qrButtons) button.addEventListener('click', () => qrDialog.showModal());
 
   function dismissSplash() { splash.hidden = true; }
   if (launched && !document.hidden && isFreshLaunch(performance.getEntriesByType('navigation')[0]?.type, document.referrer, appUrl)) {

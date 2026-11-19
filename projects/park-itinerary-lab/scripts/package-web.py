@@ -22,7 +22,7 @@ PARK_WEB_FILES = ('index.html', 'pwa.js', 'sw.js', 'manifest.webmanifest', 'styl
                   'map-view.js', 'map-display.js', 'map-gestures.js', 'storage.js', 'weather.js', 'weather-view.js', 'time-input.js', 'operation-windows.js', 'guide.html', 'data/parks.json',
                   'wait-data.js', 'wait-model.js', 'calendar-features.js', 'data/calendar.json', 'data/live-waits.json', 'data/wait-model.json',
                   'assets/land-geographic-map.webp', 'assets/sea-geographic-map.webp',
-                  'assets/tdroute-logo.webp', 'assets/land-map.webp', 'assets/sea-map.webp', 'assets/land-hero.webp', 'assets/sea-hero.webp',
+                  'assets/tdroute-logo.webp', 'assets/tdroute-app-qr.png', 'assets/land-map.webp', 'assets/sea-map.webp', 'assets/land-hero.webp', 'assets/sea-hero.webp',
                   'data/sea-geography.json', 'data/sea-geography-LICENCE.md', 'assets/sea-geographic-map.svg',
                   'data/map-landmarks.json', 'data/land-map-scenery.json', 'data/sea-map-scenery.json',
                   'contingency.js', 'data/land-geography.json', 'data/land-geography-LICENCE.md', 'assets/land-geographic-map.svg',
