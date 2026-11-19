@@ -1,7 +1,6 @@
 import {baseVisitId, isRepeatVisit} from './repeat-visits.js?v=2.3.0';
 
-// Set this at release time after the private Drive backend is deployed and verified.
-const MEMORIES_ENDPOINT = '';
+const MEMORIES_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwfjkYRgpGxZl7PlUazqT9vMS0BACICgo__EigzhXwqX9enley0_ZPJRgJYTyp0o9jp/exec';
 const DEPLOYMENT = /^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_-]+\/exec$/;
 const MAX_BYTES = 1000000;
 const MAX_SIDE = 2048;
