@@ -1,5 +1,5 @@
 /* TDRoute の公開画面だけを版ごとに保存する。個人のしおりや認証の応答はここには保存しない。 */
-const VERSION = '2.3.0';
+const VERSION = '2.3.1';
 const BUILD_ID = 'source';
 const INTEGRITY = {};
 const scope = self.registration.scope;
@@ -21,7 +21,7 @@ const OFFLINE_FILES = [
   'assets/tdroute-logo.webp', 'assets/land-hero.webp', 'assets/sea-hero.webp',
   'assets/land-geographic-map.webp', 'assets/sea-geographic-map.webp',
   'assets/land-geographic-map.svg', 'assets/sea-geographic-map.svg', 'assets/land-map.webp', 'assets/sea-map.webp',
-  'assets/pwa/splash.webp', 'assets/pwa/apple-touch-icon.png', 'assets/pwa/icon-192.png',
+  'assets/pwa/apple-touch-icon.png', 'assets/pwa/icon-192.png',
   'assets/pwa/icon-512.png', 'assets/pwa/icon-maskable-512.png'
 ];
 const offlinePaths = new Set(OFFLINE_FILES);
