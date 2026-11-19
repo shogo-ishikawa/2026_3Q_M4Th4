@@ -520,10 +520,10 @@ body[data-park=sea] .hero h1{font-size:clamp(24px,2.35vw,36px);line-height:1.6}
 
 /* Installation is a secondary action beside the planner's main entrance. */
 .hero-actions{display:flex;align-items:center;gap:12px 24px;flex-wrap:wrap}
-.install-action{min-height:44px;padding:7px 15px;border:1px solid #43608a;border-radius:9px;background:#ffffffd9;color:#203f68;font-family:inherit;font-size:.875rem;font-weight:650;line-height:1.45}
+.install-action{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;min-height:44px;padding:7px 15px;border:1px solid #43608a;border-radius:9px;background:#ffffffd9;color:#203f68;font-family:inherit;font-size:.875rem;font-weight:650;line-height:1.45}
 body[data-park=sea] .install-action{border-color:#bbdbf4;background:#123f65;color:#fff}
 .install-action:hover{box-shadow:0 0 0 1px currentColor}
-.app-qr-action{min-height:44px;padding:4px 6px;border:0;background:transparent;color:#415673;font:inherit;font-size:.875rem;text-decoration:underline;text-underline-offset:.2em;cursor:pointer}
+.app-qr-action{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:4px 6px;border:0;background:transparent;color:#415673;font:inherit;font-size:.875rem;text-decoration:underline;text-underline-offset:.2em;cursor:pointer}
 .hero-actions .app-qr-action:hover,.login-card .app-qr-action:hover{color:#182b49}
 body[data-park=sea] .hero-actions .app-qr-action{color:#fff}
 .install-help{box-sizing:border-box;width:min(26rem,calc(100% - 32px));max-height:85vh;max-height:85dvh;padding:22px;border:1px solid #cad4e4;border-radius:17px;background:#fff;color:#1b2741;box-shadow:0 20px 65px #09182c40}
@@ -600,6 +600,8 @@ body[data-park=sea] .hero-actions .app-qr-action{color:#fff}
 .login-primary { min-height: 46px; width: 100%; border: 0; border-radius: 9px; padding: 8px 16px; background: #3934aa; color: white; font-weight: 700; }
 .login-card .login-status { min-height: 1.6em; margin: 12px 0 0; font-size: 13px; color: #4d5568; }
 .login-card #retryLogin { margin-top: 12px; }
+.login-app-links { display: flex; flex-wrap: wrap; justify-content: center; column-gap: 16px; }
+.login-app-links a { display: inline-flex; align-items: center; min-height: 44px; color: #415673; font-size: 13px; text-underline-offset: .2em; }
 .site-header nav { flex-wrap: wrap; justify-content: flex-end; align-items: center; }
 #appShell .site-header {
   display: grid;

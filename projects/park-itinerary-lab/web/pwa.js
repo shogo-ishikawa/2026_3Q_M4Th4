@@ -30,46 +30,65 @@ function prepareOffline(appUrl, setStatus) {
 }
 
 // Keep website-only links inert until the page knows which surface opened it.
-const appDisplayModes = ['standalone', 'minimal-ui', 'fullscreen', 'window-controls-overlay', 'tabbed'];
+const appDisplayModes = ['standalone', 'minimal-ui', 'window-controls-overlay', 'tabbed'];
+
+function followsLinkInPlace(event) {
+  return !event.defaultPrevented && event.button === 0 &&
+    !event.ctrlKey && !event.metaKey && !event.shiftKey && !event.altKey;
+}
 
 export function initialisePwa() {
   const byId = id => document.getElementById(id);
-  const install = byId('installApp');
+  const installLinks = document.querySelectorAll('[data-open-install]');
   const dialog = byId('installHelp');
   const qrDialog = byId('appQrDialog');
-  const qrButtons = document.querySelectorAll('[data-open-app-qr]');
+  const qrLinks = document.querySelectorAll('[data-open-app-qr]');
   const splash = byId('launchSplash');
   const platform = mobilePlatform(navigator);
   const appUrl = new URL('./', location.href).href;
   const standalone = window.matchMedia(appDisplayModes.map(mode => '(display-mode: ' + mode + ')').join(', '));
+  const fullscreen = window.matchMedia('(display-mode: fullscreen)');
   const websiteContent = Array.from(document.querySelectorAll('template[data-website]'), template => ({
     template, nodes: Array.from(template.content.childNodes)
   }));
   let promptEvent;
   let installed = false;
+  let lastAppMode = false;
 
   function updateMode() {
-    const launched = standalone.matches || navigator.standalone === true;
+    // A regular tab can enter fullscreen too. Preserve its last known display mode.
+    if (!fullscreen.matches) lastAppMode = standalone.matches;
+    const launched = lastAppMode || navigator.standalone === true;
     document.documentElement.classList.toggle('tdroute-standalone', launched);
     for (const {template, nodes} of websiteContent) {
       if (template.content.hasChildNodes() === launched) continue;
       if (launched) template.content.append(...nodes);
       else template.after(...nodes);
     }
-    if (install) {
-      install.hidden = installed || launched;
-      if (install.hidden && dialog.open) dialog.close();
-    }
-    for (const button of qrButtons) button.hidden = launched || typeof qrDialog?.showModal !== 'function';
+    for (const link of installLinks) link.hidden = installed || launched;
+    if ((installed || launched) && dialog?.open) dialog.close();
+    for (const link of qrLinks) link.hidden = launched;
     if (launched && qrDialog?.open) qrDialog.close();
     return launched;
   }
 
   const launched = updateMode();
-  if (standalone.addEventListener) standalone.addEventListener('change', updateMode);
-  else standalone.addListener?.(updateMode);
-  if (!install) return; // The guide only needs its presentation mode.
-  for (const button of qrButtons) button.addEventListener('click', () => qrDialog.showModal());
+  for (const mode of [standalone, fullscreen]) {
+    if (mode.addEventListener) mode.addEventListener('change', updateMode);
+    else mode.addListener?.(updateMode);
+  }
+  if (!installLinks.length) return; // The guide only needs its presentation mode.
+  if (typeof qrDialog?.showModal === 'function') {
+    for (const link of qrLinks) {
+      link.setAttribute('aria-haspopup', 'dialog');
+      link.setAttribute('aria-controls', qrDialog.id);
+      link.addEventListener('click', event => {
+        if (!followsLinkInPlace(event)) return;
+        event.preventDefault();
+        qrDialog.showModal();
+      });
+    }
+  }
 
   function dismissSplash() { splash.hidden = true; }
   if (launched && !document.hidden && isFreshLaunch(performance.getEntriesByType('navigation')[0]?.type, document.referrer, appUrl)) {
@@ -103,33 +122,42 @@ export function initialisePwa() {
     byId('installPublicHelp').hidden = window.isSecureContext;
     byId('installFirstLaunch').hidden = platform === 'desktop';
     byId('installCopyStatus').textContent = '';
-    if (typeof dialog.showModal !== 'function') {
-      window.alert(byId({ios: 'installIos', android: 'installAndroid', desktop: 'installDesktop'}[platform]).innerText + '\n' + byId('installUrl').value);
-      return;
-    }
     dialog.showModal();
     byId('installTitle').focus();
   }
 
-  install.addEventListener('click', async () => {
+  const hasInstallDialog = typeof dialog?.showModal === 'function';
+  let prompting = false;
+  async function openInstall(event) {
+    const install = event.currentTarget;
+    if (!followsLinkInPlace(event) || (!promptEvent && !prompting && !hasInstallDialog)) return;
+    event.preventDefault();
+    if (prompting) return;
     if (!promptEvent) { showHelp(); return; }
     // Browser prompts are single use and must be invoked within this click.
     const request = promptEvent;
     promptEvent = undefined;
-    install.disabled = true;
+    prompting = true;
     try {
       await request.prompt();
       const choice = await request.userChoice;
       if (choice.outcome === 'accepted') { installed = true; updateMode(); }
     } catch {
-      if (!install.hidden) showHelp();
+      if (!install.hidden) {
+        if (hasInstallDialog) showHelp();
+        else window.location.assign(install.href);
+      }
     } finally {
-      install.disabled = false;
+      prompting = false;
     }
-  });
-  dialog.addEventListener('close', () => {
-    if (!install.hidden) install.focus({preventScroll: true});
-  });
+  }
+  for (const link of installLinks) {
+    if (hasInstallDialog) {
+      link.setAttribute('aria-haspopup', 'dialog');
+      link.setAttribute('aria-controls', dialog.id);
+    }
+    link.addEventListener('click', openInstall);
+  }
   byId('copyInstallUrl').addEventListener('click', async () => {
     const url = byId('installUrl');
     try {

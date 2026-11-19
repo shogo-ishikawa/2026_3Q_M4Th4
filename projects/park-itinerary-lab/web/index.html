@@ -27,7 +27,10 @@
     <button id="googleSignIn" class="login-primary" type="button" disabled>Googleでログイン</button>
     <p id="loginStatus" class="login-status" role="status">ログイン状態を確認しています…</p>
     <button id="retryLogin" class="small-button" type="button" hidden>もう一度試す</button>
-    <button class="app-qr-action" type="button" data-open-app-qr data-browser-only aria-haspopup="dialog" aria-controls="appQrDialog" hidden>スマホ用QRコード</button>
+    <div class="login-app-links" data-browser-only>
+      <a href="guide.html#save" data-open-install>スマホにアプリをインストール</a>
+      <a href="assets/tdroute-app-qr.png" data-open-app-qr>QRコードを表示</a>
+    </div>
     <noscript><p>ログインするにはJavaScriptを有効にしてください。</p></noscript>
   </section>
 </main>
@@ -36,8 +39,8 @@
 <div class="header-account"><span id="accountGreeting"></span><strong id="adminLabel" hidden>管理者画面</strong></div>
 <nav aria-label="ページの案内"><button type="button" class="album-nav" data-open-album aria-controls="albumDialog" aria-haspopup="dialog" hidden>アルバムを振り返る</button><a href="accuracy.html">予測の精度</a><a href="guide.html">使い方 ↗</a><template data-website><a href="../">作品集へ ↗</a></template><button id="signOut" class="account-signout" type="button">ログアウト</button></nav></header>
 <main><section class="hero" aria-labelledby="pageTitle"><div><h1 id="pageTitle"><span>夢と魔法の1日を、</span><em>いちばん輝く順番で。</em></h1><div class="hero-actions"><a class="hero-action" href="#workspace">プランを作る <span aria-hidden="true">↘</span></a>
-<button id="installApp" class="install-action" data-browser-only type="button" aria-haspopup="dialog" hidden>スマホにインストール</button>
-<button class="app-qr-action" type="button" data-open-app-qr data-browser-only aria-haspopup="dialog" aria-controls="appQrDialog" hidden>スマホ用QRコード</button></div></div><div class="hero-art" aria-hidden="true"><img class="hero-scene hero-land" src="assets/land-hero.webp" alt="" width="1280" height="853"><img class="hero-scene hero-sea" src="assets/sea-hero.webp" alt="" width="1200" height="800"></div></section>
+<a id="installApp" data-open-install class="install-action" href="guide.html#save" data-browser-only>スマホにインストール</a>
+<a class="app-qr-action" href="assets/tdroute-app-qr.png" data-open-app-qr data-browser-only>スマホ用QRコード</a></div></div><div class="hero-art" aria-hidden="true"><img class="hero-scene hero-land" src="assets/land-hero.webp" alt="" width="1280" height="853"><img class="hero-scene hero-sea" src="assets/sea-hero.webp" alt="" width="1200" height="800"></div></section>
 <section id="workspace" class="workspace" aria-label="パークの計画"><div class="workspace-top"><div class="park-tabs" role="tablist" aria-label="パークを選ぶ"><button id="landTab" role="tab" aria-selected="true" data-park="land" type="button"><span>01 / LAND</span>東京ディズニーランド</button><button id="seaTab" role="tab" aria-selected="false" data-park="sea" type="button"><span>02 / SEA</span>東京ディズニーシー</button></div><div class="workspace-tools"><button type="button" id="savePlan" class="small-button">名前を付けて保存</button><button type="button" id="loadPlan" class="small-button">保存した計画</button><button type="button" id="sharePlan" class="small-button" aria-controls="sharePanel" aria-expanded="false">条件をリンクで共有</button></div></div>
 <p id="status" class="status" role="status" aria-live="polite">施設情報を読み込んでいます…</p><div id="sharePanel" class="share-panel" hidden><label for="shareUrl">このリンクで現在の日付と希望条件を開けます</label><input id="shareUrl" type="text" readonly><button id="copyShare" type="button">リンクをコピー</button><button id="shareScheduleImage" type="button" hidden>完成したしおりを画像で開く</button></div>
 <div id="companionPlans"></div>
@@ -231,6 +234,8 @@
 <p id="memoryStatus" role="status"></p>
 </details>
 </dialog>
+<input id="planFile" type="file" accept=".json,application/json" hidden><input id="catalogueFile" type="file" accept=".json,application/json" hidden><input id="historyFile" type="file" accept=".csv,text/csv" hidden>
+</div>
 <dialog id="installHelp" class="install-help" aria-labelledby="installTitle">
   <div class="install-heading">
     <img src="assets/pwa/apple-touch-icon.png" width="52" height="52" alt="" loading="lazy">
@@ -247,7 +252,7 @@
       <li><b>ホーム画面に追加</b>または<b>アプリをインストール</b>を選び、画面の案内に従います。</li></ol>
   </div>
   <div id="installDesktop" hidden>
-    <p>このURLをスマホのSafariまたはChromeで開き、「スマホにインストール」をタップしてください。</p>
+    <p>このURLをスマホのSafariまたはChromeで開き、インストールの項目をタップしてください。</p>
     <label for="installUrl">アプリのURL</label>
     <div class="install-url"><input id="installUrl" type="url" readonly><button id="copyInstallUrl" class="small-button" type="button">コピー</button></div>
     <p id="installCopyStatus" class="field-note" role="status"></p>
@@ -256,8 +261,6 @@
   <p id="installFirstLaunch" class="field-note" hidden>追加したら、通信できる場所でアイコンから一度開いてください。</p>
   <form method="dialog"><button id="closeInstallHelp" class="small-button" type="submit">閉じる</button></form>
 </dialog>
-<input id="planFile" type="file" accept=".json,application/json" hidden><input id="catalogueFile" type="file" accept=".json,application/json" hidden><input id="historyFile" type="file" accept=".csv,text/csv" hidden>
-</div>
 <dialog id="appQrDialog" class="install-help app-qr-dialog" aria-labelledby="appQrTitle" aria-describedby="appQrHint">
   <h2 id="appQrTitle">スマホでTDRouteを開く</h2>
   <p id="appQrHint">スマホのカメラで読み取ってください。</p>
