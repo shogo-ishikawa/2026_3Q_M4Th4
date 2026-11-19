@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {makeAlbumClient, photoVisits} from '../web/drive-memories.js';
+import {canViewPhoto, makeAlbumClient, photoVisits} from '../web/drive-memories.js';
 
 const date = '2026-11-19';
 const park = {id:'land',activities:[{id:'land-ride', name:'ライド'}, {id:'land-souvenir', name:'買い物'}, {id:'land-show', name:'公演'}]};
@@ -46,4 +46,24 @@ test('an aborted account cannot send a token or display a late response',async (
     const fail = makeAlbumClient(endpoint,async () => 'synthetic',async () => response({ok:false,error:received}));
     await assert.rejects(fail('image',{},new AbortController().signal),{code});
   }
+});
+
+
+test('private rows need explicit author access, including for an album owner',() => {
+  const photo = {id:'1b66bdee-2f26-445d-9542-a61a968dc145',label:'夢の思い出',canDelete:true};
+  assert.equal(canViewPhoto({...photo, visibility:'album',canSetVisibility:false}),true);
+  assert.equal(canViewPhoto({...photo, visibility:'private',canSetVisibility:true}),true);
+  for (const access of [
+    {visibility:'private',canSetVisibility:false}, {visibility:'private',canSetVisibility:'true'},
+    {visibility:'unknown',canSetVisibility:true}, {visibility:'album'}, {}, {canSetVisibility:true}
+  ]) assert.equal(canViewPhoto({...photo,...access}),false);
+});
+
+test('the album must confirm photo visibility support before the editor opens',async () => {
+  for (const version of [null,undefined,0,'1',2]) {
+    const request = makeAlbumClient(endpoint,async () => 'synthetic',async () => response({ok:true,albums:[],visibilityVersion:version}));
+    await assert.rejects(request('albums',{},new AbortController().signal),{code:'version'});
+  }
+  const request = makeAlbumClient(endpoint,async () => 'synthetic',async () => response({ok:true,albums:[],visibilityVersion:1}));
+  assert.deepEqual((await request('albums',{},new AbortController().signal)).albums,[]);
 });

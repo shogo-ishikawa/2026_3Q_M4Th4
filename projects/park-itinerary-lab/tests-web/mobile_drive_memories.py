@@ -50,9 +50,9 @@ window.disposeMemories = mountDriveMemories({getIdToken:async () => 'mock-' + ro
 
 class LocalAlbums:
     def __init__(self):
-        self.album = None
-        self.member = False
-        self.photo = None
+        self.albums = {}
+        self.photos = {}
+        self.visibility_version = 1
         self.requests = 0
         self.images_read = 0
         self.delay_image = False
@@ -83,41 +83,56 @@ class LocalAlbums:
         payload = json.loads(request.post_data)
         action = payload['action']
         assert payload['idToken'] in ('mock-owner', 'mock-guest')
-        owner = payload['idToken'] == 'mock-owner'
+        uid = payload['idToken']
+        owner = uid == 'mock-owner'
+        album_id = payload.get('albumId')
+        album = self.albums.get(album_id)
+        photo = self.photos.get(payload.get('photoId'))
         body = {'ok': True}
         if action == 'albums':
-            body['albums'] = [{**self.album, 'owner':owner}] if self.album and (self.member or owner) else []
+            if self.visibility_version:
+                body['visibilityVersion'] = self.visibility_version
+            body['albums'] = [{'id':key, 'title':a['title'], 'owner':owner}
+                              for key, a in self.albums.items() if owner or a['member']]
         elif action == 'create':
-            assert owner and not self.album
-            self.album = {'id':payload['albumId'], 'title':payload['title']}
-        elif not self.album or not (owner or self.member) or payload['albumId'] != self.album['id']:
+            assert owner and album is None
+            self.albums[album_id] = {'title':payload['title'], 'member':False}
+        elif not album or not (owner or album['member']):
             body = {'ok': False, 'error':'forbidden'}
         elif action == 'member':
             assert owner and payload['email'] == EMAIL
-            self.member = not payload['remove']
+            album['member'] = not payload['remove']
         elif action == 'deleteAlbum':
             assert owner
-            self.album = self.photo = None
-            self.member = False
+            del self.albums[album_id]
+            self.photos = {key:p for key,p in self.photos.items() if p['albumId'] != album_id}
         elif action == 'upload':
-            assert set(payload) == {'action','idToken','albumId','photoId','jpeg','visitKey','label'}
-            assert payload['visitKey'] == VISIT and '2回目' in payload['label']
+            assert set(payload) == {'action','idToken','albumId','photoId','jpeg','visitKey','label','visibility'}
+            assert payload['visibility'] in ('album', 'private')
+            if payload['visitKey'] == VISIT:
+                assert '2回目' in payload['label']
             raw = base64.b64decode(payload['jpeg'], validate=True)
             assert raw.startswith(b'\xff\xd8') and len(raw) <= 1_000_000
             assert METADATA.encode() not in raw and b'camera-roll' not in raw
-            self.photo = {**payload, 'uploader':payload['idToken']}
+            self.photos[payload['photoId']] = {**payload, 'uploader':uid}
         elif action == 'list':
-            body['photos'] = [] if not self.photo else [{
-                'id':self.photo['photoId'], 'visitKey':self.photo['visitKey'], 'label':self.photo['label'],
-                'canDelete':owner or self.photo['uploader'] == payload['idToken'],
-            }]
+            body['photos'] = [{
+                'id':p['photoId'], 'visitKey':p['visitKey'], 'label':p['label'], 'visibility':p['visibility'],
+                'canDelete':owner or p['uploader'] == uid, 'canSetVisibility':p['uploader'] == uid,
+            } for p in self.photos.values() if p['albumId'] == album_id
+                and (p['visibility'] == 'album' or p['uploader'] == uid)]
+        elif not photo or photo['albumId'] != album_id or (photo['visibility'] == 'private' and photo['uploader'] != uid):
+            body = {'ok': False, 'error':'forbidden'}
+        elif action == 'setVisibility':
+            assert set(payload) == {'action','idToken','albumId','photoId','visibility'}
+            assert photo['uploader'] == uid and payload['visibility'] in ('album', 'private')
+            photo['visibility'] = payload['visibility']
         elif action == 'image':
-            assert self.photo and payload['photoId'] == self.photo['photoId']
             self.images_read += 1
             if self.delay_image:
                 self.pending = route
                 return
-            body['jpeg'] = self.photo['jpeg']
+            body['jpeg'] = photo['jpeg']
         else:
             raise AssertionError(action)
         self.reply(route, body)
@@ -136,6 +151,20 @@ def wait_for_poll(page, action):
         page.clock.fast_forward(60_000)
     received.value.body()
     page.evaluate('new Promise(done => requestAnimationFrame(() => requestAnimationFrame(done)))')
+
+
+def confirm_click(page, button, accept=True):
+    prompts = []
+    def respond(dialog):
+        prompts.append(dialog.message)
+        if accept:
+            dialog.accept()
+        else:
+            dialog.dismiss()
+    page.once('dialog', respond)
+    button.click()
+    assert len(prompts) == 1, 'A sharing or deletion confirmation was required'
+    return prompts[0]
 
 
 def run(browser):
@@ -160,14 +189,27 @@ def run(browser):
     expect(owner.locator('#memoryStatus')).to_contain_text('アルバムを作りました')
     expect(owner.locator('#memoryAlbum option:checked')).to_have_text('テストの思い出')
 
+    # Older deployments cannot accept a private upload.
+    store.visibility_version = None
+    owner.locator('#memoryRefresh').click()
+    expect(owner.locator('#memoryStatus')).to_contain_text('アルバムを開けません')
+    expect(owner.locator('#memoryCreate')).to_be_hidden()
+    expect(owner.locator('#memoryUpload')).to_be_hidden()
+    expect(owner.locator('#memoryAlbum option')).to_have_count(0)
+    store.visibility_version = 1
+    owner.locator('#memoryRefresh').click()
+
     owner.locator('#memoryVisit').select_option(VISIT)
     owner.locator('#memoryFile').set_input_files({
         'name':'camera-roll-private.png', 'mimeType':'image/png', 'buffer':synthetic_photo(),
     })
-    assert store.photo is None
+    expect(owner.locator('#memoryVisibility')).to_have_value('private')
+    assert not store.photos
     owner.locator('#memoryUpload').click()
     expect(owner.locator('#memoryStatus')).to_contain_text('写真を追加しました')
-    assert store.images_read == 0
+    owner_photo = next(iter(store.photos.values()))
+    assert store.images_read == 0 and owner_photo['visibility'] == 'private'
+    expect(owner.locator('#memoryPhotos li')).to_contain_text('自分だけ')
     owner.locator('#memoryPhotos button').first.click()
     expect(owner.locator('#memoryPreview')).to_be_visible()
     width, height = owner.locator('#memoryImage').evaluate(
@@ -177,11 +219,13 @@ def run(browser):
     owner.locator('#memoryFile').set_input_files({
         'name':'draft.png', 'mimeType':'image/png', 'buffer':synthetic_photo(),
     })
+    owner.locator('#memoryVisibility').select_option('album')
     wait_for_poll(owner, 'list')
     expect(owner.locator('#memoryPreview')).to_be_visible()
     assert owner.locator('#memoryImage').get_attribute('src') == preview and store.images_read == 1
     assert owner.locator('#memoryFile').evaluate('el => el.files[0]?.name') == 'draft.png'
     expect(owner.locator('#memoryVisit')).to_have_value(VISIT)
+    expect(owner.locator('#memoryVisibility')).to_have_value('album')
     owner.locator('#memoryCloseImage').click()
     assert owner.locator('#memoryImage').get_attribute('src') is None
 
@@ -189,26 +233,67 @@ def run(browser):
     owner.locator('#memoryInvite').click()
     expect(owner.locator('#memoryStatus')).to_contain_text('招待しました')
     guest.locator('#memoryRefresh').click()
-    expect(guest.locator('#memoryPhotos button')).to_have_count(1)
+    expect(guest.locator('#memoryStatus')).to_contain_text('写真はまだありません')
     expect(guest.locator('#memoryMembers')).to_be_hidden()
-    guest.locator('#memoryPhotos button').click()
+    expect(guest.locator('#memoryVisibility')).to_have_value('private')
+    guest.locator('#memoryFile').set_input_files({
+        'name':'guest.png', 'mimeType':'image/png', 'buffer':synthetic_photo(),
+    })
+    guest.locator('#memoryUpload').click()
+    expect(guest.locator('#memoryPhotos li')).to_contain_text('自分だけ')
+    guest_photo = next(p for p in store.photos.values() if p['uploader'] == 'mock-guest')
+    assert guest_photo['visibility'] == 'private'
+    owner.locator('#memoryRefresh').click()
+    expect(owner.locator('#memoryStatus')).to_contain_text('1枚')
+    guest_row = guest.locator('#memoryPhotos li')
+    share = guest_row.get_by_role('button', name='メンバーに共有', exact=True)
+    confirm_click(guest, share, accept=False)
+    assert guest_photo['visibility'] == 'private'
+    confirm_click(guest, share)
+    expect(guest_row).to_contain_text('メンバーに共有中')
+    wait_for_poll(owner, 'list')
+    guest_photo_row = owner.locator('#memoryPhotos li').filter(has_text='自由な思い出')
+    expect(guest_photo_row).to_contain_text('メンバーに共有中')
+    expect(guest_photo_row.get_by_role('button', name='自分だけに戻す')).to_have_count(0)
+    guest_photo_row.get_by_role('button', name=re.compile('を見る$')).click()
+    expect(owner.locator('#memoryPreview')).to_be_visible()
+    guest_row.get_by_role('button', name='自分だけに戻す', exact=True).click()
+    expect(guest_row).to_contain_text('自分だけ')
+    wait_for_poll(owner, 'list')
+    expect(guest_photo_row).to_have_count(0)
+    expect(owner.locator('#memoryPreview')).to_be_hidden()
+    assert owner.locator('#memoryImage').get_attribute('src') is None
+
+    # Initial sharing requires confirmation too. A canceled upload leaves the picker intact.
+    owner.locator('#memoryVisit').select_option(VISIT[:-1] + '1')
+    confirm_click(owner, owner.locator('#memoryUpload'), accept=False)
+    assert len(store.photos) == 2
+    confirm_click(owner, owner.locator('#memoryUpload'))
+    expect(owner.locator('#memoryVisibility')).to_have_value('private')
+    shared = next(p for p in store.photos.values() if p['visibility'] == 'album')
+    guest.locator('#memoryRefresh').click()
+    shared_row = guest.locator('#memoryPhotos li').filter(has_text=shared['label'])
+    expect(shared_row).to_contain_text('メンバーに共有中')
+    expect(shared_row.get_by_role('button', name='自分だけに戻す')).to_have_count(0)
+    expect(shared_row.get_by_role('button', name='削除')).to_have_count(0)
+    open_image = shared_row.get_by_role('button', name=re.compile('を見る$'))
+    open_image.click()
     expect(guest.locator('#memoryPreview')).to_be_visible()
     guest.context.set_offline(True)
     expect(guest.locator('#memoryPreview')).to_be_hidden()
     assert guest.locator('#memoryImage').get_attribute('src') is None
     guest.context.set_offline(False)
-    guest.locator('#memoryPhotos button').click()
+    open_image.click()
     expect(guest.locator('#memoryPreview')).to_be_visible()
     # Another device deletes a photo while a guest is viewing it.
-    saved = store.photo
-    store.photo = None
+    del store.photos[shared['photoId']]
     wait_for_poll(guest, 'list')
     expect(guest.locator('#memoryPreview')).to_be_hidden()
     assert guest.locator('#memoryImage').get_attribute('src') is None
-    expect(guest.locator('#memoryPhotos button')).to_have_count(0)
-    store.photo = saved
+    expect(shared_row).to_have_count(0)
+    store.photos[shared['photoId']] = shared
     guest.locator('#memoryRefresh').click()
-    guest.locator('#memoryPhotos button').click()
+    open_image.click()
     expect(guest.locator('#memoryPreview')).to_be_visible()
     owner.locator('#memoryEmail').fill(EMAIL)
     owner.once('dialog', lambda dialog: dialog.accept())
@@ -219,13 +304,27 @@ def run(browser):
     expect(guest.locator('#memoryPhotos button')).to_have_count(0)
     assert guest.locator('#memoryImage').get_attribute('src') is None
 
+    # A draft for one album must never preselect sharing in another album.
+    first_album = owner.locator('#memoryAlbum').input_value()
+    owner.locator('#memoryVisibility').select_option('album')
+    owner.locator('#memoryTitle').fill('別の日の思い出')
+    owner.locator('#memoryCreateButton').click()
+    expect(owner.locator('#memoryStatus')).to_contain_text('アルバムを作りました')
+    expect(owner.locator('#memoryVisibility')).to_have_value('private')
+    owner.locator('#memoryVisibility').select_option('album')
+    confirm_click(owner, owner.locator('#memoryDeleteAlbum'))
+    expect(owner.locator('#memoryAlbum')).to_have_value(first_album)
+    expect(owner.locator('#memoryVisibility')).to_have_value('private')
+    owner.locator('#memoryVisibility').select_option('album')
+
     # With a response already in flight, unmounting removes the session and its photos.
     store.delay_image = True
     with owner.expect_request(ENDPOINT):
         owner.locator('#memoryPhotos button').first.click()
     owner.evaluate('window.disposeMemories()')
     assert store.pending
-    store.reply(store.pending, {'ok': True, 'jpeg':store.photo['jpeg']})
+    expect(owner.locator('#memoryVisibility')).to_have_value('private')
+    store.reply(store.pending, {'ok': True, 'jpeg':owner_photo['jpeg']})
     expect(owner.locator('#driveMemories')).to_be_hidden()
     assert owner.locator('#memoryImage').get_attribute('src') is None
     expect(owner.locator('#memoryPhotos button')).to_have_count(0)
@@ -243,7 +342,7 @@ def run(browser):
     owner.locator('#memoryDeleteAlbum').click()
     expect(owner.locator('#memoryStatus')).to_contain_text('アルバムを削除しました')
     assert len(confirmations) == 1 and 'テストの思い出' in confirmations[0] and '写真' in confirmations[0]
-    assert store.album is None and store.photo is None
+    assert not store.albums and not store.photos
     assert owner.locator('#memoryImage').get_attribute('src') is None
     expect(owner.locator('#memoryPhotos button')).to_have_count(0)
     expect(owner.locator('#memoryAlbum option')).to_have_count(0)

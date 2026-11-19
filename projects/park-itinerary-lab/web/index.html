@@ -165,7 +165,7 @@
 </details>
 <details id="driveMemories" class="panel day-progress" hidden>
 <summary>夢の思い出</summary>
-<p>写真はTDRoute用のGoogle Driveに保存します。共有相手はこのアルバムのメンバーです。</p>
+<p>写真の保存先はTDRoute用のGoogle Driveです。アプリでは、自分だけで見ることも、このアルバムのメンバーと共有することもできます。</p>
 <fieldset id="memoryControls">
 <div id="memoryCreate" hidden><label>新しいアルバム名<input id="memoryTitle" maxlength="80" type="text"></label><button type="button" id="memoryCreateButton">アルバムを作る</button></div>
 <div><label>アルバム<select id="memoryAlbum"></select></label><button id="memoryRefresh" type="button">更新</button></div>
@@ -173,6 +173,7 @@
 <div id="memoryEdit" hidden>
 <label>しおりの体験<select id="memoryVisit"></select></label>
 <label>写真<input id="memoryFile" type="file" accept="image/*"></label>
+<label>アプリでの公開範囲<select id="memoryVisibility"><option value="private" selected>自分だけ</option><option value="album">アルバムのメンバー</option></select></label>
 <button id="memoryUpload" type="button">この写真を追加</button>
 <h3>アルバムの写真</h3>
 <ul id="memoryPhotos"></ul>

@@ -40,6 +40,11 @@ function backend() {
       if (flags.failDelete) { flags.failDelete = false; return response(503,{}); }
       file.trashed = JSON.parse(options.payload).trashed;
     }
+    if (u.searchParams.get('alt') === 'media' && flags.onRead) {
+      const onRead = flags.onRead;
+      flags.onRead = null;
+      onRead();
+    }
     return response(200,u.searchParams.has('alt') ? file.bytes : file);
   }
   const ctx = vm.createContext({
@@ -65,16 +70,16 @@ function backend() {
 }
 
 test('validated Google identity and private named invitations govern every album operation',()=>{
-  const {call,create,flags} = backend(), albumId = create(), p = payload(albumId);
+  const {call,create,flags} = backend(), albumId = create(), p = {...payload(albumId), visibility:'album'};
   assert.deepEqual(call(guest,'albums').albums,[]);
-  for (const action of ['create','member','list','image','upload','delete','deleteAlbum']) {
+  for (const action of ['create','member','list','image','upload','delete','deleteAlbum','setVisibility']) {
     assert.equal(call(guest,action,{...p,title:'旅行',email:guest.email,remove:false}).error,'forbidden',action);
   }
   assert.equal(flags.driveCalls,0);
   assert.equal(call(owner,'member',{albumId,email:'  GUEST@EXAMPLE.TEST ',remove:false}).ok,true);
   assert.deepEqual(call(guest,'albums').albums,[{id:albumId,title:'旅行',owner:false}]);
   assert.equal(call(guest,'upload',p).ok,true);
-  assert.deepEqual(call(guest,'list',{albumId}).photos,[{id:p.photoId,visitKey:p.visitKey,label:p.label,canDelete:true}]);
+  assert.deepEqual(call(guest,'list',{albumId}).photos,[{id:p.photoId,visitKey:p.visitKey,label:p.label,visibility:'album',canDelete:true,canSetVisibility:true}]);
   assert.deepEqual(call(owner,'image',p),{ok:true,jpeg:'QUJD'});
   call(owner,'member',{albumId,email:visitor.email,remove:false});
   assert.equal(call(visitor,'list',{albumId}).photos[0].canDelete,false);
@@ -84,6 +89,77 @@ test('validated Google identity and private named invitations govern every album
   assert.equal(call(guest,'upload',p).error,'forbidden');
   assert.deepEqual(call(guest,'albums').albums,[]);
   assert.equal(call(owner,'albums').albums[0].owner,true);
+});
+
+test('each invited author can keep a photo private, share it and retract it',()=>{
+  const {call,create,flags} = backend(), albumId = create(), p = payload(albumId);
+  for (const a of [guest, visitor]) call(owner,'member',{albumId,email:a.email,remove:false});
+  assert.equal(call(guest,'albums').visibilityVersion,1);
+  assert.equal(call(guest,'upload',p).ok,true);
+  assert.equal(call(guest,'image',p).jpeg,p.jpeg);
+  assert.deepEqual(call(guest,'list',{albumId}).photos,[{
+    id:p.photoId, label:p.label, visitKey:p.visitKey, visibility:'private', canDelete:true, canSetVisibility:true
+  }]);
+  for (const other of [owner, visitor]) {
+    const start = flags.driveCalls;
+    assert.deepEqual(call(other,'list',{albumId}).photos,[]);
+    assert.equal(call(other,'image',p).error,'not-found');
+    assert.equal(call(other,'setVisibility',{...p,visibility:'album'}).error,'not-found');
+    assert.deepEqual(call(other,'delete',p),call(other,'delete',payload(albumId)));
+    assert.equal(flags.driveCalls,start,'hidden photos are not accessed on Drive');
+  }
+  assert.equal(call(guest,'setVisibility',{...p,visibility:'album'}).ok,true);
+  assert.equal(call(guest,'setVisibility',{...p,visibility:'album'}).ok,true);
+  for (const other of [owner, visitor]) {
+    assert.equal(call(other,'image',p).jpeg,p.jpeg);
+    assert.deepEqual(call(other,'list',{albumId}).photos,[{
+      id:p.photoId, label:p.label, visitKey:p.visitKey, visibility:'album', canDelete:other===owner, canSetVisibility:false
+    }]);
+    assert.equal(call(other,'setVisibility',{...p,visibility:'private'}).error,'forbidden');
+  }
+  assert.equal(call(guest,'setVisibility',{...p,visibility:'private'}).ok,true);
+  assert.deepEqual(call(visitor,'list',{albumId}).photos,[]);
+  assert.equal(call(owner,'image',p).error,'not-found');
+  assert.equal(call(guest,'delete',p).ok,true);
+  assert.equal(call(guest,'image',p).error,'not-found');
+});
+
+test('unknown visibility never grants access and upload retries preserve later audience choices',()=>{
+  const {call,create,flags,props} = backend(), albumId = create(), p = {...payload(albumId),visibility:'album'};
+  call(owner,'member',{albumId,email:guest.email,remove:false});
+  for (const value of [null, false, 0, '', 'public']) {
+    assert.equal(call(guest,'upload',{...p,visibility:value}).error,'invalid');
+  }
+  flags.lostUpload = true;
+  assert.equal(call(guest,'upload',p).error,'offline');
+  assert.equal(call(guest,'upload',{...p,visibility:'private'}).error,'conflict');
+  assert.equal(call(guest,'upload',p).ok,true);
+  assert.equal(call(guest,'setVisibility',{...p,visibility:'private'}).ok,true);
+  assert.equal(call(guest,'upload',p).error,'conflict');
+  assert.equal(call(owner,'image',p).error,'not-found');
+  assert.equal(call(guest,'setVisibility',{...p,visibility:undefined}).error,'invalid');
+  const key = 'photo:' + albumId + ':' + p.photoId;
+  const record = JSON.parse(props.get(key));
+  for (const oldValue of [undefined,'public',null]) {
+    props.set(key,JSON.stringify({...record,visibility:oldValue}));
+    assert.deepEqual(call(owner,'list',{albumId}).photos,[]);
+    assert.equal(call(owner,'image',p).error,'not-found');
+    assert.equal(call(guest,'list',{albumId}).photos[0].visibility,'private');
+  }
+  assert.equal(call(guest,'upload',{...p,visibility:undefined}).ok,true);
+  assert.equal(call(guest,'setVisibility',p).ok,true);
+  assert.equal(call(owner,'image',p).jpeg,p.jpeg);
+});
+
+test('membership and photo visibility are rechecked after reading the Drive image',()=>{
+  const {call,create,flags} = backend(), albumId = create(), p = {...payload(albumId),visibility:'album'};
+  for (const a of [guest, visitor]) call(owner,'member',{albumId,email:a.email,remove:false});
+  assert.equal(call(guest,'upload',p).ok,true);
+  flags.onRead = () => assert.equal(call(guest,'setVisibility',{...p,visibility:'private'}).ok,true);
+  assert.deepEqual(call(owner,'image',p),{ok:false,error:'not-found'});
+  assert.equal(call(guest,'setVisibility',p).ok,true);
+  flags.onRead = () => assert.equal(call(owner,'member',{albumId,email:visitor.email,remove:true}).ok,true);
+  assert.deepEqual(call(visitor,'image',p),{ok:false,error:'forbidden'});
 });
 
 test('checks signed token with Identity Toolkit, exact project and recent Google authentication',()=>{

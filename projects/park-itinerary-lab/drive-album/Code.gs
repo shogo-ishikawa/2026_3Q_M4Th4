@@ -81,6 +81,19 @@ function participant_(store, albumId, actor) {
   if (!allowed_(album, actor)) fail_('forbidden');
   return album;
 }
+function requestedVisibility_(value) {
+  if (value !== 'private' && value !== 'album') fail_('invalid');
+  return value;
+}
+function visibility_(photo) { return photo.visibility === 'album' ? 'album' : 'private'; }
+function canViewPhoto_(photo, actor) {
+  return !!photo && (photo.author === actor.uid || visibility_(photo) === 'album');
+}
+function readablePhoto_(store, key, actor) {
+  const photo = prop_(store, key);
+  if (!canViewPhoto_(photo, actor) || photo.state !== 'ready') fail_('not-found');
+  return photo;
+}
 function locked_(fn) {
   const lock = LockService.getScriptLock();
   if (!lock.tryLock(5000)) fail_('busy');
@@ -96,7 +109,7 @@ function handle_(request, actor) {
       const album = JSON.parse(entries[key]);
       if (allowed_(album, actor)) albums.push({id: key.slice(6), title: album.title, owner: actor.owner});
     }
-    return {albums};
+    return {albums, visibilityVersion: 1};
   }
   const id = uuid_(request.albumId);
   if (['create', 'member', 'deleteAlbum'].includes(request.action)) {
@@ -110,26 +123,38 @@ function handle_(request, actor) {
     if (!allowed_(album, actor)) fail_('forbidden');
     if (album.deleting) return {photos: []};
     const photos = Object.keys(props).filter(k => k.startsWith(prefix)).map(k => ({id: k.slice(prefix.length), p: JSON.parse(props[k])}))
-      .filter(row => row.p.state === 'ready').sort((a,b) => a.p.created - b.p.created || a.id.localeCompare(b.id))
-      .map(row => ({id: row.id, visitKey: row.p.visitKey, label: row.p.label, canDelete: actor.owner || actor.uid === row.p.author}));
+      .filter(row => row.p.state === 'ready' && canViewPhoto_(row.p, actor))
+      .sort((a,b) => a.p.created - b.p.created || a.id.localeCompare(b.id))
+      .map(({id: photoId, p}) => ({id: photoId, visitKey: p.visitKey, label: p.label, visibility: visibility_(p),
+        canDelete: actor.owner || actor.uid === p.author, canSetVisibility: actor.uid === p.author}));
     return {photos};
   }
   if (participant_(store, id, actor).deleting) fail_('conflict');
   const photoId = uuid_(request.photoId);
   const key = photoKey_(id, photoId);
   if (request.action === 'image') {
-    const p = prop_(store, key);
-    if (!p || p.state !== 'ready') fail_('not-found');
+    const p = readablePhoto_(store, key, actor);
     const image = photoBytes_(p.file);
     if (participant_(store, id, actor).deleting) fail_('not-found');
-    if (prop_(store, key)?.state !== 'ready') fail_('not-found');
+    if (readablePhoto_(store, key, actor).file !== p.file) fail_('not-found');
     return {jpeg: Utilities.base64Encode(image)};
+  }
+  if (request.action === 'setVisibility') {
+    const visibility = requestedVisibility_(request.visibility);
+    return locked_(() => {
+      if (participant_(store, id, actor).deleting) fail_('conflict');
+      const photo = readablePhoto_(store, key, actor);
+      if (photo.author !== actor.uid) fail_('forbidden');
+      if (visibility !== visibility_(photo)) put_(store, key, Object.assign({}, photo, {visibility}));
+      return {};
+    });
   }
   if (request.action === 'delete') {
     return locked_(() => {
       if (participant_(store, id, actor).deleting) fail_('conflict');
       const photo = prop_(store, key);
-      if (!photo) return {};
+      // An invisible photo and an absent photo have the same delete response.
+      if (!canViewPhoto_(photo, actor)) return {};
       if (!actor.owner && actor.uid !== photo.author) fail_('forbidden');
       if (photo.state !== 'deleting') put_(store, key, Object.assign({}, photo, {state:'deleting'}));
       trash_(photo.file);
@@ -142,6 +167,7 @@ function handle_(request, actor) {
     });
   }
   if (request.action !== 'upload') fail_('invalid');
+  const visibility = request.visibility === undefined ? 'private' : requestedVisibility_(request.visibility);
   const label = title_(request.label, 100), visitKey = request.visitKey;
   if (typeof visitKey !== 'string' || !/^[\w.:-]{1,128}$/.test(visitKey)) fail_('invalid');
   const input = request.jpeg;
@@ -158,10 +184,12 @@ function handle_(request, actor) {
     let p = prop_(store, key);
     if (p) {
       if (actor.uid !== p.author || checksum !== p.checksum || p.label !== label || p.visitKey !== visitKey || p.state === 'deleting') fail_('conflict');
+      // An upload retry must not change or misreport the audience chosen since the first upload.
+      if (visibility !== visibility_(p)) fail_('conflict');
       if (p.state === 'ready') return {};
     } else {
       if (store.getKeys().filter(k => k.startsWith(photoKey_(id, ''))).length >= MAX_PHOTOS_) fail_('limit');
-      p = {file: newFileId_(), author: actor.uid, visitKey, label, checksum, created: Date.now(), state: 'saving'};
+      p = {file: newFileId_(), author: actor.uid, visibility, visitKey, label, checksum, created: Date.now(), state: 'saving'};
       put_(store, key, p);
     }
     savePhoto_(p.file, photoId, bytes, privateFolder_(store));

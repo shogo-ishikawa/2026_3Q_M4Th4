@@ -11,6 +11,7 @@ const errorText = {
   'not-found':'アルバムまたは写真が見つかりません。', invalid:'入力内容を確認してください。',
   limit:'アルバムの上限に達しました。', busy:'混み合っています。少し待ってから再度お試しください。',
   offline:'接続できません。通信状況を確認して、もう一度お試しください。',
+  version:'公開範囲を確認できないため、アルバムを開けません。',
   conflict:'内容が変更されました。アルバムを更新してください。',
   file:'この写真を読み込めません。JPEG または PNG 形式でお試しください。',
   size:'写真が大きすぎます。小さくしてから選び直してください。'
@@ -33,6 +34,7 @@ export function makeAlbumClient(endpoint, getIdToken, send = fetch) {
     const body = await response.json();
     assertActive(signal);
     if (body?.ok !== true) throw failure(Object.hasOwn(errorText, body?.error) ? body.error : 'offline');
+    if (action === 'albums' && body.visibilityVersion !== 1) throw failure('version');
     return body;
   };
 }
@@ -65,6 +67,11 @@ export function photoVisits(state, park) {
     }
   }
   return choices;
+}
+
+export function canViewPhoto(photo) {
+  if (!photo || !UUID.test(photo.id) || typeof photo.label !== 'string' || typeof photo.canSetVisibility !== 'boolean') return false;
+  return photo.visibility === 'album' || (photo.visibility === 'private' && photo.canSetVisibility);
 }
 
 function readBase64(blob) {
@@ -141,6 +148,7 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
     el('Photos').replaceChildren();
     el('Visit').replaceChildren();
     el('File').value = el('Email').value = '';
+    el('Visibility').value = 'private';
     el('Members').hidden = el('Edit').hidden = true;
     uploadDraft = null;
   }
@@ -197,10 +205,11 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
     } catch (error) {
       if (signal.aborted) return;
       clearPreview();
-      if (['auth','forbidden','not-found'].includes(error.code)) {
+      if (['auth','forbidden','not-found','version'].includes(error.code)) {
         clearAlbum();
         albums = [];
         el('Album').replaceChildren();
+        if (error.code === 'version') el('Create').hidden = true;
       }
       el('Status').textContent = errorText[error.code] || errorText.offline;
     } finally {
@@ -212,6 +221,10 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
         scheduleRefresh();
       }
     }
+  }
+  function confirmShare(albumId,label) {
+    const album = albums.find(a => a.id === albumId);
+    return album && window.confirm('「' + label + '」を「' + album.title + '」のメンバーに共有しますか？');
   }
   function photoRow(albumId,photo) {
     const li = document.createElement('li');
@@ -227,7 +240,20 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
       el('Preview').hidden = false;
       requestAnimationFrame(() => { if (!el('Preview').hidden) el('CloseImage').focus(); });
     })));
-    if (photo.canDelete) li.append(button('削除', () => {
+    const shared = photo.visibility === 'album';
+    const status = document.createElement('span');
+    status.textContent = shared ? 'メンバーに共有中' : '自分だけ';
+    li.append(status);
+    if (photo.canSetVisibility) li.append(button(shared ? '自分だけに戻す' : 'メンバーに共有', () => {
+      if (!shared && !confirmShare(albumId,photo.label)) return;
+      void run(async s => {
+        const visibility = shared ? 'private' : 'album';
+        await request('setVisibility',{albumId,photoId:photo.id,visibility},s);
+        await listPhotos(albumId,s);
+        return shared ? '公開範囲を自分だけに戻しました。' : 'このアルバムのメンバーに共有しました。';
+      });
+    }));
+    if (photo.canDelete === true) li.append(button('削除', () => {
       if (!window.confirm('「' + photo.label + '」の写真を削除しますか？')) return;
       void run(async s => {
         await request('delete',{albumId,photoId:photo.id},s);
@@ -240,10 +266,10 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
   async function listPhotos(albumId, signal) {
     const result = await request('list',{albumId},signal);
     assertActive(signal);
-    const photos = result.photos.filter(photo => UUID.test(photo.id) && typeof photo.label === 'string');
+    const photos = result.photos.filter(canViewPhoto);
     if (visiblePhoto && (visiblePhoto.albumId !== albumId || !photos.some(p => p.id === visiblePhoto.id))) clearPreview();
     // Leave the open photo, focused button and file picker alone when the album has not changed.
-    const gallery = JSON.stringify([albumId,photos.map(p => [p.id,p.label,p.canDelete])]);
+    const gallery = JSON.stringify([albumId,photos.map(p => [p.id,p.label,p.canDelete,p.visibility,p.canSetVisibility])]);
     if (renderedGallery !== gallery) {
       el('Photos').replaceChildren(...photos.map(photo => photoRow(albumId,photo)));
       renderedGallery = gallery;
@@ -256,6 +282,7 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
   async function readAlbums(signal, preferred) {
     const result = await request('albums',{},signal);
     assertActive(signal);
+    el('Create').hidden = !isOwner;
     albums = result.albums.filter(a => UUID.test(a.id) && typeof a.title === 'string');
     const chooser = el('Album'), previouslyShown = chooser.value;
     if (chooser.length !== albums.length || albums.some((a,i) => a.id !== chooser.options[i].value || a.title !== chooser.options[i].text))
@@ -314,19 +341,25 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
     });
   }
   listen(el('Visit'),'focus',visitOptions);
-  listen(el('File'),'change',() => {uploadDraft = null;});
+  listen(el('File'),'change',() => {
+    uploadDraft = null;
+    el('Visibility').value = 'private';
+  });
   listen(el('Upload'),'click',() => {
     const file = el('File').files[0], albumId = el('Album').value, key = el('Visit').value;
     const visit = visitOptions().find(v => v.visitKey === key);
     if (!visit || !file) { el('Status').textContent = 'しおりの体験と写真を選んでください。'; return; }
+    const visibility = el('Visibility').value;
+    if (visibility !== 'private' && (visibility !== 'album' || !confirmShare(albumId,visit.label))) return;
     if (!uploadDraft || uploadDraft.visitKey !== key || uploadDraft.file !== file || uploadDraft.albumId !== albumId)
       uploadDraft = {file,albumId,visitKey:key,id:crypto.randomUUID()};
     const photoId = uploadDraft.id;
     void run(async s => {
       const jpeg = await photoJpeg(file,s);
-      await request('upload',{albumId,photoId,...visit,jpeg},s);
+      await request('upload',{albumId,photoId,...visit,visibility,jpeg},s);
       assertActive(s);
       el('File').value = '';
+      el('Visibility').value = 'private';
       uploadDraft = null;
       await listPhotos(albumId,s);
       return '写真を追加しました。';
@@ -351,7 +384,7 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
   const workflow = document.getElementById('workflowSchedule');
   const observer = new MutationObserver(() => { if (showing()) void refresh(); else reset(); });
   observer.observe(workflow,{attributes:true,attributeFilter:['hidden']});
-  el('Create').hidden = !isOwner;
+  el('Create').hidden = true;
   panel.hidden = false;
   return () => {
     life.abort();
