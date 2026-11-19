@@ -234,7 +234,7 @@ def check_share_edits(page):
 
 
 def check_app_qr(page):
-    trigger = page.get_by_role('button', name='スマホ用QRコード', exact=True)
+    trigger = page.get_by_role('link', name='スマホ用QRコード', exact=True)
     expect(trigger).to_have_count(1)
     dialog = page.locator('#appQrDialog')
     for close_with_keyboard in (True, False):
@@ -256,6 +256,38 @@ def check_app_qr(page):
         expect(trigger).to_be_focused()
 
 
+def check_desktop_install_links(browser, origin, store):
+    from mobile_auth import sign_in, wire_device
+
+    url = origin + '/park-itinerary-lab/'
+    context = browser.new_context(service_workers='block')
+    wire_device(context, store)
+    page = context.new_page()
+    page.route('**/*', lambda route: route.continue_() if route.request.url.startswith(origin + '/') else route.abort())
+    page.goto(url)
+    sign_in(page)
+    page.evaluate('document.documentElement.requestFullscreen()')
+    assert page.evaluate("matchMedia('(display-mode: fullscreen)').matches")
+    check_app_qr(page)
+    install = page.get_by_role('link', name='スマホにインストール', exact=True)
+    install.click()
+    expect(page.locator('#installHelp')).to_be_visible()
+    page.keyboard.press('Escape')
+    page.evaluate('document.exitFullscreen()')
+
+    # Keep login and planning active, but simulate just the PWA module failing to load.
+    page.route('**/pwa.js*', lambda route: route.abort())
+    page.reload()
+    page.get_by_role('link', name='スマホ用QRコード', exact=True).click()
+    expect(page).to_have_url(url + 'assets/tdroute-app-qr.png')
+    assert page.locator('img').evaluate('img => img.decode().then(() => img.naturalWidth > 0)')
+    page.goto(url)
+    install.click()
+    expect(page).to_have_url(url + 'guide.html#save')
+    expect(page.locator('#save').get_by_role('heading', name='ホーム画面に追加する')).to_be_visible()
+    context.close()
+
+
 def check_mobile_course_links(website):
     course_links = 'a[href="../"], a[href="#learn"], a[href*="colab.research.google.com"], a[href*="github.com/shogo-ishikawa/"], a[href$=".zip"], #learn'
     expect(website.locator('a[href="../"]')).to_be_visible()
@@ -270,7 +302,8 @@ def check_mobile_course_links(website):
     app.goto(website.url)
     expect(app.locator('html')).to_have_class('tdroute-standalone')
     expect(app.locator(course_links)).to_have_count(0)
-    expect(app.get_by_role('button', name='スマホ用QRコード', exact=True)).to_have_count(0)
+    expect(app.get_by_role('link', name='スマホ用QRコード', exact=True)).to_have_count(0)
+    expect(app.get_by_role('link', name='スマホにインストール', exact=True)).to_have_count(0)
     app.locator('header a[href="guide.html"]').click()
     expect(app.locator('html')).to_have_class('tdroute-standalone')
     expect(app.locator(course_links)).to_have_count(0)
@@ -410,6 +443,7 @@ if __name__ == '__main__':
                                           has_touch=True, is_mobile=True, service_workers='allow', reduced_motion='reduce')
             origin = f'http://127.0.0.1:{server.server_port}'
             store = PrivateStore()
+            check_desktop_install_links(browser, origin, store)
             check_login_and_sync(browser, origin, store)
             wire_device(context, store)
             map_page = context.new_page()
