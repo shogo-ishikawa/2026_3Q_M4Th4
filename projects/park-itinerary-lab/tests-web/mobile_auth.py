@@ -26,15 +26,15 @@ def make_test_site(built_site, site):
     for name in ('firebase-auth.js', 'firebase-firestore.js'):
         shutil.copyfile(TESTS / 'fixtures' / name, app / 'assets/firebase' / name)
     # Compare against a synthetic owner's fingerprint in this temporary site.
-    sync_ui = app / 'sync-ui.js'
+    adapter = app / 'firebase-sync.js'
     fingerprint = hashlib.sha256(FIXTURE_OWNER_UID.encode('utf-8')).hexdigest()
     source, count = re.subn(
         r"const OWNER_UID_SHA256 = '[0-9a-f]{64}';",
         f"const OWNER_UID_SHA256 = '{fingerprint}';",
-        sync_ui.read_text(encoding='utf-8'),
+        adapter.read_text(encoding='utf-8'),
     )
     assert count == 1, 'Expected one owner fingerprint in the built app'
-    sync_ui.write_text(source, encoding='utf-8')
+    adapter.write_text(source, encoding='utf-8')
     # The PWA verifies each file; use the production packager for the changed test-only assets.
     shutil.copyfile(PROJECT / 'web/sw.js', app / 'sw.js')
     worker = runpy.run_path(str(PROJECT / 'scripts/package-web.py'))['public_worker'](app)
@@ -72,7 +72,7 @@ def sign_in(page, uid='visitor-one', display_name=None):
     page.locator('#googleSignIn').click()
     expect(page.locator('#appShell')).to_be_visible(timeout=30_000)
     expect(page.locator('#loginGate')).to_be_hidden()
-    name = display_name.strip()
+    name = '' if uid == FIXTURE_OWNER_UID else display_name.strip()
     greeting = f'{name}さん、良い一日を！' if name else '良い一日を！'
     expect(page.locator('#accountGreeting')).to_be_visible()
     expect(page.locator('#accountGreeting')).to_have_text(greeting)
@@ -80,8 +80,12 @@ def sign_in(page, uid='visitor-one', display_name=None):
     if uid == FIXTURE_OWNER_UID:
         expect(admin).to_be_visible()
         expect(admin).to_have_text('管理者画面')
+        expect(page.locator('#accountName')).to_have_text('管理者')
+        if display_name:
+            expect(page.locator('#appShell')).not_to_contain_text(display_name)
     else:
         expect(admin).to_be_hidden()
+        expect(page.locator('#accountName')).to_have_text(name or 'Google アカウント')
     expect(page.locator('#solveButton')).to_be_enabled(timeout=30_000)
 
 

@@ -1,4 +1,4 @@
-import {archivedFares, archivedFaresKnownBy, archivedFareSource, seedFares, faresCheckedAt} from './ticket-calendar-seed.js?v=2.2.1';
+import {archivedFares, archivedFaresKnownBy, archivedFareSource, seedFares, faresCheckedAt} from './ticket-calendar-seed.js?v=2.2.2';
 
 const parks = {land:'tdl', sea:'tds'};
 const campus = {

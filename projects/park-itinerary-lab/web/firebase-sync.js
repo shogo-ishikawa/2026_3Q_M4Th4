@@ -2,6 +2,23 @@
 const MAX_PAYLOAD_BYTES = 800_000;
 const PLAN_ID = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,99}$/;
 
+// This fingerprint selects a header label. Access to saved plans is enforced by Firestore rules.
+const OWNER_UID_SHA256 = '59a9ddcef0808ba4c057a9015e2cbd352cd8fd39cb53d8490d90644d1153efba';
+
+// Resolve the label before handing any name to the planner, including on token refresh.
+async function plannerProfile(user) {
+  const profile = {uid: user.uid, isOwner: false, displayName: ''};
+  try {
+    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(user.uid));
+    const hex = Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+    profile.isOwner = hex === OWNER_UID_SHA256;
+    if (!profile.isOwner) profile.displayName = user.displayName || '';
+  } catch {
+    // An unidentified account can use the planner with a neutral greeting.
+  }
+  return profile;
+}
+
 function syncError(code) {
   return Object.assign(new Error(syncErrorMessage({code})), {code});
 }
@@ -135,9 +152,10 @@ export async function connectFirebase(value, load = loadSdk) {
         verifiedUser = null;
         try {
           const permitted = await usesGoogle(authSdk, user, config.projectId);
+          const profile = permitted ? await plannerProfile(user) : null;
           if (generation !== observation || user !== auth.currentUser) return;
           verifiedUser = permitted ? user : null;
-          next(permitted ? {uid: user.uid, displayName: user.displayName || ''} : null);
+          next(profile);
         } catch (reason) {
           if (generation !== observation || user !== auth.currentUser) return;
           next(null);

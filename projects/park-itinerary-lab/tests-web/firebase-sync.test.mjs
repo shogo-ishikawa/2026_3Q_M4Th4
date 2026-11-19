@@ -72,7 +72,7 @@ test('only an active Google sign-in enables personal sync, including for linked 
     assert.deepEqual(loaded, ['app', 'auth']);
   }
   const {adapter, initial, loaded, calls} = await fixture();
-  assert.deepEqual(initial, {uid:'a', displayName:'Alice'});
+  assert.deepEqual(initial, {uid:'a', displayName:'Alice', isOwner:false});
   assert.deepEqual(loaded, ['app', 'auth']);
   const action = adapter.signIn();
   assert.deepEqual(calls, ['popup']);
@@ -80,6 +80,13 @@ test('only an active Google sign-in enables personal sync, including for linked 
   await assert.rejects(adapter.list('other'), {code:'sync/account'});
   await adapter.signOut();
   await assert.rejects(adapter.write('a', plan.id, 0, plan), {code:'sync/account'});
+});
+
+test('a fingerprint lookup failure keeps the account name private and does not block sync', async t => {
+  t.mock.method(globalThis.crypto.subtle, 'digest', async () => { throw Error('Unavailable'); });
+  const {adapter, initial} = await fixture();
+  assert.deepEqual(initial, {uid: 'a', displayName: '', isOwner: false});
+  assert.deepEqual(await adapter.list('a'), []);
 });
 
 test('offline restoration only recognises the previous Google credential for this project and SDK user', async () => {
