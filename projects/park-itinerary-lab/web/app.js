@@ -1,22 +1,22 @@
-import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, createVisitOutlook, prepareLiveForReplan } from './wait-data.js?v=2.3.1';
-export {prepareWeatherForVisit as prepareWeatherForPlan} from './wait-data.js?v=2.3.1';
-import {visitDayDetails} from './visit-day-view.js?v=2.3.1';
-import {createForecastCalendar} from './forecast-calendar.js?v=2.3.1';
-import {calendarDayOutlook, calendarDayPreview, CROWD_LABELS} from './calendar-outlook.js?v=2.3.1';
+import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, createVisitOutlook, prepareLiveForReplan } from './wait-data.js?v=2.4.0';
+export {prepareWeatherForVisit as prepareWeatherForPlan} from './wait-data.js?v=2.4.0';
+import {visitDayDetails} from './visit-day-view.js?v=2.4.0';
+import {createForecastCalendar} from './forecast-calendar.js?v=2.4.0';
+import {calendarDayOutlook, calendarDayPreview, CROWD_LABELS} from './calendar-outlook.js?v=2.4.0';
 import {WISH_PRESETS, presetFacilities, presetStartsPlan, addPresetWishes} from './wishlist-presets.js';
 import {attachItineraryImage} from './itinerary-image.js';
 import {attachOnsiteNavigation} from './onsite-navigation.js';
-import {attachDayProgress} from './day-progress-ui.js?v=2.3.1';
+import {attachDayProgress} from './day-progress-ui.js?v=2.4.0';
 import {baseVisitId, repeatVisitId, isRepeatVisit, expandRepeatVisits, resolveDpaVisit} from './repeat-visits.js';
-import { restsBesideFood, settledReplanWishes } from './planner.js?v=2.3.1';
-import { enhanceTimeInputs, parkTimeBounds, clampClock } from './time-input.js?v=2.3.1';
-import { estimateParkCrowd } from './wait-model.js?v=2.3.1';
-import { warmCalendarWeather, weatherForMinute } from './weather.js?v=2.3.1';
-import { forecastCardHtml, forecastSourcesHtml, visitWeatherSummary } from './weather-view.js?v=2.3.1';
-import { activityAvailable, operationPauseInfo } from './operation-windows.js?v=2.3.1';
+import { restsBesideFood, settledReplanWishes } from './planner.js?v=2.4.0';
+import { enhanceTimeInputs, parkTimeBounds, clampClock } from './time-input.js?v=2.4.0';
+import { estimateParkCrowd } from './wait-model.js?v=2.4.0';
+import { warmCalendarWeather, weatherForMinute } from './weather.js?v=2.4.0';
+import { forecastCardHtml, forecastSourcesHtml, visitWeatherSummary } from './weather-view.js?v=2.4.0';
+import { activityAvailable, operationPauseInfo } from './operation-windows.js?v=2.4.0';
 import { contingencySettings, compareContingency } from './contingency.js';
-import { renderParkMap } from './map-view.js?v=2.3.1';
-import { createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=2.3.1';
+import { renderParkMap } from './map-view.js?v=2.4.0';
+import { createShareUrl, readSharedState, downloadPlanJson, downloadScheduleCsv, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=2.4.0';
 
 const CATEGORY = {attraction:'アトラクション',show:'ショー',parade:'パレード',restaurant:'レストラン',cafe:'カフェ',snack:'スナック',popcorn:'ポップコーン',greeting:'グリーティング',shop:'お土産'};
 const FOOD = new Set(['restaurant','cafe','snack','popcorn']);
@@ -1037,7 +1037,7 @@ export function initialiseApp({plans, syncAfterEdit, refreshLibrary}) {
     const extra=Number($('contingencyDelay').value),profile=contingencySettings(state.result.settings||state.settings,extra);
     contingencyBase=state.result;const request=++contingencyRequest;
     const initialPlan=profile.replanFrom!=null?state.result:null;
-    contingencyWorker=new Worker(new URL('./planner-worker.js?v=2.3.1',import.meta.url),{type:'module'});
+    contingencyWorker=new Worker(new URL('./planner-worker.js?v=2.4.0',import.meta.url),{type:'module'});
     $('searchContingency').disabled=true;$('cancelContingency').hidden=false;
     $('contingencyStatus').textContent=`通常の待ち列がさらに${extra}分長い場合を探索しています。`;
     contingencyWorker.onmessage=event=>{
@@ -1093,7 +1093,7 @@ export function initialiseApp({plans, syncAfterEdit, refreshLibrary}) {
     if(preparingRequest!==requestId)return;
     preparation=null;state.settings=prepared;if(state.result){state.resultDirty=true;renderResult();}writeSettings();externalPanel?.refresh();
     searchStarted=performance.now();
-    try{worker=new Worker(new URL('./planner-worker.js?v=2.3.1',import.meta.url),{type:'module'});}catch{stopSearch();showPlanError(new Error('探索を起動できませんでした。ページを再読み込みしてもう一度お試しください。'));return;}
+    try{worker=new Worker(new URL('./planner-worker.js?v=2.4.0',import.meta.url),{type:'module'});}catch{stopSearch();showPlanError(new Error('探索を起動できませんでした。ページを再読み込みしてもう一度お試しください。'));return;}
     setSolveDisabled(true);$('cancelSearch').hidden=false;$('searchProgress').hidden=false;$('progressBar').value=0;$('progressText').textContent='最初の計画を探しています…';
     const thisRequest=requestId;
     worker.onmessage=event=>{
