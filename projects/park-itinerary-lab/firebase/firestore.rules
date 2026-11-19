@@ -2,13 +2,28 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    function googleUser() {
+      return request.auth != null && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+    function owner(uid) {
+      return googleUser() && request.auth.uid == uid;
+    }
+    function verifiedGoogleEmail() {
+      return googleUser() && request.auth.token.email_verified == true && request.auth.token.email is string;
+    }
+    function emailOfViewer() {
+      return request.auth.token.email.lower();
+    }
+    function planPath(uid, planId) {
+      return /databases/$(database)/documents/users/$(uid)/plans/$(planId);
+    }
+    function audiencePath(uid, planId) {
+      return /databases/$(database)/documents/users/$(uid)/livePlanAudiences/$(planId);
+    }
+    function invitationPath(email, uid, planId) {
+      return /databases/$(database)/documents/tripInboxes/$(email)/invitations/$(uid + '~' + planId);
+    }
     match /users/{uid}/plans/{planId} {
-      function signedInAsOwner() {
-        return request.auth != null
-          && request.auth.uid == uid
-          && request.auth.token.firebase.sign_in_provider == 'google.com';
-      }
-
       function validVersion(expectedRevision) {
         let fields = request.resource.data;
         return fields.keys().hasOnly(['revision', 'payload'])
@@ -18,10 +33,57 @@ service cloud.firestore {
           && fields.payload.toUtf8().size() <= 800000;
       }
 
-      allow get, list: if signedInAsOwner();
-      allow create: if signedInAsOwner() && validVersion(1);
-      allow update: if signedInAsOwner() && validVersion(resource.data.revision + 1);
+      allow get, list: if owner(uid);
+      allow create: if owner(uid) && validVersion(1);
+      allow update: if owner(uid) && validVersion(resource.data.revision + 1);
       // 削除は空の payload と新しい revision で他の端末に伝える。
+    }
+
+    // 招待先一覧は計画の所有者だけが管理・閲覧する。
+    match /users/{uid}/livePlanAudiences/{planId} {
+      function validAudience() {
+        let data = request.resource.data;
+        let members = data.members;
+        let joined = members.join('/');
+        let email = '[^/@\\s]+@[^/@\\s]+[.][^/@\\s]+';
+        return data.keys().hasOnly(['members']) && members is list && members.size() <= 12
+          && members.toSet().size() == members.size()
+          && (members.size() == 0 || (joined.lower() == joined && joined.split('/') == members
+            && joined.matches(email + '(/' + email + ')*')));
+      }
+      allow get, list, delete: if owner(uid);
+      allow create, update: if owner(uid) && validAudience();
+    }
+
+    // 同行者に送る予定表には元の計画とは独立した文書を使う。
+    match /users/{uid}/liveTimetables/{planId} {
+      function invited(email) {
+        return exists(invitationPath(email, uid, planId))
+          && email in get(audiencePath(uid, planId)).data.members
+          && get(planPath(uid, planId)).data.payload != '';
+      }
+      function validTimetable() {
+        let data = request.resource.data;
+        return data.keys().hasOnly(['view']) && data.view is string && data.view.toUtf8().size() <= 140000;
+      }
+      allow get: if owner(uid) || (verifiedGoogleEmail() && invited(emailOfViewer()));
+      allow create, update: if owner(uid) && validTimetable();
+      allow delete: if owner(uid);
+    }
+
+    match /tripInboxes/{email}/invitations/{key} {
+      function validInvitation() {
+        let data = request.resource.data;
+        return data.keys().hasOnly(['owner', 'planId', 'name']) && owner(data.owner)
+          && data.planId is string && data.planId.matches('[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}')
+          && key == data.owner + '~' + data.planId && data.name is string && data.name.size() > 0 && data.name.size() <= 80
+          && email.size() <= 254 && email == email.lower() && email.matches('[^/@\\s]+@[^/@\\s]+[.][^/@\\s]+')
+          && email in getAfter(audiencePath(data.owner, data.planId)).data.members
+          && getAfter(planPath(data.owner, data.planId)).data.payload != '';
+      }
+      allow get, list: if verifiedGoogleEmail() && email == emailOfViewer();
+      allow create, update: if validInvitation();
+      allow delete: if owner(resource.data.owner);
     }
   }
 }

@@ -1,7 +1,8 @@
-import {readFirebaseConfig, connectFirebase, syncErrorMessage} from './firebase-sync.js?v=2.4.0';
-import {createPlanSync} from './named-sync.js?v=2.4.0';
+import {readFirebaseConfig, connectFirebase, syncErrorMessage} from './firebase-sync.js?v=2.5.0';
+import {createPlanSync} from './named-sync.js?v=2.5.0';
 
-import {mountDriveMemories} from './drive-memories.js?v=2.4.0';
+import {mountCompanionPlans} from './companion-plans.js?v=2.5.0';
+import {mountDriveMemories} from './drive-memories.js?v=2.5.0';
 
 function startLogin() {
   const byId = id => document.getElementById(id);
@@ -14,13 +15,16 @@ function startLogin() {
   const greeting = byId('accountGreeting');
   const accountName = byId('accountName');
   const adminLabel = byId('adminLabel');
-  let adapter, unsubscribe, uid, planner, disposeMemories;
+  let adapter, unsubscribe, uid, planner, disposeMemories, companions;
   let starting = false, leaving = false, syncInFlight = null;
+  let syncComplete = Promise.resolve();
   let editsDuringSync = false, refreshAfterUpload = false;
   let legacyOptions = '', summaries = '';
   const plans = createPlanSync({onChange: reflectLibrary});
 
   function lock() {
+    companions?.dispose();
+    companions = null;
     disposeMemories?.();
     disposeMemories = null;
     for (const dialog of shell.querySelectorAll('dialog[open]')) dialog.close();
@@ -70,6 +74,7 @@ function startLogin() {
     if (!uid || leaving) return;
     try {
       reflectLegacyPlans();
+      companions?.refresh();
       const next = JSON.stringify(plans.list());
       if (planner && summaries !== next && !byId('savedPlanList').contains(document.activeElement)) {
         planner.renderSavedPlans();
@@ -90,8 +95,10 @@ function startLogin() {
     if (syncInFlight) {
       if (afterEdit) editsDuringSync = true;
       else if (syncInFlight === 'upload') refreshAfterUpload = true;
-      return;
+      return syncComplete;
     }
+    let finish;
+    syncComplete = new Promise(resolve => { finish = resolve; });
     syncInFlight = afterEdit ? 'upload' : 'refresh';
     byId('syncNow').disabled = true;
     try {
@@ -113,8 +120,8 @@ function startLogin() {
         const uploadOnly = !refreshAfterUpload;
         editsDuringSync = false;
         refreshAfterUpload = false;
-        void sync({afterEdit: uploadOnly});
-      }
+        try { await sync({afterEdit: uploadOnly}); } finally { finish(); }
+      } else finish();
     }
   }
 
@@ -134,14 +141,16 @@ function startLogin() {
     if (uid === user.uid) return;
     uid = user.uid;
     try {
-      const {initialiseApp} = await import('./app.js?v=2.4.0');
+      const {initialiseApp} = await import('./app.js?v=2.5.0');
       if (leaving) return;
       plans.setAccount(uid, adapter);
       status.textContent = '施設情報を読み込んでいます…';
-      const app = initialiseApp({plans, syncAfterEdit: () => sync({afterEdit: true}), refreshLibrary: () => sync()});
+      const app = initialiseApp({plans, syncAfterEdit: () => sync({afterEdit: true}), refreshLibrary: () => sync(), isSharedPlan: id => companions?.shared(id)});
       await app.ready;
       if (leaving) return;
       planner = app;
+      companions = mountCompanionPlans({container:byId('companionPlans'),adapter:adapter.companions,
+        uid,plans,planner,sync:() => sync({afterEdit:true})});
       disposeMemories = mountDriveMemories({
         getIdToken: () => adapter.albumIdToken(user.uid), isOwner: user.isOwner,
         getState: app.getState, getPark: () => app.getContext().park

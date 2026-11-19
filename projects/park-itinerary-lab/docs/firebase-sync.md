@@ -27,7 +27,11 @@ npx --yes firebase-tools@15.36.0 login
 npx --yes firebase-tools@15.36.0 deploy --only firestore:rules,firestore:indexes --project YOUR_TDROUTE_PROJECT_ID
 ```
 
-[firestore.rules](../firebase/firestore.rules) はGoogleで認証した本人に `users/{uid}/plans` 配下の読み書きだけを許可します。しおりを削除すると本文を消し、他端末に削除を伝えるための版番号と空文字だけが残ります。[firestore.indexes.json](../firebase/firestore.indexes.json) は検索に使わないしおり本文をインデックスから除外します。
+本人の保存データ `users/{uid}/plans` を読み書きできるのは、そのGoogleアカウントだけです。しおりを削除すると本文を消し、他端末に削除を伝えるための版番号と空文字だけが残ります。[firestore.indexes.json](../firebase/firestore.indexes.json) は検索に使わないしおり本文をインデックスから除外します。
+
+計画を共有すると、来園日・園・予定表・当日の体験記録を閲覧用の文書に保存します。同行者は招待されたGoogleアカウントで「同行者と計画をシェア」→「招待された計画」から開きます。招待情報はアプリに届きます。別の人の招待先一覧や費用の入力値は共有されません。写真の招待はアルバムごとに設定します。
+
+共有中の計画を開いて再計画や体験記録を行うと端末に自動保存し、同期後に同行者の予定表を更新します。招待を解除すると閲覧権限を取り消します。所有者・同行者の権限は [firestore.rules](../firebase/firestore.rules) で定義しています。
 
 ## 公開設定と動作確認
 

@@ -19,7 +19,7 @@ function doPost(e) {
     const actor = authenticate_(request.idToken);
     answer = Object.assign({ok: true}, handle_(request, actor));
   } catch (err) {
-    // Never return Google responses, emails, tokens, private IDs or exception details.
+    // Return only the public error code, never provider responses or personal data.
     answer = {ok: false, error: err && err.albumError || 'offline'};
   }
   return ContentService.createTextOutput(JSON.stringify(answer)).setMimeType(ContentService.MimeType.JSON);
@@ -58,7 +58,8 @@ function authenticate_(token) {
       !record.email || email_(record.email) !== email_(claims.email) || Number(record.validSince || 0) > claims.auth_time ||
       !(record.providerUserInfo || []).some(p => p.providerId === 'google.com')) fail_('auth');
   const uid = hash_(claims.sub);
-  return {uid, email: hash_(email_(record.email)), owner: uid === OWNER_HASH_};
+  const address = email_(record.email);
+  return {uid, email: hash_(address), address, owner: uid === OWNER_HASH_};
 }
 
 function uuid_(value) {
@@ -75,6 +76,7 @@ function prop_(store, key) {
 }
 function put_(store, key, value) { store.setProperty(key, JSON.stringify(value)); }
 function albumKey_(id) { return 'album:' + id; }
+function inviteKey_(album, member) { return 'invite-address:' + album + ':' + member; }
 function photoKey_(album, id) { return 'photo:' + album + ':' + id; }
 function allowed_(album, actor) { return !!album && (actor.owner || (!album.deleting && album.members.includes(actor.email))); }
 function participant_(store, albumId, actor) {
@@ -131,7 +133,17 @@ function handle_(request, actor) {
       .sort((a,b) => a.p.created - b.p.created || a.id.localeCompare(b.id))
       .map(({id: photoId, p}) => ({id: photoId, visitKey: p.visitKey, label: p.label, visibility: visibility_(p),
         canDelete: actor.owner || actor.uid === p.author, canSetVisibility: actor.uid === p.author}));
-    return {photos};
+    // Pre-v2.5 invitations have only an address hash. Restore their display label
+    // from the signed-in invitee once, without changing or regranting membership.
+    if (!actor.owner && !props[inviteKey_(id, actor.email)]) {
+      locked_(() => {
+        if (participant_(store, id, actor).deleting) fail_('forbidden');
+        store.setProperty(inviteKey_(id, actor.email), actor.address);
+      });
+    }
+    if (!actor.owner) return {photos};
+    const addresses = album.members.map(member => props[inviteKey_(id, member)]).filter(Boolean).sort();
+    return {photos, invitations:{addresses, unidentified:album.members.length - addresses.length}};
   }
   if (participant_(store, id, actor).deleting) fail_('conflict');
   const photoId = uuid_(request.photoId);
@@ -214,8 +226,8 @@ function manage_(store, id, request) {
     if (!album) return {};
     if (!album.deleting) put_(store, key, Object.assign({}, album, {deleting: true}));
     // Revoke app access first. Retain all original Drive files and folders, including legacy ones.
-    const prefix = photoKey_(id, '');
-    for (const k of store.getKeys().filter(k => k.startsWith(prefix))) store.deleteProperty(k);
+    const photos = photoKey_(id, ''), invitations = inviteKey_(id, '');
+    for (const k of store.getKeys().filter(k => k.startsWith(photos) || k.startsWith(invitations))) store.deleteProperty(k);
     const deleted = prop_(store, 'deleted-albums') || [];
     put_(store, 'deleted-albums', [id, ...deleted.filter(item => item !== id)].slice(0, 80));
     store.deleteProperty(key);
@@ -234,14 +246,20 @@ function manage_(store, id, request) {
     return {};
   }
   if (!album) fail_('not-found');
-  const member = hash_(email_(request.email));
+  const address = email_(request.email), member = hash_(address), label = inviteKey_(id, member);
   if (typeof request.remove !== 'boolean') fail_('invalid');
-  if (request.remove) album.members = album.members.filter(email => email !== member);
-  else if (!album.members.includes(member)) {
-    if (album.members.length >= MAX_MEMBERS_) fail_('limit');
-    album.members.push(member);
+  if (request.remove) {
+    album.members = album.members.filter(hash => hash !== member);
+    put_(store, key, album);
+    store.deleteProperty(label);
+  } else {
+    if (!album.members.includes(member)) {
+      if (album.members.length >= MAX_MEMBERS_) fail_('limit');
+      album.members.push(member);
+    }
+    store.setProperty(label, address);
+    put_(store, key, album);
   }
-  put_(store, key, album);
   return {};
 }
 

@@ -1,7 +1,7 @@
 import {
   compactSavedPlan, listSavedPlans, loadSavedPlan, MAX_SAVED_PLANS,
   newPlanId, parsePlanJson, planName, planSummary,
-} from './storage.js?v=2.4.0';
+} from './storage.js?v=2.5.0';
 
 export const PRIVATE_PLAN_PREFIX = 'tdroute:private-plans:v1:';
 const LEGACY_IMPORT_PREFIX = 'tdroute:legacy-plan-import:v1:';
@@ -108,9 +108,9 @@ export function createPlanSync({storage:providedStorage, onChange = () => {}} = 
   }
   function put(ctx, id, record) {
     const encoded = JSON.stringify(record);
-    if (encoded.length > MAX_LOCAL_LENGTH) throw Error('しおりが大きすぎます。計画JSONで保存してください。');
+    if (encoded.length > MAX_LOCAL_LENGTH) throw Error('しおりが大きすぎます。「計画ファイルを使う」から保存してください。');
     try { storage().setItem(ctx.prefix + id, encoded); }
-    catch { throw Error('端末の保存容量が足りません。しおりを計画JSONで保存してください。'); }
+    catch { throw Error('端末の保存容量が足りません。「計画ファイルを使う」から保存してください。'); }
   }
   function commit(ctx, id, previous, plan) {
     put(ctx, id, {...previous, revision:previous?.revision ?? 0, mutation:newId(), plan});

@@ -670,3 +670,74 @@ body[data-park=sea] .account-signout { color: #fff; }
   .memory-upload-fields { display:grid; grid-template-columns:minmax(0,1fr) }
 }
 @media print { #driveMemories { display:none !important } }
+
+/* In-park actions can be opened directly even before a timetable exists. */
+#workflowSchedule > #dayProgressEditor { padding:0; margin-bottom:.65rem; overflow:clip }
+.schedule-tool {
+  position:relative; display:grid; gap:.15rem; align-content:center;
+  width:100%; min-height:76px; padding:.75rem 3rem .75rem 1.2rem;
+  text-align:start; line-height:1.45; cursor:pointer; color:var(--ink);
+}
+.schedule-tool > strong { font-size:1.06rem; font-weight:750 }
+.schedule-tool > small { font-size:.82rem; color:#465b73 }
+.schedule-tool::after { position:absolute; right:1.1rem; top:50%; color:var(--accent-dark); transform:translateY(-50%) }
+#dayProgressEditor > summary { list-style:none }
+#dayProgressEditor > summary::-webkit-details-marker { display:none }
+#dayProgressEditor > summary::after { content:"＋"; font-size:1.25rem }
+#dayProgressEditor[open] > summary::after { content:"−" }
+#dayProgressEditor > .progress-content { padding:0 1.2rem 1.1rem }
+#progressDate { margin:0 }
+.album-tool { border:1px solid var(--line); border-radius:12px; background:var(--paper); margin-bottom:.9rem }
+.album-tool::after { content:"›"; font-size:1.5rem }
+.schedule-tool:focus-visible { outline:3px solid #ae7a21; outline-offset:-4px }
+.site-header .album-nav {
+  border:1px solid var(--line); border-radius:8px; color:var(--accent-dark); background:var(--paper);
+  min-height:44px; padding:5px 11px; font-weight:700; cursor:pointer;
+}
+.album-dialog {
+  width:min(44rem,calc(100% - 1.25rem)); max-height:90vh; max-height:90dvh;
+  box-sizing:border-box; border:1px solid var(--line); border-radius:16px; padding:0;
+  color:var(--ink); background:var(--paper); overscroll-behavior:contain;
+}
+.album-dialog::backdrop { background:#132137af }
+.album-dialog > header {
+  position:sticky; z-index:1; top:0; display:flex; align-items:center; justify-content:space-between;
+  gap:.75rem; padding:.8rem 1.1rem; background:var(--paper); border-bottom:1px solid var(--line);
+}
+.album-dialog > header h2 { font-size:1.25rem; margin:0 }
+.album-dialog > header button { min-height:44px }
+.album-dialog .album-body { padding:0 1.1rem 1rem }
+.album-dialog .album-body > summary { display:none }
+.album-body > p { margin:.8rem 0; color:var(--muted); font-size:.87rem }
+#memoryMembers { margin:1rem 0; padding:.85rem 1rem; border:1px solid var(--line); border-radius:12px }
+#memoryMembers h3 { margin:0; overflow-wrap:anywhere; font-size:1rem }
+#memoryRoster { list-style:none; padding:0; margin:.6rem 0 }
+#memoryRoster li { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:.5rem; padding-block:.3rem; overflow-wrap:anywhere }
+#memoryRosterNote:empty, #memoryRoster:empty { display:none }
+#memoryMembers label { max-width:24rem; font-weight:600 }
+.memory-member-actions, .plan-file-tools > div { display:flex; flex-wrap:wrap; gap:.5rem; margin:.65rem 0 }
+#memoryMembers #memoryDeleteAlbum { color:#7e3741; margin-top:.2rem }
+.plan-file-tools { margin-top:1rem; border-top:1px solid var(--line) }
+.plan-file-tools > summary { cursor:pointer; min-height:44px; padding-block:.6rem; font-size:.85rem }
+.plan-file-tools .small-button { min-height:44px }
+@media(max-width:540px) {
+  .workspace-tools { grid-template-columns:repeat(3,minmax(0,1fr)) }
+  .album-dialog > header { padding:.6rem .85rem }
+  .album-dialog .album-body { padding:0 .85rem .75rem }
+}
+@media print { .album-dialog, .album-tool { display:none !important } }
+#companionPanel { margin-block:.75rem 1rem; padding:.75rem 1rem }
+#companionPanel > summary { cursor:pointer; min-height:44px; align-content:center; color:var(--accent-dark); font-weight:700 }
+#companionPanel h3 { margin:1rem 0 .4rem; font-size:1rem }
+#companionPanel label { display:grid; gap:.25rem; width:min(100%,28rem); font-size:.9rem; font-weight:600 }
+#companionPanel :is(input,select,button) { min-width:0; max-width:100%; min-height:44px; border:1px solid var(--line); border-radius:7px; padding:.4rem .65rem; color:var(--ink); background:var(--paper) }
+#companionPanel button { cursor:pointer; font-weight:650; color:var(--accent-dark) }
+#companionPanel button:disabled { opacity:.6; cursor:default }
+#tripManage:not([hidden]) { display:flex; align-items:end; flex-wrap:wrap; gap:.5rem; margin:.65rem 0 }
+#tripGuests { flex:1 0 100%; margin:0; padding:0; list-style:none }
+#tripGuests li { display:flex; flex-wrap:wrap; align-items:center; gap:.6rem; padding-block:.2rem; overflow-wrap:anywhere }
+#companionPanel p[role=status] { margin:.45rem 0; color:var(--muted); font-size:.85rem }
+#tripTimetable { overflow-wrap:anywhere }
+#tripTimetable ol { padding-left:1.7rem }
+#tripTimetable ol li { padding:.45rem .15rem; border-bottom:1px solid var(--line) }
+@media print { #companionPlans { display:none !important } }
