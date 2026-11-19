@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {encodeJoint,decodeJoint,jointEditor} from '../web/joint-planning.js';
+import {planOptions} from '../web/companion-plans.js';
 import {companionEmail, companionStore, timetablePayload} from '../web/companion-view.js';
 
 const id = 'sample';
@@ -78,4 +80,112 @@ test('a stale/cached or signed-out snapshot is never shown as fresh', async () =
   send(snap(false)); assert.equal(received[1].name,plan.name);
   signOut(); send(snap(false)); assert.equal(received.length,2); assert.equal(errors.length,1);
   close(); send(snap(false)); assert.equal(watchers.size,0); assert.equal(errors.length,1);
+});
+
+
+const sharedTrip = {parkId:'sea',settings:{date:'2026-11-19',entry:540,exit:1200,speed:70,budget:12000,
+  paidBy:'hidden',spentBudget:1300,purchases:[{receipt:'hidden'}],history:[{wait:30}],waitModel:{raw:'hidden'},
+  selections:[{id:'sea-example',weight:4,manualWait:123,dpaPurchasedAt:581,personalNote:'hidden'}]},
+  result:{status:'feasible',rows:[{kind:'activity',name:'体験',start:600,end:610,privateMemo:'hidden'}],
+    diagnostics:{notes:['hidden']},totals:{finish:610,unrelatedPrivate:'hidden'}},
+  history:[{wait:17}],parkStates:{land:{memo:'hidden'}}};
+
+test('joint drafts use a nested allowlist even for older imported plans; the original backup is unchanged',()=>{
+  const before = JSON.stringify(sharedTrip);
+  const draft = encodeJoint(sharedTrip);
+  assert.equal(JSON.stringify(sharedTrip),before);
+  assert.doesNotMatch(draft,/hidden|manualWait|spentBudget|history|waitModel|dpaPurchasedAt|privateMemo|receipt|paidBy|parkStates/);
+  const clean = decodeJoint({revision:4,draft});
+  assert.deepEqual(clean.state.settings.selections,[{id:'sea-example',weight:4}]);
+  assert.equal(clean.state.result.rows[0].name,'体験'); assert.equal(clean.revision,4);
+  assert.throws(()=>decodeJoint({revision:0,draft}));
+});
+
+test('viewer promotion seeds one independent workspace, concurrent editors cannot overwrite, and personal saves do not reset it',async()=>{
+  const {db,store,sdk,tx,owner} = fixture();
+  const original = {...plan,state:structuredClone(sharedTrip)};
+  db.set('users/creator/plans/sample',{revision:1,payload:JSON.stringify(original)});
+  const guest = 'another@example.jp', name=original.name;
+  await store.changeMember(owner,id,email,true);
+  assert.equal(db.has('users/creator/liveWorkspaces/sample'),false);
+  await store.changeMember(owner,id,email,true,'editor');
+  const workspace='users/creator/liveWorkspaces/sample', view='users/creator/liveTimetables/sample';
+  const ref={owner,planId:id,name}, draft=decodeJoint(db.get(workspace));
+  assert.equal(draft.revision,1); draft.state.settings.exit=1205;
+  assert.deepEqual(await store.commitWorkspace(owner,ref,1,draft.state),{ok:true,revision:2});
+  assert.equal((await store.commitWorkspace(owner,ref,1,original.state)).ok,false);
+  assert.equal(decodeJoint(db.get(workspace)).state.settings.exit,1205);
+  assert.equal(db.get(view).view,db.get(workspace).view);
+  await store.changeMember(owner,id,guest,true);
+  const privateView=structuredClone(original); privateView.state.settings.exit=1260;
+  await store.updateSharedCopy(sdk,db,tx,owner,id,original,privateView);
+  assert.equal(decodeJoint(db.get(workspace)).state.settings.exit,1205);
+  assert.equal(db.get(view).view,db.get(workspace).view);
+  await store.changeMember(owner,id,email,true,'viewer');
+  assert.equal(db.get('tripInboxes/'+email+'/invitations/creator~sample').role,undefined);
+  assert.deepEqual(db.get('users/creator/liveEditors/sample').members,[]);
+  await store.changeMember(owner,id,email,false);
+  await store.changeMember(owner,id,guest,false);
+  assert.deepEqual(db.get('users/creator/livePlanAudiences/sample'),{members:[]});
+  assert.deepEqual(db.get('users/creator/liveEditors/sample'),{members:[]});
+  assert.equal(decodeJoint(db.get(workspace)).state.settings.exit,1205);
+  await store.changeMember(owner,id,email,true,'editor');
+  assert.equal(decodeJoint(db.get(workspace)).revision,2);
+  await store.changeMember(owner,id,email,false);
+  assert.equal(db.get(view).view,db.get(workspace).view);
+  await store.updateSharedCopy(sdk,db,tx,owner,id,original,null);
+  assert.equal(db.size,1);
+});
+
+test('owner and inbox pickers distinguish only repeated names without exposing accounts',()=>{
+  assert.deepEqual(planOptions([['owner2~plan','夏休み'],['solo','遠足'],['owner1~plan','夏休み']]),
+    [['owner2~plan','夏休み（2）'],['solo','遠足'],['owner1~plan','夏休み（1）']]);
+});
+
+test('the editor reconciles newer changes before a save acknowledgement and confirms changes of plan',async t=>{
+  const nodes = new Map(), box = new EventTarget();
+  box.querySelector = selector => {
+    if (!nodes.has(selector)) nodes.set(selector,new EventTarget());
+    return nodes.get(selector);
+  };
+  box.scrollIntoView = box.remove = ()=>{};
+  const page = new EventTarget(), browser = new EventTarget();
+  page.hidden = false; page.createElement = ()=>box;
+  let allowClose = false, confirms = 0;
+  browser.confirm = ()=>{confirms++;return allowClose;};
+  for (const [key,value] of [['document',page],['window',browser],['navigator',{onLine:true}]]) {
+    const original = Object.getOwnPropertyDescriptor(globalThis,key);
+    Object.defineProperty(globalThis,key,{configurable:true,value});
+    t.after(()=>{if (original) Object.defineProperty(globalThis,key,original); else delete globalThis[key];});
+  }
+  let state, deliver, acknowledge;
+  const adapter = {
+    watchWorkspace(_uid,_invite,fn){ deliver=fn;return ()=>{}; },
+    commitWorkspace(){return new Promise(resolve=>{acknowledge=resolve;});}
+  };
+  const planner = {openJoint(value){state=structuredClone(value);},captureJoint(){return state;},
+    leaveJoint(){state=null;},jointBusy(){return false;}};
+  const editor = jointEditor({container:{append(){}},adapter,uid:'owner',planner,notice(){}});
+  t.after(()=>editor.dispose());
+  const record = revision => {
+    const draft = decodeJoint({revision,draft:encodeJoint(sharedTrip)});
+    draft.state.settings.exit = 1200+revision;
+    return draft;
+  };
+  editor.open({owner:'owner',planId:'A',name:'共同計画'});
+  deliver(record(1)); state.settings.exit = 1202;
+  const publish = nodes.get('#jointCommit');
+  publish.dispatchEvent(new Event('click'));
+  assert.ok(acknowledge);
+  deliver(record(3)); // A later save is already visible while our acknowledgement is in flight.
+  acknowledge({ok:true,revision:2}); await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(state.settings.exit,1203);
+  deliver(record(2)); assert.equal(state.settings.exit,1203);
+  assert.equal(publish.disabled,false);
+  state.settings.exit = 1204;
+  assert.equal(editor.select('owner','A'),true); assert.equal(confirms,0);
+  assert.equal(editor.select('otherOwner','A'),false); assert.equal(confirms,1);
+  assert.equal(state.settings.exit,1204);
+  allowClose=true;assert.equal(editor.select('owner','B'),true);
+  assert.equal(confirms,2);assert.equal(state,null);assert.equal(box.hidden,true);
 });

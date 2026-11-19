@@ -23,6 +23,22 @@ service cloud.firestore {
     function invitationPath(email, uid, planId) {
       return /databases/$(database)/documents/tripInboxes/$(email)/invitations/$(uid + '~' + planId);
     }
+    function editorsPath(uid, planId) {
+      return /databases/$(database)/documents/users/$(uid)/liveEditors/$(planId);
+    }
+    function workspacePath(uid, planId) {
+      return /databases/$(database)/documents/users/$(uid)/liveWorkspaces/$(planId);
+    }
+    function viewer(email, uid, planId) {
+      return exists(invitationPath(email, uid, planId))
+        && email in get(audiencePath(uid, planId)).data.members
+        && get(planPath(uid, planId)).data.payload != '';
+    }
+    function editor(uid, planId) {
+      return verifiedGoogleEmail() && viewer(emailOfViewer(), uid, planId)
+        && get(invitationPath(emailOfViewer(), uid, planId)).data.get('role', 'viewer') == 'editor'
+        && emailOfViewer() in get(editorsPath(uid, planId)).data.members;
+    }
     match /users/{uid}/plans/{planId} {
       function validVersion(expectedRevision) {
         let fields = request.resource.data;
@@ -40,42 +56,62 @@ service cloud.firestore {
     }
 
     // 招待先一覧は計画の所有者だけが管理・閲覧する。
+    function validAudience() {
+      let data = request.resource.data;
+      let members = data.members;
+      let joined = members.join('/');
+      let email = '[^/@\\s]+@[^/@\\s]+[.][^/@\\s]+';
+      return data.keys().hasOnly(['members']) && members is list && members.size() <= 12
+        && members.toSet().size() == members.size()
+        && (members.size() == 0 || (joined.lower() == joined && joined.split('/') == members
+          && joined.matches(email + '(/' + email + ')*')));
+    }
     match /users/{uid}/livePlanAudiences/{planId} {
-      function validAudience() {
-        let data = request.resource.data;
-        let members = data.members;
-        let joined = members.join('/');
-        let email = '[^/@\\s]+@[^/@\\s]+[.][^/@\\s]+';
-        return data.keys().hasOnly(['members']) && members is list && members.size() <= 12
-          && members.toSet().size() == members.size()
-          && (members.size() == 0 || (joined.lower() == joined && joined.split('/') == members
-            && joined.matches(email + '(/' + email + ')*')));
-      }
       allow get, list, delete: if owner(uid);
       allow create, update: if owner(uid) && validAudience();
     }
 
     // 同行者に送る予定表には元の計画とは独立した文書を使う。
     match /users/{uid}/liveTimetables/{planId} {
-      function invited(email) {
-        return exists(invitationPath(email, uid, planId))
-          && email in get(audiencePath(uid, planId)).data.members
-          && get(planPath(uid, planId)).data.payload != '';
-      }
       function validTimetable() {
         let data = request.resource.data;
         return data.keys().hasOnly(['view']) && data.view is string && data.view.toUtf8().size() <= 140000;
       }
-      allow get: if owner(uid) || (verifiedGoogleEmail() && invited(emailOfViewer()));
+      allow get: if owner(uid) || (verifiedGoogleEmail() && viewer(emailOfViewer(), uid, planId));
       allow create, update: if owner(uid) && validTimetable();
+      allow update: if editor(uid, planId) && validTimetable()
+        && getAfter(workspacePath(uid, planId)).data.view == request.resource.data.view
+        && getAfter(workspacePath(uid, planId)).data.revision == get(workspacePath(uid, planId)).data.revision + 1;
+      allow delete: if owner(uid);
+    }
+
+    // Editing rights are separate from viewing rights. Other invitees cannot enumerate this list.
+    match /users/{uid}/liveEditors/{planId} {
+      allow get, list, delete: if owner(uid);
+      allow create, update: if owner(uid) && validAudience()
+        && getAfter(audiencePath(uid, planId)).data.members.toSet().hasAll(request.resource.data.members);
+    }
+    match /users/{uid}/liveWorkspaces/{planId} {
+      function validWorkspace(revision) {
+        let fields = request.resource.data;
+        return fields.keys().hasOnly(['revision','draft','view']) && fields.revision is int
+          && fields.revision == revision && fields.draft is string && fields.draft.toUtf8().size() <= 650000
+          && fields.view is string && fields.view.toUtf8().size() <= 140000;
+      }
+      allow get: if owner(uid) || editor(uid, planId);
+      allow create: if owner(uid) && validWorkspace(1) && getAfter(planPath(uid, planId)).data.payload != '';
+      allow update: if (owner(uid) || editor(uid, planId)) && validWorkspace(resource.data.revision + 1)
+        && getAfter(/databases/$(database)/documents/users/$(uid)/liveTimetables/$(planId)).data.view == request.resource.data.view;
       allow delete: if owner(uid);
     }
 
     match /tripInboxes/{email}/invitations/{key} {
       function validInvitation() {
         let data = request.resource.data;
-        return data.keys().hasOnly(['owner', 'planId', 'name']) && owner(data.owner)
+        return data.keys().hasOnly(['owner', 'planId', 'name', 'role']) && owner(data.owner)
           && data.planId is string && data.planId.matches('[A-Za-z0-9][A-Za-z0-9_.:-]{0,99}')
+          && (data.get('role','viewer') == 'viewer' || (data.role == 'editor'
+            && email in getAfter(editorsPath(data.owner, data.planId)).data.members))
           && key == data.owner + '~' + data.planId && data.name is string && data.name.size() > 0 && data.name.size() <= 80
           && email.size() <= 254 && email == email.lower() && email.matches('[^/@\\s]+@[^/@\\s]+[.][^/@\\s]+')
           && email in getAfter(audiencePath(data.owner, data.planId)).data.members

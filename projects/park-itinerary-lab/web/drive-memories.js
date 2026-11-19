@@ -1,4 +1,4 @@
-import {baseVisitId, isRepeatVisit} from './repeat-visits.js?v=2.5.0';
+import {baseVisitId, isRepeatVisit} from './repeat-visits.js?v=2.6.0';
 
 const MEMORIES_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwfjkYRgpGxZl7PlUazqT9vMS0BACICgo__EigzhXwqX9enley0_ZPJRgJYTyp0o9jp/exec';
 const DEPLOYMENT = /^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_-]+\/exec$/;
@@ -10,7 +10,7 @@ const errorText = {
   'not-found':'アルバムまたは写真が見つかりません。', invalid:'入力内容を確認してください。',
   limit:'アルバムの上限に達しました。', busy:'混み合っています。少し待ってから再度お試しください。',
   offline:'接続できません。通信状況を確認して、もう一度お試しください。',
-  version:'公開範囲を確認できないため、アルバムを開けません。',
+  version:'保存先と公開範囲を確認できないため、アルバムを開けません。',
   conflict:'内容が変更されました。アルバムを更新してください。',
   file:'この写真を読み込めません。JPEG または PNG 形式でお試しください。',
   size:'写真が大きすぎます。小さくしてから選び直してください。'
@@ -33,7 +33,7 @@ export function makeAlbumClient(endpoint, getIdToken, send = fetch) {
     const body = await response.json();
     assertActive(signal);
     if (body?.ok !== true) throw failure(Object.hasOwn(errorText, body?.error) ? body.error : 'offline');
-    if (action === 'albums' && body.visibilityVersion !== 1) throw failure('version');
+    if (action === 'albums' && (body.visibilityVersion !== 1 || body.albumVersion !== 2)) throw failure('version');
     return body;
   };
 }
@@ -125,7 +125,7 @@ function button(title, onClick) {
   return el;
 }
 
-export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
+export function mountDriveMemories({getIdToken, getState, getPark}) {
   if (!MEMORIES_ENDPOINT) return;
   const request = makeAlbumClient(MEMORIES_ENDPOINT, getIdToken);
   const panel = document.getElementById('driveMemories');
@@ -135,7 +135,10 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
   const preview = el('Preview');
   const life = new AbortController();
   const listen = (target,type,fn) => target.addEventListener(type,fn,{signal:life.signal});
-  let active = null, albums = [], uploadDraft, albumDraft, refreshTimer;
+  let active = null, albums = [], hiddenAlbums = [], uploadDraft, albumDraft, refreshTimer;
+  let kind = 'private', pickedKind = false, pickerSignature, peopleSignature;
+  const lastAlbum = {private:'',shared:''};
+  const currentAlbum = () => albums.find(a => a.id === el('Album').value && a.kind === kind);
   let backgroundRequest, visiblePhoto, renderedGallery, displayedRoster, canArchive = false;
   function clearPreview() {
     visiblePhoto = null;
@@ -151,19 +154,30 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
     el('Photos').replaceChildren();
     clearRoster();
     el('Visit').replaceChildren();
-    el('File').value = el('Email').value = '';
+    el('File').value = el('Email').value = el('InviteAlias').value = el('Alias').value = '';
+    peopleSignature = null;
+    el('Participants').replaceChildren();
+    el('People').hidden = el('HideAlbum').hidden = el('DeleteAlbum').hidden = true;
     el('Visibility').value = 'private';
     el('Members').hidden = el('Edit').hidden = true;
     uploadDraft = null;
+  }
+  function clearPicker() {
+    albums = [];
+    hiddenAlbums = [];
+    pickerSignature = null;
+    canArchive = false;
+    el('Create').hidden = el('Hidden').hidden = true;
+    el('Album').replaceChildren();
+    el('HiddenAlbums').replaceChildren();
+    el('PersonalCount').textContent = el('GroupCount').textContent = '';
   }
   function reset() {
     clearTimeout(refreshTimer);
     active?.abort();
     active = null;
     clearAlbum();
-    albums = [];
-    canArchive = false;
-    el('Album').replaceChildren();
+    clearPicker();
     el('Title').value = el('Status').textContent = '';
     el('Controls').disabled = false;
     albumDraft = null;
@@ -214,9 +228,7 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
       clearPreview();
       if (['auth','forbidden','not-found','version'].includes(error.code)) {
         clearAlbum();
-        albums = [];
-        el('Album').replaceChildren();
-        if (error.code === 'version') el('Create').hidden = true;
+        clearPicker();
       }
       el('Status').textContent = errorText[error.code] || errorText.offline;
     } finally {
@@ -233,7 +245,8 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
     const album = albums.find(a => a.id === albumId);
     return album && window.confirm('「' + label + '」を「' + album.title + '」のメンバーに共有しますか？');
   }
-  function photoRow(albumId,photo,title) {
+  function photoRow(album,photo,title) {
+    const albumId = album.id;
     const li = document.createElement('li');
     li.append(button(title + ' を見る', () => run(async s => {
       clearPreview();
@@ -248,7 +261,7 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
       preview.hidden = false;
       requestAnimationFrame(() => { if (!preview.hidden) el('CloseImage').focus(); });
     })));
-    if (photo.canSetVisibility) {
+    if (album.kind === 'shared' && photo.canSetVisibility) {
       const label = document.createElement('label');
       label.textContent = 'この写真の公開範囲';
       const select = document.createElement('select');
@@ -281,7 +294,7 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
       li.append(label);
     } else {
       const status = document.createElement('span');
-      status.textContent = 'メンバーに共有中';
+      status.textContent = album.kind === 'private' ? '自分だけ' : 'メンバーに共有中';
       li.append(status);
     }
     if (canArchive && photo.canDelete === true) li.append(button('写真を削除', () => {
@@ -302,7 +315,9 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
   async function listPhotos(albumId, signal) {
     const result = await request('list',{albumId},signal);
     assertActive(signal);
-    const photos = result.photos.filter(canViewPhoto);
+    const album = currentAlbum();
+    if (album?.id !== albumId) return '';
+    const photos = result.photos.filter(p => canViewPhoto(p) && (album.kind === 'shared' || p.visibility === 'private'));
     if (visiblePhoto && (visiblePhoto.albumId !== albumId || !photos.some(p => p.id === visiblePhoto.id))) clearPreview();
     // Leave the open photo, focused button and file picker alone when the album has not changed.
     const gallery = JSON.stringify([albumId,canArchive,photos.map(p => [p.id,p.label,p.canDelete,p.visibility,p.canSetVisibility])]);
@@ -313,33 +328,114 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
         const index = (seen.get(photo.label) || 0) + 1;
         seen.set(photo.label,index);
         const title = counts.get(photo.label) > 1 ? photo.label + '（写真' + index + '）' : photo.label;
-        return photoRow(albumId,photo,title);
+        return photoRow(album,photo,title);
       });
       el('Photos').replaceChildren(...rows);
       renderedGallery = gallery;
     }
     el('Edit').hidden = false;
-    const album = albums.find(a => a.id === albumId);
-    el('Members').hidden = !album?.owner;
-    if (album?.owner) showRoster(album, result.invitations);
-    el('DeleteAlbum').hidden = !canArchive;
+    const shared = album.kind === 'shared';
+    el('VisibilityField').hidden = !shared;
+    el('People').hidden = !shared;
+    if (shared) showPeople(album, result.participants);
+    el('Members').hidden = !(shared && album.owner);
+    if (shared && album.owner) showRoster(album, result.invitations);
+    el('DeleteAlbum').hidden = !canArchive || shared || !album.owner;
+    el('HideAlbum').hidden = !canArchive || !shared;
     visitOptions();
     return photos.length ? photos.length + '枚の写真' : '写真はまだありません。';
+  }
+  function albumOptions(entries) {
+    const titles = new Set(), duplicates = new Set();
+    for (const a of entries) {
+      if (titles.has(a.title)) duplicates.add(a.title);
+      titles.add(a.title);
+    }
+    const groups = new Map();
+    for (const album of entries) {
+      const label = album.owner ? '自分が作成' : '招待されたアルバム';
+      if (!groups.has(label)) {
+        const group = document.createElement('optgroup');
+        group.label = label;
+        groups.set(label,group);
+      }
+      const title = duplicates.has(album.title) ? album.title + '（' + album.id.slice(-6) + '）' : album.title;
+      groups.get(label).append(new Option(title,album.id));
+    }
+    return groups.values();
+  }
+  function renderPicker() {
+    const signature = JSON.stringify([kind,albums,hiddenAlbums]);
+    if (signature === pickerSignature) return;
+    pickerSignature = signature;
+    const entries = albums.filter(a => a.kind === kind);
+    el('PersonalCount').textContent = String(albums.filter(a => a.kind === 'private').length);
+    el('GroupCount').textContent = String(albums.filter(a => a.kind === 'shared').length);
+    const personal = kind === 'private';
+    const tab = personal ? el('PersonalTab') : el('GroupTab');
+    for (const item of [el('PersonalTab'),el('GroupTab')]) {
+      item.setAttribute('aria-selected', String(item === tab));
+      item.tabIndex = item === tab ? 0 : -1;
+    }
+    el('TabPanel').setAttribute('aria-labelledby',tab.id);
+    el('CreateButton').textContent = personal ? '自分だけのアルバムを作る' : '共有アルバムを作る';
+    el('Album').replaceChildren(...albumOptions(entries));
+    if (!entries.length) el('Album').add(new Option('アルバムはまだありません',''));
+    el('Album').disabled = !entries.length;
+    const oldHidden = el('HiddenAlbums').value;
+    el('HiddenAlbums').replaceChildren(...albumOptions(hiddenAlbums));
+    if (hiddenAlbums.some(a => a.id === oldHidden)) el('HiddenAlbums').value = oldHidden;
+    el('Hidden').hidden = personal || !hiddenAlbums.length;
+  }
+  async function selectAlbum(signal, preferred, previous) {
+    renderPicker();
+    const chooser = el('Album');
+    if (albums.some(a => a.kind === kind && a.id === preferred)) chooser.value = preferred;
+    const id = chooser.value;
+    if (!id || id !== previous) clearAlbum();
+    lastAlbum[kind] = id;
+    if (!id) return 'この種類のアルバムはまだありません。';
+    return await listPhotos(id,signal);
   }
   async function readAlbums(signal, preferred) {
     const result = await request('albums',{},signal);
     assertActive(signal);
-    el('Create').hidden = !isOwner;
+    const valid = a => a && UUID.test(a.id) && typeof a.title === 'string' && typeof a.owner === 'boolean' &&
+      (a.kind === 'shared' || (a.kind === 'private' && a.owner));
+    if (!Array.isArray(result.albums) || !Array.isArray(result.hiddenAlbums) ||
+        !result.albums.every(valid) || !result.hiddenAlbums.every(a => valid(a) && a.kind === 'shared')) throw failure('version');
+    const previous = el('Album').value;
     canArchive = result.archiveVersion === 1;
-    albums = result.albums.filter(a => UUID.test(a.id) && typeof a.title === 'string');
-    const chooser = el('Album'), previouslyShown = chooser.value;
-    if (chooser.length !== albums.length || albums.some((a,i) => a.id !== chooser.options[i].value || a.title !== chooser.options[i].text))
-      chooser.replaceChildren(...albums.map(a => new Option(a.title,a.id)));
-    if (chooser.value !== preferred && albums.some(a => a.id === preferred)) chooser.value = preferred;
-    const id = chooser.value;
-    if (!id) {clearAlbum(); return '開けるアルバムはまだありません。';}
-    if (id !== previouslyShown) clearAlbum();
-    return await listPhotos(id,signal);
+    albums = result.albums;
+    hiddenAlbums = result.hiddenAlbums;
+    if (!pickedKind && (albums.length || hiddenAlbums.length)) {
+      kind = albums.some(a => a.kind === 'private') ? 'private' : 'shared';
+      pickedKind = true;
+    }
+    el('Create').hidden = false;
+    return await selectAlbum(signal, preferred || lastAlbum[kind], previous);
+  }
+  function chooseKind(next) {
+    if (el('Create').hidden) return;
+    pickedKind = true;
+    if (next === kind) return;
+    kind = next;
+    pickerSignature = null;
+    albumDraft = null;
+    el('Title').value = '';
+    clearAlbum();
+    void run(s => selectAlbum(s,lastAlbum[kind],''));
+  }
+  for (const [id,next] of [['PersonalTab','private'],['GroupTab','shared']]) {
+    const tab = el(id);
+    listen(tab,'click',() => chooseKind(next));
+    listen(tab,'keydown',event => {
+      if (!['ArrowLeft','ArrowRight','Home','End'].includes(event.key)) return;
+      event.preventDefault();
+      const personal = event.key === 'Home' || (event.key !== 'End' && kind === 'shared');
+      (personal ? el('PersonalTab') : el('GroupTab')).focus();
+      chooseKind(personal ? 'private' : 'shared');
+    });
   }
   function refresh(background = false) {
     if (!navigator.onLine) { reset(); el('Status').textContent = errorText.offline; return; }
@@ -349,27 +445,49 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
   listen(el('Refresh'),'click',() => refresh());
   listen(el('Album'),'change',() => {
     clearAlbum();
-    void run(s => listPhotos(el('Album').value,s));
+    const album = currentAlbum();
+    if (album) {
+      lastAlbum[kind] = album.id;
+      void run(s => listPhotos(album.id,s));
+    }
   });
   listen(el('CloseImage'),'click',() => {
     const openButton = preview.closest('li')?.querySelector('button');
     clearPreview();
     openButton?.focus();
   });
-  listen(el('DeleteAlbum'),'click',() => {
-    const album = albums.find(a => a.id === el('Album').value && a.owner);
-    if (!canArchive || !album || !window.confirm('「' + album.title + '」と中の写真を全員のアプリから削除しますか？ 保存済みの画像ファイルは残ります。')) return;
+  function dismissAlbum(expectedKind) {
+    const album = currentAlbum();
+    if (!canArchive || album?.kind !== expectedKind) return;
+    const shared = album.kind === 'shared';
+    const title = el('Album').selectedOptions[0].text;
+    const question = shared ? '「' + title + '」を自分の一覧から外しますか？ 他のメンバーは引き続き使えます。' :
+      '「' + title + '」と中の写真をアプリから削除しますか？ 保存済みの画像ファイルは残ります。';
+    if (!window.confirm(question)) return;
     void run(async s => {
-      await request('archiveAlbum',{albumId:album.id},s);
       clearAlbum();
+      await request('dismissAlbum',{albumId:album.id},s);
       await readAlbums(s);
-      return 'アルバムをアプリから削除しました。';
+      return shared ? '自分の一覧から外しました。' : 'アルバムをアプリから削除しました。';
+    });
+  }
+  listen(el('DeleteAlbum'),'click',() => dismissAlbum('private'));
+  listen(el('HideAlbum'),'click',() => dismissAlbum('shared'));
+  listen(el('RestoreAlbum'),'click',() => {
+    const albumId = el('HiddenAlbums').value;
+    if (kind !== 'shared' || !hiddenAlbums.some(a => a.id === albumId)) return;
+    void run(async s => {
+      await request('restoreAlbum',{albumId},s);
+      await readAlbums(s,albumId);
+      return '自分の一覧に戻しました。';
     });
   });
   listen(el('CreateButton'),'click',() => {
     const title = el('Title').value.trim();
     if (!title) { el('Title').focus(); return; }
-    if (albumDraft?.title !== title) albumDraft = {albumId:crypto.randomUUID(),title};
+    if (el('Create').hidden) return;
+    pickedKind = true;
+    if (albumDraft?.title !== title || albumDraft.kind !== kind) albumDraft = {albumId:crypto.randomUUID(),title,kind};
     void run(async s => {
       const draft = albumDraft;
       await request('create',draft,s);
@@ -377,6 +495,35 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
       el('Title').value = '';
       albumDraft = null;
       return 'アルバムを作りました。';
+    });
+  });
+  function showPeople(album, participants) {
+    const people = Array.isArray(participants) ? participants.filter(p => p && typeof p.label === 'string' &&
+      ['creator','member'].includes(p.role) && typeof p.self === 'boolean') : [];
+    const signature = JSON.stringify([album.id,people]);
+    if (signature === peopleSignature) return;
+    peopleSignature = signature;
+    const rows = people.map(p => {
+      const li = document.createElement('li');
+      li.append(document.createTextNode(p.label));
+      const tags = [p.role === 'creator' && p.label !== '作成者' && '作成者',p.self && '自分'].filter(Boolean);
+      if (tags.length) {
+        const role = document.createElement('small');
+        role.textContent = tags.join('・');
+        li.append(role);
+      }
+      return li;
+    });
+    el('Participants').replaceChildren(...rows);
+  }
+  listen(el('SetAlias'),'click',() => {
+    const album = currentAlbum(), alias = el('Alias').value.trim();
+    if (album?.kind !== 'shared' || !el('Alias').reportValidity()) return;
+    void run(async s => {
+      await request('setAlbumAlias',{albumId:album.id,alias},s);
+      await listPhotos(album.id,s);
+      el('Alias').value = '';
+      return alias ? 'このアルバムでの呼び名を保存しました。' : 'このアルバムでの呼び名を元に戻しました。';
     });
   });
   function clearRoster() {
@@ -412,12 +559,15 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
     }
   }
   function changeMember(album, email, remove) {
-    if (!album?.owner || album.id !== el('Album').value) return;
-    if (remove && !window.confirm('「' + album.title + '」の ' + email + ' への招待を取り消しますか？')) return;
+    if (!album?.owner || album.kind !== 'shared' || album.id !== currentAlbum()?.id) return;
+    const title = el('Album').selectedOptions[0].text;
+    if (remove && !window.confirm('「' + title + '」の ' + email + ' への招待を取り消しますか？')) return;
+    if (!remove && !el('InviteAlias').reportValidity()) return;
+    const alias = remove ? '' : el('InviteAlias').value.trim();
     void run(async s => {
-      await request('member',{albumId:album.id,email,remove},s);
+      await request('member',{albumId:album.id,email,remove,...(alias ? {alias} : {})},s);
       assertActive(s);
-      if (el('Email').value.trim() === email) el('Email').value = '';
+      if (el('Email').value.trim() === email) el('Email').value = el('InviteAlias').value = '';
       await listPhotos(album.id,s);
       return remove ? '招待を取り消しました。' : '「' + album.title + '」に招待しました。友達にTDRouteのリンクを知らせてください。';
     });
@@ -426,7 +576,7 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
     listen(el(id),'click',() => {
       const field = el('Email'), email = field.value.trim();
       if (!email || !field.reportValidity()) { field.focus(); return; }
-      changeMember(albums.find(a => a.id === el('Album').value),email,remove);
+      changeMember(currentAlbum(),email,remove);
     });
   }
   listen(el('Visit'),'focus',visitOptions);
@@ -438,7 +588,9 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
     const file = el('File').files[0], albumId = el('Album').value, key = el('Visit').value;
     const visit = visitOptions().find(v => v.visitKey === key);
     if (!visit || !file) { el('Status').textContent = 'しおりの体験と写真を選んでください。'; return; }
-    const visibility = el('Visibility').value;
+    const album = currentAlbum();
+    if (!album) return;
+    const visibility = album.kind === 'private' ? 'private' : el('Visibility').value;
     if (visibility !== 'private' && (visibility !== 'album' || !confirmShare(albumId,visit.label))) return;
     if (!uploadDraft || uploadDraft.visitKey !== key || uploadDraft.file !== file || uploadDraft.albumId !== albumId)
       uploadDraft = {file,albumId,visitKey:key,id:crypto.randomUUID()};
@@ -464,6 +616,9 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
     clearPreview();
     el('Photos').replaceChildren();
     clearRoster();
+    peopleSignature = null;
+    el('Participants').replaceChildren();
+    el('People').hidden = true;
     renderedGallery = null;
     el('Edit').hidden = el('Members').hidden = true;
     el('Controls').disabled = true;

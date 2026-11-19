@@ -1,22 +1,22 @@
-import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, createVisitOutlook, prepareLiveForReplan } from './wait-data.js?v=2.5.0';
-export {prepareWeatherForVisit as prepareWeatherForPlan} from './wait-data.js?v=2.5.0';
-import {visitDayDetails} from './visit-day-view.js?v=2.5.0';
-import {createForecastCalendar} from './forecast-calendar.js?v=2.5.0';
-import {calendarDayOutlook, calendarDayPreview, CROWD_LABELS} from './calendar-outlook.js?v=2.5.0';
+import { initialiseExternalData, fetchPublishedCatalogue, fetchPublishedCalendar, createVisitOutlook, prepareLiveForReplan } from './wait-data.js?v=2.6.0';
+export {prepareWeatherForVisit as prepareWeatherForPlan} from './wait-data.js?v=2.6.0';
+import {visitDayDetails} from './visit-day-view.js?v=2.6.0';
+import {createForecastCalendar} from './forecast-calendar.js?v=2.6.0';
+import {calendarDayOutlook, calendarDayPreview, CROWD_LABELS} from './calendar-outlook.js?v=2.6.0';
 import {WISH_PRESETS, presetFacilities, presetStartsPlan, addPresetWishes} from './wishlist-presets.js';
 import {attachItineraryImage} from './itinerary-image.js';
 import {attachOnsiteNavigation} from './onsite-navigation.js';
-import {attachDayProgress} from './day-progress-ui.js?v=2.5.0';
+import {attachDayProgress} from './day-progress-ui.js?v=2.6.0';
 import {baseVisitId, repeatVisitId, isRepeatVisit, expandRepeatVisits, resolveDpaVisit} from './repeat-visits.js';
-import { restsBesideFood, settledReplanWishes } from './planner.js?v=2.5.0';
-import { enhanceTimeInputs, parkTimeBounds, clampClock } from './time-input.js?v=2.5.0';
-import { estimateParkCrowd } from './wait-model.js?v=2.5.0';
-import { warmCalendarWeather, weatherForMinute } from './weather.js?v=2.5.0';
-import { forecastCardHtml, forecastSourcesHtml, visitWeatherSummary } from './weather-view.js?v=2.5.0';
-import { activityAvailable, operationPauseInfo } from './operation-windows.js?v=2.5.0';
+import { restsBesideFood, settledReplanWishes } from './planner.js?v=2.6.0';
+import { enhanceTimeInputs, parkTimeBounds, clampClock } from './time-input.js?v=2.6.0';
+import { estimateParkCrowd } from './wait-model.js?v=2.6.0';
+import { warmCalendarWeather, weatherForMinute } from './weather.js?v=2.6.0';
+import { forecastCardHtml, forecastSourcesHtml, visitWeatherSummary } from './weather-view.js?v=2.6.0';
+import { activityAvailable, operationPauseInfo } from './operation-windows.js?v=2.6.0';
 import { contingencySettings, compareContingency } from './contingency.js';
-import { renderParkMap } from './map-view.js?v=2.5.0';
-import { createShareUrl, readSharedState, downloadPlanJson, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=2.5.0';
+import { renderParkMap } from './map-view.js?v=2.6.0';
+import { createShareUrl, readSharedState, downloadPlanJson, downloadCalendar, downloadOfflineHtml, parseHistoryCsv, validateCatalogue, parsePlanJson } from './storage.js?v=2.6.0';
 
 const CATEGORY = {attraction:'アトラクション',show:'ショー',parade:'パレード',restaurant:'レストラン',cafe:'カフェ',snack:'スナック',popcorn:'ポップコーン',greeting:'グリーティング',shop:'お土産'};
 const FOOD = new Set(['restaurant','cafe','snack','popcorn']);
@@ -376,6 +376,7 @@ export const PARK_COPY = {
 export function initialiseApp({plans, syncAfterEdit, refreshLibrary, isSharedPlan = () => false}) {
   let contingencyWorker = null, contingencyResult = null, contingencyBase = null, contingencyRequest = 0;
   let catalogue, calendarData, externalPanel, preparation = null, worker = null, requestId = 0, searchStarted = 0, progressTimer = null, latestPreview = null, wishlistGenre = 'all', lastBreakSuggestionResult = null, workflowView = 'wishlist', openedPlanId = null;
+  let suspendedPrivate = null;
   let purchaseDraft, progressEditor, itineraryImage, onsiteCard;
   const modelCache=new Map();
   const visitOutlook=createVisitOutlook();
@@ -522,7 +523,29 @@ export function initialiseApp({plans, syncAfterEdit, refreshLibrary, isSharedPla
     if(forSaving){if(!$('planName').value.trim())$('planName').value=`${state.settings.date} ${state.parkId==='sea'?'シー':'ランド'}`;$('planName').focus();}
     $('savedPlansPanel').scrollIntoView({block:'start',behavior:'smooth'});
   }
+  function personalMode() {
+    if (suspendedPrivate) throw Error('先に共同編集を終了してください。共同計画は「自分用に保存」できます。');
+  }
+  function openJoint(value,name) {
+    const next = cleanState(value);
+    if (!suspendedPrivate) {
+      readSettings();
+      suspendedPrivate = {state, openedPlanId, name:$('planName').value, workflowView};
+    }
+    stopSearch(); closeSharePanel(); openedPlanId = null; state = next;
+    $('planName').value = name; setStatus('「'+name+'」を共同編集中です。');
+    writeSettings(); updateContext(); renderSavedPlans(); showWorkflow(state.result?'schedule':'wishlist');
+  }
+  function leaveJoint(message='') {
+    if (!suspendedPrivate) return;
+    stopSearch(); closeSharePanel();
+    const original = suspendedPrivate;
+    suspendedPrivate = null; state = original.state; openedPlanId = original.openedPlanId;
+    $('planName').value = original.name; setStatus(message);
+    writeSettings(); updateContext(); renderSavedPlans(); showWorkflow(original.workflowView);
+  }
   function saveCurrentPlan(overwrite=false){
+    personalMode();
     readSettings();
     const summary=plans.save($('planName').value,state,overwrite && openedPlanId?{id:openedPlanId}:{});
     openedPlanId=summary.id;
@@ -1052,7 +1075,7 @@ export function initialiseApp({plans, syncAfterEdit, refreshLibrary, isSharedPla
     const extra=Number($('contingencyDelay').value),profile=contingencySettings(state.result.settings||state.settings,extra);
     contingencyBase=state.result;const request=++contingencyRequest;
     const initialPlan=profile.replanFrom!=null?state.result:null;
-    contingencyWorker=new Worker(new URL('./planner-worker.js?v=2.5.0',import.meta.url),{type:'module'});
+    contingencyWorker=new Worker(new URL('./planner-worker.js?v=2.6.0',import.meta.url),{type:'module'});
     $('searchContingency').disabled=true;$('cancelContingency').hidden=false;
     $('contingencyStatus').textContent=`通常の待ち列がさらに${extra}分長い場合を探索しています。`;
     contingencyWorker.onmessage=event=>{
@@ -1108,7 +1131,7 @@ export function initialiseApp({plans, syncAfterEdit, refreshLibrary, isSharedPla
     if(preparingRequest!==requestId)return;
     preparation=null;state.settings=prepared;if(state.result){state.resultDirty=true;renderResult();}writeSettings();externalPanel?.refresh();
     searchStarted=performance.now();
-    try{worker=new Worker(new URL('./planner-worker.js?v=2.5.0',import.meta.url),{type:'module'});}catch{stopSearch();showPlanError(new Error('探索を起動できませんでした。ページを再読み込みしてもう一度お試しください。'));return;}
+    try{worker=new Worker(new URL('./planner-worker.js?v=2.6.0',import.meta.url),{type:'module'});}catch{stopSearch();showPlanError(new Error('探索を起動できませんでした。ページを再読み込みしてもう一度お試しください。'));return;}
     setSolveDisabled(true);$('cancelSearch').hidden=false;$('searchProgress').hidden=false;$('progressBar').value=0;$('progressText').textContent='最初の計画を探しています…';
     const thisRequest=requestId;
     worker.onmessage=event=>{
@@ -1179,6 +1202,7 @@ export function initialiseApp({plans, syncAfterEdit, refreshLibrary, isSharedPla
     window.addEventListener('hashchange', safely(() => {
       const shared = readSharedState(location.hash);
       if (!shared) return;
+      personalMode();
       const imported = cleanState(shared);
       stopSearch();
       openedPlanId = null;
@@ -1233,7 +1257,7 @@ export function initialiseApp({plans, syncAfterEdit, refreshLibrary, isSharedPla
     $('saveNewPlan').addEventListener('click',safely(()=>saveCurrentPlan(false)));$('overwritePlan').addEventListener('click',safely(()=>saveCurrentPlan(true)));
     $('savedPlanList').addEventListener('click',safely(event=>{
       const load=event.target.closest('[data-load-saved]'),rename=event.target.closest('[data-rename-saved]'),commit=event.target.closest('[data-commit-rename]'),remove=event.target.closest('[data-delete-saved]');
-      if(load){const id=load.dataset.loadSaved,saved=plans.load(id);if(!saved)throw Error('この計画は見つかりませんでした。');stopSearch();state=cleanState(saved);openedPlanId=id;const summary=plans.list().find(item=>item.id===id);$('planName').value=summary?.name||'';writeSettings();updateContext();renderSavedPlans();showWorkflow(state.result?'schedule':'wishlist');setStatus(`「${summary?.name||'計画'}」を開きました。`);}
+      if(load){personalMode();const id=load.dataset.loadSaved,saved=plans.load(id);if(!saved)throw Error('この計画は見つかりませんでした。');stopSearch();state=cleanState(saved);openedPlanId=id;const summary=plans.list().find(item=>item.id===id);$('planName').value=summary?.name||'';writeSettings();updateContext();renderSavedPlans();showWorkflow(state.result?'schedule':'wishlist');setStatus(`「${summary?.name||'計画'}」を開きました。`);}
       const exportButton=event.target.closest('[data-export-saved]');
       if (exportButton) {
         const saved=plans.load(exportButton.dataset.exportSaved,{forEdit:false});
@@ -1417,7 +1441,7 @@ export function initialiseApp({plans, syncAfterEdit, refreshLibrary, isSharedPla
         setStatus('リンク欄を選択しました。コピーして送ってください。');
       }
     }));
-    $('importPlan').addEventListener('click',()=>$('planFile').click());$('planFile').addEventListener('change',safely(async()=>{const file=$('planFile').files[0];if(!file)return;if(file.size>5000000)throw Error('計画ファイルは5MB以下で指定してください。');const value=parsePlanJson(await file.text());stopSearch();state=cleanState(value);openedPlanId=null;writeSettings();updateContext();showWorkflow(state.result?'schedule':'wishlist');setStatus('計画ファイルを読み込みました。');$('planFile').value='';}));
+    $('importPlan').addEventListener('click',()=>$('planFile').click());$('planFile').addEventListener('change',safely(async()=>{personalMode();const file=$('planFile').files[0];if(!file)return;if(file.size>5000000)throw Error('計画ファイルは5MB以下で指定してください。');const value=parsePlanJson(await file.text());stopSearch();state=cleanState(value);openedPlanId=null;writeSettings();updateContext();showWorkflow(state.result?'schedule':'wishlist');setStatus('計画ファイルを読み込みました。');$('planFile').value='';}));
     $('importHistory').addEventListener('click',()=>$('historyFile').click());$('historyFile').addEventListener('change',safely(async()=>{const file=$('historyFile').files[0];if(!file)return;if(file.size>10000000)throw Error('待ち時間CSVは10MB以下で指定してください。');state.history=parseHistoryCsv(await file.text());state.settings.history=state.history;updateCrowd();externalPanel?.refresh();markResultStale();setStatus(`${state.history.length}件の待ち時間を読み込みました。再探索すると計画へ反映します。`);$('historyFile').value='';}));
     $('exportCatalogue').addEventListener('click',safely(downloadCatalogue));$('importCatalogue').addEventListener('click',()=>$('catalogueFile').click());$('catalogueFile').addEventListener('change',safely(async()=>{const file=$('catalogueFile').files[0];if(!file)return;if(file.size>5000000)throw Error('施設JSONは5MB以下で指定してください。');const next=validateCatalogue(JSON.parse(await file.text()));stopSearch();catalogue=next;state.result=null;state.settings.selections=state.settings.selections.filter(s=>byId(s.id));updateContext();setStatus('施設情報を更新しました。時間・料金を確認して再探索してください。');$('catalogueFile').value='';}));
     $('refreshCatalogue').addEventListener('click',safely(async()=>{stopSearch();await loadCatalogue(true);stopSearch();state.result=null;updateContext();setStatus('配布中の施設情報を読み直しました。');}));
@@ -1430,5 +1454,7 @@ export function initialiseApp({plans, syncAfterEdit, refreshLibrary, isSharedPla
     finally { window.dispatchEvent(new Event('tdroute:ready')); }
   }
   const ready=start();
-  return {ready,getOpenedPlanId:()=>openedPlanId,getState:()=>state,showWorkflow,renderSavedPlans,getCatalogue:()=>catalogue,getContext:()=>({park:currentPark(),settings:state.settings,history:state.history}),applyDataUpdate,readSettings,addSelection,renderResult,stopSearch};
+  return {ready,openJoint,leaveJoint,jointBusy:()=>!!(preparation || worker),
+    captureJoint:()=>{if(!suspendedPrivate)throw Error('共同計画を開いてください。');readSettings();return state;},
+    getOpenedPlanId:()=>openedPlanId,getState:()=>state,showWorkflow,renderSavedPlans,getCatalogue:()=>catalogue,getContext:()=>({park:currentPark(),settings:state.settings,history:state.history}),applyDataUpdate,readSettings,addSelection,renderResult,stopSearch};
 }

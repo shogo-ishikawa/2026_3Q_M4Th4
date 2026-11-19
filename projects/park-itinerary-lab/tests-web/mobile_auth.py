@@ -73,7 +73,7 @@ def sign_in(page, uid='visitor-one', display_name=None):
     expect(page.locator('#appShell')).to_be_visible(timeout=30_000)
     expect(page.locator('#loginGate')).to_be_hidden()
     name = '' if uid == FIXTURE_OWNER_UID else display_name.strip()
-    greeting = f'{name}さん、良い一日を！' if name else '良い一日を！'
+    greeting = f'{name}さん、素敵な1日を！' if name else '素敵な1日を！'
     expect(page.locator('#accountGreeting')).to_be_visible()
     expect(page.locator('#accountGreeting')).to_have_text(greeting)
     admin = page.locator('#adminLabel')
