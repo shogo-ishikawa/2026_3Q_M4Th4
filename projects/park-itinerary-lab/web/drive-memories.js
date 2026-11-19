@@ -1,4 +1,4 @@
-import {baseVisitId, isRepeatVisit} from './repeat-visits.js?v=2.4.0';
+import {baseVisitId, isRepeatVisit} from './repeat-visits.js?v=2.5.0';
 
 const MEMORIES_ENDPOINT = 'https://script.google.com/macros/s/AKfycbwfjkYRgpGxZl7PlUazqT9vMS0BACICgo__EigzhXwqX9enley0_ZPJRgJYTyp0o9jp/exec';
 const DEPLOYMENT = /^https:\/\/script\.google\.com\/macros\/s\/[a-zA-Z0-9_-]+\/exec$/;
@@ -129,12 +129,14 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
   if (!MEMORIES_ENDPOINT) return;
   const request = makeAlbumClient(MEMORIES_ENDPOINT, getIdToken);
   const panel = document.getElementById('driveMemories');
+  const dialog = panel.closest('dialog');
+  const albumButtons = document.querySelectorAll('[data-open-album]');
   const el = suffix => document.getElementById('memory' + suffix);
   const preview = el('Preview');
   const life = new AbortController();
   const listen = (target,type,fn) => target.addEventListener(type,fn,{signal:life.signal});
   let active = null, albums = [], uploadDraft, albumDraft, refreshTimer;
-  let backgroundRequest, visiblePhoto, renderedGallery, canArchive = false;
+  let backgroundRequest, visiblePhoto, renderedGallery, displayedRoster, canArchive = false;
   function clearPreview() {
     visiblePhoto = null;
     el('Image').removeAttribute('src');
@@ -147,6 +149,7 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
     clearPreview();
     renderedGallery = null;
     el('Photos').replaceChildren();
+    clearRoster();
     el('Visit').replaceChildren();
     el('File').value = el('Email').value = '';
     el('Visibility').value = 'private';
@@ -173,7 +176,9 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
     if (choices.some(c => c.visitKey === selected)) field.value = selected;
     return choices;
   }
-  function showing() { return panel.open && !panel.closest('[hidden]') && !document.hidden && !life.signal.aborted; }
+  function showing() {
+    return panel.open && (!dialog || dialog.open) && !panel.closest('[hidden]') && !document.hidden && !life.signal.aborted;
+  }
   function scheduleRefresh() {
     clearTimeout(refreshTimer);
     if (showing() && navigator.onLine) refreshTimer = setTimeout(() => refresh(true),60000);
@@ -314,7 +319,9 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
       renderedGallery = gallery;
     }
     el('Edit').hidden = false;
-    el('Members').hidden = !albums.some(a => a.id === albumId && a.owner);
+    const album = albums.find(a => a.id === albumId);
+    el('Members').hidden = !album?.owner;
+    if (album?.owner) showRoster(album, result.invitations);
     el('DeleteAlbum').hidden = !canArchive;
     visitOptions();
     return photos.length ? photos.length + '枚の写真' : '写真はまだありません。';
@@ -372,17 +379,54 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
       return 'アルバムを作りました。';
     });
   });
+  function clearRoster() {
+    displayedRoster = null;
+    el('Roster').replaceChildren();
+    el('RosterHeading').textContent = el('RosterNote').textContent = '';
+  }
+  function showRoster(album, roster) {
+    const signature = JSON.stringify([album.id, album.title, roster]);
+    if (signature === displayedRoster) return;
+    clearRoster();
+    displayedRoster = signature;
+    el('RosterHeading').textContent = '「' + album.title + '」の招待先';
+    const known = Array.isArray(roster?.addresses) && Number.isInteger(roster.unidentified);
+    el('Revoke').hidden = known && !roster.unidentified;
+    if (!known) {
+      el('RosterNote').textContent = '招待先の一覧を取得できませんでした。';
+      return;
+    }
+    for (const address of roster.addresses) {
+      const li = document.createElement('li');
+      const name = document.createElement('span');
+      name.textContent = address;
+      const remove = button('招待を取り消す', () => changeMember(album,address,true));
+      remove.setAttribute('aria-label', address + ' の招待を取り消す');
+      li.append(name,remove);
+      el('Roster').append(li);
+    }
+    if (roster.unidentified) {
+      el('RosterNote').textContent = '以前の招待が' + roster.unidentified + '件あります。相手がアルバムを開くか、同じアドレスをもう一度招待すると表示されます。';
+    } else if (!roster.addresses.length) {
+      el('RosterNote').textContent = 'まだ誰も招待していません。';
+    }
+  }
+  function changeMember(album, email, remove) {
+    if (!album?.owner || album.id !== el('Album').value) return;
+    if (remove && !window.confirm('「' + album.title + '」の ' + email + ' への招待を取り消しますか？')) return;
+    void run(async s => {
+      await request('member',{albumId:album.id,email,remove},s);
+      assertActive(s);
+      if (el('Email').value.trim() === email) el('Email').value = '';
+      await listPhotos(album.id,s);
+      return remove ? '招待を取り消しました。' : '「' + album.title + '」に招待しました。友達にTDRouteのリンクを知らせてください。';
+    });
+  }
   for (const [id,remove] of [['Invite',false],['Revoke',true]]) {
     listen(el(id),'click',() => {
-      const field = el('Email'), email = field.value.trim(), albumId = el('Album').value;
+      const field = el('Email'), email = field.value.trim();
       if (!email || !field.reportValidity()) { field.focus(); return; }
-      if (remove && !window.confirm('このアカウントの招待を取り消しますか？')) return;
-      void run(async s => {
-        await request('member',{albumId,email,remove},s);
-        assertActive(s);
-        field.value = '';
-        return remove ? '招待を取り消しました。' : '招待しました。同じアカウントでアルバムを開けます。';
-      });
+      changeMember(albums.find(a => a.id === el('Album').value),email,remove);
     });
   }
   listen(el('Visit'),'focus',visitOptions);
@@ -419,6 +463,7 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
     active = null;
     clearPreview();
     el('Photos').replaceChildren();
+    clearRoster();
     renderedGallery = null;
     el('Edit').hidden = el('Members').hidden = true;
     el('Controls').disabled = true;
@@ -428,9 +473,10 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
   listen(window,'pagehide',reset);
   const workflow = document.getElementById('workflowSchedule');
   const observer = new MutationObserver(() => { if (showing()) void refresh(); else reset(); });
-  observer.observe(workflow,{attributes:true,attributeFilter:['hidden']});
+  if (!dialog && workflow) observer.observe(workflow,{attributes:true,attributeFilter:['hidden']});
   el('Create').hidden = true;
   panel.hidden = false;
+  for (const opener of albumButtons) opener.hidden = false;
   return () => {
     life.abort();
     observer.disconnect();
@@ -438,5 +484,7 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
     el('Create').hidden = true;
     panel.hidden = true;
     panel.open = false;
+    for (const opener of albumButtons) opener.hidden = true;
+    if (dialog?.open) dialog.close();
   };
 }

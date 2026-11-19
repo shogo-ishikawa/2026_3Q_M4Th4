@@ -13,6 +13,7 @@ INVENTORY = 'DISTRIBUTION_FILES.json'
 PARK_WEB_FILES = ('index.html', 'pwa.js', 'sw.js', 'manifest.webmanifest', 'style.css', 'app.js', 'planner.js', 'planner-worker.js',
                   'accuracy.html', 'accuracy.css', 'accuracy-page.js', 'forecast-accuracy.js',
                   'sync-ui.js', 'named-sync.js', 'firebase-sync.js', 'firebase-config.json', 'drive-memories.js',
+                  'companion-plans.js', 'companion-view.js',
                   'assets/firebase/firebase-app.js', 'assets/firebase/firebase-auth.js',
                   'assets/firebase/firebase-firestore.js', 'assets/firebase/LICENSE.txt', 'assets/firebase/SOURCES.md',
                   'forecast-calendar.js', 'calendar-outlook.js',

@@ -17,8 +17,16 @@ class QuietFiles(SimpleHTTPRequestHandler):
 
 
 def read_itinerary(page):
+    already_open = page.locator('#savedPlansPanel').evaluate('el => !el.hidden && el.open')
+    page.locator('#loadPlan').click()
+    tools = page.locator('.plan-file-tools')
+    if not tools.evaluate('el => el.open'):
+        tools.locator('summary').click()
     with page.expect_download() as download:
-        page.get_by_role('button', name='計画JSON', exact=True).click()
+        tools.get_by_role('button', name='この計画をファイルに保存').click()
+    tools.locator('summary').click()
+    if not already_open:
+        page.locator('#savedPlansPanel > summary').click()
     plan = json.loads(download.value.path().read_text())
     assert plan['result']['status'] == 'feasible', plan['result']['status']
     return plan
@@ -26,7 +34,7 @@ def read_itinerary(page):
 
 def download_saved_plan(page, name):
     with page.expect_download() as download:
-        page.get_by_role('button', name=f'「{name}」をJSONで保存', exact=True).click()
+        page.get_by_role('button', name=f'「{name}」をファイルに保存', exact=True).click()
     return download.value.path()
 
 
@@ -146,6 +154,33 @@ def check_forecast_panel(page):
     saved.locator('[data-delete-saved]').click()
 
 
+def check_album_entries(page):
+    header_entry = page.get_by_role('navigation', name='ページの案内').get_by_role('button', name='アルバム', exact=True)
+    album = page.get_by_role('dialog', name='夢の思い出')
+    header_entry.click()
+    expect(album).to_be_visible()
+    expect(album.get_by_role('button', name='閉じる')).to_be_focused()
+    assert album.evaluate('el => el.scrollWidth <= el.clientWidth')
+    page.keyboard.press('Escape')
+    expect(album).to_be_hidden()
+    expect(header_entry).to_be_focused()
+    expect(page.locator('#workflowWishlistTab')).to_have_attribute('aria-selected', 'true')
+
+    page.locator('#workflowScheduleTab').click()
+    progress = page.locator('#dayProgressEditor > summary')
+    expect(progress).to_contain_text('残りの予定を組み直す')
+    entry = page.locator('#openScheduleAlbum')
+    expect(entry).to_contain_text('写真を見返す')
+    for control in (progress, entry):
+        assert control.bounding_box()['height'] >= 64
+    entry.click()
+    expect(album).to_be_visible()
+    album.get_by_role('button', name='閉じる').click()
+    expect(entry).to_be_focused()
+    expect(page.locator('#workflowScheduleTab')).to_have_attribute('aria-selected', 'true')
+    page.locator('#workflowWishlistTab').click()
+
+
 def check_share_edits(page):
     share = page.locator('#sharePlan')
     panel = page.locator('#sharePanel')
@@ -170,10 +205,31 @@ def check_share_edits(page):
     page.locator('#seaTab').click()
     expect(panel).to_be_hidden()
     share.click()
+    sea_url = link.input_value()
     share.click()
     expect(share).to_have_attribute('aria-expanded', 'false')
     expect(panel).to_be_hidden()
     page.locator('#landTab').click()
+    page.locator('#savePlan').click()
+    page.locator('#planName').fill('受信前のランド')
+    page.locator('#saveNewPlan').click()
+    expect(page.locator('#overwritePlan')).to_be_visible()
+    page.goto(sea_url)
+    expect(page.locator('#seaTab')).to_have_attribute('aria-selected', 'true')
+    expect(page.locator('#overwritePlan')).to_be_hidden()
+    expect(page.locator('#planName')).to_have_value('')
+    expect(page.locator('[data-saved-plan]')).to_have_count(1)
+    saved = page.locator('[data-saved-plan]').filter(has_text='受信前のランド')
+    saved.locator('[data-load-saved]').click()
+    expect(page.locator('#landTab')).to_have_attribute('aria-selected', 'true')
+    saved.locator('[data-delete-saved]').click()
+
+    fresh = page.context.new_page()
+    fresh.route('**/*', lambda route: route.continue_() if route.request.url.startswith(sea_url.split('#')[0]) else route.abort())
+    fresh.goto(sea_url)
+    expect(fresh.locator('#seaTab')).to_have_attribute('aria-selected', 'true', timeout=30_000)
+    fresh.close()
+    page.goto(sea_url.split('#')[0] + '#workspace')
     date.fill('2026-11-19')
 
 
@@ -213,6 +269,7 @@ def check_mobile(page, url):
     expect(page.locator('#solveButton')).to_be_enabled(timeout=30_000)
     expect(page.locator('#visitDate')).to_have_value('2026-11-19')
     check_mobile_course_links(page)
+    check_album_entries(page)
     check_share_edits(page)
     check_forecast_calendar(page)
     check_forecast_panel(page)

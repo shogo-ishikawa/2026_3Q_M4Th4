@@ -1,7 +1,7 @@
-import {validateWaitModel} from './wait-model.js?v=2.4.0';
-import {weatherForMinute,formatWeatherDetails} from './weather.js?v=2.4.0';
+import {validateWaitModel} from './wait-model.js?v=2.5.0';
+import {weatherForMinute,formatWeatherDetails} from './weather.js?v=2.5.0';
 import {baseVisitId, isRepeatVisit} from './repeat-visits.js';
-import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=2.4.0';
+import {forecastCardHtml,forecastSourcesHtml} from './weather-view.js?v=2.5.0';
 /** Portable schedules: the shared link contains preferences, never a browser's saved history. */
 const STORAGE_KEY = 'park-itinerary-lab:v1';
 const PLANS_KEY = 'park-itinerary-lab:plans:v1';
@@ -427,14 +427,14 @@ export function createShareUrl(state, baseUrl = location.href) {
     delete portableSettings.currentNode;
   }
   const encoded = encodeBase64(JSON.stringify({v:1, parkId:state.parkId, settings:portableSettings}));
-  if (encoded.length > MAX_SHARED_LENGTH) fail('希望が多いためリンクが長くなります。JSONで共有してください。');
+  if (encoded.length > MAX_SHARED_LENGTH) fail('希望が多く、リンクに収まりません。計画ファイルを保存して送ってください。');
   url.hash = `plan=${encoded}`;
   return url.href;
 }
 export function readSharedState(hash = location.hash) {
   if (!hash || !hash.startsWith('#plan=')) return null;
   const encoded = hash.slice(6);
-  if (encoded.length > MAX_SHARED_LENGTH) fail('共有リンクが長すぎます。JSONで読み込んでください。');
+  if (encoded.length > MAX_SHARED_LENGTH) fail('共有リンクが長すぎます。送った人から計画ファイルを受け取り、「保存した計画」から読み込んでください。');
   const value = JSON.parse(decodeBase64(encoded));
   if (value.v !== 1) fail('共有リンクの版を確認してください。');
   return validateSavedState({parkId:value.parkId, settings:value.settings});

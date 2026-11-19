@@ -184,6 +184,49 @@ test('validated Google identity and private named invitations govern every album
   assert.equal(call(owner,'albums').albums[0].owner,true);
 });
 
+test('only the owner sees the selected album’s invitations, including Workspace accounts',()=>{
+  const {call,create,props} = backend(), first = create('ランド'), second = create('シー');
+  const campus = {uid:'synthetic-campus',email:'student@campus.example.test'};
+  function roster(albumId) { return call(owner,'list',{albumId}).invitations; }
+  assert.deepEqual(roster(first),{addresses:[],unidentified:0});
+  call(owner,'member',{albumId:first,email:'  STUDENT@Campus.Example.Test ',remove:false});
+  call(owner,'member',{albumId:second,email:visitor.email,remove:false});
+  assert.deepEqual(roster(first),{addresses:[campus.email],unidentified:0});
+  assert.deepEqual(roster(second),{addresses:[visitor.email],unidentified:0});
+  assert.deepEqual(call(campus,'list',{albumId:first,owner:true}),{ok:true,photos:[]});
+  assert.equal(call(campus,'list',{albumId:second}).error,'forbidden');
+  assert.deepEqual(call({...campus,email:'alias@campus.example.test'},'albums').albums,[]);
+  assert.ok(!JSON.stringify(call(campus,'albums')).includes('@'));
+  call(owner,'member',{albumId:first,email:campus.email,remove:true});
+  assert.deepEqual(roster(first),{addresses:[],unidentified:0});
+  assert.ok(![...props.values()].includes(campus.email));
+  assert.equal(call(campus,'list',{albumId:first}).error,'forbidden');
+  assert.deepEqual(roster(second),{addresses:[visitor.email],unidentified:0});
+  call(owner,'archiveAlbum',{albumId:second});
+  assert.ok(![...props.values()].includes(visitor.email));
+});
+
+test('existing hash-only invitations stay valid and resolve only for the matching album and address',()=>{
+  const {call,create,props} = backend(), first = create(), second = create();
+  for (const albumId of [first,second]) {
+    const key = 'album:' + albumId, album = JSON.parse(props.get(key));
+    album.members = [uidHash(guest.email), uidHash(visitor.email)];
+    props.set(key,JSON.stringify(album));
+  }
+  function roster(albumId) { return call(owner,'list',{albumId}).invitations; }
+  assert.deepEqual(roster(first),{addresses:[],unidentified:2});
+  assert.equal(call(guest,'albums').albums.length,2);
+  assert.deepEqual(call(guest,'list',{albumId:first,email:'other@example.test'}),{ok:true,photos:[]});
+  assert.deepEqual(roster(first),{addresses:[guest.email],unidentified:1});
+  assert.deepEqual(roster(second),{addresses:[],unidentified:2});
+  call(owner,'member',{albumId:second,email:visitor.email,remove:false});
+  assert.deepEqual(roster(second),{addresses:[visitor.email],unidentified:1});
+  assert.deepEqual(roster(first),{addresses:[guest.email],unidentified:1});
+  call(owner,'member',{albumId:first,email:visitor.email,remove:true});
+  assert.equal(call(visitor,'list',{albumId:first}).error,'forbidden');
+  assert.deepEqual(roster(first),{addresses:[guest.email],unidentified:0});
+});
+
 test('each invited author can keep a photo private, share it and retract it',()=>{
   const {call,create,flags} = backend(), albumId = create(), p = payload(albumId);
   for (const a of [guest, visitor]) call(owner,'member',{albumId,email:a.email,remove:false});

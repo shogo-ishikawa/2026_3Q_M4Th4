@@ -1,3 +1,5 @@
+import {companionStore} from './companion-view.js?v=2.5.0';
+
 // Pinned Firebase Web SDK distributed with TDRoute so Auth can also restore a session offline.
 const MAX_PAYLOAD_BYTES = 800_000;
 const PLAN_ID = /^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,99}$/;
@@ -143,7 +145,9 @@ export async function connectFirebase(value, load = loadSdk) {
     if (!uid || uid.includes('/') || auth.currentUser !== verifiedUser || verifiedUser?.uid !== uid) throw syncError('sync/account');
   }
 
+  const companions = companionStore({store, requireAccount, current:() => verifiedUser});
   return {
+    companions,
     observeUser(next, error) {
       let observation = 0;
       const unsubscribe = authSdk.onIdTokenChanged(auth, async user => {
@@ -197,6 +201,9 @@ export async function connectFirebase(value, load = loadSdk) {
         const current = snapshot.exists() ? decodePlan(snapshot) : null;
         if ((current?.revision ?? 0) !== expectedRevision) return {ok: false, current};
         const revision = expectedRevision + 1;
+        // A first save cannot have invitations. Keep its original single-document path.
+        if (current?.plan) await companions.updateSharedCopy(sdk,db,transaction,uid,id,current.plan,plan);
+        requireAccount(uid);
         transaction.set(ref, {revision, payload});
         return {ok: true, revision};
       });
