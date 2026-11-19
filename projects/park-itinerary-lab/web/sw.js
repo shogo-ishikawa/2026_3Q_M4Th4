@@ -1,5 +1,5 @@
 /* TDRoute の公開画面だけを版ごとに保存する。個人のしおりや認証の応答はここには保存しない。 */
-const VERSION = '2.3.1';
+const VERSION = '2.4.0';
 const BUILD_ID = 'source';
 const INTEGRITY = {};
 const scope = self.registration.scope;

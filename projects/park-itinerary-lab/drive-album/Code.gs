@@ -4,6 +4,7 @@ const FIREBASE_KEY_ = 'AIzaSyA4_oJPeS2kZ2LJJyKcx14R8IV7FMSIiy4'; // Public web a
 const OWNER_HASH_ = '59a9ddcef0808ba4c057a9015e2cbd352cd8fd39cb53d8490d90644d1153efba';
 const MAX_ALBUMS_ = 12, MAX_MEMBERS_ = 12, MAX_PHOTOS_ = 40, MAX_BYTES_ = 1000000;
 const UUID_ = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const FOLDER_TYPE_ = 'application/vnd.google-apps.folder';
 
 function fail_(code) { throw Object.assign(new Error('Album request failed'), {albumError: code}); }
 
@@ -102,6 +103,9 @@ function locked_(fn) {
 
 function handle_(request, actor) {
   const store = PropertiesService.getScriptProperties();
+  // New clients use separate action names so they cannot request a trash operation on an older server.
+  if (request.action === 'archivePhoto') request.action = 'delete';
+  if (request.action === 'archiveAlbum') request.action = 'deleteAlbum';
   if (request.action === 'albums') {
     const albums = [];
     const entries = store.getProperties();
@@ -109,7 +113,7 @@ function handle_(request, actor) {
       const album = JSON.parse(entries[key]);
       if (allowed_(album, actor)) albums.push({id: key.slice(6), title: album.title, owner: actor.owner});
     }
-    return {albums, visibilityVersion: 1};
+    return {albums, visibilityVersion: 1, archiveVersion: 1};
   }
   const id = uuid_(request.albumId);
   if (['create', 'member', 'deleteAlbum'].includes(request.action)) {
@@ -157,7 +161,6 @@ function handle_(request, actor) {
       if (!canViewPhoto_(photo, actor)) return {};
       if (!actor.owner && actor.uid !== photo.author) fail_('forbidden');
       if (photo.state !== 'deleting') put_(store, key, Object.assign({}, photo, {state:'deleting'}));
-      trash_(photo.file);
       // Keep a bounded record of completed deletes so a delayed retry won't recreate a photo.
       const album = participant_(store, id, actor);
       album.recentDeletes = [photoId, ...album.recentDeletes.filter(item => item !== photoId)].slice(0, 80);
@@ -187,12 +190,17 @@ function handle_(request, actor) {
       // An upload retry must not change or misreport the audience chosen since the first upload.
       if (visibility !== visibility_(p)) fail_('conflict');
       if (p.state === 'ready') return {};
-    } else {
-      if (store.getKeys().filter(k => k.startsWith(photoKey_(id, ''))).length >= MAX_PHOTOS_) fail_('limit');
-      p = {file: newFileId_(), author: actor.uid, visibility, visitKey, label, checksum, created: Date.now(), state: 'saving'};
+    } else if (store.getKeys().filter(k => k.startsWith(photoKey_(id, ''))).length >= MAX_PHOTOS_) fail_('limit');
+    // A saving record from the flat layout may already have written its JPEG there.
+    const date = !p || p.folder ? visitDate_(visitKey) : null;
+    const root = privateFolder_(store);
+    const folder = date ? photoFolder_(store, root, date, actor.uid, id, album.title) : root;
+    if (p?.folder && p.folder !== folder) fail_('conflict');
+    if (!p) {
+      p = {file: newFileId_(), folder, author: actor.uid, visibility, visitKey, label, checksum, created: Date.now(), state: 'saving'};
       put_(store, key, p);
     }
-    savePhoto_(p.file, photoId, bytes, privateFolder_(store));
+    savePhoto_(p.file, photoId, bytes, folder);
     p.state = 'ready';
     put_(store, key, p);
     return {};
@@ -205,12 +213,9 @@ function manage_(store, id, request) {
   if (request.action === 'deleteAlbum') {
     if (!album) return {};
     if (!album.deleting) put_(store, key, Object.assign({}, album, {deleting: true}));
-    // Keep every mapping until the complete batch succeeds, including after an interrupted request.
+    // Revoke app access first. Retain all original Drive files and folders, including legacy ones.
     const prefix = photoKey_(id, '');
-    const props = store.getProperties();
-    const keys = Object.keys(props).filter(k => k.startsWith(prefix));
-    trashBatch_(keys.map(k => JSON.parse(props[k]).file));
-    for (const k of keys) store.deleteProperty(k);
+    for (const k of store.getKeys().filter(k => k.startsWith(prefix))) store.deleteProperty(k);
     const deleted = prop_(store, 'deleted-albums') || [];
     put_(store, 'deleted-albums', [id, ...deleted.filter(item => item !== id)].slice(0, 80));
     store.deleteProperty(key);
@@ -262,19 +267,84 @@ function privateFolder_(store) {
     id = newFileId_();
     store.setProperty('folder', id);
   }
-  const folderType = 'application/vnd.google-apps.folder';
   const found = resource_(id);
   if (found) {
-    if (found.shared || found.trashed || found.mimeType !== folderType || found.appProperties?.app !== 'TDRoute-memories') fail_('offline');
+    if (found.shared || found.trashed || found.mimeType !== FOLDER_TYPE_ || found.appProperties?.app !== 'TDRoute-memories') fail_('offline');
   } else {
-    Drive.Files.create({id, name:'TDRoute 夢の思い出', mimeType:folderType, appProperties:{app:'TDRoute-memories'}});
+    Drive.Files.create({id, name:'TDRoute 夢の思い出', mimeType:FOLDER_TYPE_, appProperties:{app:'TDRoute-memories'}});
   }
   return id;
+}
+
+function visitDate_(visitKey) {
+  const match = /^(\d{4})-(\d{2})-(\d{2}):/.exec(visitKey);
+  if (!match || match[1] === '0000') fail_('invalid');
+  const iso = match[0].slice(0, 10), day = new Date(iso + 'T00:00:00Z');
+  if (!Number.isFinite(day.getTime()) || day.toISOString().slice(0, 10) !== iso) fail_('invalid');
+  return match.slice(1);
+}
+
+function childFolders_(parent) {
+  const folders = [];
+  const options = {q:"'" + parent + "' in parents and mimeType = '" + FOLDER_TYPE_ + "' and trashed = false",
+    spaces:'drive', fields:'nextPageToken,incompleteSearch,files(id,name,mimeType,trashed,shared,parents,appProperties)', pageSize:100};
+  do {
+    const page = Drive.Files.list(options);
+    if (page.incompleteSearch) fail_('offline');
+    folders.push(...(page.files || []));
+    options.pageToken = page.nextPageToken;
+  } while (options.pageToken);
+  return folders;
+}
+
+function checkChild_(folder, parent, key) {
+  if (folder.shared || folder.trashed || folder.mimeType !== FOLDER_TYPE_ || !folder.parents?.includes(parent) ||
+      folder.appProperties?.tdroutePath !== key) fail_('offline');
+}
+
+// Called under the upload lock. Drive metadata identifies the folder even if its display name changes.
+function childFolder_(store, parent, key, name, isAlbum) {
+  const path = hash_(parent + ':' + key);
+  // Bound the hints independently of the number of dates, people and archived albums.
+  const slot = 'folder-hint:' + (parseInt(path.slice(0, 2), 16) % 48);
+  let hint = prop_(store, slot);
+  if (hint?.path === path) {
+    const found = resource_(hint.id);
+    if (found) { checkChild_(found, parent, key); return found.id; }
+  } else {
+    const siblings = childFolders_(parent);
+    const matches = siblings.filter(f => f.appProperties?.tdroutePath === key);
+    if (matches.length > 1) fail_('conflict');
+    if (matches.length) {
+      const found = matches[0];
+      checkChild_(found, parent, key);
+      put_(store, slot, {path, id:found.id, name:found.name});
+      return found.id;
+    }
+    if (siblings.some(f => f.name === name)) {
+      if (!isAlbum) fail_('conflict');
+      const stem = name + ' (' + key + ')';
+      name = stem;
+      for (let n = 2; siblings.some(f => f.name === name); n++) name = stem + ' ' + n;
+    }
+    hint = {path, id:newFileId_(), name};
+    // Reserve the ID before create so a lost response can use the same folder.
+    put_(store, slot, hint);
+  }
+  Drive.Files.create({id:hint.id, name:hint.name, mimeType:FOLDER_TYPE_, parents:[parent], appProperties:{tdroutePath:key}});
+  return hint.id;
+}
+
+function photoFolder_(store, root, date, author, albumId, title) {
+  let parent = root;
+  for (const part of [...date, author]) parent = childFolder_(store, parent, part, part, false);
+  const name = title.replace(/\//g, '／').replace(/\\/g, '＼').replace(/^\.{1,2}$/, dots => '．'.repeat(dots.length));
+  return childFolder_(store, parent, albumId, name, true);
 }
 function savePhoto_(id, photoId, bytes, folder) {
   const existing = resource_(id);
   if (existing) {
-    if (existing.trashed || existing.mimeType !== 'image/jpeg' || !existing.parents?.includes(folder) || existing.appProperties?.photo !== photoId) fail_('conflict');
+    if (existing.shared || existing.trashed || existing.mimeType !== 'image/jpeg' || !existing.parents?.includes(folder) || existing.appProperties?.photo !== photoId) fail_('conflict');
     return;
   }
   const name = photoId + '.jpg';
@@ -287,20 +357,4 @@ function photoBytes_(id) {
   const bytes = result.getContent();
   if (!bytes.length || bytes.length > MAX_BYTES_) fail_('invalid');
   return bytes;
-}
-function trash_(id) {
-  const result = driveFetch_(id + '?fields=id', {method:'patch', contentType:'application/json', payload:'{"trashed":true}'});
-  if (result.getResponseCode() !== 404) checkDrive_(result);
-}
-
-function trashBatch_(ids) {
-  if (!ids.length) return;
-  const headers = {Authorization: 'Bearer ' + ScriptApp.getOAuthToken()};
-  const responses = UrlFetchApp.fetchAll(ids.map(id => ({
-    url:'https://www.googleapis.com/drive/v3/files/' + id + '?fields=id',
-    headers, method:'patch', contentType:'application/json', payload:'{"trashed":true}', muteHttpExceptions:true
-  })));
-  for (const result of responses) {
-    if (result.getResponseCode() !== 404) checkDrive_(result);
-  }
 }

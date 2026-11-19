@@ -1,5 +1,5 @@
-import {visitDayContext} from './calendar-features.js?v=2.3.1';
-import {predictModelWait} from './wait-model.js?v=2.3.1';
+import {visitDayContext} from './calendar-features.js?v=2.4.0';
+import {predictModelWait} from './wait-model.js?v=2.4.0';
 import {validateLiveSnapshot} from './wait-data.js';
 
 const MIN_FACILITIES = 3;

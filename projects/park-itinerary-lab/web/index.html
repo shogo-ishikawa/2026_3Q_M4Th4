@@ -5,20 +5,20 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="TDRoute">
-<link rel="apple-touch-startup-image" href="assets/pwa/startup-750x1334.jpg?v=2.3.1" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="assets/pwa/startup-1125x2436.jpg?v=2.3.1" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="assets/pwa/startup-828x1792.jpg?v=2.3.1" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="assets/pwa/startup-1170x2532.jpg?v=2.3.1" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="assets/pwa/startup-1179x2556.jpg?v=2.3.1" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="assets/pwa/startup-1206x2622.jpg?v=2.3.1" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="assets/pwa/startup-1284x2778.jpg?v=2.3.1" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="assets/pwa/startup-1290x2796.jpg?v=2.3.1" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<link rel="apple-touch-startup-image" href="assets/pwa/startup-1320x2868.jpg?v=2.3.1" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
-<script type="module" src="pwa.js?v=2.3.1"></script>
-<link rel="stylesheet" href="style.css?v=2.3.1"></head>
+<link rel="apple-touch-startup-image" href="assets/pwa/startup-750x1334.jpg?v=2.4.0" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="assets/pwa/startup-1125x2436.jpg?v=2.4.0" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="assets/pwa/startup-828x1792.jpg?v=2.4.0" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="assets/pwa/startup-1170x2532.jpg?v=2.4.0" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="assets/pwa/startup-1179x2556.jpg?v=2.4.0" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="assets/pwa/startup-1206x2622.jpg?v=2.4.0" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="assets/pwa/startup-1284x2778.jpg?v=2.4.0" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="assets/pwa/startup-1290x2796.jpg?v=2.4.0" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<link rel="apple-touch-startup-image" href="assets/pwa/startup-1320x2868.jpg?v=2.4.0" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)">
+<script type="module" src="pwa.js?v=2.4.0"></script>
+<link rel="stylesheet" href="style.css?v=2.4.0"></head>
 <body data-park="land"><div id="launchSplash" aria-hidden="true" hidden>
   <span class="launch-name">TDRoute</span>
-  <span class="launch-version">v2.3.1</span>
+  <span class="launch-version">v2.4.0</span>
 </div><main id="loginGate" class="login-gate" aria-labelledby="loginTitle">
   <section class="login-card">
     <img class="login-logo" src="assets/pwa/icon-192.png" alt="" width="80" height="80">
@@ -168,18 +168,23 @@
 </details>
 <details id="driveMemories" class="panel day-progress" hidden>
 <summary>夢の思い出</summary>
-<p>写真は自分だけで見ることも、このアルバムのメンバーと共有することもできます。</p>
+<p>写真ごとに、自分だけで見るか、このアルバムのメンバーと共有するかを選べます。</p>
 <fieldset id="memoryControls">
 <div id="memoryCreate" hidden><label>新しいアルバム名<input id="memoryTitle" maxlength="80" type="text"></label><button type="button" id="memoryCreateButton">アルバムを作る</button></div>
 <div><label>アルバム<select id="memoryAlbum"></select></label><button id="memoryRefresh" type="button">更新</button></div>
 <div id="memoryMembers" hidden><label>招待する Google アカウント<input id="memoryEmail" type="email" autocomplete="off" placeholder="メールアドレス"></label><button type="button" id="memoryInvite">招待</button><button type="button" id="memoryRevoke">招待を取り消す</button><button type="button" id="memoryDeleteAlbum">アルバムを削除</button></div>
 <div id="memoryEdit" hidden>
+<section class="memory-upload" aria-labelledby="memoryUploadHeading">
+<h3 id="memoryUploadHeading">写真を追加</h3>
+<div class="memory-upload-fields">
 <label>しおりの体験<select id="memoryVisit"></select></label>
 <label>写真<input id="memoryFile" type="file" accept="image/*"></label>
-<label>アプリでの公開範囲<select id="memoryVisibility"><option value="private" selected>自分だけ</option><option value="album">アルバムのメンバー</option></select></label>
+<label>追加する写真の公開範囲<select id="memoryVisibility"><option value="private" selected>自分だけ</option><option value="album">アルバムのメンバー</option></select></label>
 <button id="memoryUpload" type="button">この写真を追加</button>
-<h3>アルバムの写真</h3>
-<ul id="memoryPhotos"></ul>
+</div>
+</section>
+<h3 id="memoryGalleryHeading">アルバムの写真</h3>
+<ul id="memoryPhotos" aria-labelledby="memoryGalleryHeading"></ul>
 <figure id="memoryPreview" hidden><img id="memoryImage" alt=""><figcaption id="memoryCaption"></figcaption><button type="button" id="memoryCloseImage">写真を閉じる</button></figure>
 </div>
 </fieldset>
@@ -193,7 +198,7 @@
 </div></div>
 <details id="searchModels" class="panel model-panel"><summary>計画の仕組み</summary><p>必須条件・予算・時間帯を守り、重要度の高い希望から組み合わせます。探索で見つかった案を表示します。最適性は証明していません。</p><a href="guide.html#route">探索方法を詳しく見る ↗</a></details>
 </section><section class="sources-section" aria-label="情報源"><details id="sourcePanel" class="panel source-panel"><summary>情報源と更新状況 <span id="sourceSummary"></span></summary><div class="source-content"><p id="appOfflineState" class="field-note" role="status"></p><div id="sourceDetails"></div><div id="forecastSources"></div><p id="weatherStatus" class="field-note weather-status" role="status" aria-live="polite"></p><section class="visit-day-references" aria-labelledby="visitDayReferencesTitle"><h3 id="visitDayReferencesTitle">訪問日の情報</h3><div class="visit-day-sources"><a id="dailyLink" class="inline-link" href="#" target="_blank" rel="noopener noreferrer">訪問日の公式情報を開く ↗</a><span id="visitDayFactSources"></span></div></section><details class="source-tools"><summary>待ち時間・天気の更新と記録</summary><p id="crowdExplanation" class="field-note"></p><button id="importHistory" type="button" class="text-button">過去の待ち時間CSVを読み込む ↗</button><p id="historyStatus" class="field-note">待ち時間の実績データ：未読込</p><div id="externalDataPanel"></div></details><details class="panel data-panel"><summary>施設情報を更新する</summary><div class="data-panel-content"><p>施設名・料金・開催時刻をJSONで管理しています。更新データを読み込むとその場で使えます。</p><div class="result-actions"><button id="exportCatalogue" type="button">現在の施設JSONを保存</button><button id="importCatalogue" type="button">施設JSONを読み込む</button><button id="refreshCatalogue" type="button">配布中の情報を読み直す</button><a id="officialParkLink" href="#" target="_blank" rel="noopener noreferrer">公式パーク情報 ↗</a></div><p id="dataVersion" class="field-note"></p><p><a href="guide.html#update">更新の手順とデータの意味 →</a></p></div></details></div></details><p class="source-attributions"><a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a> · <a href="https://opendatacommons.org/licenses/odbl/1-0/" target="_blank" rel="noopener noreferrer">ODbL</a> · <a href="https://queue-times.com/" target="_blank" rel="noopener noreferrer">Powered by Queue-Times.com</a> · <a href="https://www.themeparks.wiki/" target="_blank" rel="noopener noreferrer">Powered by ThemeParks.wiki</a> · <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a> <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener noreferrer">CC BY 4.0</a> · <a href="https://www.jma.go.jp/bosai/forecast/" target="_blank" rel="noopener noreferrer">気象庁</a></p></section></main>
-<footer class="site-footer"><span>TDRoute / v2.3.1</span><template data-website><a href="downloads/TDRoute_v2.3.1.zip" download>プログラム一式をダウンロード ↓</a></template><a href="guide.html">使い方・計画の仕組み</a></footer></div>
+<footer class="site-footer"><span>TDRoute / v2.4.0</span><template data-website><a href="downloads/TDRoute_v2.4.0.zip" download>プログラム一式をダウンロード ↓</a></template><a href="guide.html">使い方・計画の仕組み</a></footer></div>
 <dialog id="installHelp" class="install-help" aria-labelledby="installTitle">
   <div class="install-heading">
     <img src="assets/pwa/apple-touch-icon.png" width="52" height="52" alt="" loading="lazy">
@@ -221,4 +226,4 @@
 </dialog>
 <input id="planFile" type="file" accept=".json,application/json" hidden><input id="catalogueFile" type="file" accept=".json,application/json" hidden><input id="historyFile" type="file" accept=".csv,text/csv" hidden>
 </div>
-<script type="module" src="sync-ui.js?v=2.3.1"></script></body></html>
+<script type="module" src="sync-ui.js?v=2.4.0"></script></body></html>
