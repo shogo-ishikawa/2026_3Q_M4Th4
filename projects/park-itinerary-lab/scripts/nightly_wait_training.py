@@ -52,6 +52,47 @@ def training_due(state, day, now):
     return now - last >= RETRY_DELAY
 
 
+def training_issues(state, day):
+    target = day.isoformat()
+    issues = []
+    if not isinstance(state, dict):
+        return [f'Missing or invalid training state for {target}.']
+    if state.get('completedThrough') != target:
+        issues.append(f'Training has not completed through {target}.')
+    parks = state.get('parks')
+    for park in ('land', 'sea'):
+        result = parks.get(park) if isinstance(parks, dict) else None
+        if not isinstance(result, dict) or result.get('lastObservedDate') != target:
+            issues.append(f'{park}: missing training observations for {target}.')
+    return issues
+
+
+def nightly_output_issues(state, forecast, day):
+    """Check the saved outcome, including a legitimately retained prior model."""
+    issues = training_issues(state, day)
+    target = (day + dt.timedelta(days=1)).isoformat()
+    if (not isinstance(forecast, dict) or forecast.get('date') != target
+            or forecast.get('slotMinutes') != 30 or not isinstance(forecast.get('parks'), list)):
+        return [*issues, f'Missing or invalid forecast for {target}.']
+    for park in ('land', 'sea'):
+        records = [item for item in forecast['parks'] if isinstance(item, dict) and item.get('parkId') == park]
+        if (len(records) != 1 or not isinstance(records[0].get('rows'), list)
+                or not records[0]['rows'] or not records[0].get('issuedAt')):
+            issues.append(f'{park}: missing issued forecast slots for {target}.')
+    return issues
+
+
+def check_nightly_outputs(data, day):
+    state_file = data / 'training-state.json'
+    state = json.loads(state_file.read_text()) if state_file.exists() else {}
+    forecast_file = data / 'forecasts' / f'{day + dt.timedelta(days=1)}.json'
+    forecast = json.loads(forecast_file.read_text()) if forecast_file.exists() else {}
+    issues = nightly_output_issues(state, forecast, day)
+    if issues:
+        raise RuntimeError(' '.join(issues))
+    print(f'Both parks finished training through {day} and have next-day forecasts.')
+
+
 def supplement_sparse_history(data, catalogue, calendar, local_model, output, day):
     """Try the free recent history window, capped independently of any configured key."""
     env = os.environ.copy()
@@ -70,12 +111,18 @@ def supplement_sparse_history(data, catalogue, calendar, local_model, output, da
         return {}
 
 
-def run(data, now, force=False):
+def run(data, now, force=False, retry_incomplete=False):
     marker = data / 'training-state.json'
     state = json.loads(marker.read_text()) if marker.exists() else {}
     end = latest_closed_day(data, now)
     day = end.isoformat()
-    if not force and not training_due(state, day, now):
+    if retry_incomplete:
+        if state.get('completedThrough', '') > day:
+            raise ValueError(f'Training state is newer than the recovery target {day}.')
+        if not training_issues(state, end):
+            print(f'Both parks already completed training through {day}.')
+            return
+    elif not force and not training_due(state, day, now):
         print(f'No nightly training due for {day}.')
         return
     state.update(attemptedFor=day, attemptedAt=now.isoformat())
@@ -159,6 +206,20 @@ def run(data, now, force=False):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--data-dir', type=Path, required=True)
-    parser.add_argument('--force', action='store_true', help='Run even if already processed or recently attempted')
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument('--force', action='store_true', help='Run even if already processed or recently attempted')
+    mode.add_argument('--retry-incomplete', action='store_true', help='Retry an unfinished night before its normal cooldown')
+    mode.add_argument('--check-only', action='store_true', help='Verify both parks and the next-day forecast')
+    mode.add_argument('--closed-day', action='store_true', help='Print the latest closed business day')
+    parser.add_argument('--day', type=dt.date.fromisoformat, help='Expected recovery business day (JST)')
     args = parser.parse_args()
-    run(args.data_dir, dt.datetime.now(dt.timezone.utc), args.force)
+    now = dt.datetime.now(dt.timezone.utc)
+    end = latest_closed_day(args.data_dir, now)
+    if args.closed_day:
+        print(end)
+    elif args.check_only:
+        check_nightly_outputs(args.data_dir, args.day or end)
+    else:
+        if args.day is not None and args.day != end:
+            parser.error(f'Expected {args.day}, but the latest closed business day is {end}.')
+        run(args.data_dir, now, args.force, args.retry_incomplete)

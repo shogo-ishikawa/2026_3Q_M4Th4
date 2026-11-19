@@ -164,6 +164,33 @@ class NightlyTrainingTest(unittest.TestCase):
             self.assertEqual(park['lastBootstrapAttempt']['fit']['samples'], 320)
             self.assertIsNone(read(data, 'training-state.json')['parks']['sea']['activeModelSamples'])
 
+    def test_recovery_retries_an_incomplete_night_and_accepts_retained_models(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            data = Path(temporary)
+            fixture(data, observations(range(1, 10)))
+            now = dt.datetime(2026, 11, 9, 22, tzinfo=nightly.JST)
+            failure = subprocess.CalledProcessError(1, 'train_wait_model')
+            with patch.object(nightly.subprocess, 'run', side_effect=failure), self.assertRaises(subprocess.CalledProcessError):
+                nightly.run(data, now)
+            nightly.run(data, now + dt.timedelta(minutes=30), retry_incomplete=True)
+            state = read(data, 'training-state.json')
+            self.assertEqual(state['completedThrough'], now.date().isoformat())
+            with patch.object(nightly.subprocess, 'run') as train:
+                nightly.run(data, now + dt.timedelta(minutes=31), retry_incomplete=True)
+                train.assert_not_called()
+            # A wider prior model may be retained after a completed fit on this day.
+            state['parks']['land']['activeModelThrough'] = '2026-11-08'
+            forecast = {'date': '2026-11-10', 'slotMinutes': 30, 'parks': [
+                {'parkId': park, 'issuedAt': now.isoformat(), 'rows': [{'activityId': park + '-ride'}]}
+                for park in ('land', 'sea')]}
+            self.assertFalse(nightly.nightly_output_issues(state, forecast, now.date()))
+            self.assertTrue(nightly.nightly_output_issues(state, {}, now.date()))
+            forecast['parks'][1]['rows'] = []
+            state['parks']['land']['lastObservedDate'] = '2026-11-08'
+            issues = nightly.nightly_output_issues(state, forecast, now.date())
+            self.assertTrue(any('land' in issue and 'training' in issue for issue in issues))
+            self.assertTrue(any('sea' in issue and 'forecast' in issue for issue in issues))
+
     def test_failed_fit_retains_published_files_and_bounds_retries(self):
         with tempfile.TemporaryDirectory() as temporary:
             data = Path(temporary)

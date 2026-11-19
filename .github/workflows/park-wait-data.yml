@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/park-wait-data.yml'
       - 'projects/park-itinerary-lab/scripts/collect_wait_data.py'
+      - 'projects/park-itinerary-lab/scripts/import_backup_observations.py'
       - 'projects/park-itinerary-lab/scripts/collect_weather.py'
       - 'projects/park-itinerary-lab/scripts/archive_daily_weather.py'
       - 'projects/park-itinerary-lab/scripts/issued_training_inputs.py'
@@ -30,6 +31,20 @@ on:
       - 'projects/park-itinerary-lab/web/data/queue-times-map.json'
       - 'projects/park-itinerary-lab/web/data/wait-model.json'
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Collect current waits, recover an unfinished night, or explicitly refit
+        type: choice
+        required: true
+        default: collect
+        options:
+          - collect
+          - recover
+          - force
+      business_date:
+        description: Expected latest closed day in JST (optional, for recover)
+        type: string
+        required: false
   schedule:
     - cron: '7,22,37,52 23,0-12 * * *' # 08:07–21:52 JST
     - cron: '55 12 * * *' # 21:55 JST: archive and retrain after closing
@@ -69,14 +84,19 @@ jobs:
           fi
       - name: Seed validated fallback models
         id: seed
+        if: inputs.mode != 'collect'
         run: python projects/park-itinerary-lab/scripts/seed_wait_model.py --published data-publish/wait-model.json --output data-publish/wait-model.json
       - name: Collect documented current waits
         id: collect
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         run: python projects/park-itinerary-lab/scripts/collect_wait_data.py --output-dir data-publish
+      - name: Merge independently captured Queue-Times observations
+        id: backup
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        run: python projects/park-itinerary-lab/scripts/import_backup_observations.py --data-dir data-publish
       - name: Refresh the hourly forecast cache
         id: weather
-        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        if: ${{ inputs.mode != 'collect' && !cancelled() && steps.prepare.outcome == 'success' }}
         continue-on-error: true
         run: python projects/park-itinerary-lab/scripts/collect_weather.py --output data-publish/weather-forecast.json
       - name: Record prospective intraday comparisons from fresh posted waits
@@ -86,23 +106,49 @@ jobs:
         run: node projects/park-itinerary-lab/scripts/issue_intraday_forecast.mjs --data-dir data-publish
       - name: Score frozen forecasts against collected waits after closing
         id: daily_score
-        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        if: ${{ inputs.mode != 'collect' && !cancelled() && steps.prepare.outcome == 'success' }}
         run: python projects/park-itinerary-lab/scripts/score_daily_waits.py --data-dir data-publish
       - name: Compare the issued weather forecast with hourly AMeDAS measurements after closing
         if: ${{ !cancelled() && steps.daily_score.outcome == 'success' }}
         continue-on-error: true
         run: python projects/park-itinerary-lab/scripts/archive_daily_weather.py --data-dir data-publish
-      - name: Archive collected waits and train through the latest completed park day
-        if: ${{ !cancelled() && steps.daily_score.outcome == 'success' && steps.seed.outcome == 'success' }}
+      - name: Identify the closed business day for recovery
+        id: recovery
+        if: ${{ !cancelled() && inputs.mode == 'recover' && steps.prepare.outcome == 'success' }}
+        env:
+          EXPECTED_DAY: ${{ inputs.business_date }}
         run: |
-          python projects/park-itinerary-lab/scripts/nightly_wait_training.py --data-dir data-publish ${{ github.event_name != 'schedule' && '--force' || '' }}
+          day=$(python projects/park-itinerary-lab/scripts/nightly_wait_training.py --data-dir data-publish --closed-day)
+          if [[ -n "$EXPECTED_DAY" && "$EXPECTED_DAY" != "$day" ]]; then
+            echo "Requested business day does not match the latest closed day ($day)." >&2
+            exit 1
+          fi
+          echo "day=$day" >> "$GITHUB_OUTPUT"
+      - name: Archive collected waits and train through the latest completed park day
+        id: training
+        if: ${{ !cancelled() && steps.daily_score.outcome == 'success' && steps.seed.outcome == 'success' && (inputs.mode != 'recover' || steps.recovery.outcome == 'success') }}
+        env:
+          MODE: ${{ inputs.mode }}
+          CLOSED_DAY: ${{ steps.recovery.outputs.day }}
+        run: |
+          args=()
+          case "$MODE" in
+            recover) args=(--retry-incomplete --day "$CLOSED_DAY") ;;
+            force) args=(--force) ;;
+          esac
+          python projects/park-itinerary-lab/scripts/nightly_wait_training.py --data-dir data-publish "${args[@]}"
       - name: Record the forecast for future park hours
         id: forecast
-        if: ${{ !cancelled() && steps.seed.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.seed.outcome == 'success' && (inputs.mode != 'recover' || steps.training.outcome == 'success') }}
         run: node projects/park-itinerary-lab/scripts/issue_wait_forecast.mjs --data-dir data-publish
+      - name: Verify recovery for both parks and their next-day forecast
+        if: ${{ !cancelled() && inputs.mode == 'recover' && steps.forecast.outcome == 'success' }}
+        env:
+          CLOSED_DAY: ${{ steps.recovery.outputs.day }}
+        run: python projects/park-itinerary-lab/scripts/nightly_wait_training.py --data-dir data-publish --check-only --day "$CLOSED_DAY"
       - name: Supplement the local report with recent provider history
         id: external_score
-        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        if: ${{ inputs.mode != 'collect' && !cancelled() && steps.prepare.outcome == 'success' }}
         continue-on-error: true
         env:
           THEMEPARKS_API_KEY: ${{ secrets.THEMEPARKS_API_KEY }}
@@ -113,13 +159,17 @@ jobs:
         env:
           SEED_STATUS: ${{ steps.seed.outcome }}
           COLLECT_STATUS: ${{ steps.collect.outcome }}
+          BACKUP_STATUS: ${{ steps.backup.outcome }}
           WEATHER_STATUS: ${{ steps.weather.outcome }}
           FORECAST_STATUS: ${{ steps.forecast.outcome }}
           EXTERNAL_SCORE_STATUS: ${{ steps.external_score.outcome }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          if [ "$COLLECT_STATUS" = success ]; then git add live-waits.json observations.json; fi
+          if [ "$COLLECT_STATUS" = success ]; then git add live-waits.json; fi
+          if [[ "$COLLECT_STATUS" == success || "$BACKUP_STATUS" == success ]] && [ -f observations.json ]; then
+            git add observations.json
+          fi
           if [ "$WEATHER_STATUS" = success ] && [ -f weather-forecast.json ]; then git add weather-forecast.json; fi
           if [ "$SEED_STATUS" = success ]; then
             for name in wait-model.json history-index.json training-state.json; do
