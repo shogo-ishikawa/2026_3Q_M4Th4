@@ -523,6 +523,9 @@ body[data-park=sea] .hero h1{font-size:clamp(24px,2.35vw,36px);line-height:1.6}
 .install-action{min-height:44px;padding:7px 15px;border:1px solid #43608a;border-radius:9px;background:#ffffffd9;color:#203f68;font-family:inherit;font-size:.875rem;font-weight:650;line-height:1.45}
 body[data-park=sea] .install-action{border-color:#bbdbf4;background:#123f65;color:#fff}
 .install-action:hover{box-shadow:0 0 0 1px currentColor}
+.app-qr-action{min-height:44px;padding:4px 6px;border:0;background:transparent;color:#415673;font:inherit;font-size:.875rem;text-decoration:underline;text-underline-offset:.2em;cursor:pointer}
+.hero-actions .app-qr-action:hover,.login-card .app-qr-action:hover{color:#182b49}
+body[data-park=sea] .hero-actions .app-qr-action{color:#fff}
 .install-help{box-sizing:border-box;width:min(26rem,calc(100% - 32px));max-height:85vh;max-height:85dvh;padding:22px;border:1px solid #cad4e4;border-radius:17px;background:#fff;color:#1b2741;box-shadow:0 20px 65px #09182c40}
 .install-help::backdrop{background:#141d35a8}
 .install-heading{display:flex;align-items:center;gap:12px}
@@ -535,6 +538,10 @@ body[data-park=sea] .install-action{border-color:#bbdbf4;background:#123f65;colo
 .install-url input{flex:1;min-width:0;padding:8px;border:1px solid #abb7c6;border-radius:6px}
 .install-help form{display:flex;justify-content:flex-end;margin-top:16px}
 .install-help button{min-height:44px}
+.app-qr-dialog{width:min(22rem,calc(100% - 32px));text-align:center}
+.app-qr-dialog h2{margin:0;font-size:1.15rem}
+.app-qr-dialog p{margin:.35rem 0 .75rem;font-size:.875rem}
+.app-qr-dialog img{display:block;width:min(270px,100%);height:auto;margin:auto;image-rendering:pixelated}
 #launchSplash {
   position: fixed;
   inset: 0;
@@ -560,7 +567,7 @@ body[data-park=sea] .install-action{border-color:#bbdbf4;background:#123f65;colo
 .tdroute-standalone [data-browser-only]{display:none!important}
 .tdroute-standalone body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 @media(display-mode:standalone){[data-browser-only]{display:none!important}}
-@media print{.install-action,.install-help,#launchSplash{display:none!important}}
+@media print{.install-action,.app-qr-action,.install-help,#launchSplash{display:none!important}}
 
 .park-touch-help{display:none}
 .park-map-pan:not([hidden]){margin-top:7px}

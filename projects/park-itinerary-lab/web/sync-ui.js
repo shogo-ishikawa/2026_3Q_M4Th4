@@ -1,8 +1,8 @@
-import {readFirebaseConfig, connectFirebase, syncErrorMessage} from './firebase-sync.js?v=2.6.0';
-import {createPlanSync} from './named-sync.js?v=2.6.0';
+import {readFirebaseConfig, connectFirebase, syncErrorMessage} from './firebase-sync.js?v=2.6.1';
+import {createPlanSync} from './named-sync.js?v=2.6.1';
 
-import {mountCompanionPlans} from './companion-plans.js?v=2.6.0';
-import {mountDriveMemories} from './drive-memories.js?v=2.6.0';
+import {mountCompanionPlans} from './companion-plans.js?v=2.6.1';
+import {mountDriveMemories} from './drive-memories.js?v=2.6.1';
 
 function startLogin() {
   const byId = id => document.getElementById(id);
@@ -141,7 +141,7 @@ function startLogin() {
     if (uid === user.uid) return;
     uid = user.uid;
     try {
-      const {initialiseApp} = await import('./app.js?v=2.6.0');
+      const {initialiseApp} = await import('./app.js?v=2.6.1');
       if (leaving) return;
       plans.setAccount(uid, adapter);
       status.textContent = '施設情報を読み込んでいます…';

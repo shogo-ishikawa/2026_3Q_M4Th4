@@ -1,4 +1,4 @@
-import {validateSavedState} from './storage.js?v=2.6.0';
+import {validateSavedState} from './storage.js?v=2.6.1';
 
 // Keep private backups, other park drafts, imported observations and purchase histories outside collaboration.
 function fields(source, keys) {

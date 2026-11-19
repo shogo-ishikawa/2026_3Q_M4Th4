@@ -1,4 +1,4 @@
-import {companionStore} from './companion-view.js?v=2.6.0';
+import {companionStore} from './companion-view.js?v=2.6.1';
 
 // Pinned Firebase Web SDK distributed with TDRoute so Auth can also restore a session offline.
 const MAX_PAYLOAD_BYTES = 800_000;
