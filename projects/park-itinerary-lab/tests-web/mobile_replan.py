@@ -233,8 +233,8 @@ def check_share_edits(page):
     date.fill('2026-11-19')
 
 
-def check_app_qr(page):
-    trigger = page.get_by_role('link', name='スマホ用QRコード', exact=True)
+def check_app_qr(page, label='スマホ用QRコード'):
+    trigger = page.get_by_role('link', name=label, exact=True)
     expect(trigger).to_have_count(1)
     dialog = page.locator('#appQrDialog')
     for close_with_keyboard in (True, False):
@@ -254,6 +254,28 @@ def check_app_qr(page):
             dialog.get_by_role('button', name='閉じる', exact=True).click()
         expect(dialog).to_be_hidden()
         expect(trigger).to_be_focused()
+
+
+def check_login_install_links(page):
+    gate = page.locator('#loginGate')
+    expect(gate).to_be_visible()
+    expect(page.locator('#appShell')).to_be_hidden()
+    login = gate.get_by_role('button', name='Googleでログイン', exact=True)
+    install = gate.get_by_role('link', name='スマホにアプリをインストール', exact=True)
+    qr = gate.get_by_role('link', name='QRコードを表示', exact=True)
+    login_box = login.bounding_box()
+    for link in (install, qr):
+        expect(link).to_be_in_viewport()
+        assert link.bounding_box()['y'] >= login_box['y'] + login_box['height']
+
+    install.click()
+    dialog = page.get_by_role('dialog', name='TDRouteをスマホに追加', exact=True)
+    expect(dialog).to_be_visible()
+    dialog.get_by_role('button', name='閉じる', exact=True).click()
+    expect(dialog).to_be_hidden()
+    expect(install).to_be_focused()
+    check_app_qr(page, 'QRコードを表示')
+    expect(gate).to_be_visible()
 
 
 def check_desktop_install_links(browser, origin, store):
@@ -449,7 +471,7 @@ if __name__ == '__main__':
             map_page = context.new_page()
             map_page.route('**/*', lambda route: route.continue_() if route.request.url.startswith(origin + '/') else route.abort())
             map_page.goto(origin + '/park-itinerary-lab/')
-            check_app_qr(map_page)
+            check_login_install_links(map_page)
             sign_in(map_page, 'mobile-visitor')
             check_app_qr(map_page)
             check_map_gestures(map_page, origin + '/park-itinerary-lab/')

@@ -39,7 +39,7 @@ function followsLinkInPlace(event) {
 
 export function initialisePwa() {
   const byId = id => document.getElementById(id);
-  const install = byId('installApp');
+  const installLinks = document.querySelectorAll('[data-open-install]');
   const dialog = byId('installHelp');
   const qrDialog = byId('appQrDialog');
   const qrLinks = document.querySelectorAll('[data-open-app-qr]');
@@ -65,10 +65,8 @@ export function initialisePwa() {
       if (launched) template.content.append(...nodes);
       else template.after(...nodes);
     }
-    if (install) {
-      install.hidden = installed || launched;
-      if (install.hidden && dialog.open) dialog.close();
-    }
+    for (const link of installLinks) link.hidden = installed || launched;
+    if ((installed || launched) && dialog?.open) dialog.close();
     for (const link of qrLinks) link.hidden = launched;
     if (launched && qrDialog?.open) qrDialog.close();
     return launched;
@@ -79,7 +77,7 @@ export function initialisePwa() {
     if (mode.addEventListener) mode.addEventListener('change', updateMode);
     else mode.addListener?.(updateMode);
   }
-  if (!install) return; // The guide only needs its presentation mode.
+  if (!installLinks.length) return; // The guide only needs its presentation mode.
   if (typeof qrDialog?.showModal === 'function') {
     for (const link of qrLinks) {
       link.setAttribute('aria-haspopup', 'dialog');
@@ -129,12 +127,9 @@ export function initialisePwa() {
   }
 
   const hasInstallDialog = typeof dialog?.showModal === 'function';
-  if (hasInstallDialog) {
-    install.setAttribute('aria-haspopup', 'dialog');
-    install.setAttribute('aria-controls', dialog.id);
-  }
   let prompting = false;
-  install.addEventListener('click', async event => {
+  async function openInstall(event) {
+    const install = event.currentTarget;
     if (!followsLinkInPlace(event) || (!promptEvent && !prompting && !hasInstallDialog)) return;
     event.preventDefault();
     if (prompting) return;
@@ -155,10 +150,14 @@ export function initialisePwa() {
     } finally {
       prompting = false;
     }
-  });
-  dialog.addEventListener('close', () => {
-    if (!install.hidden) install.focus({preventScroll: true});
-  });
+  }
+  for (const link of installLinks) {
+    if (hasInstallDialog) {
+      link.setAttribute('aria-haspopup', 'dialog');
+      link.setAttribute('aria-controls', dialog.id);
+    }
+    link.addEventListener('click', openInstall);
+  }
   byId('copyInstallUrl').addEventListener('click', async () => {
     const url = byId('installUrl');
     try {

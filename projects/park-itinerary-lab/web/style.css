@@ -600,6 +600,8 @@ body[data-park=sea] .hero-actions .app-qr-action{color:#fff}
 .login-primary { min-height: 46px; width: 100%; border: 0; border-radius: 9px; padding: 8px 16px; background: #3934aa; color: white; font-weight: 700; }
 .login-card .login-status { min-height: 1.6em; margin: 12px 0 0; font-size: 13px; color: #4d5568; }
 .login-card #retryLogin { margin-top: 12px; }
+.login-app-links { display: flex; flex-wrap: wrap; justify-content: center; column-gap: 16px; }
+.login-app-links a { display: inline-flex; align-items: center; min-height: 44px; color: #415673; font-size: 13px; text-underline-offset: .2em; }
 .site-header nav { flex-wrap: wrap; justify-content: flex-end; align-items: center; }
 #appShell .site-header {
   display: grid;
