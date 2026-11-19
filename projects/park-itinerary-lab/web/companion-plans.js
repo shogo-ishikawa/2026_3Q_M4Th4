@@ -1,5 +1,6 @@
-import {companionEmail, progressLabels} from './companion-view.js?v=2.5.0';
-import {formatTime} from './storage.js?v=2.5.0';
+import {companionEmail, progressLabels} from './companion-view.js?v=2.6.0';
+import {jointEditor} from './joint-planning.js?v=2.6.0';
+import {formatTime} from './storage.js?v=2.6.0';
 import {baseVisitId,isRepeatVisit} from './repeat-visits.js';
 
 const element = (tag, text) => Object.assign(document.createElement(tag), {textContent:text});
@@ -54,11 +55,12 @@ export function mountCompanionPlans({container,adapter,uid,plans,planner,sync}) 
   container.innerHTML = `<details class="panel" id="companionPanel"><summary>同行者と計画をシェア <span id="tripCount"></span></summary>
     <h3>自分の計画を共有</h3><label>共有する計画<select id="tripOwnPlan"></select></label>
     <div id="tripManage" hidden><label>同行者のGoogleアカウント<input id="tripGuest" type="email" autocomplete="off" maxlength="254" required placeholder="メールアドレス"></label>
-    <button type="button" id="tripInvite">この計画に招待</button><ul id="tripGuests" aria-label="この計画の同行者"></ul></div>
-    <p class="field-note">名前を付けて保存した計画を選びます。共有中のしおりを開いて予定や体験記録を更新すると、同行者にも反映されます。</p>
+    <label>同行者の権限<select id="tripRole"><option value="viewer">閲覧のみ</option><option value="editor">共同編集</option></select></label>
+    <button type="button" id="tripInvite">この計画に招待</button><button id="tripEditOwn" type="button" hidden>共同編集を開く</button><ul id="tripGuests" aria-label="この計画の同行者"></ul></div>
+    <p class="field-note">名前を付けて保存した計画を選びます。「共同編集」では、希望・来園条件・計画予算・旅程を一緒に編集できます。</p>
     <p role="status" id="tripOwnerStatus"></p>
     <h3>招待された計画</h3><label>同行者の計画<select id="tripInbox"></select></label>
-    <p role="status" id="tripReadStatus"></p><section id="tripTimetable" aria-label="共有されたしおり"></section></details>`;
+    <button type="button" id="tripEditReceived" hidden>共同編集を開く</button><p role="status" id="tripReadStatus"></p><section id="tripTimetable" aria-label="共有されたしおり"></section></details>`;
   const get = id => container.querySelector('#'+id);
   const own = get('tripOwnPlan'), inbox = get('tripInbox'), manage = get('tripManage'), panel = get('companionPanel');
   const guest = get('tripGuest'), invite = get('tripInvite'), members = get('tripGuests');
@@ -67,13 +69,19 @@ export function mountCompanionPlans({container,adapter,uid,plans,planner,sync}) 
   let sharedIds = new Set();
   try { sharedIds = new Set(JSON.parse(localStorage.getItem(key) || '[]')); } catch {}
   let preferredInvite = '';
+  let roles = null, stopRoles;
   let audiences = null, invites = [], stopOwn, stopInbox, stopView, opened = '', alive = true, busy = false;
   const listeners = new AbortController();
   const on = (target,type,fn) => target.addEventListener(type,fn,{signal:listeners.signal});
+  const joint = jointEditor({container,adapter,uid,planner,plans,sync,notice:text=>{
+    status.textContent = readStatus.textContent = text;
+    panel.open = true;
+  }});
   const setMembers = () => {
     members.replaceChildren();
     manage.hidden = !own.value;
-    invite.disabled = own.disabled = guest.disabled = busy || !audiences;
+    invite.disabled = own.disabled = guest.disabled = get('tripRole').disabled = busy || !audiences || !roles;
+    get('tripEditOwn').hidden = !roles?.has(own.value);
     if (!own.value || !audiences) return;
     const emails = audiences.get(own.value) || [];
     if (!emails.length) { members.append(element('li','招待した同行者はいません。')); return; }
@@ -82,7 +90,13 @@ export function mountCompanionPlans({container,adapter,uid,plans,planner,sync}) 
       remove.type = 'button'; remove.disabled = busy;
       remove.setAttribute('aria-label',email + 'との共有を解除');
       remove.onclick = () => change(email,false);
-      li.append(remove); members.append(li);
+      const role = document.createElement('select');
+      role.setAttribute('aria-label',email + 'の権限');
+      role.append(new Option('閲覧のみ','viewer'),new Option('共同編集','editor'));
+      role.value = roles?.get(own.value)?.includes(email) ? 'editor' : 'viewer';
+      role.disabled = busy || !roles;
+      role.onchange = () => { const next=role.value; setMembers(); void change(email,true,next); };
+      li.append(role,remove); members.append(li);
     }
   };
   function refresh() {
@@ -97,6 +111,7 @@ export function mountCompanionPlans({container,adapter,uid,plans,planner,sync}) 
   }
   function read() {
     const selected = invites.find(i => i.key === inbox.value);
+    get('tripEditReceived').hidden = selected?.role !== 'editor';
     if (opened && selected?.key === opened && panel.open) return;
     clearView();
     if (!selected || !panel.open) return;
@@ -104,7 +119,7 @@ export function mountCompanionPlans({container,adapter,uid,plans,planner,sync}) 
     readStatus.textContent = '最新の予定を確認しています…';
     stopView = adapter.watchView(uid,selected,view => {
       if (!alive || opened !== selected.key) return;
-      renderTimetable(timetable,view,planner.getCatalogue());
+      renderTimetable(timetable,view && {...view,name:selected.name},planner.getCatalogue());
       readStatus.textContent = view ? '閲覧専用 · 自動更新' : '最新の予定を確認しています…';
     }, cause => {
       if (!alive || opened !== selected.key) return;
@@ -112,6 +127,7 @@ export function mountCompanionPlans({container,adapter,uid,plans,planner,sync}) 
     });
   }
   function updateInbox(items) {
+    joint.verifyInvites(items);
     invites = items || [];
     options(inbox,invites.map(i=>[i.key,i.name]),'招待された計画を選ぶ');
     if (items && !inbox.value) {
@@ -119,11 +135,11 @@ export function mountCompanionPlans({container,adapter,uid,plans,planner,sync}) 
       preferredInvite = inbox.value;
     }
     get('tripCount').textContent = invites.length ? '（招待 ' + invites.length + '件）' : '';
-    if (!inbox.value) clearView(); else read();
+    read();
     if (!invites.length) readStatus.textContent = items ? '招待された計画はまだありません。' : '最新の招待を確認しています…';
   }
   function disconnect() {
-    stopOwn?.(); stopInbox?.(); stopOwn = stopInbox = null;
+    stopOwn?.(); stopRoles?.(); stopInbox?.(); stopOwn = stopRoles = stopInbox = null; roles = null;
     clearView(); updateInbox(null); audiences = null; setMembers();
   }
   function connect() {
@@ -139,14 +155,16 @@ export function mountCompanionPlans({container,adapter,uid,plans,planner,sync}) 
       }
       refresh();
     }, cause => { audiences = null; setMembers(); status.textContent = message(cause); });
+    stopRoles = adapter.watchEditors(uid,data => { roles=data; setMembers(); },
+      cause=>{roles=null; setMembers(); status.textContent=message(cause);});
     stopInbox = adapter.watchInbox(uid,updateInbox,cause => {updateInbox(null); readStatus.textContent = message(cause);});
   }
-  async function change(input,add) {
+  async function change(input,add,role='viewer') {
     if (busy || !own.value || !audiences) return;
     const id = own.value;
     try {
       const email = companionEmail(input);
-      if (add && (audiences.get(id)||[]).includes(email)) { status.textContent = 'この同行者は招待済みです。'; return; }
+      if (add && (audiences.get(id)||[]).includes(email) && (roles?.get(id)?.includes(email) ? 'editor' : 'viewer') === role) { status.textContent = 'この同行者は招待済みです。'; return; }
       busy = true; setMembers();
       // If the local plan was saved offline, send the pending version before creating its first grant.
       if (plans.pendingCount()) {
@@ -154,19 +172,27 @@ export function mountCompanionPlans({container,adapter,uid,plans,planner,sync}) 
         if (plans.pendingCount()) throw new Error('保存した計画の同期が終わってから、もう一度お試しください。');
       }
       if (!alive) return;
-      await adapter.changeMember(uid,id,email,add);
+      await adapter.changeMember(uid,id,email,add,role);
       if (!alive) return;
       if (add) { sharedIds.add(id); guest.value = ''; }
-      status.textContent = add ? '招待しました。同じGoogleアカウントで「招待された計画」を開けます。' : 'この計画の共有を解除しました。';
+      status.textContent = add ? (role==='editor'?'共同編集を許可しました。':'閲覧を許可しました。')+'同行者は「招待された計画」から開けます。' : 'この計画の共有を解除しました。';
     } catch (error) { if (alive) status.textContent = message(error); }
     finally { busy = false; if (alive) setMembers(); }
   }
   on(own,'change',()=>{status.textContent = ''; guest.value=''; setMembers();});
-  on(invite,'click',()=>{if (guest.reportValidity()) void change(guest.value,true);});
+  on(invite,'click',()=>{if (guest.reportValidity()) void change(guest.value,true,get('tripRole').value);});
+  on(get('tripEditOwn'),'click',()=>{
+    const selected=plans.list().find(p=>p.id===own.value);
+    if (selected && roles?.has(selected.id)) joint.open({owner:uid,planId:selected.id,name:selected.name});
+  });
+  on(get('tripEditReceived'),'click',()=>{
+    const invite=invites.find(i=>i.key===inbox.value && i.role==='editor');
+    if (invite) joint.open(invite);
+  });
   on(inbox,'change',()=>{ preferredInvite = inbox.value; read(); }); on(panel,'toggle',()=>{ if (panel.open) refresh(); read(); });
   on(window,'offline',connect); on(window,'online',connect); on(document,'visibilitychange',connect);
   refresh(); connect();
-  return {refresh,shared:id=>sharedIds.has(id),dispose(){
-    alive = false; listeners.abort(); disconnect(); container.replaceChildren();
+  return {refresh,shared:id=>sharedIds.has(id)&&!roles?.has(id),dispose(){
+    alive = false; listeners.abort(); joint.dispose(); disconnect(); container.replaceChildren();
   }};
 }

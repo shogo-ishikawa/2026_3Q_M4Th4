@@ -221,3 +221,39 @@ test('one transaction can rename and then remove a published plan with twelve re
   await assertFails(getDoc(liveRefs(member,id,guests.at(-1)).timetable));
   assert.equal((await assertSucceeds(getDocs(liveRefs(member,id,guests.at(-1)).inbox))).size, 0);
 });
+
+test('an opted-in editor can update only their shared workspace and its matching public view', async () => {
+  const id = 'joint-trip', ownerRefs = await publishPlan(id);
+  const member = companion('active-editor',university);
+  const docFor = (db,kind) => doc(db,'users','owner',kind,id);
+  const docs = db => ({editors:docFor(db,'liveEditors'), work:docFor(db,'liveWorkspaces'), ...liveRefs(db,id)});
+  const mine=docs(owner), invited=docs(member);
+  const work = {revision:1, draft:'joint planning fields', view:'morning'};
+  await assertFails(setDoc(ownerRefs.invite,{...invitation(id),role:'editor'}));
+  await assertFails(setDoc(mine.editors,{members:['uninvited@example.org']}));
+  const setup = writeBatch(owner);
+  setup.set(mine.editors,{members:[university]});
+  setup.set(mine.work,work); setup.set(mine.timetable,{view:work.view});
+  setup.set(mine.invite,{...invitation(id),role:'editor'});
+  await assertSucceeds(setup.commit());
+  await assertSucceeds(getDoc(invited.work));
+  await assertFails(getDoc(plan(member,id)));
+  await assertFails(getDoc(invited.editors)); await assertFails(getDoc(invited.audience));
+  await assertFails(getDocs(collection(member,'users/owner/liveWorkspaces')));
+  await assertFails(setDoc(invited.editors,{members:[]}));
+  await assertFails(deleteDoc(invited.work));
+  for (const db of [companion('stranger','other@example.org'),companion('unverified',university,false),guest])
+    await assertFails(getDoc(docs(db).work));
+  const change = (rev, v) => {
+    const b=writeBatch(member);b.set(invited.work,{revision:rev,draft:'next draft',view:'afternoon'});
+    b.set(invited.timetable,{view:v});return b.commit();
+  };
+  await assertFails(setDoc(invited.timetable,{view:'only view'}));
+  await assertFails(change(3,'afternoon')); await assertFails(change(2,'mismatch'));
+  await assertSucceeds(change(2,'afternoon')); await assertFails(change(2,'afternoon'));
+  await assertSucceeds(setDoc(mine.invite,{...invitation(id),role:'viewer'}));
+  await assertFails(getDoc(invited.work)); await assertSucceeds(getDoc(invited.timetable));
+  await assertFails(change(3,'afternoon'));
+  await assertSucceeds(setDoc(mine.invite,{...invitation(id),role:'editor'}));
+  await assertSucceeds(deleteDoc(mine.editors)); await assertFails(getDoc(invited.work));
+});

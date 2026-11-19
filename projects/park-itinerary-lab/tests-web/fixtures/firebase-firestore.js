@@ -2,7 +2,7 @@
 export function initializeFirestore() { return {}; }
 export function memoryLocalCache() { return {}; }
 export function collection(_db, users, uid, plans) {
-  if (users !== 'users' || !['plans','livePlanAudiences'].includes(plans)) throw Error('Unexpected collection');
+  if (users !== 'users' || !['plans','livePlanAudiences','liveEditors'].includes(plans)) throw Error('Unexpected collection');
   return {uid,kind:plans};
 }
 export function doc(db, users, uid, plans, id) {
@@ -41,7 +41,7 @@ export async function runTransaction(_db, update) {
 }
 
 export function onSnapshot(ref, _options, next) {
-  if (ref.kind !== 'livePlanAudiences') throw Error('Unexpected listener');
+  if (!['livePlanAudiences','liveEditors'].includes(ref.kind)) throw Error('Unexpected listener');
   queueMicrotask(() => next({metadata:{fromCache:false},docs:[]}));
   return () => {};
 }

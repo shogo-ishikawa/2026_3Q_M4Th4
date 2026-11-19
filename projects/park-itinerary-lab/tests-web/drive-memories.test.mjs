@@ -64,6 +64,10 @@ test('the album must confirm photo visibility support before the editor opens',a
     const request = makeAlbumClient(endpoint,async () => 'synthetic',async () => response({ok:true,albums:[],visibilityVersion:version}));
     await assert.rejects(request('albums',{},new AbortController().signal),{code:'version'});
   }
-  const request = makeAlbumClient(endpoint,async () => 'synthetic',async () => response({ok:true,albums:[],visibilityVersion:1}));
+  for (const version of [null,undefined,0,'2',1]) {
+    const request = makeAlbumClient(endpoint,async () => 'synthetic',async () => response({ok:true,albums:[],visibilityVersion:1,albumVersion:version}));
+    await assert.rejects(request('albums',{},new AbortController().signal),{code:'version'});
+  }
+  const request = makeAlbumClient(endpoint,async () => 'synthetic',async () => response({ok:true,albums:[],visibilityVersion:1,albumVersion:2}));
   assert.deepEqual((await request('albums',{},new AbortController().signal)).albums,[]);
 });

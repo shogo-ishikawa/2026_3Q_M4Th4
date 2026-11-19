@@ -1,8 +1,8 @@
-import {readFirebaseConfig, connectFirebase, syncErrorMessage} from './firebase-sync.js?v=2.5.0';
-import {createPlanSync} from './named-sync.js?v=2.5.0';
+import {readFirebaseConfig, connectFirebase, syncErrorMessage} from './firebase-sync.js?v=2.6.0';
+import {createPlanSync} from './named-sync.js?v=2.6.0';
 
-import {mountCompanionPlans} from './companion-plans.js?v=2.5.0';
-import {mountDriveMemories} from './drive-memories.js?v=2.5.0';
+import {mountCompanionPlans} from './companion-plans.js?v=2.6.0';
+import {mountDriveMemories} from './drive-memories.js?v=2.6.0';
 
 function startLogin() {
   const byId = id => document.getElementById(id);
@@ -134,14 +134,14 @@ function startLogin() {
       status.textContent = '同じGoogleアカウントでほかの端末からも開けます。';
       return;
     }
-    const name = user.displayName?.trim();
-    greeting.textContent = name ? `${name}さん、良い一日を！` : '良い一日を！';
+    const name = user.isOwner ? '' : user.displayName?.trim();
+    greeting.textContent = name ? `${name}さん、素敵な1日を！` : '素敵な1日を！';
     accountName.textContent = user.isOwner ? '管理者' : name || 'Google アカウント';
     adminLabel.hidden = !user.isOwner;
     if (uid === user.uid) return;
     uid = user.uid;
     try {
-      const {initialiseApp} = await import('./app.js?v=2.5.0');
+      const {initialiseApp} = await import('./app.js?v=2.6.0');
       if (leaving) return;
       plans.setAccount(uid, adapter);
       status.textContent = '施設情報を読み込んでいます…';
@@ -152,7 +152,7 @@ function startLogin() {
       companions = mountCompanionPlans({container:byId('companionPlans'),adapter:adapter.companions,
         uid,plans,planner,sync:() => sync({afterEdit:true})});
       disposeMemories = mountDriveMemories({
-        getIdToken: () => adapter.albumIdToken(user.uid), isOwner: user.isOwner,
+        getIdToken: () => adapter.albumIdToken(user.uid),
         getState: app.getState, getPark: () => app.getContext().park
       });
       shell.inert = false;

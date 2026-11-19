@@ -155,7 +155,7 @@ def check_forecast_panel(page):
 
 
 def check_album_entries(page):
-    header_entry = page.get_by_role('navigation', name='ページの案内').get_by_role('button', name='アルバム', exact=True)
+    header_entry = page.get_by_role('navigation', name='ページの案内').get_by_role('button', name='アルバムを振り返る', exact=True)
     album = page.get_by_role('dialog', name='夢の思い出')
     header_entry.click()
     expect(album).to_be_visible()

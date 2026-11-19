@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {encodeJoint,decodeJoint} from '../web/joint-planning.js';
 import {companionEmail, companionStore, timetablePayload} from '../web/companion-view.js';
 
 const id = 'sample';
@@ -78,4 +79,52 @@ test('a stale/cached or signed-out snapshot is never shown as fresh', async () =
   send(snap(false)); assert.equal(received[1].name,plan.name);
   signOut(); send(snap(false)); assert.equal(received.length,2); assert.equal(errors.length,1);
   close(); send(snap(false)); assert.equal(watchers.size,0); assert.equal(errors.length,1);
+});
+
+
+const sharedTrip = {parkId:'sea',settings:{date:'2026-11-19',entry:540,exit:1200,speed:70,budget:12000,
+  paidBy:'hidden',spentBudget:1300,purchases:[{receipt:'hidden'}],history:[{wait:30}],waitModel:{raw:'hidden'},
+  selections:[{id:'sea-example',weight:4,manualWait:123,dpaPurchasedAt:581,personalNote:'hidden'}]},
+  result:{status:'feasible',rows:[{kind:'activity',name:'体験',start:600,end:610,privateMemo:'hidden'}],
+    diagnostics:{notes:['hidden']},totals:{finish:610,unrelatedPrivate:'hidden'}},
+  history:[{wait:17}],parkStates:{land:{memo:'hidden'}}};
+
+test('joint drafts use a nested allowlist even for older imported plans; the original backup is unchanged',()=>{
+  const before = JSON.stringify(sharedTrip);
+  const draft = encodeJoint(sharedTrip);
+  assert.equal(JSON.stringify(sharedTrip),before);
+  assert.doesNotMatch(draft,/hidden|manualWait|spentBudget|history|waitModel|dpaPurchasedAt|privateMemo|receipt|paidBy|parkStates/);
+  const clean = decodeJoint({revision:4,draft});
+  assert.deepEqual(clean.state.settings.selections,[{id:'sea-example',weight:4}]);
+  assert.equal(clean.state.result.rows[0].name,'体験'); assert.equal(clean.revision,4);
+  assert.throws(()=>decodeJoint({revision:0,draft}));
+});
+
+test('viewer promotion seeds one independent workspace, concurrent editors cannot overwrite, and personal saves do not reset it',async()=>{
+  const {db,store,sdk,tx,owner} = fixture();
+  const original = {...plan,state:structuredClone(sharedTrip)};
+  db.set('users/creator/plans/sample',{revision:1,payload:JSON.stringify(original)});
+  const guest = 'another@example.jp', name=original.name;
+  await store.changeMember(owner,id,email,true);
+  assert.equal(db.has('users/creator/liveWorkspaces/sample'),false);
+  await store.changeMember(owner,id,email,true,'editor');
+  const workspace='users/creator/liveWorkspaces/sample', view='users/creator/liveTimetables/sample';
+  const ref={owner,planId:id,name}, draft=decodeJoint(db.get(workspace));
+  assert.equal(draft.revision,1); draft.state.settings.exit=1205;
+  assert.deepEqual(await store.commitWorkspace(owner,ref,1,draft.state),{ok:true,revision:2});
+  assert.equal((await store.commitWorkspace(owner,ref,1,original.state)).ok,false);
+  assert.equal(decodeJoint(db.get(workspace)).state.settings.exit,1205);
+  assert.equal(db.get(view).view,db.get(workspace).view);
+  await store.changeMember(owner,id,guest,true);
+  const privateView=structuredClone(original); privateView.state.settings.exit=1260;
+  await store.updateSharedCopy(sdk,db,tx,owner,id,original,privateView);
+  assert.equal(decodeJoint(db.get(workspace)).state.settings.exit,1205);
+  assert.equal(db.get(view).view,db.get(workspace).view);
+  await store.changeMember(owner,id,email,true,'viewer');
+  assert.equal(db.get('tripInboxes/'+email+'/invitations/creator~sample').role,undefined);
+  assert.deepEqual(db.get('users/creator/liveEditors/sample').members,[]);
+  await store.changeMember(owner,id,email,true,'editor');
+  assert.equal(decodeJoint(db.get(workspace)).revision,2);
+  await store.updateSharedCopy(sdk,db,tx,owner,id,original,null);
+  assert.equal(db.size,1);
 });

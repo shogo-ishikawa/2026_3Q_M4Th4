@@ -170,7 +170,7 @@ test('validated Google identity and private named invitations govern every album
   }
   assert.equal(flags.driveCalls,0);
   assert.equal(call(owner,'member',{albumId,email:'  GUEST@EXAMPLE.TEST ',remove:false}).ok,true);
-  assert.deepEqual(call(guest,'albums').albums,[{id:albumId,title:'旅行',owner:false}]);
+  assert.deepEqual(call(guest,'albums').albums,[{id:albumId,title:'旅行',kind:'shared',owner:false}]);
   assert.equal(call(guest,'upload',p).ok,true);
   assert.deepEqual(call(guest,'list',{albumId}).photos,[{id:p.photoId,visitKey:p.visitKey,label:p.label,visibility:'album',canDelete:true,canSetVisibility:true}]);
   assert.deepEqual(call(owner,'image',p),{ok:true,jpeg:'QUJD'});
@@ -193,7 +193,10 @@ test('only the owner sees the selected album’s invitations, including Workspac
   call(owner,'member',{albumId:second,email:visitor.email,remove:false});
   assert.deepEqual(roster(first),{addresses:[campus.email],unidentified:0});
   assert.deepEqual(roster(second),{addresses:[visitor.email],unidentified:0});
-  assert.deepEqual(call(campus,'list',{albumId:first,owner:true}),{ok:true,photos:[]});
+  const memberView = call(campus,'list',{albumId:first,owner:true});
+  assert.deepEqual(memberView.photos,[]);
+  assert.equal(memberView.invitations,undefined);
+  assert.ok(!JSON.stringify(memberView).includes('@'));
   assert.equal(call(campus,'list',{albumId:second}).error,'forbidden');
   assert.deepEqual(call({...campus,email:'alias@campus.example.test'},'albums').albums,[]);
   assert.ok(!JSON.stringify(call(campus,'albums')).includes('@'));
@@ -203,7 +206,9 @@ test('only the owner sees the selected album’s invitations, including Workspac
   assert.equal(call(campus,'list',{albumId:first}).error,'forbidden');
   assert.deepEqual(roster(second),{addresses:[visitor.email],unidentified:0});
   call(owner,'archiveAlbum',{albumId:second});
-  assert.ok(![...props.values()].includes(visitor.email));
+  assert.deepEqual(call(owner,'albums').hiddenAlbums.map(a=>a.id),[second]);
+  assert.ok([...props.values()].includes(visitor.email),'hiding does not revoke anybody');
+  assert.deepEqual(call(visitor,'list',{albumId:second}).photos,[]);
 });
 
 test('existing hash-only invitations stay valid and resolve only for the matching album and address',()=>{
@@ -216,7 +221,9 @@ test('existing hash-only invitations stay valid and resolve only for the matchin
   function roster(albumId) { return call(owner,'list',{albumId}).invitations; }
   assert.deepEqual(roster(first),{addresses:[],unidentified:2});
   assert.equal(call(guest,'albums').albums.length,2);
-  assert.deepEqual(call(guest,'list',{albumId:first,email:'other@example.test'}),{ok:true,photos:[]});
+  const view = call(guest,'list',{albumId:first,email:'other@example.test'});
+  assert.deepEqual(view.photos,[]);
+  assert.equal(view.invitations,undefined);
   assert.deepEqual(roster(first),{addresses:[guest.email],unidentified:1});
   assert.deepEqual(roster(second),{addresses:[],unidentified:2});
   call(owner,'member',{albumId:second,email:visitor.email,remove:false});
@@ -386,26 +393,163 @@ test('retry recovers the same private file after uncertain Drive upload, and pri
   assert.deepEqual(call(owner,'list',{albumId}).photos,[]);
 });
 
-test('removing an album revokes access first and a retry preserves private and shared originals',()=>{
-  const {call,create,files,flags,props} = backend(), id=create(), other=create();
-  call(owner,'member',{albumId:id,email:guest.email,remove:false});
-  const p={...payload(id),visibility:'album'}, personal=payload(id), keep=payload(other);
-  for (const [actor,photo] of [[owner,p],[guest,personal],[owner,keep]]) assert.deepEqual(call(actor,'upload',photo),{ok:true});
-  flags.failPropertyDelete='photo:' + id + ':' + personal.photoId;
-  const beforeRemoval = flags.driveCalls;
-  assert.equal(call(owner,'archiveAlbum',{albumId:id}).error,'offline');
-  assert.equal(call(guest,'image',p).error,'forbidden');
-  assert.deepEqual(call(guest,'albums').albums,[]);
-  assert.equal(call(owner,'upload',p).error,'conflict');
+test('all Google users can own personal albums that cannot be shared, even with the operator',()=>{
+  const {call,files,flags,props} = backend(), id = randomUUID(), p = payload(id);
+  const create = {albumId:id,title:'ひとり旅',kind:'private'};
+  assert.equal(call(guest,'create',create).ok,true);
+  assert.equal(call(guest,'create',create).ok,true);
+  assert.equal(call(visitor,'create',create).error,'forbidden');
+  assert.equal(call(guest,'create',{...create,kind:'shared'}).error,'conflict');
+  assert.deepEqual(call(guest,'albums').albums,[{id,title:'ひとり旅',kind:'private',owner:true}]);
+  assert.deepEqual(call(owner,'albums').albums,[]);
+  assert.equal(call(guest,'member',{albumId:id,email:visitor.email,remove:false}).error,'forbidden');
+  assert.equal(call(guest,'upload',{...p,visibility:'album'}).error,'invalid');
+  assert.deepEqual(call(guest,'upload',p),{ok:true});
+  assert.equal(call(guest,'setVisibility',{...p,visibility:'album'}).error,'invalid');
+  for (const action of ['list','image','member','dismissAlbum','archiveAlbum','deleteAlbum','archivePhoto','setAlbumAlias']) {
+    assert.equal(call(owner,action,{...p,alias:'作成者',email:owner.email,remove:false}).error,'forbidden',action);
+  }
+  const original = [...files.values()].find(f=>f.mimeType==='image/jpeg');
+  flags.failPropertyDelete='photo:' + id + ':' + p.photoId;
+  assert.equal(call(guest,'dismissAlbum',{albumId:id}).error,'offline');
+  assert.equal(call(guest,'image',p).error,'forbidden','an interrupted private deletion is already inaccessible');
+  assert.equal(call(guest,'dismissAlbum',{albumId:id}).ok,true);
+  assert.equal(call(guest,'dismissAlbum',{albumId:id}).ok,true);
+  assert.equal(call(guest,'restoreAlbum',{albumId:id}).error,'forbidden');
+  assert.deepEqual(call(guest,'albums').hiddenAlbums,[]);
+  assert.equal(call(guest,'create',create).error,'conflict');
+  assert.equal(props.has('photo:' + id + ':' + p.photoId),false);
+  assert.ok(files.has(original.id) && !original.trashed);
+});
+
+test('shared album management belongs to the creator and roster names are local to the album',()=>{
+  const {call} = backend(), id = randomUUID(), other = randomUUID();
+  function perform(a,action,fields={}) { return call(a,action,{albumId:id,...fields}); }
+  assert.equal(perform(guest,'create',{kind:'shared',title:'友人旅行',alias:'幹事'}).ok,true);
+  assert.equal(call(guest,'create',{albumId:other,title:'別の旅行',kind:'shared'}).ok,true);
+  for (const a of [owner,visitor]) assert.equal(perform(guest,'member',{email:a.email,remove:false,alias:a===visitor?'旅友':'案内役'}).ok,true);
+  const list = perform(visitor,'list');
+  assert.equal(list.invitations,undefined);
+  assert.deepEqual(list.participants,[
+    {label:'幹事',role:'creator',self:false},{label:'案内役',role:'member',self:false},{label:'旅友',role:'member',self:true}]);
+  assert.equal(perform(owner,'member',{email:visitor.email,remove:true}).error,'forbidden');
+  assert.equal(perform(visitor,'setAlbumAlias',{email:guest.email,alias:'新しい呼び名'}).ok,true);
+  assert.deepEqual(perform(guest,'list').participants.map(p=>p.label),['幹事','案内役','新しい呼び名']);
+  assert.equal(perform(guest,'member',{email:visitor.email,remove:false,alias:'招待時の別名'}).ok,true);
+  assert.equal(perform(visitor,'list').participants[2].label,'新しい呼び名');
+  assert.equal(perform(visitor,'setAlbumAlias',{alias:'someone@example.test'}).error,'invalid');
+  assert.equal(perform(visitor,'setAlbumAlias',{alias:''}).ok,true);
+  assert.deepEqual(call(guest,'list',{albumId:other}).participants,[{label:'作成者',role:'creator',self:true}]);
+  assert.ok(!JSON.stringify(perform(owner,'list')).includes('@'));
+  assert.equal(perform(guest,'member',{email:guest.email,remove:false}).error,'invalid');
+});
+
+test('shared album dismissal (including both cached client actions) affects only the caller',()=>{
+  for (const dismiss of ['dismissAlbum','archiveAlbum','deleteAlbum']) {
+    const {call,files,props,flags} = backend(), albumId=randomUUID();
+    call(guest,'create',{albumId,kind:'shared',title:'共同'});
+    for (const a of [visitor,owner]) call(guest,'member',{albumId,email:a.email,remove:false});
+    const p = {...payload(albumId),visibility:'album'}, personal = payload(albumId);
+    assert.equal(call(guest,'upload',p).ok,true);
+    assert.equal(call(visitor,'upload',personal).ok,true);
+    assert.equal(call(owner,'archivePhoto',p).error,'forbidden','operator is an ordinary participant');
+    for (const actor of [guest,visitor,owner]) {
+      assert.deepEqual(call(actor,dismiss,{albumId}),{ok:true});
+      assert.deepEqual(call(actor,dismiss,{albumId}),{ok:true});
+      assert.deepEqual(call(actor,'albums').albums,[]);
+      assert.equal(call(actor,'albums').hiddenAlbums[0].id,albumId);
+      for (const action of ['image','upload','setVisibility','setAlbumAlias','list','member','archivePhoto'])
+        assert.equal(call(actor,action,{...p,alias:'text',email:visitor.email,remove:true}).error,'forbidden',action);
+      if (actor===guest) {
+        assert.equal(call(visitor,'image',p).jpeg,p.jpeg);
+        assert.equal(call(owner,'image',p).jpeg,p.jpeg);
+        assert.equal(call(owner,'image',personal).error,'not-found');
+      }
+    }
+    assert.equal([...files.values()].filter(f=>f.mimeType==='image/jpeg' && !f.trashed).length,2);
+    assert.ok(props.has('photo:' + albumId + ':' + personal.photoId));
+    for (const a of [visitor,guest]) assert.deepEqual(call(a,'restoreAlbum',{albumId}),{ok:true});
+    assert.equal(call(visitor,'image',personal).jpeg,personal.jpeg);
+    assert.equal(call(guest,'image',personal).error,'not-found');
+    assert.equal(call(guest,'member',{albumId,email:owner.email,remove:true}).ok,true);
+    assert.deepEqual(call(owner,'albums').hiddenAlbums,[]);
+    assert.equal(call(owner,'restoreAlbum',{albumId}).error,'forbidden');
+    flags.onRead = () => assert.equal(call(visitor,dismiss,{albumId}).ok,true);
+    assert.equal(call(visitor,'image',p).error,'forbidden');
+  }
+});
+
+test('pre-v2.6 albums, including an empty one, retain the operator creator and existing memberships',()=>{
+  const {call,create,props} = backend(), id = create(), empty=create('以前の写真');
+  for (const albumId of [id,empty]) {
+    const key = 'album:' + albumId, album = JSON.parse(props.get(key));
+    delete album.creator; delete album.kind;
+    if (albumId === id) album.members = [uidHash(guest.email)];
+    props.set(key,JSON.stringify(album));
+  }
+  assert.ok(call(owner,'albums').albums.every(a=>a.owner && a.kind==='shared'));
+  assert.deepEqual(call(guest,'albums').albums,[{id,title:'旅行',kind:'shared',owner:false}]);
   assert.equal(call(owner,'deleteAlbum',{albumId:id}).ok,true);
-  assert.equal(call(owner,'deleteAlbum',{albumId:id}).ok,true);
-  assert.equal(call(owner,'create',{albumId:id,title:'旅行'}).error,'conflict');
-  assert.equal(call(owner,'image',personal).ok,false);
-  assert.equal(call(guest,'image',personal).ok,false);
-  assert.equal(flags.driveCalls,beforeRemoval);
-  assert.equal(call(owner,'image',keep).ok,true);
-  assert.equal([...files.values()].filter(f=>f.mimeType==='image/jpeg' && !f.trashed).length,3);
-  assert.equal([...props.keys()].filter(k=>k.startsWith('album:')).length,1);
+  assert.equal(call(guest,'list',{albumId:id}).ok,true);
+  assert.equal(call(guest,'member',{albumId:id,email:visitor.email,remove:false}).error,'forbidden');
+});
+
+test('per-creator quota allows other people to start and a hidden group can be recovered',()=>{
+  const {call} = backend();
+  function create(a) {
+    const albumId=randomUUID();
+    return {albumId,...call(a,'create',{albumId,title:'旅',kind:'shared'})};
+  }
+  const first=create(guest);
+  for (let i=1;i<12;i++) assert.equal(create(guest).ok,true);
+  assert.equal(create(guest).error,'limit');
+  assert.equal(create(visitor).ok,true);
+  assert.equal(call(guest,'dismissAlbum',first).ok,true);
+  assert.equal(create(guest).ok,true);
+  assert.equal(call(guest,'restoreAlbum',first).ok,true);
+});
+
+test('retained originals count toward daily upload quotas across albums and after app removal',()=>{
+  const {call,props,files,flags} = backend(), ids=[randomUUID(),randomUUID()];
+  for (const albumId of ids) call(guest,'create',{albumId,title:'旅行',kind:'private'});
+  const day=new Date(Date.now()+9*3600000).toISOString().slice(0,10);
+  const key='upload-day:'+uidHash(guest.uid);
+  props.set(key,JSON.stringify({day,files:Array.from({length:39},()=>randomUUID())}));
+  const photo=payload(ids[0]);
+  flags.lostUpload=true;
+  assert.equal(call(guest,'upload',photo).error,'offline');
+  assert.equal(call(guest,'upload',photo).ok,true);
+  assert.equal(JSON.parse(props.get(key)).files.length,40);
+  assert.equal(call(guest,'archivePhoto',photo).ok,true);
+  assert.equal(call(guest,'upload',payload(ids[1])).error,'limit');
+  assert.equal([...files.values()].filter(f=>f.mimeType==='image/jpeg').length,1);
+  const old=JSON.parse(props.get(key)); old.day='2020-01-01'; props.set(key,JSON.stringify(old));
+  assert.equal(call(guest,'upload',payload(ids[1])).ok,true);
+  assert.equal(JSON.parse(props.get(key)).files.length,1);
+});
+
+test('aggregate limits reject new writes without touching Drive and a new day releases expired quotas',()=>{
+  const {call,props,flags} = backend(), albumId=randomUUID();
+  call(guest,'create',{albumId,kind:'private',title:'私用'});
+  const day=new Date(Date.now()+9*3600000).toISOString().slice(0,10);
+  for (let i=0;i<8;i++) props.set('upload-day:'+uidHash('actor'+i),JSON.stringify({
+    day,files:Array.from({length:i<7?40:20},()=>randomUUID())
+  }));
+  assert.equal(call(guest,'upload',payload(albumId)).error,'limit');
+  assert.equal(flags.driveCalls,0);
+  for (const [key,value] of props) if (key.startsWith('upload-day:')) {
+    props.set(key,JSON.stringify({...JSON.parse(value),day:'2020-01-01'}));
+  }
+  assert.equal(call(guest,'upload',payload(albumId)).ok,true);
+  assert.equal([...props.keys()].filter(k=>k.startsWith('upload-day:')).length,1);
+  const before = flags.driveCalls;
+  props.set('reserved-room-fixture','x'.repeat(451*1024));
+  assert.equal(call(guest,'upload',payload(albumId)).error,'limit');
+  assert.equal(call(visitor,'create',{albumId:randomUUID(),kind:'private',title:'私用'}).error,'limit');
+  assert.equal(flags.driveCalls,before);
+  props.delete('reserved-room-fixture');
+  for (let i=1;i<120;i++) props.set('album:'+randomUUID(), JSON.stringify({creator:uidHash('f'+i), kind:'private', members:[]}));
+  assert.equal(call(visitor,'create',{albumId:randomUUID(),kind:'private',title:'私用'}).error,'limit');
 });
 
 test('refuses new uploads if any folder in the existing path is shared',()=>{

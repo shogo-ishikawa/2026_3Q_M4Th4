@@ -1,8 +1,8 @@
-import { weatherAtMinute } from './calendar-features.js?v=2.5.0';
-import {trainWaitModel, validateWaitModel} from './wait-model.js?v=2.5.0';
-import {validateCatalogue} from './storage.js?v=2.5.0';
-import {prepareWeatherForVisit,forecastSourceLabel,forecastCacheLabel} from './weather.js?v=2.5.0';
-export {fetchWeather,prepareWeatherForVisit} from './weather.js?v=2.5.0';
+import { weatherAtMinute } from './calendar-features.js?v=2.6.0';
+import {trainWaitModel, validateWaitModel} from './wait-model.js?v=2.6.0';
+import {validateCatalogue} from './storage.js?v=2.6.0';
+import {prepareWeatherForVisit,forecastSourceLabel,forecastCacheLabel} from './weather.js?v=2.6.0';
+export {fetchWeather,prepareWeatherForVisit} from './weather.js?v=2.6.0';
 
 const REMOTE='https://raw.githubusercontent.com/shogo-ishikawa/2026_3Q_M4Th4/park-wait-data/';
 const QUEUE_URL='https://queue-times.com/';

@@ -3,6 +3,7 @@ const PROJECT_ = 'tdroute-399c1';
 const FIREBASE_KEY_ = 'AIzaSyA4_oJPeS2kZ2LJJyKcx14R8IV7FMSIiy4'; // Public web app configuration.
 const OWNER_HASH_ = '59a9ddcef0808ba4c057a9015e2cbd352cd8fd39cb53d8490d90644d1153efba';
 const MAX_ALBUMS_ = 12, MAX_MEMBERS_ = 12, MAX_PHOTOS_ = 40, MAX_BYTES_ = 1000000;
+const MAX_STORED_ALBUMS_ = 120, MAX_DAILY_UPLOADS_ = 40, MAX_DAILY_TOTAL_ = 300;
 const UUID_ = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
 const FOLDER_TYPE_ = 'application/vnd.google-apps.folder';
 
@@ -78,7 +79,41 @@ function put_(store, key, value) { store.setProperty(key, JSON.stringify(value))
 function albumKey_(id) { return 'album:' + id; }
 function inviteKey_(album, member) { return 'invite-address:' + album + ':' + member; }
 function photoKey_(album, id) { return 'photo:' + album + ':' + id; }
-function allowed_(album, actor) { return !!album && (actor.owner || (!album.deleting && album.members.includes(actor.email))); }
+// Albums written before per-person ownership belonged to the original operator.
+function creator_(album) { return album.creator || OWNER_HASH_; }
+function kind_(album) { return album.kind || 'shared'; }
+function memberKey_(album, actor) {
+  if (!album) return null;
+  if (actor.uid === creator_(album)) return 'creator';
+  return kind_(album) === 'shared' && album.members.includes(actor.email) ? actor.email : null;
+}
+function allowed_(album, actor) {
+  const member = memberKey_(album, actor);
+  return member && !album.deleting && !(album.hidden || []).includes(member);
+}
+function alias_(value) {
+  if (typeof value !== 'string' || /[@＠\x00-\x1f\x7f]/.test(value) || value.trim().length > 24) fail_('invalid');
+  return value.trim();
+}
+function participants_(album, actor) {
+  const self = memberKey_(album, actor);
+  return ['creator', ...album.members].map((key,index) => ({
+    role:index ? 'member' : 'creator', self:key === self, label:album.aliases?.[key] || (index ? 'メンバー' + index : '作成者')
+  }));
+}
+function usageDay_() { return new Date(Date.now() + 9 * 3600000).toISOString().slice(0,10); }
+function checkStorageRoom_(store, entries) {
+  // Expired budgets must not prevent admission after yesterday's peak.
+  const today = usageDay_();
+  for (const key of Object.keys(entries).filter(k => k.startsWith('upload-day:'))) {
+    if (JSON.parse(entries[key]).day !== today) {
+      store.deleteProperty(key);
+      delete entries[key];
+    }
+  }
+  // Keep room within the 500 KiB Script Properties store for withdrawals and in-flight writes.
+  if (encodeURIComponent(JSON.stringify(entries)).replace(/%[0-9A-F]{2}/g,'x').length > 450 * 1024) fail_('limit');
+}
 function participant_(store, albumId, actor) {
   const album = prop_(store, albumKey_(albumId));
   if (!allowed_(album, actor)) fail_('forbidden');
@@ -105,60 +140,63 @@ function locked_(fn) {
 
 function handle_(request, actor) {
   const store = PropertiesService.getScriptProperties();
-  // New clients use separate action names so they cannot request a trash operation on an older server.
   if (request.action === 'archivePhoto') request.action = 'delete';
-  if (request.action === 'archiveAlbum') request.action = 'deleteAlbum';
+  // Cached clients use both old names. All three always act on the caller's own library.
+  if (['archiveAlbum','deleteAlbum'].includes(request.action)) request.action = 'dismissAlbum';
   if (request.action === 'albums') {
-    const albums = [];
+    const albums = [], hiddenAlbums = [];
     const entries = store.getProperties();
     for (const key of Object.keys(entries).filter(k => k.startsWith('album:'))) {
-      const album = JSON.parse(entries[key]);
-      if (allowed_(album, actor)) albums.push({id: key.slice(6), title: album.title, owner: actor.owner});
+      const album = JSON.parse(entries[key]), member = memberKey_(album, actor);
+      if (!member || album.deleting) continue;
+      const list = (album.hidden || []).includes(member) ? hiddenAlbums : albums;
+      list.push({id:key.slice(6), title:album.title, kind:kind_(album), owner:member === 'creator'});
     }
-    return {albums, visibilityVersion: 1, archiveVersion: 1};
+    return {albums, hiddenAlbums, visibilityVersion:1, archiveVersion:1, albumVersion:2};
   }
   const id = uuid_(request.albumId);
-  if (['create', 'member', 'deleteAlbum'].includes(request.action)) {
-    if (!actor.owner) fail_('forbidden');
-    return locked_(() => manage_(store, id, request));
-  }
+  if (['create','member','dismissAlbum','restoreAlbum','setAlbumAlias'].includes(request.action))
+    return locked_(() => manage_(store, id, request, actor));
   if (request.action === 'list') {
     const prefix = photoKey_(id, '');
     const props = store.getProperties();
     const album = props[albumKey_(id)] && JSON.parse(props[albumKey_(id)]);
     if (!allowed_(album, actor)) fail_('forbidden');
-    if (album.deleting) return {photos: []};
+    const creator = actor.uid === creator_(album);
     const photos = Object.keys(props).filter(k => k.startsWith(prefix)).map(k => ({id: k.slice(prefix.length), p: JSON.parse(props[k])}))
       .filter(row => row.p.state === 'ready' && canViewPhoto_(row.p, actor))
       .sort((a,b) => a.p.created - b.p.created || a.id.localeCompare(b.id))
       .map(({id: photoId, p}) => ({id: photoId, visitKey: p.visitKey, label: p.label, visibility: visibility_(p),
-        canDelete: actor.owner || actor.uid === p.author, canSetVisibility: actor.uid === p.author}));
+        canDelete: creator || actor.uid === p.author, canSetVisibility: actor.uid === p.author}));
     // Pre-v2.5 invitations have only an address hash. Restore their display label
     // from the signed-in invitee once, without changing or regranting membership.
-    if (!actor.owner && !props[inviteKey_(id, actor.email)]) {
+    if (!creator && !props[inviteKey_(id, actor.email)]) {
       locked_(() => {
-        if (participant_(store, id, actor).deleting) fail_('forbidden');
+        participant_(store, id, actor);
         store.setProperty(inviteKey_(id, actor.email), actor.address);
       });
     }
-    if (!actor.owner) return {photos};
+    if (kind_(album) === 'private') return {photos};
+    const participants = participants_(album, actor);
+    if (!creator) return {photos, participants};
     const addresses = album.members.map(member => props[inviteKey_(id, member)]).filter(Boolean).sort();
-    return {photos, invitations:{addresses, unidentified:album.members.length - addresses.length}};
+    return {photos, participants, invitations:{addresses, unidentified:album.members.length - addresses.length}};
   }
-  if (participant_(store, id, actor).deleting) fail_('conflict');
+  participant_(store, id, actor);
   const photoId = uuid_(request.photoId);
   const key = photoKey_(id, photoId);
   if (request.action === 'image') {
     const p = readablePhoto_(store, key, actor);
     const image = photoBytes_(p.file);
-    if (participant_(store, id, actor).deleting) fail_('not-found');
+    participant_(store, id, actor);
     if (readablePhoto_(store, key, actor).file !== p.file) fail_('not-found');
     return {jpeg: Utilities.base64Encode(image)};
   }
   if (request.action === 'setVisibility') {
     const visibility = requestedVisibility_(request.visibility);
     return locked_(() => {
-      if (participant_(store, id, actor).deleting) fail_('conflict');
+      const album = participant_(store, id, actor);
+      if (kind_(album) === 'private' && visibility !== 'private') fail_('invalid');
       const photo = readablePhoto_(store, key, actor);
       if (photo.author !== actor.uid) fail_('forbidden');
       if (visibility !== visibility_(photo)) put_(store, key, Object.assign({}, photo, {visibility}));
@@ -167,14 +205,13 @@ function handle_(request, actor) {
   }
   if (request.action === 'delete') {
     return locked_(() => {
-      if (participant_(store, id, actor).deleting) fail_('conflict');
+      const album = participant_(store, id, actor);
       const photo = prop_(store, key);
       // An invisible photo and an absent photo have the same delete response.
       if (!canViewPhoto_(photo, actor)) return {};
-      if (!actor.owner && actor.uid !== photo.author) fail_('forbidden');
+      if (actor.uid !== creator_(album) && actor.uid !== photo.author) fail_('forbidden');
       if (photo.state !== 'deleting') put_(store, key, Object.assign({}, photo, {state:'deleting'}));
       // Keep a bounded record of completed deletes so a delayed retry won't recreate a photo.
-      const album = participant_(store, id, actor);
       album.recentDeletes = [photoId, ...album.recentDeletes.filter(item => item !== photoId)].slice(0, 80);
       put_(store, albumKey_(id), album);
       store.deleteProperty(key);
@@ -195,7 +232,8 @@ function handle_(request, actor) {
   const checksum = hash_(bytes);
   return locked_(() => {
     const album = participant_(store, id, actor);
-    if (album.deleting || album.recentDeletes.includes(photoId)) fail_('conflict');
+    if (kind_(album) === 'private' && visibility !== 'private') fail_('invalid');
+    if (album.recentDeletes.includes(photoId)) fail_('conflict');
     let p = prop_(store, key);
     if (p) {
       if (actor.uid !== p.author || checksum !== p.checksum || p.label !== label || p.visitKey !== visitKey || p.state === 'deleting') fail_('conflict');
@@ -205,12 +243,20 @@ function handle_(request, actor) {
     } else if (store.getKeys().filter(k => k.startsWith(photoKey_(id, ''))).length >= MAX_PHOTOS_) fail_('limit');
     // A saving record from the flat layout may already have written its JPEG there.
     const date = !p || p.folder ? visitDate_(visitKey) : null;
+    const entries = store.getProperties();
+    if (!p) checkStorageRoom_(store,entries);
+    const charge = uploadBudget_(entries, actor.uid, p?.file);
     const root = privateFolder_(store);
     const folder = date ? photoFolder_(store, root, date, actor.uid, id, album.title) : root;
     if (p?.folder && p.folder !== folder) fail_('conflict');
     if (!p) {
-      p = {file: newFileId_(), folder, author: actor.uid, visibility, visitKey, label, checksum, created: Date.now(), state: 'saving'};
+      p = {file:newFileId_(), folder, author: actor.uid, visibility, visitKey, label, checksum, created: Date.now(), state: 'saving'};
       put_(store, key, p);
+    }
+    // A saved reservation has a stable Drive ID. A lost response consumes only one daily slot.
+    if (charge) {
+      charge.value.files.push(p.file);
+      put_(store, charge.key, charge.value);
     }
     savePhoto_(p.file, photoId, bytes, folder);
     p.state = 'ready';
@@ -219,43 +265,107 @@ function handle_(request, actor) {
   });
 }
 
-function manage_(store, id, request) {
-  const key = albumKey_(id);
-  const album = prop_(store, key);
-  if (request.action === 'deleteAlbum') {
-    if (!album) return {};
-    if (!album.deleting) put_(store, key, Object.assign({}, album, {deleting: true}));
-    // Revoke app access first. Retain all original Drive files and folders, including legacy ones.
-    const photos = photoKey_(id, ''), invitations = inviteKey_(id, '');
-    for (const k of store.getKeys().filter(k => k.startsWith(photos) || k.startsWith(invitations))) store.deleteProperty(k);
-    const deleted = prop_(store, 'deleted-albums') || [];
-    put_(store, 'deleted-albums', [id, ...deleted.filter(item => item !== id)].slice(0, 80));
-    store.deleteProperty(key);
-    return {};
-  }
-  if (album?.deleting) fail_('conflict');
-  if (request.action === 'create') {
-    if ((prop_(store, 'deleted-albums') || []).includes(id)) fail_('conflict');
-    const title = title_(request.title, 80);
-    if (album) {
-      if (album.title !== title) fail_('conflict');
-      return {};
+function uploadBudget_(entries, uid, file) {
+  const today = usageDay_();
+  const key = 'upload-day:' + uid;
+  let files = [], total = 0;
+  for (const name of Object.keys(entries).filter(k => k.startsWith('upload-day:'))) {
+    const entry = JSON.parse(entries[name]);
+    if (entry.day === today) {
+      total += entry.files.length;
+      if (name === key) files = entry.files;
     }
-    if (store.getKeys().filter(k => k.startsWith('album:')).length >= MAX_ALBUMS_) fail_('limit');
-    put_(store, key, {title, members: [], recentDeletes: []});
+  }
+  if (files.includes(file)) return null;
+  if (files.length >= MAX_DAILY_UPLOADS_ || total >= MAX_DAILY_TOTAL_) fail_('limit');
+  return {key, value:{day:today,files}};
+}
+
+function createAlbum_(store, id, request, actor, album) {
+  // A cached pre-v2.6 creator screen was available only for the original operator.
+  if (request.kind === undefined && !actor.owner) fail_('forbidden');
+  const kind = request.kind === undefined ? 'shared' : request.kind;
+  if (!['private','shared'].includes(kind)) fail_('invalid');
+  const title = title_(request.title,80), alias = alias_(request.alias === undefined ? '' : request.alias);
+  if (album) {
+    if (creator_(album) !== actor.uid) fail_('forbidden');
+    if (album.title !== title || kind_(album) !== kind || album.deleting) fail_('conflict');
     return {};
   }
-  if (!album) fail_('not-found');
+  if ((prop_(store, 'deleted-albums') || []).some(marker => marker === id || marker.startsWith(id + ':'))) fail_('conflict');
+  const entries = store.getProperties(), keys = Object.keys(entries).filter(k => k.startsWith('album:'));
+  const owned = keys.map(k => JSON.parse(entries[k])).filter(a => creator_(a) === actor.uid);
+  if (keys.length >= MAX_STORED_ALBUMS_ || owned.length >= MAX_ALBUMS_ * 2 ||
+      owned.filter(a => !(a.hidden || []).includes('creator')).length >= MAX_ALBUMS_) fail_('limit');
+  checkStorageRoom_(store,entries);
+  const record = {creator:actor.uid, kind, title, members:[], recentDeletes:[]};
+  if (alias && kind === 'shared') record.aliases = {creator:alias};
+  put_(store, albumKey_(id), record);
+  return {};
+}
+
+function deletePrivateAlbum_(store, id, album) {
+  const key = albumKey_(id);
+  if (!album.deleting) put_(store, key, Object.assign({}, album, {deleting:true}));
+  const photos = photoKey_(id, ''), invitations = inviteKey_(id, '');
+  for (const k of store.getKeys().filter(k => k.startsWith(photos) || k.startsWith(invitations))) store.deleteProperty(k);
+  const deleted = prop_(store, 'deleted-albums') || [];
+  const marker = id + ':' + creator_(album);
+  put_(store, 'deleted-albums', [marker,...deleted.filter(item => item !== marker)].slice(0,80));
+  store.deleteProperty(key);
+}
+
+function manage_(store, id, request, actor) {
+  const key = albumKey_(id), album = prop_(store, key);
+  if (request.action === 'create') return createAlbum_(store,id,request,actor,album);
+  if (!album && request.action === 'dismissAlbum') {
+    const deleted = prop_(store, 'deleted-albums') || [];
+    if (deleted.includes(id + ':' + actor.uid) || (actor.owner && deleted.includes(id))) return {};
+  }
+  const self = memberKey_(album,actor);
+  if (!self) fail_('forbidden');
+  const kind = kind_(album);
+  if (request.action === 'dismissAlbum' && self === 'creator' && (kind === 'private' || album.deleting)) {
+    // A v2.5 global removal already marked 'deleting' can finish without resurrecting its data.
+    deletePrivateAlbum_(store,id,album);
+    return {};
+  }
+  if (album.deleting) fail_('forbidden');
+  if (['restoreAlbum','dismissAlbum'].includes(request.action)) {
+    if (kind !== 'shared') fail_('invalid');
+    const hidden = (album.hidden || []).filter(member => member !== self);
+    if (request.action === 'dismissAlbum') hidden.push(self);
+    album.hidden = hidden;
+    put_(store,key,album);
+    return {};
+  }
+  if (!allowed_(album,actor) || kind !== 'shared') fail_('forbidden');
+  if (request.action === 'setAlbumAlias') {
+    const label = alias_(request.alias);
+    album.aliases = album.aliases || {};
+    if (label) album.aliases[self] = label;
+    else delete album.aliases[self];
+    put_(store,key,album);
+    return {};
+  }
+  if (self !== 'creator') fail_('forbidden');
   const address = email_(request.email), member = hash_(address), label = inviteKey_(id, member);
-  if (typeof request.remove !== 'boolean') fail_('invalid');
+  if (member === actor.email || typeof request.remove !== 'boolean') fail_('invalid');
   if (request.remove) {
     album.members = album.members.filter(hash => hash !== member);
+    if (album.hidden) album.hidden = album.hidden.filter(hash => hash !== member);
+    if (album.aliases) delete album.aliases[member];
     put_(store, key, album);
     store.deleteProperty(label);
   } else {
+    const alias = alias_(request.alias === undefined ? '' : request.alias);
     if (!album.members.includes(member)) {
       if (album.members.length >= MAX_MEMBERS_) fail_('limit');
       album.members.push(member);
+      if (alias) {
+        album.aliases = album.aliases || {};
+        album.aliases[member] = alias;
+      }
     }
     store.setProperty(label, address);
     put_(store, key, album);
