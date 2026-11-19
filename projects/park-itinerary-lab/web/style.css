@@ -535,7 +535,28 @@ body[data-park=sea] .install-action{border-color:#bbdbf4;background:#123f65;colo
 .install-url input{flex:1;min-width:0;padding:8px;border:1px solid #abb7c6;border-radius:6px}
 .install-help form{display:flex;justify-content:flex-end;margin-top:16px}
 .install-help button{min-height:44px}
-#launchSplash{position:fixed;inset:0;z-index:1000;pointer-events:none;background:#191e37 url('assets/pwa/splash.webp') center/contain no-repeat}
+#launchSplash {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  padding-bottom: max(32px, calc(env(safe-area-inset-bottom) + 14px));
+  color: #fff;
+  background:
+    linear-gradient(to top, #0b1930ed, #0b193000 34%),
+    #191e37 url('assets/land-hero.webp') 80% center / cover no-repeat;
+}
+.launch-name {
+  font: 600 clamp(2rem, 6vw, 3rem)/1.1 Georgia, serif;
+}
+.launch-version {
+  margin-top: 6px;
+  font: 600 0.875rem/1.5 system-ui, sans-serif;
+}
 .tdroute-standalone [data-browser-only]{display:none!important}
 .tdroute-standalone body{padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
 @media(display-mode:standalone){[data-browser-only]{display:none!important}}

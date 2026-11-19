@@ -26,7 +26,7 @@ PARK_WEB_FILES = ('index.html', 'pwa.js', 'sw.js', 'manifest.webmanifest', 'styl
                   'data/map-landmarks.json', 'data/land-map-scenery.json', 'data/sea-map-scenery.json',
                   'contingency.js', 'data/land-geography.json', 'data/land-geography-LICENCE.md', 'assets/land-geographic-map.svg',
                   'assets/pwa/icon-192.png', 'assets/pwa/icon-512.png', 'assets/pwa/icon-maskable-512.png',
-                  'assets/pwa/apple-touch-icon.png', 'assets/pwa/splash.webp',
+                  'assets/pwa/apple-touch-icon.png',
                   'assets/pwa/startup-750x1334.jpg', 'assets/pwa/startup-1125x2436.jpg', 'assets/pwa/startup-828x1792.jpg',
                   'assets/pwa/startup-1170x2532.jpg', 'assets/pwa/startup-1179x2556.jpg', 'assets/pwa/startup-1206x2622.jpg',
                   'assets/pwa/startup-1284x2778.jpg', 'assets/pwa/startup-1290x2796.jpg', 'assets/pwa/startup-1320x2868.jpg')

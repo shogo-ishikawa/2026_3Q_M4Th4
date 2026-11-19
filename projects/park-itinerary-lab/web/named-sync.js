@@ -1,7 +1,7 @@
 import {
   compactSavedPlan, listSavedPlans, loadSavedPlan, MAX_SAVED_PLANS,
   newPlanId, parsePlanJson, planName, planSummary,
-} from './storage.js?v=2.3.0';
+} from './storage.js?v=2.3.1';
 
 export const PRIVATE_PLAN_PREFIX = 'tdroute:private-plans:v1:';
 const LEGACY_IMPORT_PREFIX = 'tdroute:legacy-plan-import:v1:';

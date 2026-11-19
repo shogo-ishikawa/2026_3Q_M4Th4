@@ -18,7 +18,7 @@ class ParkPublicBuildTests(unittest.TestCase):
         builder = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(builder)
         required = {'accuracy.html', 'accuracy.css', 'accuracy-page.js', 'forecast-accuracy.js',
-                    'pwa.js', 'manifest.webmanifest', 'sw.js', 'assets/pwa/splash.webp',
+                    'pwa.js', 'manifest.webmanifest', 'sw.js', 'assets/land-hero.webp',
                     'forecast-calendar.js', 'calendar-outlook.js',
                     'onsite-navigation.js', 'visit-day-view.js', 'wishlist-presets.js', 'itinerary-image.js', 'ticket-calendar.js', 'ticket-calendar-seed.js',
                     'repeat-visits.js', 'intraday-waits.js', 'day-progress-ui.js', 'day-progress-plan.js'}
@@ -91,7 +91,14 @@ class ParkPublicBuildTests(unittest.TestCase):
         html = (web / 'index.html').read_text(encoding='utf-8')
         startup_images = re.findall(r'href=["\'](?:\./)?(assets/pwa/startup-[^"\']+)["\']', html)
         self.assertTrue(startup_images)
-        for path in set(offline + icons + startup_images):
+        version = json.loads((web.parent / 'version.json').read_text())['version']
+        self.assertIn(f'<span class="launch-version">v{version}</span>', html)
+        for url in startup_images:
+            path, query = url.split('?')
+            self.assertEqual(query, 'v=' + version)
+            self.assertIn(path, builder.PARK_WEB_FILES)
+            self.assertIn(f'TDRoute v{version}\n'.encode(), (web / path).read_bytes()[:100])
+        for path in set(offline + icons):
             self.assertIn(path, builder.PARK_WEB_FILES)
             self.assertTrue((web / path).is_file(), path)
 

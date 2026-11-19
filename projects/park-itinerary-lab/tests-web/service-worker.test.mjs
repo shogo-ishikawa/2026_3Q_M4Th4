@@ -51,7 +51,7 @@ test('インストールは現地の計画に必要な画面・ワーカー・�
     request.credentials === 'omit' && request.cache === 'reload' && request.redirect === 'error'));
   const paths = new Set(sw.files().map(request => request.url.slice(scope.length)));
   for (const needed of ['index.html', 'planner-worker.js', 'data/parks.json', 'assets/land-geographic-map.svg',
-    'assets/sea-geographic-map.svg', 'itinerary-image.js', 'assets/pwa/splash.webp', 'sync-ui.js', 'firebase-config.json',
+    'assets/sea-geographic-map.svg', 'itinerary-image.js', 'assets/land-hero.webp', 'sync-ui.js', 'firebase-config.json',
     'assets/firebase/firebase-app.js', 'assets/firebase/firebase-auth.js', 'assets/firebase/firebase-firestore.js']) assert.ok(paths.has(needed));
   assert.equal(paths.size, sw.files().length);
   // 画面やワーカーから新たにモジュールを読むときも、オフラインの依存漏れを検出する。
@@ -114,7 +114,7 @@ test('公開シェル以外の取得・別の版・個人情報付きの要求�
   for (const path of ['../another-app/', '../park-itinerary-lab-copy/app.js', 'https://example.org/weather.json',
     'https://raw.githubusercontent.com/shogo-ishikawa/2026_3Q_M4Th4/park-wait-data/live-waits.json',
     'downloads/TDRoute.zip', 'data/park-history.json', 'index.html?plan=private', 'app.js?v=previous',
-    'app.js?v=2.3.0&user=private', 'data/parks.json?refresh=123&user=private']) {
+    'app.js?v=2.3.1&user=private', 'data/parks.json?refresh=123&user=private']) {
     assert.equal(sw.request(path), undefined, path);
   }
   assert.equal(sw.request('app.js', {method: 'POST', body: 'private'}), undefined);
