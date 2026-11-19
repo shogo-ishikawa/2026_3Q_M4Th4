@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "catalogueUpdatedAt": "2026-11-18T21:15:19.078072Z",
-  "updatedAt": "2026-11-19T21:01:53.709011Z",
+  "updatedAt": "2026-11-19T21:02:10.537642Z",
   "attribution": "Powered by Queue-Times.com",
   "attributionUrl": "https://queue-times.com/",
   "weatherAttributionUrl": "https://open-meteo.com/",
@@ -11,7 +11,7 @@
       "provider": "queue-times",
       "parkId": "land",
       "providerParkId": 274,
-      "fetchedAt": "2026-11-19T21:01:53.341556Z",
+      "fetchedAt": "2026-11-19T21:02:10.318778Z",
       "sourceUrl": "https://queue-times.com/parks/274/queue_times.json",
       "attributionUrl": "https://queue-times.com/",
       "rides": [
@@ -308,7 +308,7 @@
       "provider": "queue-times",
       "parkId": "sea",
       "providerParkId": 275,
-      "fetchedAt": "2026-11-19T21:01:53.708848Z",
+      "fetchedAt": "2026-11-19T21:02:10.537448Z",
       "sourceUrl": "https://queue-times.com/parks/275/queue_times.json",
       "attributionUrl": "https://queue-times.com/",
       "rides": [
