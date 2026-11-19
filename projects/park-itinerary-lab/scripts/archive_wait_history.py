@@ -14,13 +14,38 @@ import re
 
 JST=dt.timezone(dt.timedelta(hours=9))
 MONTH_FILE=re.compile(r'\d{4}-(?:0[1-9]|1[0-2])\.json')
-PUBLIC_FIELDS={'date','activityId','time','wait','weather','event','source','observedAt','temperature','precipitation','openingMinute','holiday','holidayName','weatherSource','weatherTime','weatherFetchedAt'}
+PUBLIC_FIELDS={'date','activityId','time','wait','weather','event','source','observedAt','temperature','precipitation','openingMinute','holiday','holidayName','weatherSource','weatherTime','weatherFetchedAt','collector'}
 
 
 def bucket(row):
     minute=row['time'];opening=row.get('openingMinute')
     width=10 if isinstance(opening,int) and not isinstance(opening,bool) and 0<=minute-opening<90 else 30
     return minute//width*width
+
+
+BACKUP_COLLECTOR = 'watchdog'
+
+
+def observation_order(row):
+    # The independent collector fills empty buckets; the primary feed carries weather.
+    primary = row.get('collector') != BACKUP_COLLECTOR
+    # Older published rows have only the JST minute, newer ones retain seconds.
+    try:
+        observed = dt.datetime.fromisoformat(row['observedAt'])
+        if observed.tzinfo is not None:
+            return primary, row['time'], observed
+    except (KeyError, ValueError, TypeError):
+        pass
+    return primary, row['time'], dt.datetime.min.replace(tzinfo=dt.timezone.utc)
+
+
+def preferred_per_bucket(values):
+    merged = {}
+    for row in values:
+        key = row['date'], row['activityId'], bucket(row)
+        if key not in merged or observation_order(row) >= observation_order(merged[key]):
+            merged[key] = row
+    return merged.values()
 
 
 def valid_row(row,today):
@@ -61,9 +86,9 @@ def update_archive(data_dir,today,retain_months=None):
         if earliest is None or month_number(dt.date.fromisoformat(row['date']))>=earliest:months.setdefault(row['date'][:7],[]).append(row)
     files=[]
     for month,values in sorted(months.items()):
-        merged={}
-        for row in values:merged[(row['date'],row['activityId'],bucket(row))]={key:value for key,value in row.items() if key in PUBLIC_FIELDS and isinstance(value,(str,int,float,bool))}
-        values=sorted(merged.values(),key=lambda row:(row['date'],row['time'],row['activityId']))
+        values = [{key: value for key, value in row.items() if key in PUBLIC_FIELDS and isinstance(value, (str, int, float, bool))}
+                  for row in preferred_per_bucket(values)]
+        values.sort(key=lambda row: (row['date'], row['time'], row['activityId']))
         path=directory/(month+'.json');atomic_json(path,values)
         files.append({'file':'history/'+path.name,'month':month,'samples':len(values),'firstDate':values[0]['date'] if values else None,'lastDate':values[-1]['date'] if values else None})
     index={'schemaVersion':1,'updatedAt':dt.datetime.now(dt.timezone.utc).isoformat().replace('+00:00','Z'),'source':'queue-times','attribution':'Powered by Queue-Times.com','attributionUrl':'https://queue-times.com/','retentionMonths':retain_months,'files':files,'samples':sum(item['samples'] for item in files)}

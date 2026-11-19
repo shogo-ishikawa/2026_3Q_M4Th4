@@ -99,6 +99,8 @@ function parseTimestamp(value) {
 }
 
 function collectPosts(rows, date, midnight, asOf, slots, source) {
+  const primaryBuckets = new Set();
+  const backups = new Map();
   for (const row of rows) {
     if (row?.date !== date || row.source !== source || !validWait(row.wait) ||
         row.isOpen === false || !Number.isInteger(row.time) || row.time < 0 || row.time >= 1440) continue;
@@ -107,7 +109,23 @@ function collectPosts(rows, date, midnight, asOf, slots, source) {
         Math.floor((observedAt - midnight) / MINUTE) !== row.time) continue;
     const start = Math.floor(row.time / SLOT) * SLOT;
     const slot = slots.get(row.activityId + '|' + start);
-    if (slot && row.time < slot.end) slot.posts.set(observedAt, row.wait);
+    if (!slot || row.time >= slot.end) continue;
+    if (source === 'queue-times') {
+      // An archive can still contain a backup after recent observations gained a primary reading.
+      const sinceOpening = row.time - row.openingMinute;
+      const width = Number.isInteger(row.openingMinute) && sinceOpening >= 0 && sinceOpening < 90 ? 10 : SLOT;
+      const key = row.activityId + '|' + Math.floor(row.time / width) * width;
+      if (row.collector === 'watchdog') {
+        const prior = backups.get(key);
+        if (!prior || observedAt > prior.observedAt) backups.set(key, {slot, observedAt, wait:row.wait});
+        continue;
+      }
+      primaryBuckets.add(key);
+    }
+    slot.posts.set(observedAt, row.wait);
+  }
+  for (const [key, {slot, observedAt, wait}] of backups) {
+    if (!primaryBuckets.has(key) && !slot.posts.has(observedAt)) slot.posts.set(observedAt, wait);
   }
 }
 
