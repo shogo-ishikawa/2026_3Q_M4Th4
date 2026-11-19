@@ -1,5 +1,7 @@
-import {readFirebaseConfig, connectFirebase, syncErrorMessage} from './firebase-sync.js?v=2.2.2';
-import {createPlanSync} from './named-sync.js?v=2.2.2';
+import {readFirebaseConfig, connectFirebase, syncErrorMessage} from './firebase-sync.js?v=2.3.0';
+import {createPlanSync} from './named-sync.js?v=2.3.0';
+
+import {mountDriveMemories} from './drive-memories.js?v=2.3.0';
 
 function startLogin() {
   const byId = id => document.getElementById(id);
@@ -12,13 +14,15 @@ function startLogin() {
   const greeting = byId('accountGreeting');
   const accountName = byId('accountName');
   const adminLabel = byId('adminLabel');
-  let adapter, unsubscribe, uid, planner;
+  let adapter, unsubscribe, uid, planner, disposeMemories;
   let starting = false, leaving = false, syncInFlight = null;
   let editsDuringSync = false, refreshAfterUpload = false;
   let legacyOptions = '', summaries = '';
   const plans = createPlanSync({onChange: reflectLibrary});
 
   function lock() {
+    disposeMemories?.();
+    disposeMemories = null;
     for (const dialog of shell.querySelectorAll('dialog[open]')) dialog.close();
     shell.inert = true;
     shell.hidden = true;
@@ -130,7 +134,7 @@ function startLogin() {
     if (uid === user.uid) return;
     uid = user.uid;
     try {
-      const {initialiseApp} = await import('./app.js?v=2.2.2');
+      const {initialiseApp} = await import('./app.js?v=2.3.0');
       if (leaving) return;
       plans.setAccount(uid, adapter);
       status.textContent = '施設情報を読み込んでいます…';
@@ -138,6 +142,10 @@ function startLogin() {
       await app.ready;
       if (leaving) return;
       planner = app;
+      disposeMemories = mountDriveMemories({
+        getIdToken: () => adapter.albumIdToken(user.uid), isOwner: user.isOwner,
+        getState: app.getState, getPark: () => app.getContext().park
+      });
       shell.inert = false;
       shell.hidden = false;
       gate.hidden = true;
