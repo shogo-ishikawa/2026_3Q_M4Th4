@@ -233,6 +233,29 @@ def check_share_edits(page):
     date.fill('2026-11-19')
 
 
+def check_app_qr(page):
+    trigger = page.get_by_role('button', name='スマホ用QRコード', exact=True)
+    expect(trigger).to_have_count(1)
+    dialog = page.locator('#appQrDialog')
+    for close_with_keyboard in (True, False):
+        trigger.click()
+        expect(dialog).to_be_visible()
+        image = dialog.get_by_role('img')
+        expect(image).to_be_visible()
+        assert image.evaluate('''async img => {
+          await img.decode();
+          const box = img.getBoundingClientRect();
+          return img.naturalWidth > 0 && img.naturalWidth === img.naturalHeight &&
+            box.width === box.height && box.x >= 0 && box.right <= innerWidth;
+        }''')
+        if close_with_keyboard:
+            page.keyboard.press('Escape')
+        else:
+            dialog.get_by_role('button', name='閉じる', exact=True).click()
+        expect(dialog).to_be_hidden()
+        expect(trigger).to_be_focused()
+
+
 def check_mobile_course_links(website):
     course_links = 'a[href="../"], a[href="#learn"], a[href*="colab.research.google.com"], a[href*="github.com/shogo-ishikawa/"], a[href$=".zip"], #learn'
     expect(website.locator('a[href="../"]')).to_be_visible()
@@ -247,6 +270,7 @@ def check_mobile_course_links(website):
     app.goto(website.url)
     expect(app.locator('html')).to_have_class('tdroute-standalone')
     expect(app.locator(course_links)).to_have_count(0)
+    expect(app.get_by_role('button', name='スマホ用QRコード', exact=True)).to_have_count(0)
     app.locator('header a[href="guide.html"]').click()
     expect(app.locator('html')).to_have_class('tdroute-standalone')
     expect(app.locator(course_links)).to_have_count(0)
@@ -391,7 +415,9 @@ if __name__ == '__main__':
             map_page = context.new_page()
             map_page.route('**/*', lambda route: route.continue_() if route.request.url.startswith(origin + '/') else route.abort())
             map_page.goto(origin + '/park-itinerary-lab/')
+            check_app_qr(map_page)
             sign_in(map_page, 'mobile-visitor')
+            check_app_qr(map_page)
             check_map_gestures(map_page, origin + '/park-itinerary-lab/')
             map_page.close()
             check_mobile(context.new_page(), origin)
