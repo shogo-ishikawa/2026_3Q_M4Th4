@@ -533,15 +533,15 @@ export function initialiseApp({plans, syncAfterEdit, refreshLibrary, isSharedPla
       suspendedPrivate = {state, openedPlanId, name:$('planName').value, workflowView};
     }
     stopSearch(); closeSharePanel(); openedPlanId = null; state = next;
-    $('planName').value = name;
+    $('planName').value = name; setStatus('「'+name+'」を共同編集中です。');
     writeSettings(); updateContext(); renderSavedPlans(); showWorkflow(state.result?'schedule':'wishlist');
   }
-  function leaveJoint() {
+  function leaveJoint(message='') {
     if (!suspendedPrivate) return;
     stopSearch(); closeSharePanel();
     const original = suspendedPrivate;
     suspendedPrivate = null; state = original.state; openedPlanId = original.openedPlanId;
-    $('planName').value = original.name;
+    $('planName').value = original.name; setStatus(message);
     writeSettings(); updateContext(); renderSavedPlans(); showWorkflow(original.workflowView);
   }
   function saveCurrentPlan(overwrite=false){

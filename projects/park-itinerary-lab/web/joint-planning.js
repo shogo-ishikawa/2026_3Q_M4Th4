@@ -106,7 +106,9 @@ export function jointEditor({container,adapter,uid,planner,plans,sync,notice}) {
   function receive(s,record) {
     if (session !== s) return;
     if (record === false) { close('この共同計画は削除されました。'); return; }
-    if (!record) { pause(s); s.online = false; status.textContent='編集権限と最新版を確認しています…'; redraw(); return; }
+    if (!record) { pause(s); return; }
+    // An acknowledgement and its listener callbacks can arrive in either order.
+    if (s.active && s.latest && record.revision < Math.max(s.base,s.latest.revision)) return;
     s.online = true; s.latest = record;
     if (s.pending) {
       const pending = s.pending; s.pending = null;
@@ -140,9 +142,9 @@ export function jointEditor({container,adapter,uid,planner,plans,sync,notice}) {
       let state;
       try { state = structuredClone(planner.captureJoint()); } catch { state = structuredClone(planner.getState()); }
       s.pending = {dirty:changed(s),state};
-      planner.leaveJoint(); s.active = false;
+      planner.leaveJoint('接続が戻るまで、個人の計画を表示しています。'); s.active = false;
     }
-    status.textContent = '接続後に編集権限を確認します。'; redraw();
+    status.textContent = '接続が戻るまで、個人の計画を表示しています。'; redraw();
   }
   function suspend() {
     unsubscribe?.(); unsubscribe = null;
@@ -191,17 +193,25 @@ export function jointEditor({container,adapter,uid,planner,plans,sync,notice}) {
       if (error?.code === 'permission-denied') {close('この計画の編集権限がなくなりました。'); return;}
       status.textContent = error?.code ? '共同計画に反映できませんでした。通信状態を確認してください。' : error.message;
     } finally {
-      if (session === s) { s.saving = false; redraw(); }
+      if (session === s) {
+        s.saving = false;
+        if (s.active && s.online && s.latest?.revision > s.base) receive(s,s.latest);
+        else redraw();
+      }
     }
   });
   on(window,'offline',suspend); on(window,'online',subscribe);
   on(document,'visibilitychange',()=>document.hidden ? suspend() : subscribe());
   return {
+    select(owner,planId) {
+      if (!session || (session.invite.owner === owner && session.invite.planId === planId)) return true;
+      return leave();
+    },
     open(invite) {
       if (session?.invite.owner === invite.owner && session.invite.planId === invite.planId) {box.scrollIntoView();return;}
       if (session && !leave()) return;
       session = {invite,base:0,baseline:'',active:false,online:false,saving:false,touched:false};
-      get('jointName').textContent=invite.name;
+      get('jointName').textContent=invite.label || invite.name;
       status.textContent='編集権限と最新版を確認しています…'; redraw(); subscribe(); box.scrollIntoView({block:'center'});
     },
     verifyInvites(invites) {

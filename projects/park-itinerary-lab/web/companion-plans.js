@@ -33,6 +33,20 @@ function renderTimetable(target, view, catalogue) {
   target.append(list);
 }
 
+// Ordinals only distinguish identical names. Account identifiers stay out of the displayed names.
+export function planOptions(entries) {
+  const groups = new Map();
+  for (const [id,name] of entries) {
+    if (!groups.has(name)) groups.set(name,[]);
+    groups.get(name).push(id);
+  }
+  for (const ids of groups.values()) ids.sort();
+  return entries.map(([id,name]) => {
+    const ids = groups.get(name);
+    return [id,ids.length === 1 ? name : name+'（'+(ids.indexOf(id)+1)+'）'];
+  });
+}
+
 function options(select, data, placeholder) {
   const values = data.map(([value,label]) => new Option(label,value));
   const old = select.value;
@@ -68,7 +82,7 @@ export function mountCompanionPlans({container,adapter,uid,plans,planner,sync}) 
   const key = 'tdroute:active-shares:' + encodeURIComponent(uid);
   let sharedIds = new Set();
   try { sharedIds = new Set(JSON.parse(localStorage.getItem(key) || '[]')); } catch {}
-  let preferredInvite = '';
+  let preferredInvite = '', selectedOwn = '';
   let roles = null, stopRoles;
   let audiences = null, invites = [], stopOwn, stopInbox, stopView, opened = '', alive = true, busy = false;
   const listeners = new AbortController();
@@ -89,7 +103,10 @@ export function mountCompanionPlans({container,adapter,uid,plans,planner,sync}) 
       const li = element('li',email + '　'), remove = element('button','共有を解除');
       remove.type = 'button'; remove.disabled = busy;
       remove.setAttribute('aria-label',email + 'との共有を解除');
-      remove.onclick = () => change(email,false);
+      remove.onclick = () => {
+        const name = own.selectedOptions[0]?.text;
+        if (name && window.confirm('「'+name+'」の共有を '+email+' と解除しますか？')) void change(email,false);
+      };
       const role = document.createElement('select');
       role.setAttribute('aria-label',email + 'の権限');
       role.append(new Option('閲覧のみ','viewer'),new Option('共同編集','editor'));
@@ -101,9 +118,9 @@ export function mountCompanionPlans({container,adapter,uid,plans,planner,sync}) 
   };
   function refresh() {
     if (!alive) return;
-    options(own,plans.list().map(p=>[p.id,p.name]),'保存した計画を選ぶ');
+    options(own,planOptions(plans.list().map(p=>[p.id,p.name])),'保存した計画を選ぶ');
     if (!own.value && planner.getOpenedPlanId()) own.value = planner.getOpenedPlanId();
-    setMembers();
+    selectedOwn = own.value; setMembers();
   }
   function clearView() {
     stopView?.(); stopView = null; opened = '';
@@ -129,7 +146,7 @@ export function mountCompanionPlans({container,adapter,uid,plans,planner,sync}) 
   function updateInbox(items) {
     joint.verifyInvites(items);
     invites = items || [];
-    options(inbox,invites.map(i=>[i.key,i.name]),'招待された計画を選ぶ');
+    options(inbox,planOptions(invites.map(i=>[i.key,i.name])),'招待された計画を選ぶ');
     if (items && !inbox.value) {
       inbox.value = invites.some(i => i.key === preferredInvite) ? preferredInvite : '';
       preferredInvite = inbox.value;
@@ -179,17 +196,24 @@ export function mountCompanionPlans({container,adapter,uid,plans,planner,sync}) 
     } catch (error) { if (alive) status.textContent = message(error); }
     finally { busy = false; if (alive) setMembers(); }
   }
-  on(own,'change',()=>{status.textContent = ''; guest.value=''; setMembers();});
+  on(own,'change',()=>{
+    if (!joint.select(uid,own.value)) {own.value = selectedOwn; return;}
+    selectedOwn = own.value; status.textContent = ''; guest.value=''; setMembers();
+  });
   on(invite,'click',()=>{if (guest.reportValidity()) void change(guest.value,true,get('tripRole').value);});
   on(get('tripEditOwn'),'click',()=>{
     const selected=plans.list().find(p=>p.id===own.value);
-    if (selected && roles?.has(selected.id)) joint.open({owner:uid,planId:selected.id,name:selected.name});
+    if (selected && roles?.has(selected.id)) joint.open({owner:uid,planId:selected.id,name:selected.name,label:own.selectedOptions[0]?.text});
   });
   on(get('tripEditReceived'),'click',()=>{
     const invite=invites.find(i=>i.key===inbox.value && i.role==='editor');
-    if (invite) joint.open(invite);
+    if (invite) joint.open({...invite,label:inbox.selectedOptions[0]?.text});
   });
-  on(inbox,'change',()=>{ preferredInvite = inbox.value; read(); }); on(panel,'toggle',()=>{ if (panel.open) refresh(); read(); });
+  on(inbox,'change',()=>{
+    const selected = invites.find(i=>i.key === inbox.value);
+    if (!joint.select(selected?.owner,selected?.planId)) {inbox.value = preferredInvite; return;}
+    preferredInvite = inbox.value; read();
+  }); on(panel,'toggle',()=>{ if (panel.open) refresh(); read(); });
   on(window,'offline',connect); on(window,'online',connect); on(document,'visibilitychange',connect);
   refresh(); connect();
   return {refresh,shared:id=>sharedIds.has(id)&&!roles?.has(id),dispose(){

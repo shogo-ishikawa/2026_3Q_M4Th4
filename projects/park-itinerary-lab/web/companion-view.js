@@ -121,13 +121,14 @@ export function companionStore({store, requireAccount, current}) {
         const newEditors = editing ? [...new Set([...oldEditors,email])] : oldEditors.filter(item => item !== email);
         const invite = inboxRef(sdk,db,email,uid,planId);
         const target = viewRef(sdk,db,uid,planId);
-        if (changed.length) transaction.set(ref,{members:changed}); else transaction.delete(ref);
-        // An empty roster marks a previous collaborative workspace while viewers remain.
-        if (newEditors.length || (joint.exists() && changed.length)) transaction.set(roles,{members:newEditors});
+        // An existing joint workspace belongs to its owner even after the final invitation ends.
+        if (changed.length || joint.exists()) transaction.set(ref,{members:changed});
+        else transaction.delete(ref);
+        if (newEditors.length || joint.exists()) transaction.set(roles,{members:newEditors});
         else if (editors.exists()) transaction.delete(roles);
         if (!add) {
           transaction.delete(invite);
-          if (!changed.length) { transaction.delete(target); if (joint.exists()) transaction.delete(workspace); }
+          if (!changed.length && !joint.exists()) transaction.delete(target);
           return;
         }
         if (!saved.data()?.payload) throw new Error('計画を保存して同期してから、もう一度招待してください。');
@@ -148,9 +149,10 @@ export function companionStore({store, requireAccount, current}) {
     // Run inside the same transaction as the versioned private save or deletion.
     async updateSharedCopy(sdk,db,tx,uid,id,previous,plan) {
       const ref = audienceRef(sdk,db,uid,id);
-      const members = (await tx.get(ref)).data()?.members || [];
+      const audience = await tx.get(ref);
       requireAccount(uid);
-      if (!members.length) return;
+      if (!audience.exists()) return;
+      const members = audience.data().members;
       const view = viewRef(sdk,db,uid,id);
       const roles = editorsRef(sdk,db,uid,id);
       const editors = await tx.get(roles);

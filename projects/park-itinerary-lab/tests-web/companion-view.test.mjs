@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {encodeJoint,decodeJoint} from '../web/joint-planning.js';
+import {encodeJoint,decodeJoint,jointEditor} from '../web/joint-planning.js';
+import {planOptions} from '../web/companion-plans.js';
 import {companionEmail, companionStore, timetablePayload} from '../web/companion-view.js';
 
 const id = 'sample';
@@ -123,8 +124,68 @@ test('viewer promotion seeds one independent workspace, concurrent editors canno
   await store.changeMember(owner,id,email,true,'viewer');
   assert.equal(db.get('tripInboxes/'+email+'/invitations/creator~sample').role,undefined);
   assert.deepEqual(db.get('users/creator/liveEditors/sample').members,[]);
+  await store.changeMember(owner,id,email,false);
+  await store.changeMember(owner,id,guest,false);
+  assert.deepEqual(db.get('users/creator/livePlanAudiences/sample'),{members:[]});
+  assert.deepEqual(db.get('users/creator/liveEditors/sample'),{members:[]});
+  assert.equal(decodeJoint(db.get(workspace)).state.settings.exit,1205);
   await store.changeMember(owner,id,email,true,'editor');
   assert.equal(decodeJoint(db.get(workspace)).revision,2);
+  await store.changeMember(owner,id,email,false);
+  assert.equal(db.get(view).view,db.get(workspace).view);
   await store.updateSharedCopy(sdk,db,tx,owner,id,original,null);
   assert.equal(db.size,1);
+});
+
+test('owner and inbox pickers distinguish only repeated names without exposing accounts',()=>{
+  assert.deepEqual(planOptions([['owner2~plan','夏休み'],['solo','遠足'],['owner1~plan','夏休み']]),
+    [['owner2~plan','夏休み（2）'],['solo','遠足'],['owner1~plan','夏休み（1）']]);
+});
+
+test('the editor reconciles newer changes before a save acknowledgement and confirms changes of plan',async t=>{
+  const nodes = new Map(), box = new EventTarget();
+  box.querySelector = selector => {
+    if (!nodes.has(selector)) nodes.set(selector,new EventTarget());
+    return nodes.get(selector);
+  };
+  box.scrollIntoView = box.remove = ()=>{};
+  const page = new EventTarget(), browser = new EventTarget();
+  page.hidden = false; page.createElement = ()=>box;
+  let allowClose = false, confirms = 0;
+  browser.confirm = ()=>{confirms++;return allowClose;};
+  for (const [key,value] of [['document',page],['window',browser],['navigator',{onLine:true}]]) {
+    const original = Object.getOwnPropertyDescriptor(globalThis,key);
+    Object.defineProperty(globalThis,key,{configurable:true,value});
+    t.after(()=>{if (original) Object.defineProperty(globalThis,key,original); else delete globalThis[key];});
+  }
+  let state, deliver, acknowledge;
+  const adapter = {
+    watchWorkspace(_uid,_invite,fn){ deliver=fn;return ()=>{}; },
+    commitWorkspace(){return new Promise(resolve=>{acknowledge=resolve;});}
+  };
+  const planner = {openJoint(value){state=structuredClone(value);},captureJoint(){return state;},
+    leaveJoint(){state=null;},jointBusy(){return false;}};
+  const editor = jointEditor({container:{append(){}},adapter,uid:'owner',planner,notice(){}});
+  t.after(()=>editor.dispose());
+  const record = revision => {
+    const draft = decodeJoint({revision,draft:encodeJoint(sharedTrip)});
+    draft.state.settings.exit = 1200+revision;
+    return draft;
+  };
+  editor.open({owner:'owner',planId:'A',name:'共同計画'});
+  deliver(record(1)); state.settings.exit = 1202;
+  const publish = nodes.get('#jointCommit');
+  publish.dispatchEvent(new Event('click'));
+  assert.ok(acknowledge);
+  deliver(record(3)); // A later save is already visible while our acknowledgement is in flight.
+  acknowledge({ok:true,revision:2}); await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(state.settings.exit,1203);
+  deliver(record(2)); assert.equal(state.settings.exit,1203);
+  assert.equal(publish.disabled,false);
+  state.settings.exit = 1204;
+  assert.equal(editor.select('owner','A'),true); assert.equal(confirms,0);
+  assert.equal(editor.select('otherOwner','A'),false); assert.equal(confirms,1);
+  assert.equal(state.settings.exit,1204);
+  allowClose=true;assert.equal(editor.select('owner','B'),true);
+  assert.equal(confirms,2);assert.equal(state,null);assert.equal(box.hidden,true);
 });
