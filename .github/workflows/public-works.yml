@@ -138,10 +138,11 @@ jobs:
           python -m unittest discover -s scripts/tests -p 'test_park_public_build.py'
           python -m pip install -e "projects/park-itinerary-lab[dev]"
           python -m pytest -q projects/park-itinerary-lab/tests
-      - name: Exercise the park planner's same-day edits in mobile Chrome
+      - name: Exercise the park planner and photo albums in mobile Chrome
         run: |
           python -m pip install 'playwright>=1.49,<2'
           python projects/park-itinerary-lab/tests-web/mobile_replan.py
+          python projects/park-itinerary-lab/tests-web/mobile_drive_memories.py
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

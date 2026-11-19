@@ -127,7 +127,9 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
   const life = new AbortController();
   const listen = (target,type,fn) => target.addEventListener(type,fn,{signal:life.signal});
   let active = null, albums = [], uploadDraft, albumDraft, refreshTimer;
+  let backgroundRequest, visiblePhoto, renderedGallery;
   function clearPreview() {
+    visiblePhoto = null;
     el('Image').removeAttribute('src');
     el('Image').alt = '';
     el('Caption').textContent = '';
@@ -135,6 +137,7 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
   }
   function clearAlbum() {
     clearPreview();
+    renderedGallery = null;
     el('Photos').replaceChildren();
     el('Visit').replaceChildren();
     el('File').value = el('Email').value = '';
@@ -163,21 +166,37 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
   function showing() { return panel.open && !panel.closest('[hidden]') && !document.hidden && !life.signal.aborted; }
   function scheduleRefresh() {
     clearTimeout(refreshTimer);
-    if (showing() && navigator.onLine) refreshTimer = setTimeout(() => refresh(),60000);
+    if (showing() && navigator.onLine) refreshTimer = setTimeout(() => refresh(true),60000);
   }
-  async function run(work, initial = '読み込み中…') {
-    if (!showing() || active) return;
+  async function run(work, initial = '読み込み中…', background = false) {
+    if (!showing()) return;
+    if (active) {
+      if (background || active !== backgroundRequest) return;
+      active.abort();
+    }
     clearTimeout(refreshTimer);
     const controller = new AbortController(), {signal} = controller;
     active = controller;
-    el('Controls').disabled = true;
-    el('Status').textContent = initial;
+    const previousGallery = renderedGallery;
+    const timeout = setTimeout(() => {
+      if (active !== controller) return;
+      controller.abort();
+      clearPreview();
+      el('Status').textContent = errorText.offline;
+    },background ? 25000 : 90000);
+    if (background) backgroundRequest = controller;
+    else {
+      el('Controls').disabled = true;
+      el('Status').textContent = initial;
+    }
     try {
       const message = await work(signal);
       assertActive(signal);
-      el('Status').textContent = message || '';
+      if (!background || previousGallery !== renderedGallery || Object.values(errorText).includes(el('Status').textContent))
+        el('Status').textContent = message || '';
     } catch (error) {
       if (signal.aborted) return;
+      clearPreview();
       if (['auth','forbidden','not-found'].includes(error.code)) {
         clearAlbum();
         albums = [];
@@ -185,66 +204,74 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
       }
       el('Status').textContent = errorText[error.code] || errorText.offline;
     } finally {
+      clearTimeout(timeout);
       if (active === controller) {
         el('Controls').disabled = false;
         active = null;
+        backgroundRequest = null;
         scheduleRefresh();
       }
     }
   }
+  function photoRow(albumId,photo) {
+    const li = document.createElement('li');
+    li.append(button(photo.label + ' を見る', () => run(async s => {
+      clearPreview();
+      const {jpeg} = await request('image',{albumId,photoId:photo.id},s);
+      assertActive(s);
+      if (typeof jpeg !== 'string' || jpeg.length > Math.ceil(MAX_BYTES / 3) * 4 || !jpeg.startsWith('/9j/')) throw failure('file');
+      visiblePhoto = {albumId,id:photo.id};
+      el('Image').src = 'data:image/jpeg;base64,' + jpeg;
+      el('Image').alt = photo.label;
+      el('Caption').textContent = photo.label;
+      el('Preview').hidden = false;
+      requestAnimationFrame(() => { if (!el('Preview').hidden) el('CloseImage').focus(); });
+    })));
+    if (photo.canDelete) li.append(button('削除', () => {
+      if (!window.confirm('「' + photo.label + '」の写真を削除しますか？')) return;
+      void run(async s => {
+        await request('delete',{albumId,photoId:photo.id},s);
+        await listPhotos(albumId,s);
+        return '写真を削除しました。';
+      });
+    }));
+    return li;
+  }
   async function listPhotos(albumId, signal) {
-    const {photos} = await request('list',{albumId},signal);
+    const result = await request('list',{albumId},signal);
     assertActive(signal);
-    clearPreview();
-    const rows = [];
-    for (const photo of photos) {
-      if (!UUID.test(photo.id) || typeof photo.label !== 'string') continue;
-      const li = document.createElement('li');
-      li.append(button(photo.label + ' を見る', () => run(async s => {
-        clearPreview();
-        const {jpeg} = await request('image',{albumId,photoId:photo.id},s);
-        assertActive(s);
-        if (typeof jpeg !== 'string' || jpeg.length > Math.ceil(MAX_BYTES / 3) * 4 || !jpeg.startsWith('/9j/')) throw failure('file');
-        el('Image').src = 'data:image/jpeg;base64,' + jpeg;
-        el('Image').alt = photo.label;
-        el('Caption').textContent = photo.label;
-        el('Preview').hidden = false;
-        el('CloseImage').focus();
-      })));
-      if (photo.canDelete) li.append(button('削除', () => {
-        if (!window.confirm('「' + photo.label + '」の写真を削除しますか？')) return;
-        void run(async s => {
-          await request('delete',{albumId,photoId:photo.id},s);
-          await listPhotos(albumId,s);
-          return '写真を削除しました。';
-        });
-      }));
-      rows.push(li);
+    const photos = result.photos.filter(photo => UUID.test(photo.id) && typeof photo.label === 'string');
+    if (visiblePhoto && (visiblePhoto.albumId !== albumId || !photos.some(p => p.id === visiblePhoto.id))) clearPreview();
+    // Leave the open photo, focused button and file picker alone when the album has not changed.
+    const gallery = JSON.stringify([albumId,photos.map(p => [p.id,p.label,p.canDelete])]);
+    if (renderedGallery !== gallery) {
+      el('Photos').replaceChildren(...photos.map(photo => photoRow(albumId,photo)));
+      renderedGallery = gallery;
     }
-    el('Photos').replaceChildren(...rows);
     el('Edit').hidden = false;
     el('Members').hidden = !albums.some(a => a.id === albumId && a.owner);
     visitOptions();
-    return rows.length ? rows.length + '枚の写真' : '写真はまだありません。';
+    return photos.length ? photos.length + '枚の写真' : '写真はまだありません。';
   }
   async function readAlbums(signal, preferred) {
     const result = await request('albums',{},signal);
     assertActive(signal);
     albums = result.albums.filter(a => UUID.test(a.id) && typeof a.title === 'string');
-    el('Album').replaceChildren(...albums.map(a => new Option(a.title,a.id)));
-    if (albums.some(a => a.id === preferred)) el('Album').value = preferred;
-    const id = el('Album').value;
+    const chooser = el('Album'), previouslyShown = chooser.value;
+    if (chooser.length !== albums.length || albums.some((a,i) => a.id !== chooser.options[i].value || a.title !== chooser.options[i].text))
+      chooser.replaceChildren(...albums.map(a => new Option(a.title,a.id)));
+    if (chooser.value !== preferred && albums.some(a => a.id === preferred)) chooser.value = preferred;
+    const id = chooser.value;
     if (!id) {clearAlbum(); return '開けるアルバムはまだありません。';}
-    if (id !== preferred) clearAlbum();
+    if (id !== previouslyShown) clearAlbum();
     return await listPhotos(id,signal);
   }
-  function refresh() {
+  function refresh(background = false) {
     if (!navigator.onLine) { reset(); el('Status').textContent = errorText.offline; return; }
     const selected = el('Album').value;
-    clearPreview();
-    return run(s => readAlbums(s,selected));
+    return run(s => readAlbums(s,selected),undefined,background);
   }
-  listen(el('Refresh'),'click',refresh);
+  listen(el('Refresh'),'click',() => refresh());
   listen(el('Album'),'change',() => {
     clearAlbum();
     void run(s => listPhotos(el('Album').value,s));
@@ -314,6 +341,7 @@ export function mountDriveMemories({getIdToken, isOwner, getState, getPark}) {
     active = null;
     clearPreview();
     el('Photos').replaceChildren();
+    renderedGallery = null;
     el('Edit').hidden = el('Members').hidden = true;
     el('Controls').disabled = true;
   });
