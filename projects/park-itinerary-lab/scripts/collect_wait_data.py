@@ -13,16 +13,12 @@ from pathlib import Path
 import urllib.request
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from archive_wait_history import bucket, preferred_per_bucket
 from collect_weather import hourly_weather, timestamp, weather_fields
 
 PROJECT = Path(__file__).resolve().parents[1]
 JST = dt.timezone(dt.timedelta(hours=9))
-
-
-def bucket(row):
-    minute = row['time']; opening = row.get('openingMinute')
-    width = 10 if isinstance(opening, int) and not isinstance(opening, bool) and 0 <= minute - opening < 90 else 30
-    return minute // width * width
+RETAIN_DAYS = 60
 
 
 def request_json(url: str) -> dict:
@@ -108,6 +104,18 @@ def current_weather() -> dict:
     return {}
 
 
+def day_fields(park: dict, date: str, calendar: dict | None) -> dict:
+    fields = {'event': '|'.join(item['id'] for item in park.get('events', [])
+                                if item['startDate'] <= date <= item['endDate'])}
+    opening = park.get('operatingCalendar', {}).get(date, {}).get('windows', [])
+    if opening:
+        fields['openingMinute'] = opening[0][0]
+    holiday = next((item for item in (calendar or {}).get('holidays', []) if item.get('date') == date), None)
+    if holiday:
+        fields.update(holiday=True, holidayName=holiday['name'])
+    return fields
+
+
 def to_observations(snapshot: dict, park: dict, weather: str = "", weather_values: dict | None = None,
                     calendar: dict | None = None, *, forecast=None, current=None) -> list[dict]:
     result = []
@@ -118,30 +126,23 @@ def to_observations(snapshot: dict, park: dict, weather: str = "", weather_value
             continue
         local = updated.astimezone(JST)
         date = local.date().isoformat()
-        event = "|".join(item["id"] for item in park.get("events", []) if item["startDate"] <= date <= item["endDate"])
-        row = {"date": date, "activityId": ride["activityId"], "time": local.hour * 60 + local.minute, "wait": ride["wait"], "weather": weather, "event": event, "source": "queue-times", "observedAt": ride["updatedAt"]}
+        row = {"date": date, "activityId": ride["activityId"], "time": local.hour * 60 + local.minute, "wait": ride["wait"], "weather": weather, "source": "queue-times", "observedAt": ride["updatedAt"]}
         values = weather_values or {}
         for key,minimum,maximum in [('temperature',-60,60),('precipitation',0,500)]:
             value = values.get(key)
             if isinstance(value,(int,float)) and not isinstance(value,bool) and math.isfinite(value) and minimum<=value<=maximum:row[key]=value
         if forecast is not None:
             row.update(observation_weather(local, forecast, current))
-        opening = park.get('operatingCalendar',{}).get(date,{}).get('windows',[])
-        if opening:row['openingMinute']=opening[0][0]
-        holiday = next((item for item in (calendar or {}).get('holidays',[]) if item.get('date')==date),None)
-        if holiday:row['holiday']=True;row['holidayName']=holiday['name']
+        row.update(day_fields(park, date, calendar))
         result.append(row)
     return result
 
 
-def merge_observations(existing: list[dict], incoming: list[dict], today: dt.date, retain_days: int = 60) -> list[dict]:
+def merge_observations(existing: list[dict], incoming: list[dict], today: dt.date, retain_days: int = RETAIN_DAYS) -> list[dict]:
     earliest = (today - dt.timedelta(days=retain_days)).isoformat()
-    rows = {}
-    for row in existing + incoming:
-        if earliest <= row.get("date", "") <= today.isoformat():
-            key = (row["date"], row["activityId"], bucket(row))
-            rows[key] = row
-    return sorted(rows.values(), key=lambda row: (row["date"], row["time"], row["activityId"]))[-100000:]
+    latest = today.isoformat()
+    rows = preferred_per_bucket(row for row in existing + incoming if earliest <= row.get("date", "") <= latest)
+    return sorted(rows, key=lambda row: (row["date"], row["time"], row["activityId"]))[-100000:]
 
 
 def main() -> None:

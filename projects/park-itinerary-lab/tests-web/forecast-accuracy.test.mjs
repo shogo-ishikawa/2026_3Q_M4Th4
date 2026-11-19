@@ -38,6 +38,23 @@ test('one independent score per completed facility-slot; bias is signed, baselin
   assert.deepEqual(result.hours.map(row => [row.hour, row.matched, row.expected]), [[10,1,1],[11,2,2],[12,0,1]]);
 });
 
+test('archive backups fill uncovered collector buckets while all eligible primary posts still count', () => {
+  const openingPost = (time, wait) => ({...post(time, wait), openingMinute:540});
+  const backup = (time, wait) => ({...openingPost(time, wait), collector:'watchdog'});
+  const observations = [
+    backup(548, 100), openingPost(543, 10), openingPost(546, 20), // primary-only 09:00 bucket
+    backup(550, 110), backup(555, 30), // latest backup in the 09:10 bucket
+    {...openingPost(557, 0), isOpen:false}, // ineligible to suppress the 09:10 backup
+    openingPost(787, 50), backup(795, 120) // after opening, 13:00 is a single 30-minute bucket
+  ];
+  for (const order of [observations, [...observations].reverse()]) {
+    const result = score([target(540, 20), target(780, 50)], order);
+    assert.equal(result.overall.samples, 4);
+    assert.equal(result.overall.matched, 2);
+    assert.equal(result.overall.mae, 0);
+  }
+});
+
 test('only an eligible public measurement with a consistent dated timestamp can match', () => {
   const wrongPark = post(630, 30, 'sea-alpha');
   const observations = [wrongPark, {...post(630, 30), date:'2026-11-18'},
