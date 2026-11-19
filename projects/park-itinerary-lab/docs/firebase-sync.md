@@ -13,7 +13,7 @@ TDRoute専用のFirebaseプロジェクトを使います。Web版とホーム�
 
 Firebase Authenticationの利用者一覧ではメールアドレス、利用者ID（UID）、ログイン方法、登録日時、最終ログイン日時を確認できます。Googleから提供された表示名やプロフィール写真のURLも、利用者レコードを読み取る権限があれば取得できます。
 
-TDRouteはログイン中の本人にGoogleの表示名であいさつします。運営者本人の画面には赤字で「管理者画面」と表示します。この表示はアカウントを見分けるためのもので、Firebase上のアクセス権はIAMが管理します。Firestoreのデータを閲覧できる運営者は、コンソールから同期済みのしおり本文も確認できます。
+利用者の画面ではGoogleの表示名であいさつします。運営者本人の画面には「良い一日を！」と赤字の「管理者画面」を表示します。この表示はアカウントを見分けるためのもので、Firebase上のアクセス権はIAMが管理します。
 
 [Firebase Authenticationの利用者管理](https://firebase.google.com/docs/auth/admin/manage-users?hl=ja) ／ [FirestoreのIAM権限](https://firebase.google.com/docs/firestore/security/iam?hl=ja)
 
