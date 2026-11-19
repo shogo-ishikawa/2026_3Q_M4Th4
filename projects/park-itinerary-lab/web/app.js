@@ -1176,6 +1176,22 @@ export function initialiseApp({plans, syncAfterEdit, refreshLibrary, isSharedPla
     }
   }
   function attachEvents() {
+    window.addEventListener('hashchange', safely(() => {
+      const shared = readSharedState(location.hash);
+      if (!shared) return;
+      const imported = cleanState(shared);
+      stopSearch();
+      openedPlanId = null;
+      state = imported;
+      wishlistGenre = 'all';
+      $('catalogueSearch').value = $('planName').value = '';
+      closeSharePanel();
+      writeSettings();
+      updateContext();
+      renderSavedPlans();
+      showWorkflow('wishlist');
+      setStatus('共有された希望を読み込みました。');
+    }));
     const calendarOptions=()=>({
       pendingModel:Boolean(displayedOutlook && !displayedOutlook.values && state.settings.waitModel?.parkId!==state.parkId)
     });
@@ -1409,7 +1425,7 @@ export function initialiseApp({plans, syncAfterEdit, refreshLibrary, isSharedPla
     $('exportJson').addEventListener('click',safely(()=>{readSettings();downloadPlanJson(state);}));$('exportIcs').addEventListener('click',safely(()=>downloadCalendar(state.result,currentPark(),state.result.settings||state.settings)));$('exportHtml').addEventListener('click',safely(()=>downloadOfflineHtml(state.result,currentPark(),state.result.settings||state.settings)));$('printPlan').addEventListener('click',()=>window.print());
   }
   async function start() {
-    try{setSolveDisabled(true);setStatus('施設情報を確認中…');await loadCatalogue();const shared=await readSharedState(location.hash);if(shared)state=cleanState(shared);calendarData=await fetchPublishedCalendar({timeoutMs:5000});if(calendarData)state.settings.calendarData=calendarData;writeSettings();attachEvents();showWorkflow(state.result?'schedule':'wishlist');renderSavedPlans();setSolveDisabled(false);externalPanel=initialiseExternalData({container:$('externalDataPanel'),getContext:()=>({park:currentPark(),settings:state.settings,history:state.history}),onUpdate:applyDataUpdate,beforeAction:readSettings});updateContext();setStatus(shared?'共有された希望を読み込みました。':'');}
+    try{setSolveDisabled(true);setStatus('施設情報を確認中…');await loadCatalogue();calendarData=await fetchPublishedCalendar({timeoutMs:5000});const shared=readSharedState(location.hash);if(shared)state=cleanState(shared);if(calendarData)state.settings.calendarData=calendarData;writeSettings();attachEvents();showWorkflow(state.result?'schedule':'wishlist');renderSavedPlans();setSolveDisabled(false);externalPanel=initialiseExternalData({container:$('externalDataPanel'),getContext:()=>({park:currentPark(),settings:state.settings,history:state.history}),onUpdate:applyDataUpdate,beforeAction:readSettings});updateContext();setStatus(shared?'共有された希望を読み込みました。':'');}
     catch(error){setStatus(error.message||'起動に失敗しました。ページを再読み込みしてください。',true);setSolveDisabled(true);throw error;}
     finally { window.dispatchEvent(new Event('tdroute:ready')); }
   }
