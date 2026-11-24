@@ -1,5 +1,5 @@
 {
-  "date": "2026-11-24",
+  "date": "2026-11-25",
   "changed": [
     {
       "id": "land-parade-7003",
@@ -449,7 +449,6 @@
       "id": "land-restaurant-300",
       "name": "イーストサイド・カフェ",
       "fields": [
-        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -774,7 +773,6 @@
       "id": "land-restaurant-349",
       "name": "クイーン・オブ・ハートのバンケットホール",
       "fields": [
-        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -932,7 +930,6 @@
       "id": "land-restaurant-353",
       "name": "パン・ギャラクティック・ピザ・ポート",
       "fields": [
-        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1216,6 +1213,60 @@
       ]
     },
     {
+      "id": "sea-greeting-905",
+      "name": "ヴィレッジ・グリーティングプレイス",
+      "fields": [
+        "checkedOn",
+        "operatingDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
+      "id": "sea-greeting-904",
+      "name": "“サルードス・アミーゴス！”グリーティングドック",
+      "fields": [
+        "checkedOn",
+        "operatingDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
+      "id": "sea-greeting-901",
+      "name": "ミッキー＆フレンズ・グリーティングトレイル（ミッキー）",
+      "fields": [
+        "checkedOn",
+        "operatingDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
+      "id": "sea-greeting-902",
+      "name": "ミッキー＆フレンズ・グリーティングトレイル（ミニー）",
+      "fields": [
+        "checkedOn",
+        "operatingDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
+      "id": "sea-greeting-903",
+      "name": "ミッキー＆フレンズ・グリーティングトレイル（ドナルド）",
+      "fields": [
+        "checkedOn",
+        "operatingDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
+      "id": "sea-greeting-921",
+      "name": "ディズニーシー・プラザ（キャラクターグリーティング）",
+      "fields": [
+        "checkedOn",
+        "operatingDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
       "id": "sea-show-952",
       "name": "スターブライト・クリスマス",
       "fields": [
@@ -1442,6 +1493,7 @@
       "fields": [
         "checkedOn",
         "operatingDate",
+        "dailySchedules",
         "dailyScheduleCheckedOn"
       ]
     },
@@ -1851,61 +1903,6 @@
       ]
     },
     {
-      "id": "sea-greeting-905",
-      "name": "ヴィレッジ・グリーティングプレイス",
-      "fields": [
-        "checkedOn",
-        "operatingDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
-      "id": "sea-greeting-904",
-      "name": "“サルードス・アミーゴス！”グリーティングドック",
-      "fields": [
-        "checkedOn",
-        "operatingDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
-      "id": "sea-greeting-901",
-      "name": "ミッキー＆フレンズ・グリーティングトレイル（ミッキー）",
-      "fields": [
-        "checkedOn",
-        "operatingDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
-      "id": "sea-greeting-902",
-      "name": "ミッキー＆フレンズ・グリーティングトレイル（ミニー）",
-      "fields": [
-        "checkedOn",
-        "operatingDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
-      "id": "sea-greeting-903",
-      "name": "ミッキー＆フレンズ・グリーティングトレイル（ドナルド）",
-      "fields": [
-        "checkedOn",
-        "operatingDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
-      "id": "sea-greeting-921",
-      "name": "ディズニーシー・プラザ（キャラクターグリーティング）",
-      "fields": [
-        "windows",
-        "checkedOn",
-        "operatingDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
       "id": "sea-shop-601",
       "name": "エンポーリオ",
       "fields": [
@@ -1939,13 +1936,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -3276,13 +3266,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -4613,13 +4596,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -5950,13 +5926,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -7299,13 +7268,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -8636,13 +8598,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -9973,13 +9928,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -11310,13 +11258,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -12647,13 +12588,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -13984,13 +13918,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -15321,13 +15248,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -17517,13 +17437,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -17797,13 +17710,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -19390,21 +19296,6 @@
       ],
       "isRange": true,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [
-            540,
-            1245
-          ],
-          "windows": [
-            [
-              540,
-              1245
-            ]
-          ],
-          "isRange": true,
-          "closed": false,
-          "published": true
-        },
         "2026-11-25": {
           "times": [
             540,
@@ -21031,13 +20922,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -22416,13 +22300,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -24017,21 +23894,6 @@
       ],
       "isRange": true,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [
-            540,
-            1260
-          ],
-          "windows": [
-            [
-              540,
-              1260
-            ]
-          ],
-          "isRange": true,
-          "closed": false,
-          "published": true
-        },
         "2026-11-25": {
           "times": [
             540,
@@ -25658,13 +25520,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -26995,13 +26850,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -28344,13 +28192,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -29681,13 +29522,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -31018,13 +30852,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-25": {
           "times": [],
           "windows": [],
@@ -32856,7 +32683,7 @@
   "closures": [
     {
       "parkId": "land",
-      "periods": 41
+      "periods": 42
     },
     {
       "parkId": "sea",
@@ -32951,7 +32778,7 @@
     }
   ],
   "sourceErrors": [],
-  "checkedAt": "2026-11-23T21:23:49.808792Z",
+  "checkedAt": "2026-11-24T21:16:21.487779Z",
   "status": "complete",
   "lastKnownCatalogueUsed": false
 }
