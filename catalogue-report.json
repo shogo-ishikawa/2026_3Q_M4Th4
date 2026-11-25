@@ -1,5 +1,5 @@
 {
-  "date": "2026-11-25",
+  "date": "2026-11-26",
   "changed": [
     {
       "id": "land-parade-7003",
@@ -416,27 +416,6 @@
       ]
     },
     {
-      "id": "land-shop-513",
-      "name": "グランドエンポーリアム",
-      "fields": [
-        "checkedOn"
-      ]
-    },
-    {
-      "id": "land-shop-500",
-      "name": "ワールドバザール・コンフェクショナリー",
-      "fields": [
-        "checkedOn"
-      ]
-    },
-    {
-      "id": "land-shop-556",
-      "name": "ギャグファクトリー／ファイブ・アンド・ダイム",
-      "fields": [
-        "checkedOn"
-      ]
-    },
-    {
       "id": "land-snack-317",
       "name": "アイスクリームコーン",
       "fields": [
@@ -783,14 +762,14 @@
       "name": "トルバドールタバン",
       "fields": [
         "checkedOn",
-        "dailyScheduleCheckedOn"
+        "dailyScheduleCheckedOn",
+        "operatingDate"
       ]
     },
     {
       "id": "land-snack-350",
       "name": "ビレッジペイストリー",
       "fields": [
-        "windows",
         "checkedOn",
         "operatingDate",
         "dailySchedules",
@@ -802,6 +781,7 @@
       "name": "マジカルマーケット",
       "fields": [
         "checkedOn",
+        "dailySchedules",
         "dailyScheduleCheckedOn",
         "operatingDate"
       ]
@@ -967,6 +947,27 @@
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
+      ]
+    },
+    {
+      "id": "land-shop-513",
+      "name": "グランドエンポーリアム",
+      "fields": [
+        "checkedOn"
+      ]
+    },
+    {
+      "id": "land-shop-500",
+      "name": "ワールドバザール・コンフェクショナリー",
+      "fields": [
+        "checkedOn"
+      ]
+    },
+    {
+      "id": "land-shop-556",
+      "name": "ギャグファクトリー／ファイブ・アンド・ダイム",
+      "fields": [
+        "checkedOn"
       ]
     },
     {
@@ -1213,60 +1214,6 @@
       ]
     },
     {
-      "id": "sea-greeting-905",
-      "name": "ヴィレッジ・グリーティングプレイス",
-      "fields": [
-        "checkedOn",
-        "operatingDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
-      "id": "sea-greeting-904",
-      "name": "“サルードス・アミーゴス！”グリーティングドック",
-      "fields": [
-        "checkedOn",
-        "operatingDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
-      "id": "sea-greeting-901",
-      "name": "ミッキー＆フレンズ・グリーティングトレイル（ミッキー）",
-      "fields": [
-        "checkedOn",
-        "operatingDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
-      "id": "sea-greeting-902",
-      "name": "ミッキー＆フレンズ・グリーティングトレイル（ミニー）",
-      "fields": [
-        "checkedOn",
-        "operatingDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
-      "id": "sea-greeting-903",
-      "name": "ミッキー＆フレンズ・グリーティングトレイル（ドナルド）",
-      "fields": [
-        "checkedOn",
-        "operatingDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
-      "id": "sea-greeting-921",
-      "name": "ディズニーシー・プラザ（キャラクターグリーティング）",
-      "fields": [
-        "checkedOn",
-        "operatingDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
       "id": "sea-show-952",
       "name": "スターブライト・クリスマス",
       "fields": [
@@ -1326,6 +1273,60 @@
       "fields": [
         "checkedOn",
         "showTimesDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
+      "id": "sea-greeting-905",
+      "name": "ヴィレッジ・グリーティングプレイス",
+      "fields": [
+        "checkedOn",
+        "operatingDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
+      "id": "sea-greeting-904",
+      "name": "“サルードス・アミーゴス！”グリーティングドック",
+      "fields": [
+        "checkedOn",
+        "operatingDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
+      "id": "sea-greeting-901",
+      "name": "ミッキー＆フレンズ・グリーティングトレイル（ミッキー）",
+      "fields": [
+        "checkedOn",
+        "operatingDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
+      "id": "sea-greeting-902",
+      "name": "ミッキー＆フレンズ・グリーティングトレイル（ミニー）",
+      "fields": [
+        "checkedOn",
+        "operatingDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
+      "id": "sea-greeting-903",
+      "name": "ミッキー＆フレンズ・グリーティングトレイル（ドナルド）",
+      "fields": [
+        "checkedOn",
+        "operatingDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
+      "id": "sea-greeting-921",
+      "name": "ディズニーシー・プラザ（キャラクターグリーティング）",
+      "fields": [
+        "checkedOn",
+        "operatingDate",
         "dailyScheduleCheckedOn"
       ]
     },
@@ -1493,7 +1494,6 @@
       "fields": [
         "checkedOn",
         "operatingDate",
-        "dailySchedules",
         "dailyScheduleCheckedOn"
       ]
     },
@@ -1936,13 +1936,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -3266,13 +3259,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -4596,13 +4582,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -5926,13 +5905,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -7268,13 +7240,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -8598,13 +8563,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -9928,13 +9886,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -11258,13 +11209,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -12588,13 +12532,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -13918,13 +13855,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -15248,13 +15178,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -16817,6 +16740,272 @@
     },
     {
       "parkId": "land",
+      "name": "キャリッジハウス・リフレッシュメント",
+      "sourceUrl": "https://www.tokyodisneyresort.jp/tdl/restaurant/detail/307/",
+      "area": "パーク外",
+      "hasDailySchedule": true,
+      "hasConfirmedSchedule": false,
+      "times": [],
+      "windows": [],
+      "isRange": false,
+      "dailySchedules": {
+        "2026-11-26": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-11-27": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-11-28": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-11-29": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-11-30": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-01": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-02": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-03": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-04": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-05": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-06": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-07": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-08": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-09": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-10": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-11": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-12": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-13": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-14": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-15": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-16": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-17": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-18": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-19": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-20": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-21": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-22": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-23": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-24": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-25": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-26": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-27": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-28": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-29": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-30": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-31": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        }
+      },
+      "dpaListed": false
+    },
+    {
+      "parkId": "land",
       "name": "カメラセンター",
       "sourceUrl": "https://www.tokyodisneyresort.jp/tdl/shop/detail/515/",
       "area": "ワールドバザール",
@@ -17427,279 +17616,6 @@
       "dpaListed": false
     },
     {
-      "parkId": "land",
-      "name": "キャリッジハウス・リフレッシュメント",
-      "sourceUrl": "https://www.tokyodisneyresort.jp/tdl/restaurant/detail/307/",
-      "area": "パーク外",
-      "hasDailySchedule": true,
-      "hasConfirmedSchedule": false,
-      "times": [],
-      "windows": [],
-      "isRange": false,
-      "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-11-27": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-11-28": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-11-29": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-11-30": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-01": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-02": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-03": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-04": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-05": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-06": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-07": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-08": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-09": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-10": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-11": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-12": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-13": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-14": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-15": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-16": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-17": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-18": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-19": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-20": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-21": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-22": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-23": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-27": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-28": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-29": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-30": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-31": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        }
-      },
-      "dpaListed": false
-    },
-    {
       "parkId": "sea",
       "name": "ディズニーシー・トランジットスチーマーライン（メディテレーニアンハーバー）",
       "sourceUrl": "https://www.tokyodisneyresort.jp/tds/attraction/detail/227/",
@@ -17710,13 +17626,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -19296,21 +19205,6 @@
       ],
       "isRange": true,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [
-            540,
-            1245
-          ],
-          "windows": [
-            [
-              540,
-              1245
-            ]
-          ],
-          "isRange": true,
-          "closed": false,
-          "published": true
-        },
         "2026-11-26": {
           "times": [
             540,
@@ -20922,13 +20816,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -22300,13 +22187,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -23894,21 +23774,6 @@
       ],
       "isRange": true,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [
-            540,
-            1260
-          ],
-          "windows": [
-            [
-              540,
-              1260
-            ]
-          ],
-          "isRange": true,
-          "closed": false,
-          "published": true
-        },
         "2026-11-26": {
           "times": [
             540,
@@ -25520,13 +25385,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -26850,13 +26708,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -28192,13 +28043,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -29522,13 +29366,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -30852,13 +30689,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-26": {
           "times": [],
           "windows": [],
@@ -32683,7 +32513,7 @@
   "closures": [
     {
       "parkId": "land",
-      "periods": 42
+      "periods": 41
     },
     {
       "parkId": "sea",
@@ -32778,7 +32608,7 @@
     }
   ],
   "sourceErrors": [],
-  "checkedAt": "2026-11-24T21:16:21.487779Z",
+  "checkedAt": "2026-11-25T21:16:11.510964Z",
   "status": "complete",
   "lastKnownCatalogueUsed": false
 }
