@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "catalogueUpdatedAt": "2026-11-25T21:17:29.109627Z",
-  "updatedAt": "2026-11-25T22:00:57.967106Z",
+  "updatedAt": "2026-11-25T23:05:48.114406Z",
   "attribution": "Powered by Queue-Times.com",
   "attributionUrl": "https://queue-times.com/",
   "weatherAttributionUrl": "https://open-meteo.com/",
@@ -11,7 +11,7 @@
       "provider": "queue-times",
       "parkId": "land",
       "providerParkId": 274,
-      "fetchedAt": "2026-11-25T22:00:57.831077Z",
+      "fetchedAt": "2026-11-25T23:05:47.974710Z",
       "sourceUrl": "https://queue-times.com/parks/274/queue_times.json",
       "attributionUrl": "https://queue-times.com/",
       "rides": [
@@ -21,7 +21,7 @@
           "name": "Jungle Cruise: Wildlife Expeditions",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-152",
@@ -29,7 +29,7 @@
           "name": "Pirates of the Caribbean",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-156",
@@ -37,7 +37,7 @@
           "name": "The Enchanted Tiki Room: Stitch Presents “Aloha E Komo Mai!”",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-154",
@@ -45,7 +45,7 @@
           "name": "Western River Railroad",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-163",
@@ -53,7 +53,7 @@
           "name": "Beaver Brothers Explorer Canoes",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-162",
@@ -61,7 +61,7 @@
           "name": "Splash Mountain",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-172",
@@ -69,7 +69,7 @@
           "name": "“it's a small world”",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-173",
@@ -77,7 +77,7 @@
           "name": "Alice's Tea Party",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-170",
@@ -85,7 +85,7 @@
           "name": "Castle Carrousel",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-169",
@@ -93,7 +93,7 @@
           "name": "Dumbo The Flying Elephant",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-197",
@@ -101,7 +101,7 @@
           "name": "Enchanted Tale of Beauty and the Beast",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-171",
@@ -109,7 +109,7 @@
           "name": "Haunted Mansion “Holiday Nightmare”",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-167",
@@ -117,7 +117,7 @@
           "name": "Mickey's PhilharMagic",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-164",
@@ -125,7 +125,7 @@
           "name": "Peter Pan's Flight",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-168",
@@ -133,7 +133,7 @@
           "name": "Pinocchio's Daring Journey",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-174",
@@ -141,7 +141,7 @@
           "name": "Pooh's Hunny Hunt",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-165",
@@ -149,7 +149,7 @@
           "name": "Snow White's Adventures",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-189",
@@ -157,7 +157,7 @@
           "name": "Monsters, Inc. Ride & Go Seek!",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-183",
@@ -165,7 +165,7 @@
           "name": "Star Tours: The Adventures Continue",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-196",
@@ -173,7 +173,7 @@
           "name": "The Happy Ride with Baymax",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-178",
@@ -181,7 +181,7 @@
           "name": "Chip 'n Dale's Treehouse",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-180",
@@ -189,7 +189,7 @@
           "name": "Donald's Boat",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-179",
@@ -197,7 +197,7 @@
           "name": "Gadget's Go Coaster",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-181",
@@ -205,7 +205,7 @@
           "name": "Goofy's Paint 'n' Play House",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-176",
@@ -213,7 +213,7 @@
           "name": "Minnie's House",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-175",
@@ -221,7 +221,7 @@
           "name": "Roger Rabbit's Car Toon Spin",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-194",
@@ -229,7 +229,7 @@
           "name": "Toon Park",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-160",
@@ -237,7 +237,7 @@
           "name": "Big Thunder Mountain",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-158",
@@ -245,7 +245,7 @@
           "name": "Country Bear Theater",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-159",
@@ -253,7 +253,7 @@
           "name": "Mark Twain Riverboat",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-161",
@@ -261,7 +261,7 @@
           "name": "Tom Sawyer Island Rafts",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-157",
@@ -269,7 +269,7 @@
           "name": "Westernland Shootin' Gallery",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-151",
@@ -277,7 +277,7 @@
           "name": "Omnibus",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "land-attraction-191",
@@ -285,7 +285,7 @@
           "name": "Penny Arcade",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         }
       ],
       "unmatched": [
@@ -308,7 +308,7 @@
       "provider": "queue-times",
       "parkId": "sea",
       "providerParkId": 275,
-      "fetchedAt": "2026-11-25T22:00:57.966854Z",
+      "fetchedAt": "2026-11-25T23:05:48.114303Z",
       "sourceUrl": "https://queue-times.com/parks/275/queue_times.json",
       "attributionUrl": "https://queue-times.com/",
       "rides": [
@@ -318,7 +318,7 @@
           "name": "DisneySea Electric Railway (American Waterfront)",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-243",
@@ -326,7 +326,7 @@
           "name": "Tower of Terror",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-218",
@@ -334,7 +334,7 @@
           "name": "Toy Story Mania!",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-246",
@@ -342,7 +342,7 @@
           "name": "Turtle Talk",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-236",
@@ -350,7 +350,7 @@
           "name": "Caravan Carousel",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-220",
@@ -358,7 +358,7 @@
           "name": "Jasmine's Flying Carpets",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-235",
@@ -366,7 +366,7 @@
           "name": "Sindbad's Storybook Voyage",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-226",
@@ -374,7 +374,7 @@
           "name": "The Magic Lamp Theater",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-255",
@@ -382,7 +382,7 @@
           "name": "Anna and Elsa's Frozen Journey",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-258",
@@ -390,7 +390,7 @@
           "name": "Fairy Tinker Bell's Busy Buggies",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-257",
@@ -398,7 +398,7 @@
           "name": "Peter Pan's Never Land Adventure",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-256",
@@ -406,7 +406,7 @@
           "name": "Rapunzel's Lantern Festival",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-242",
@@ -414,7 +414,7 @@
           "name": "Raging Spirits",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-244",
@@ -422,7 +422,7 @@
           "name": "Fortress Explorations",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-219",
@@ -430,7 +430,7 @@
           "name": "Soaring: Fantastic Flight",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-245",
@@ -438,7 +438,7 @@
           "name": "The Leonardo Challenge",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-230",
@@ -446,7 +446,7 @@
           "name": "Venetian Gondolas",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-202",
@@ -454,7 +454,7 @@
           "name": "Ariel's Playground",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-240",
@@ -462,7 +462,7 @@
           "name": "Blowfish Balloon Race",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-237",
@@ -470,7 +470,7 @@
           "name": "Flounder's Flying Fish Coaster",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-239",
@@ -478,7 +478,7 @@
           "name": "Jumpin' Jellyfish",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-238",
@@ -486,7 +486,7 @@
           "name": "Scuttle's Scooters",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-241",
@@ -494,7 +494,7 @@
           "name": "The Whirlpool",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-224",
@@ -502,7 +502,7 @@
           "name": "20,000 Leagues Under the Sea",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-223",
@@ -510,7 +510,7 @@
           "name": "Journey to the Center of the Earth",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-231",
@@ -518,7 +518,7 @@
           "name": "DisneySea Electric Railway (Port Discovery)",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         },
         {
           "activityId": "sea-attraction-247",
@@ -526,7 +526,7 @@
           "name": "Nemo & Friends SeaRider",
           "wait": 0,
           "isOpen": false,
-          "updatedAt": "2026-11-25T21:56:14Z"
+          "updatedAt": "2026-11-25T23:01:14Z"
         }
       ],
       "unmatched": [
