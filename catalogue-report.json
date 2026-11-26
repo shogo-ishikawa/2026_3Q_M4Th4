@@ -1,69 +1,6 @@
 {
-  "date": "2026-11-26",
+  "date": "2026-11-27",
   "changed": [
-    {
-      "id": "land-parade-7003",
-      "name": "トイズ・ワンダラス・クリスマス！",
-      "fields": [
-        "checkedOn",
-        "showTimesDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
-      "id": "land-parade-7000",
-      "name": "ディズニー・ハーモニー・イン・カラー",
-      "fields": [
-        "checkedOn",
-        "showTimesDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
-      "id": "land-parade-913",
-      "name": "東京ディズニーランド・エレクトリカルパレード・ドリームライツ",
-      "fields": [
-        "checkedOn",
-        "showTimesDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
-      "id": "land-show-951",
-      "name": "スターブライト・クリスマス",
-      "fields": [
-        "checkedOn",
-        "showTimesDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
-      "id": "land-show-985",
-      "name": "ジャンボリミッキー！レッツ・ダンス！",
-      "fields": [
-        "checkedOn",
-        "showTimesDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
-      "id": "land-show-895",
-      "name": "ミッキーのマジカルミュージックワールド",
-      "fields": [
-        "checkedOn",
-        "showTimesDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
-    {
-      "id": "land-show-7204",
-      "name": "The D-Groovationz4 Live: Happy! Funky! Groovy! Tour",
-      "fields": [
-        "checkedOn",
-        "showTimesDate",
-        "dailyScheduleCheckedOn"
-      ]
-    },
     {
       "id": "land-greeting-908",
       "name": "メインストリート・ハウス前（キャラクターグリーティング）",
@@ -110,6 +47,70 @@
       ]
     },
     {
+      "id": "land-parade-7003",
+      "name": "トイズ・ワンダラス・クリスマス！",
+      "fields": [
+        "checkedOn",
+        "showTimesDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
+      "id": "land-parade-7000",
+      "name": "ディズニー・ハーモニー・イン・カラー",
+      "fields": [
+        "checkedOn",
+        "showTimesDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
+      "id": "land-parade-913",
+      "name": "東京ディズニーランド・エレクトリカルパレード・ドリームライツ",
+      "fields": [
+        "checkedOn",
+        "showTimesDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
+      "id": "land-show-951",
+      "name": "スターブライト・クリスマス",
+      "fields": [
+        "showTimes",
+        "checkedOn",
+        "showTimesDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
+      "id": "land-show-985",
+      "name": "ジャンボリミッキー！レッツ・ダンス！",
+      "fields": [
+        "checkedOn",
+        "showTimesDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
+      "id": "land-show-895",
+      "name": "ミッキーのマジカルミュージックワールド",
+      "fields": [
+        "checkedOn",
+        "showTimesDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
+      "id": "land-show-7204",
+      "name": "The D-Groovationz4 Live: Happy! Funky! Groovy! Tour",
+      "fields": [
+        "checkedOn",
+        "showTimesDate",
+        "dailyScheduleCheckedOn"
+      ]
+    },
+    {
       "id": "land-attraction-151",
       "name": "オムニバス",
       "fields": [
@@ -131,6 +132,7 @@
       "id": "land-attraction-154",
       "name": "ウエスタンリバー鉄道",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -185,6 +187,7 @@
       "id": "land-attraction-159",
       "name": "蒸気船マークトウェイン号",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -416,6 +419,27 @@
       ]
     },
     {
+      "id": "land-shop-513",
+      "name": "グランドエンポーリアム",
+      "fields": [
+        "checkedOn"
+      ]
+    },
+    {
+      "id": "land-shop-500",
+      "name": "ワールドバザール・コンフェクショナリー",
+      "fields": [
+        "checkedOn"
+      ]
+    },
+    {
+      "id": "land-shop-556",
+      "name": "ギャグファクトリー／ファイブ・アンド・ダイム",
+      "fields": [
+        "checkedOn"
+      ]
+    },
+    {
       "id": "land-snack-317",
       "name": "アイスクリームコーン",
       "fields": [
@@ -636,6 +660,7 @@
       "name": "ポップコーンワゴン（カフェ・オーリンズ前）",
       "fields": [
         "checkedOn",
+        "dailySchedules",
         "dailyScheduleCheckedOn",
         "operatingDate"
       ]
@@ -709,6 +734,7 @@
       "fields": [
         "checkedOn",
         "operatingDate",
+        "dailySchedules",
         "dailyScheduleCheckedOn"
       ]
     },
@@ -717,6 +743,7 @@
       "name": "ポップコーンワゴン（トレーディングポスト横）",
       "fields": [
         "checkedOn",
+        "dailySchedules",
         "dailyScheduleCheckedOn",
         "operatingDate"
       ]
@@ -772,7 +799,6 @@
       "fields": [
         "checkedOn",
         "operatingDate",
-        "dailySchedules",
         "dailyScheduleCheckedOn"
       ]
     },
@@ -781,7 +807,6 @@
       "name": "マジカルマーケット",
       "fields": [
         "checkedOn",
-        "dailySchedules",
         "dailyScheduleCheckedOn",
         "operatingDate"
       ]
@@ -859,6 +884,7 @@
       "name": "トゥーンポップ",
       "fields": [
         "checkedOn",
+        "dailySchedules",
         "dailyScheduleCheckedOn",
         "operatingDate"
       ]
@@ -877,6 +903,7 @@
       "name": "ポップ・ア・ロット・ポップコーン",
       "fields": [
         "checkedOn",
+        "dailySchedules",
         "dailyScheduleCheckedOn",
         "operatingDate"
       ]
@@ -950,30 +977,10 @@
       ]
     },
     {
-      "id": "land-shop-513",
-      "name": "グランドエンポーリアム",
-      "fields": [
-        "checkedOn"
-      ]
-    },
-    {
-      "id": "land-shop-500",
-      "name": "ワールドバザール・コンフェクショナリー",
-      "fields": [
-        "checkedOn"
-      ]
-    },
-    {
-      "id": "land-shop-556",
-      "name": "ギャグファクトリー／ファイブ・アンド・ダイム",
-      "fields": [
-        "checkedOn"
-      ]
-    },
-    {
       "id": "sea-attraction-230",
       "name": "ヴェネツィアン・ゴンドラ",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -983,6 +990,7 @@
       "id": "sea-attraction-219",
       "name": "ソアリン：ファンタスティック・フライト",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -992,6 +1000,7 @@
       "id": "sea-attraction-244",
       "name": "フォートレス・エクスプロレーション",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1010,6 +1019,7 @@
       "id": "sea-attraction-246",
       "name": "タートル・トーク",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1019,6 +1029,7 @@
       "id": "sea-attraction-243",
       "name": "タワー・オブ・テラー",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1028,6 +1039,7 @@
       "id": "sea-attraction-232",
       "name": "ディズニーシー・エレクトリックレールウェイ（アメリカンウォーターフロント）",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1037,6 +1049,7 @@
       "id": "sea-attraction-218",
       "name": "トイ・ストーリー・マニア！",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1046,6 +1059,7 @@
       "id": "sea-attraction-231",
       "name": "ディズニーシー・エレクトリックレールウェイ（ポートディスカバリー）",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1055,6 +1069,7 @@
       "id": "sea-attraction-247",
       "name": "ニモ＆フレンズ・シーライダー",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1064,6 +1079,7 @@
       "id": "sea-attraction-242",
       "name": "レイジングスピリッツ",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1073,6 +1089,7 @@
       "id": "sea-attraction-255",
       "name": "アナとエルサのフローズンジャーニー",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1082,6 +1099,7 @@
       "id": "sea-attraction-257",
       "name": "ピーターパンのネバーランドアドベンチャー",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1091,6 +1109,7 @@
       "id": "sea-attraction-258",
       "name": "フェアリー・ティンカーベルのビジーバギー",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1100,6 +1119,7 @@
       "id": "sea-attraction-256",
       "name": "ラプンツェルのランタンフェスティバル",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1109,6 +1129,7 @@
       "id": "sea-attraction-236",
       "name": "キャラバンカルーセル",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1118,6 +1139,7 @@
       "id": "sea-attraction-220",
       "name": "ジャスミンのフライングカーペット",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1127,6 +1149,7 @@
       "id": "sea-attraction-235",
       "name": "シンドバッド・ストーリーブック・ヴォヤッジ",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1136,6 +1159,7 @@
       "id": "sea-attraction-226",
       "name": "マジックランプシアター",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1145,6 +1169,7 @@
       "id": "sea-attraction-202",
       "name": "アリエルのプレイグラウンド",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1154,6 +1179,7 @@
       "id": "sea-attraction-239",
       "name": "ジャンピン・ジェリーフィッシュ",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1163,6 +1189,7 @@
       "id": "sea-attraction-238",
       "name": "スカットルのスクーター",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1172,6 +1199,7 @@
       "id": "sea-attraction-237",
       "name": "フランダーのフライングフィッシュコースター",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1181,6 +1209,7 @@
       "id": "sea-attraction-240",
       "name": "ブローフィッシュ・バルーンレース",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1190,6 +1219,7 @@
       "id": "sea-attraction-241",
       "name": "ワールプール",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1199,6 +1229,7 @@
       "id": "sea-attraction-224",
       "name": "海底2万マイル",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1208,6 +1239,7 @@
       "id": "sea-attraction-223",
       "name": "センター・オブ・ジ・アース",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1218,7 +1250,6 @@
       "name": "スターブライト・クリスマス",
       "fields": [
         "checkedOn",
-        "showTimesDate",
         "dailyScheduleCheckedOn"
       ]
     },
@@ -1245,7 +1276,6 @@
       "name": "【環境演出】スパークリング・ジュビリー・ナイト",
       "fields": [
         "checkedOn",
-        "showTimesDate",
         "dailyScheduleCheckedOn"
       ]
     },
@@ -1254,7 +1284,6 @@
       "name": "ビリーヴ！～シー・オブ・ドリームス～",
       "fields": [
         "checkedOn",
-        "showTimesDate",
         "dailyScheduleCheckedOn"
       ]
     },
@@ -1262,6 +1291,7 @@
       "id": "sea-show-7604",
       "name": "ダンス・ザ・グローブ！",
       "fields": [
+        "showTimes",
         "checkedOn",
         "showTimesDate",
         "dailyScheduleCheckedOn"
@@ -1280,6 +1310,7 @@
       "id": "sea-greeting-905",
       "name": "ヴィレッジ・グリーティングプレイス",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1289,6 +1320,7 @@
       "id": "sea-greeting-904",
       "name": "“サルードス・アミーゴス！”グリーティングドック",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1298,6 +1330,7 @@
       "id": "sea-greeting-901",
       "name": "ミッキー＆フレンズ・グリーティングトレイル（ミッキー）",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1307,6 +1340,7 @@
       "id": "sea-greeting-902",
       "name": "ミッキー＆フレンズ・グリーティングトレイル（ミニー）",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1316,6 +1350,7 @@
       "id": "sea-greeting-903",
       "name": "ミッキー＆フレンズ・グリーティングトレイル（ドナルド）",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1334,6 +1369,7 @@
       "id": "sea-restaurant-400",
       "name": "カフェ・ポルトフィーノ",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1343,6 +1379,7 @@
       "id": "sea-cafe-411",
       "name": "ゴンドリエ・スナック",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1352,6 +1389,7 @@
       "id": "sea-restaurant-403",
       "name": "ザンビーニ･ブラザーズ･リストランテ",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1361,6 +1399,7 @@
       "id": "sea-restaurant-412",
       "name": "マゼランズ",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1370,6 +1409,7 @@
       "id": "sea-cafe-401",
       "name": "マンマ・ビスコッティーズ・ベーカリー",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1379,6 +1419,7 @@
       "id": "sea-restaurant-408",
       "name": "リストランテ・ディ・カナレット",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1388,6 +1429,7 @@
       "id": "sea-snack-416",
       "name": "リフレスコス",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1397,6 +1439,7 @@
       "id": "sea-popcorn-479",
       "name": "ポップコーンワゴン（ソアリン：ファンタスティック・フライト前）",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1413,6 +1456,7 @@
       "id": "sea-snack-436",
       "name": "ウォーターサイドテラス",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1422,6 +1466,7 @@
       "id": "sea-restaurant-425",
       "name": "S.S.コロンビア・ダイニングルーム",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1431,6 +1476,7 @@
       "id": "sea-restaurant-446",
       "name": "ケープコッド・クックオフ",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1440,6 +1486,7 @@
       "id": "sea-restaurant-447",
       "name": "ケープコッド・クックオフ（ショーダイニングエリア）",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1467,6 +1514,7 @@
       "id": "sea-restaurant-429",
       "name": "テディ・ルーズヴェルト・ラウンジ",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1483,6 +1531,7 @@
       "id": "sea-snack-423",
       "name": "デランシー・ケータリング",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1492,6 +1541,7 @@
       "id": "sea-restaurant-441",
       "name": "ドックサイドダイナー",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1501,6 +1551,7 @@
       "id": "sea-cafe-422",
       "name": "ニューヨーク・デリ",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1510,6 +1561,7 @@
       "id": "sea-snack-430",
       "name": "バーナクル・ビルズ",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1519,6 +1571,7 @@
       "id": "sea-snack-449",
       "name": "ハイタイド・トリート",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1528,6 +1581,7 @@
       "id": "sea-snack-498",
       "name": "ハドソンリバー・ハーベスト",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1546,6 +1600,7 @@
       "id": "sea-snack-435",
       "name": "リバティ・ランディング・ダイナー",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1555,6 +1610,7 @@
       "id": "sea-restaurant-432",
       "name": "レストラン櫻",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1564,6 +1620,7 @@
       "id": "sea-popcorn-474",
       "name": "ポップコーンワゴン（ケープコッド・クックオフ前）",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1573,6 +1630,7 @@
       "id": "sea-popcorn-472",
       "name": "ポップコーンワゴン（ドックサイドステージ前）",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1582,6 +1640,7 @@
       "id": "sea-popcorn-471",
       "name": "ポップコーンワゴン（リドアイル前）",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1591,6 +1650,7 @@
       "id": "sea-popcorn-473",
       "name": "ポップコーンワゴン（リバティ・ランディング・ダイナー前）",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1614,6 +1674,7 @@
       "id": "sea-snack-450",
       "name": "シーサイドスナック",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1623,6 +1684,7 @@
       "id": "sea-snack-454",
       "name": "ブリーズウェイ・バイツ",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1632,6 +1694,7 @@
       "id": "sea-snack-453",
       "name": "ベイサイド・テイクアウト",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1641,6 +1704,7 @@
       "id": "sea-restaurant-451",
       "name": "ホライズンベイ・レストラン",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1650,6 +1714,7 @@
       "id": "sea-popcorn-475",
       "name": "ポップコーンワゴン（ホライズンベイ・レストラン横）",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1666,6 +1731,7 @@
       "id": "sea-snack-460",
       "name": "エクスペディション・イート",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1675,6 +1741,7 @@
       "id": "sea-snack-457",
       "name": "トロピック・アルズ",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1684,6 +1751,7 @@
       "id": "sea-restaurant-456",
       "name": "ミゲルズ・エルドラド・キャンティーナ",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1693,6 +1761,7 @@
       "id": "sea-restaurant-459",
       "name": "ユカタン・ベースキャンプ・グリル",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1702,6 +1771,7 @@
       "id": "sea-snack-452",
       "name": "ユカタン・ベースキャンプ・グリル（テイクアウトカウンター）",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1711,6 +1781,7 @@
       "id": "sea-snack-461",
       "name": "ロストリバークックハウス",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1720,6 +1791,7 @@
       "id": "sea-popcorn-476",
       "name": "ポップコーンワゴン（ハンガーステージ横）",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1743,6 +1815,7 @@
       "id": "sea-restaurant-409",
       "name": "アレンデール・ロイヤルバンケット",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1752,6 +1825,7 @@
       "id": "sea-snack-410",
       "name": "オーケンのオーケーフード",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1761,6 +1835,7 @@
       "id": "sea-restaurant-413",
       "name": "スナグリーダックリング",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1770,6 +1845,7 @@
       "id": "sea-restaurant-414",
       "name": "ルックアウト・クックアウト",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1779,6 +1855,7 @@
       "id": "sea-popcorn-490",
       "name": "ポップコーンワゴン（フェアリー・ティンカーベルのビジーバギー前）",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1795,6 +1872,7 @@
       "id": "sea-snack-465",
       "name": "オープンセサミ",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1804,6 +1882,7 @@
       "id": "sea-restaurant-463",
       "name": "カスバ・フードコート",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1813,6 +1892,7 @@
       "id": "sea-snack-464",
       "name": "サルタンズ・オアシス",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1822,6 +1902,7 @@
       "id": "sea-popcorn-478",
       "name": "ポップコーンワゴン（アラビアンコースト前）",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1838,6 +1919,7 @@
       "id": "sea-restaurant-468",
       "name": "セバスチャンのカリプソキッチン",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1847,6 +1929,7 @@
       "id": "sea-popcorn-480",
       "name": "ポップコーンワゴン（コーヴ・オブ・ワンダー横）",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1856,6 +1939,7 @@
       "id": "sea-popcorn-477",
       "name": "ポップコーンワゴン（スカットルのスクーター前）",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1872,6 +1956,7 @@
       "id": "sea-restaurant-418",
       "name": "ヴォルケイニア・レストラン",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1881,6 +1966,7 @@
       "id": "sea-snack-421",
       "name": "ノーチラスギャレー",
       "fields": [
+        "windows",
         "checkedOn",
         "dailyScheduleCheckedOn",
         "operatingDate"
@@ -1890,6 +1976,7 @@
       "id": "sea-snack-419",
       "name": "リフレッシュメント・ステーション",
       "fields": [
+        "windows",
         "checkedOn",
         "operatingDate",
         "dailyScheduleCheckedOn"
@@ -1936,13 +2023,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -3259,13 +3339,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -4582,13 +4655,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -5905,13 +5971,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -7240,13 +7299,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -8563,13 +8615,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -9886,13 +9931,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -11209,13 +11247,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -12532,13 +12563,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -13855,13 +13879,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -15178,13 +15195,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -16740,272 +16750,6 @@
     },
     {
       "parkId": "land",
-      "name": "キャリッジハウス・リフレッシュメント",
-      "sourceUrl": "https://www.tokyodisneyresort.jp/tdl/restaurant/detail/307/",
-      "area": "パーク外",
-      "hasDailySchedule": true,
-      "hasConfirmedSchedule": false,
-      "times": [],
-      "windows": [],
-      "isRange": false,
-      "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-11-27": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-11-28": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-11-29": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-11-30": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-01": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-02": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-03": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-04": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-05": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-06": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-07": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-08": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-09": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-10": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-11": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-12": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-13": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-14": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-15": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-16": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-17": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-18": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-19": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-20": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-21": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-22": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-23": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-24": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-25": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-27": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-28": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-29": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-30": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
-        "2026-12-31": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        }
-      },
-      "dpaListed": false
-    },
-    {
-      "parkId": "land",
       "name": "カメラセンター",
       "sourceUrl": "https://www.tokyodisneyresort.jp/tdl/shop/detail/515/",
       "area": "ワールドバザール",
@@ -17616,6 +17360,265 @@
       "dpaListed": false
     },
     {
+      "parkId": "land",
+      "name": "キャリッジハウス・リフレッシュメント",
+      "sourceUrl": "https://www.tokyodisneyresort.jp/tdl/restaurant/detail/307/",
+      "area": "パーク外",
+      "hasDailySchedule": true,
+      "hasConfirmedSchedule": false,
+      "times": [],
+      "windows": [],
+      "isRange": false,
+      "dailySchedules": {
+        "2026-11-27": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-11-28": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-11-29": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-11-30": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-01": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-02": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-03": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-04": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-05": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-06": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-07": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-08": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-09": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-10": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-11": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-12": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-13": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-14": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-15": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-16": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-17": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-18": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-19": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-20": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-21": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-22": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-23": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-24": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-25": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-26": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-27": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-28": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-29": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-30": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        },
+        "2026-12-31": {
+          "times": [],
+          "windows": [],
+          "isRange": false,
+          "closed": false,
+          "published": false
+        }
+      },
+      "dpaListed": false
+    },
+    {
       "parkId": "sea",
       "name": "ディズニーシー・トランジットスチーマーライン（メディテレーニアンハーバー）",
       "sourceUrl": "https://www.tokyodisneyresort.jp/tds/attraction/detail/227/",
@@ -17626,13 +17629,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -19195,31 +19191,16 @@
       "hasConfirmedSchedule": true,
       "times": [
         540,
-        1245
+        1095
       ],
       "windows": [
         [
           540,
-          1245
+          1095
         ]
       ],
       "isRange": true,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [
-            540,
-            1245
-          ],
-          "windows": [
-            [
-              540,
-              1245
-            ]
-          ],
-          "isRange": true,
-          "closed": false,
-          "published": true
-        },
         "2026-11-27": {
           "times": [
             540,
@@ -20816,13 +20797,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -22187,13 +22161,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -23764,31 +23731,16 @@
       "hasConfirmedSchedule": true,
       "times": [
         540,
-        1260
+        1110
       ],
       "windows": [
         [
           540,
-          1260
+          1110
         ]
       ],
       "isRange": true,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [
-            540,
-            1260
-          ],
-          "windows": [
-            [
-              540,
-              1260
-            ]
-          ],
-          "isRange": true,
-          "closed": false,
-          "published": true
-        },
         "2026-11-27": {
           "times": [
             540,
@@ -25385,13 +25337,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -26708,13 +26653,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -28043,13 +27981,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -29366,13 +29297,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -30689,13 +30613,6 @@
       "windows": [],
       "isRange": false,
       "dailySchedules": {
-        "2026-11-26": {
-          "times": [],
-          "windows": [],
-          "isRange": false,
-          "closed": false,
-          "published": false
-        },
         "2026-11-27": {
           "times": [],
           "windows": [],
@@ -32608,7 +32525,7 @@
     }
   ],
   "sourceErrors": [],
-  "checkedAt": "2026-11-25T21:16:11.510964Z",
+  "checkedAt": "2026-11-26T21:13:48.325650Z",
   "status": "complete",
   "lastKnownCatalogueUsed": false
 }
