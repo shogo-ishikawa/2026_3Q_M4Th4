@@ -1,0 +1,1 @@
+{"schemaVersion":1,"date":"2026-11-27","parkId":"land","minute":930,"issuedAt":"2026-11-27T04:54:53.266Z","baselineIssuedAt":"2026-11-26T14:58:01.107Z","source":"queue-times","evidence":{"rides":30,"agreeing":21,"offset":4.75},"rows":[{"activityId":"land-attraction-161","wait":15}]}
