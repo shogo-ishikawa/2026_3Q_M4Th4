@@ -136733,12 +136733,517 @@
     }
   ],
   "foodMenuUpdate": {
-    "checkedOn": "2026-11-27",
-    "checkedAt": "2026-11-26T21:14:44.383972Z",
+    "checkedOn": "2026-11-28",
+    "checkedAt": "2026-11-27T21:14:20.279061Z",
     "checked": 126,
-    "updated": 126,
-    "errors": [],
-    "status": "complete"
+    "updated": 0,
+    "errors": [
+      {
+        "activityId": "land-restaurant-313",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-cafe-316",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-restaurant-300",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-cafe-304",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-331",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-cafe-321",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-restaurant-332",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-popcorn-374",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-restaurant-338",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-restaurant-339",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-restaurant-318",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-305",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-restaurant-349",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-350",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-restaurant-344",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-popcorn-369",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-364",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-popcorn-292",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-cafe-290",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-restaurant-362",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-popcorn-293",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-restaurant-357",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-363",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-317",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-restaurant-306",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-328",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-303",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-311",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-restaurant-323",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-495",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-327",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-494",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-restaurant-326",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-334",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-333",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-330",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-499",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-popcorn-373",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-322",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-popcorn-366",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-337",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-popcorn-368",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-restaurant-336",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-restaurant-335",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-345",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-397",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-346",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-347",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-391",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-291",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-popcorn-371",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-popcorn-372",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-390",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-popcorn-376",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-snack-354",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-popcorn-380",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-popcorn-378",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-popcorn-375",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-restaurant-352",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "land-restaurant-353",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-cafe-401",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-412",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-cafe-411",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-403",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-441",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-425",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-408",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-cafe-422",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-popcorn-471",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-432",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-450",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-popcorn-474",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-451",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-459",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-461",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-409",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-410",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-413",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-popcorn-490",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-414",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-418",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-463",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-468",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-464",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-popcorn-479",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-419",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-400",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-416",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-447",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-446",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-486",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-436",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-493",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-429",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-448",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-426",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-498",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-430",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-449",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-423",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-popcorn-472",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-popcorn-473",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-435",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-440",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-481",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-482",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-454",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-453",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-460",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-457",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-483",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-popcorn-475",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-popcorn-476",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-452",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-restaurant-456",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-484",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-469",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-465",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-489",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-popcorn-478",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-488",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-popcorn-480",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-popcorn-477",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-485",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-487",
+        "reason": "HTTP Error 403: Forbidden"
+      },
+      {
+        "activityId": "sea-snack-421",
+        "reason": "HTTP Error 403: Forbidden"
+      }
+    ],
+    "status": "failed"
   },
   "fetchedAt": "2026-11-26T21:14:44.232634Z",
   "pipelineVersion": 2,
@@ -136897,10 +137402,77 @@
       }
     ]
   },
-  "updateStatus": "complete",
+  "updateStatus": "failed",
   "refreshAttempt": {
-    "checkedAt": "2026-11-26T21:13:48.325650Z",
-    "status": "complete",
-    "sourceErrors": []
+    "checkedAt": "2026-11-27T21:13:57.421846Z",
+    "status": "failed",
+    "sourceErrors": [
+      {
+        "url": "https://www.tokyodisneyresort.jp/tdl/show/",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      {
+        "url": "https://www.tokyodisneyresort.jp/tdl/attraction/",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      {
+        "url": "https://www.tokyodisneyresort.jp/tdl/greeting/",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      {
+        "url": "https://www.tokyodisneyresort.jp/tdl/restaurant/list/",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      {
+        "url": "https://www.tokyodisneyresort.jp/tdl/monthly/stop/",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      {
+        "url": "https://www.tokyodisneyresort.jp/tdl/shop/list/",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      {
+        "url": "https://www.tokyodisneyresort.jp/tdl/monthly/calendar.html",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      {
+        "url": "https://www.tokyodisneyresort.jp/tdl/event.html",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      {
+        "url": "https://www.tokyodisneyresort.jp/tds/attraction/",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      {
+        "url": "https://www.tokyodisneyresort.jp/tds/restaurant/list/",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      {
+        "url": "https://www.tokyodisneyresort.jp/tds/show/",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      {
+        "url": "https://www.tokyodisneyresort.jp/tds/greeting/",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      {
+        "url": "https://www.tokyodisneyresort.jp/tds/event.html",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      {
+        "url": "https://www.tokyodisneyresort.jp/tds/shop/list/",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      {
+        "url": "https://www.tokyodisneyresort.jp/tds/monthly/stop/",
+        "message": "HTTP Error 403: Forbidden"
+      },
+      {
+        "url": "https://www.tokyodisneyresort.jp/tds/monthly/calendar.html",
+        "message": "HTTP Error 403: Forbidden"
+      }
+    ],
+    "message": "公式情報を取得できなかったため確認済みの情報を保持しています。",
+    "lastSuccessfulFetchedAt": "2026-11-26T21:14:44.232634Z"
   }
 }
